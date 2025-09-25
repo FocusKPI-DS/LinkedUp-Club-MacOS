@@ -1,0 +1,52 @@
+// Automatic FlutterFlow imports
+import '/backend/backend.dart';
+import '/backend/schema/structs/index.dart';
+import '/backend/schema/enums/enums.dart';
+import '/actions/actions.dart' as action_blocks;
+import 'package:ff_theme/flutter_flow/flutter_flow_theme.dart';
+import '/flutter_flow/flutter_flow_util.dart';
+import 'index.dart'; // Imports other custom actions
+import '/flutter_flow/custom_functions.dart'; // Imports custom functions
+import 'package:flutter/material.dart';
+// Begin custom action code
+// DO NOT REMOVE OR MODIFY THE CODE ABOVE!
+
+import 'dart:io';
+import 'package:firebase_storage/firebase_storage.dart';
+import 'package:path/path.dart' as path;
+
+Future<String> uploadAudioToStorage(String? localAudioPath) async {
+  print("📥 [uploadAudioToStorage] Called with path: $localAudioPath");
+
+  if (localAudioPath == null || localAudioPath.isEmpty) {
+    print("❌ Error: No audio path provided.");
+    throw Exception("No audio path provided.");
+  }
+
+  final cleanedPath = localAudioPath.replaceFirst("file://", "");
+  final file = File(cleanedPath);
+  print("🧼 Cleaned path: $cleanedPath");
+
+  if (!await file.exists()) {
+    print("❌ Error: File does not exist at path: $cleanedPath");
+    throw Exception("Audio file does not exist at: $localAudioPath");
+  }
+
+  try {
+    final fileName = path.basename(cleanedPath);
+    final storageRef =
+        FirebaseStorage.instance.ref().child('audio_uploads/$fileName');
+
+    print("🚀 Uploading $fileName to Firebase Storage...");
+    final uploadTask = storageRef.putFile(file);
+
+    final snapshot = await uploadTask;
+    final downloadUrl = await snapshot.ref.getDownloadURL();
+
+    print("✅ Upload successful! Download URL: $downloadUrl");
+    return downloadUrl;
+  } catch (e) {
+    print("❌ Firebase upload failed: $e");
+    throw Exception("Firebase upload failed: $e");
+  }
+}

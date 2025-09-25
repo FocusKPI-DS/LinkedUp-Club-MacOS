@@ -1,0 +1,246 @@
+// Automatic FlutterFlow imports
+import '/backend/backend.dart';
+import '/backend/schema/structs/index.dart';
+import '/backend/schema/enums/enums.dart';
+import '/actions/actions.dart' as action_blocks;
+import 'package:ff_theme/flutter_flow/flutter_flow_theme.dart';
+import '/flutter_flow/flutter_flow_util.dart';
+import 'index.dart'; // Imports other custom widgets
+import '/custom_code/actions/index.dart'; // Imports custom actions
+import '/flutter_flow/custom_functions.dart'; // Imports custom functions
+import 'package:flutter/material.dart';
+// Begin custom widget code
+// DO NOT REMOVE OR MODIFY THE CODE ABOVE!
+
+// Set your widget name, define your parameter, and then add the
+// boilerplate code using the green button on the right!
+
+import '/flutter_flow/flutter_flow_widgets.dart';
+import '/auth/firebase_auth/auth_util.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:google_fonts/google_fonts.dart';
+
+class EnhancedJoinButton extends StatefulWidget {
+  const EnhancedJoinButton({
+    Key? key,
+    this.width,
+    this.height,
+    required this.eventDoc,
+    required this.onSuccess,
+    required this.onError,
+  }) : super(key: key);
+
+  final double? width;
+  final double? height;
+  final EventsRecord eventDoc;
+  final Future Function()? onSuccess;
+  final Future Function(String error)? onError;
+
+  @override
+  _EnhancedJoinButtonState createState() => _EnhancedJoinButtonState();
+}
+
+class _EnhancedJoinButtonState extends State<EnhancedJoinButton> {
+  bool _isLoading = false;
+  bool _hasJoined = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _checkIfJoined();
+  }
+
+  Future<void> _checkIfJoined() async {
+    if (currentUserReference != null &&
+        widget.eventDoc.participants.contains(currentUserReference)) {
+      setState(() {
+        _hasJoined = true;
+      });
+    }
+  }
+
+  Future<void> _handlePurchase() async {
+    setState(() {
+      _isLoading = true;
+    });
+
+    try {
+      // Get the price (in cents)
+      int priceInCents =
+          widget.eventDoc.price * 100; // Convert dollars to cents
+
+      // Call the purchase action
+      final result = await purchaseEventTicket(
+        widget.eventDoc.eventId,
+        widget.eventDoc.title,
+        priceInCents,
+        widget.eventDoc.reference,
+        widget.eventDoc.eventType, // Add the 5th required parameter
+      );
+
+      if (result.success == true) {
+        setState(() {
+          _hasJoined = true;
+        });
+        if (widget.onSuccess != null) {
+          await widget.onSuccess!();
+        }
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              result.message ?? 'Successfully joined event!',
+              style: TextStyle(color: Colors.white),
+            ),
+            backgroundColor: FlutterFlowTheme.of(context).success,
+            duration: Duration(seconds: 3),
+          ),
+        );
+      } else {
+        if (widget.onError != null) {
+          await widget.onError!(result.message ?? 'Failed to join event');
+        }
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              result.message ?? 'Failed to purchase ticket',
+              style: TextStyle(color: Colors.white),
+            ),
+            backgroundColor: FlutterFlowTheme.of(context).error,
+            duration: Duration(seconds: 4),
+          ),
+        );
+      }
+    } catch (e) {
+      if (widget.onError != null) {
+        await widget.onError!(e.toString());
+      }
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'An error occurred: ${e.toString()}',
+            style: TextStyle(color: Colors.white),
+          ),
+          backgroundColor: FlutterFlowTheme.of(context).error,
+          duration: Duration(seconds: 4),
+        ),
+      );
+    } finally {
+      setState(() {
+        _isLoading = false;
+      });
+    }
+  }
+
+  Future<void> _handleLeave() async {
+    setState(() {
+      _isLoading = true;
+    });
+
+    try {
+      // Remove from participants
+      await widget.eventDoc.reference.update({
+        'participants': FieldValue.arrayRemove([currentUserReference]),
+      });
+
+      // Delete participant record
+      final participantDocs = await widget.eventDoc.reference
+          .collection('participant')
+          .where('user_ref', isEqualTo: currentUserReference)
+          .get();
+
+      for (var doc in participantDocs.docs) {
+        await doc.reference.delete();
+      }
+
+      setState(() {
+        _hasJoined = false;
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'You have left the event',
+            style: TextStyle(color: Colors.white),
+          ),
+          backgroundColor: FlutterFlowTheme.of(context).secondary,
+          duration: Duration(seconds: 2),
+        ),
+      );
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Failed to leave event',
+            style: TextStyle(color: Colors.white),
+          ),
+          backgroundColor: FlutterFlowTheme.of(context).error,
+          duration: Duration(seconds: 3),
+        ),
+      );
+    } finally {
+      setState(() {
+        _isLoading = false;
+      });
+    }
+  }
+
+  String _getButtonText() {
+    if (_hasJoined) {
+      return 'Leave Event';
+    }
+    if (widget.eventDoc.price == 0) {
+      return 'Join Free';
+    }
+    return 'Buy Ticket - \$${widget.eventDoc.price}';
+  }
+
+  Color _getButtonColor() {
+    if (_hasJoined) {
+      return Color(0xFFFA000F); // Red for leave
+    }
+    return Color(0xFF2563EB); // Blue for join/buy
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    // Don't show button if user is the creator
+    if (widget.eventDoc.creatorId == currentUserReference) {
+      return SizedBox.shrink();
+    }
+
+    return FFButtonWidget(
+      onPressed:
+          _isLoading ? null : (_hasJoined ? _handleLeave : _handlePurchase),
+      text: _isLoading ? 'Processing...' : _getButtonText(),
+      icon: _isLoading
+          ? null
+          : (_hasJoined
+              ? null
+              : (widget.eventDoc.price > 0
+                  ? Icon(Icons.shopping_cart, size: 18)
+                  : null)),
+      options: FFButtonOptions(
+        width: widget.width ?? double.infinity,
+        height: widget.height ?? 50.0,
+        padding: EdgeInsetsDirectional.fromSTEB(24.0, 0.0, 24.0, 0.0),
+        iconPadding: EdgeInsetsDirectional.fromSTEB(0.0, 0.0, 8.0, 0.0),
+        color: _getButtonColor(),
+        textStyle: FlutterFlowTheme.of(context).titleSmall.override(
+              font: GoogleFonts.inter(
+                fontWeight: FontWeight.w500,
+              ),
+              color: Colors.white,
+              fontSize: 16.0,
+              letterSpacing: 0.0,
+            ),
+        elevation: 2.0,
+        borderRadius: BorderRadius.circular(8.0),
+        disabledColor: FlutterFlowTheme.of(context).secondaryText,
+      ),
+      showLoadingIndicator: _isLoading,
+    );
+  }
+}
