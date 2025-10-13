@@ -7,6 +7,7 @@ import '/flutter_flow/flutter_flow_util.dart';
 import '/pages/chat/chat_component/p_d_f_view/p_d_f_view_widget.dart';
 import '/pages/chat/chat_component/report_component/report_component_widget.dart';
 import 'dart:ui';
+import 'dart:io' show Platform;
 import '/custom_code/actions/index.dart' as actions;
 import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -33,6 +34,7 @@ class ChatThreadWidget extends StatefulWidget {
     required this.chatRef,
     required this.userRef,
     required this.action,
+    this.onMessageLongPress,
   });
 
   final MessagesRecord? message;
@@ -41,6 +43,7 @@ class ChatThreadWidget extends StatefulWidget {
   final DocumentReference? chatRef;
   final DocumentReference? userRef;
   final Future Function()? action;
+  final Function(MessagesRecord)? onMessageLongPress;
 
   @override
   State<ChatThreadWidget> createState() => _ChatThreadWidgetState();
@@ -125,35 +128,51 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
     );
   }
 
-  // Small "arrow" dropdown menu like WhatsApp.
+  // Platform-specific dropdown menu - WhatsApp style for macOS, iOS native style for iOS
   Widget _messageMenuButton() {
     return PopupMenuButton<_MsgAction>(
       tooltip: 'Message options',
       padding: EdgeInsets.zero,
-      elevation: 6,
+      elevation: Platform.isIOS ? 8 : 6,
       position: PopupMenuPosition.under,
-      offset: const Offset(0, 12),
-      constraints: const BoxConstraints(minWidth: 100),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-      color: Colors.black,
-      onOpened: () => setState(() => _isMenuOpen = true),
+      offset: Offset(0, Platform.isIOS ? 16 : 12),
+      constraints: BoxConstraints(
+        minWidth: Platform.isIOS ? 120 : 100,
+      ),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(Platform.isIOS ? 12 : 10),
+      ),
+      color: Platform.isIOS ? Colors.white : Colors.black,
+      onOpened: () {
+        if (Platform.isIOS) {
+          HapticFeedback.mediumImpact();
+        }
+        setState(() => _isMenuOpen = true);
+      },
       onCanceled: () => setState(() => _isMenuOpen = false),
       icon: KeyedSubtree(
         key: _menuIconKey,
         child: Container(
           decoration: BoxDecoration(
-            color: const Color.fromARGB(255, 242, 239, 239).withOpacity(0.04),
+            color: Platform.isIOS
+                ? Colors.black.withOpacity(0.1)
+                : const Color.fromARGB(255, 242, 239, 239).withOpacity(0.04),
             shape: BoxShape.circle,
           ),
-          padding: const EdgeInsets.all(4),
-          child: const Icon(
-            Icons.keyboard_arrow_down_rounded,
-            size: 12,
-            color: Color(0xFF4B5563), // neutral-600
+          padding: EdgeInsets.all(Platform.isIOS ? 6 : 4),
+          child: Icon(
+            Platform.isIOS
+                ? Icons.more_vert_rounded // iOS style: vertical dots
+                : Icons.keyboard_arrow_down_rounded, // macOS style: arrow
+            size: Platform.isIOS ? 16 : 12,
+            color: Platform.isIOS ? Colors.black54 : Color(0xFF4B5563),
           ),
         ),
       ),
       onSelected: (value) async {
+        if (Platform.isIOS) {
+          HapticFeedback.lightImpact();
+        }
         setState(() => _isMenuOpen = false);
         switch (value) {
           case _MsgAction.react:
@@ -172,18 +191,29 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
         }
       },
       itemBuilder: (context) => [
-        const PopupMenuItem(
+        PopupMenuItem(
           value: _MsgAction.react,
-          child: _MenuRow(icon: Icons.emoji_emotions_rounded, label: 'React'),
+          child: _MenuRow(
+            icon: Icons.emoji_emotions_rounded,
+            label: 'React',
+            textColor: Platform.isIOS ? Colors.black : Colors.white,
+          ),
         ),
-        const PopupMenuItem(
+        PopupMenuItem(
           value: _MsgAction.copy,
-          child: _MenuRow(icon: Icons.copy_rounded, label: 'Copy'),
+          child: _MenuRow(
+            icon: Icons.copy_rounded,
+            label: 'Copy',
+            textColor: Platform.isIOS ? Colors.black : Colors.white,
+          ),
         ),
-        const PopupMenuItem(
+        PopupMenuItem(
           value: _MsgAction.report,
           child: _MenuRow(
-              icon: Icons.report_gmailerrorred_rounded, label: 'Report'),
+            icon: Icons.report_gmailerrorred_rounded,
+            label: 'Report',
+            textColor: Platform.isIOS ? Colors.black : Colors.white,
+          ),
         ),
       ],
     );
@@ -286,36 +316,60 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
   // Wrap a bubble in a Stack and pin the menu in its top-right corner.
   Widget _withMessageMenu({required Widget bubble}) {
     final reactionsBadge = _buildReactionsBadge();
-    return MouseRegion(
-      onEnter: (_) => setState(() => _isHoveredForMenu = true),
-      onExit: (_) => setState(() => _isHoveredForMenu = false),
-      child: Stack(
-        clipBehavior: Clip.none,
-        children: [
-          bubble,
-          if (_isHoveredForMenu || _isMenuOpen)
-            Positioned(
-              top: -4,
-              right: -5,
-              child: _messageMenuButton(),
-            ),
-          // Put badge last so it sits on top of all overlays for reliable taps
-          if (reactionsBadge != null)
-            Positioned(
-              right: -6,
-              bottom: -20,
-              child: AbsorbPointer(
-                absorbing: false,
-                child: Container(
-                  padding: const EdgeInsets.all(8),
-                  color: Colors.transparent,
-                  child: reactionsBadge,
+
+    if (Platform.isIOS) {
+      // iOS: Call parent callback for fixed top menu
+      return GestureDetector(
+        onLongPress: () {
+          HapticFeedback.mediumImpact();
+          widget.onMessageLongPress?.call(widget.message!);
+        },
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            bubble,
+            // Reactions badge positioned relative to bubble
+            if (reactionsBadge != null)
+              Padding(
+                padding: const EdgeInsets.only(top: 4.0),
+                child: reactionsBadge,
+              ),
+          ],
+        ),
+      );
+    } else {
+      // macOS: Use hover detection with dropdown
+      return MouseRegion(
+        onEnter: (_) => setState(() => _isHoveredForMenu = true),
+        onExit: (_) => setState(() => _isHoveredForMenu = false),
+        child: Stack(
+          clipBehavior: Clip.none,
+          children: [
+            bubble,
+            if (_isHoveredForMenu || _isMenuOpen)
+              Positioned(
+                top: -4,
+                right: -5,
+                child: _messageMenuButton(),
+              ),
+            // Put badge last so it sits on top of all overlays for reliable taps
+            if (reactionsBadge != null)
+              Positioned(
+                right: -6,
+                bottom: -20,
+                child: AbsorbPointer(
+                  absorbing: false,
+                  child: Container(
+                    padding: const EdgeInsets.all(8),
+                    color: Colors.transparent,
+                    child: reactionsBadge,
+                  ),
                 ),
               ),
-            ),
-        ],
-      ),
-    );
+          ],
+        ),
+      );
+    }
   }
 
   Widget? _buildReactionsBadge() {
@@ -472,60 +526,83 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
                       mainAxisAlignment: MainAxisAlignment.end,
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Expanded(
-                          child: Column(
-                            mainAxisSize: MainAxisSize.max,
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Align(
-                                alignment:
-                                    const AlignmentDirectional(1.0, -1.0),
-                                child: Padding(
-                                  padding: const EdgeInsetsDirectional.fromSTEB(
-                                      12.0, 0.0, 12.0, 0.0),
-                                  child: InkWell(
-                                    splashColor: Colors.transparent,
-                                    focusColor: Colors.transparent,
-                                    hoverColor: Colors.transparent,
-                                    highlightColor: Colors.transparent,
-                                    onLongPress: _copyContentIfAny,
-                                    child: _withMessageMenu(
-                                      bubble: Container(
-                                        decoration: BoxDecoration(
-                                          color: const Color(0xFFF3F4F6),
-                                          borderRadius:
-                                              BorderRadius.circular(16.0),
-                                        ),
-                                        child: Padding(
-                                          padding: const EdgeInsets.all(16.0),
-                                          child: Column(
-                                            mainAxisSize: MainAxisSize.min,
-                                            crossAxisAlignment:
-                                                CrossAxisAlignment.start,
-                                            children: [
-                                              if (widget.message?.content !=
-                                                      null &&
-                                                  widget.message?.content != '')
-                                                MarkdownBody(
-                                                  data: valueOrDefault<String>(
-                                                    widget.message?.content,
-                                                    'I\'m at the venue now. Here\'s the map with the room highlighted:',
-                                                  ),
-                                                  selectable: true,
-                                                  onTapLink:
-                                                      (text, url, title) async {
-                                                    if (url != null) {
-                                                      await _launchURL(url);
-                                                    }
-                                                  },
-                                                  styleSheet:
-                                                      MarkdownStyleSheet(
-                                                    p: FlutterFlowTheme.of(
-                                                            context)
-                                                        .bodyMedium
-                                                        .override(
-                                                          font:
-                                                              GoogleFonts.inter(
+                        Flexible(
+                          child: ConstrainedBox(
+                            constraints: BoxConstraints(
+                              maxWidth: MediaQuery.of(context).size.width * 0.6,
+                              minHeight: 60,
+                            ),
+                            child: Column(
+                              mainAxisSize: MainAxisSize.max,
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Align(
+                                  alignment:
+                                      const AlignmentDirectional(1.0, -1.0),
+                                  child: Padding(
+                                    padding:
+                                        const EdgeInsetsDirectional.fromSTEB(
+                                            12.0, 0.0, 12.0, 0.0),
+                                    child: InkWell(
+                                      splashColor: Colors.transparent,
+                                      focusColor: Colors.transparent,
+                                      hoverColor: Colors.transparent,
+                                      highlightColor: Colors.transparent,
+                                      onLongPress: _copyContentIfAny,
+                                      child: _withMessageMenu(
+                                        bubble: Container(
+                                          decoration: BoxDecoration(
+                                            color: const Color(0xFFF3F4F6),
+                                            borderRadius:
+                                                BorderRadius.circular(16.0),
+                                          ),
+                                          child: Padding(
+                                            padding: const EdgeInsets.all(16.0),
+                                            child: Column(
+                                              mainAxisSize: MainAxisSize.min,
+                                              crossAxisAlignment:
+                                                  CrossAxisAlignment.start,
+                                              children: [
+                                                if (widget.message?.content !=
+                                                        null &&
+                                                    widget.message?.content !=
+                                                        '')
+                                                  MarkdownBody(
+                                                    data:
+                                                        valueOrDefault<String>(
+                                                      widget.message?.content,
+                                                      'I\'m at the venue now. Here\'s the map with the room highlighted:',
+                                                    ),
+                                                    selectable: true,
+                                                    onTapLink: (text, url,
+                                                        title) async {
+                                                      if (url != null) {
+                                                        await _launchURL(url);
+                                                      }
+                                                    },
+                                                    styleSheet:
+                                                        MarkdownStyleSheet(
+                                                      p: FlutterFlowTheme.of(
+                                                              context)
+                                                          .bodyMedium
+                                                          .override(
+                                                            font: GoogleFonts
+                                                                .inter(
+                                                              fontWeight:
+                                                                  FlutterFlowTheme.of(
+                                                                          context)
+                                                                      .bodyMedium
+                                                                      .fontWeight,
+                                                              fontStyle:
+                                                                  FlutterFlowTheme.of(
+                                                                          context)
+                                                                      .bodyMedium
+                                                                      .fontStyle,
+                                                            ),
+                                                            color: const Color(
+                                                                0xFF1F2937),
+                                                            fontSize: 14.0,
+                                                            letterSpacing: 0.0,
                                                             fontWeight:
                                                                 FlutterFlowTheme.of(
                                                                         context)
@@ -537,515 +614,518 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
                                                                     .bodyMedium
                                                                     .fontStyle,
                                                           ),
-                                                          color: const Color(
-                                                              0xFF1F2937),
-                                                          fontSize: 14.0,
-                                                          letterSpacing: 0.0,
-                                                          fontWeight:
-                                                              FlutterFlowTheme.of(
-                                                                      context)
-                                                                  .bodyMedium
-                                                                  .fontWeight,
-                                                          fontStyle:
-                                                              FlutterFlowTheme.of(
-                                                                      context)
-                                                                  .bodyMedium
-                                                                  .fontStyle,
-                                                        ),
-                                                    a: FlutterFlowTheme.of(
-                                                            context)
-                                                        .bodyMedium
-                                                        .override(
-                                                          font: GoogleFonts
-                                                              .inter(),
-                                                          color: const Color(
-                                                              0xFF2563EB),
-                                                          fontSize: 14.0,
-                                                          letterSpacing: 0.0,
-                                                          decoration:
-                                                              TextDecoration
-                                                                  .underline,
-                                                        ),
-                                                    code: FlutterFlowTheme.of(
-                                                            context)
-                                                        .bodyMedium
-                                                        .override(
-                                                          font: GoogleFonts
-                                                              .robotoMono(),
-                                                          color: const Color(
-                                                              0xFF1F2937),
-                                                          fontSize: 13.0,
-                                                        ),
-                                                    codeblockDecoration:
-                                                        BoxDecoration(
+                                                      a: FlutterFlowTheme.of(
+                                                              context)
+                                                          .bodyMedium
+                                                          .override(
+                                                            font: GoogleFonts
+                                                                .inter(),
+                                                            color: const Color(
+                                                                0xFF2563EB),
+                                                            fontSize: 14.0,
+                                                            letterSpacing: 0.0,
+                                                            decoration:
+                                                                TextDecoration
+                                                                    .underline,
+                                                          ),
+                                                      code: FlutterFlowTheme.of(
+                                                              context)
+                                                          .bodyMedium
+                                                          .override(
+                                                            font: GoogleFonts
+                                                                .robotoMono(),
+                                                            color: const Color(
+                                                                0xFF1F2937),
+                                                            fontSize: 13.0,
+                                                          ),
+                                                      codeblockDecoration:
+                                                          BoxDecoration(
+                                                        color: const Color(
+                                                            0xFFE5E7EB),
+                                                        borderRadius:
+                                                            BorderRadius
+                                                                .circular(4),
+                                                      ),
+                                                      strong: FlutterFlowTheme
+                                                              .of(context)
+                                                          .bodyMedium
+                                                          .override(
+                                                            font: GoogleFonts
+                                                                .inter(
+                                                              fontWeight:
+                                                                  FontWeight
+                                                                      .bold,
+                                                            ),
+                                                            color: const Color(
+                                                                0xFF1F2937),
+                                                            fontSize: 14.0,
+                                                            fontWeight:
+                                                                FontWeight.bold,
+                                                          ),
+                                                      em: FlutterFlowTheme.of(
+                                                              context)
+                                                          .bodyMedium
+                                                          .override(
+                                                            font: GoogleFonts
+                                                                .inter(
+                                                              fontStyle:
+                                                                  FontStyle
+                                                                      .italic,
+                                                            ),
+                                                            color: const Color(
+                                                                0xFF1F2937),
+                                                            fontSize: 14.0,
+                                                            fontStyle: FontStyle
+                                                                .italic,
+                                                          ),
+                                                    ),
+                                                  ),
+                                                if (widget.message?.image !=
+                                                        null &&
+                                                    widget.message?.image != '')
+                                                  Container(
+                                                    width: 265.0,
+                                                    height: 207.2,
+                                                    decoration: BoxDecoration(
                                                       color: const Color(
                                                           0xFFE5E7EB),
                                                       borderRadius:
                                                           BorderRadius.circular(
-                                                              4),
+                                                              8.0),
                                                     ),
-                                                    strong: FlutterFlowTheme.of(
-                                                            context)
-                                                        .bodyMedium
-                                                        .override(
-                                                          font:
-                                                              GoogleFonts.inter(
-                                                            fontWeight:
-                                                                FontWeight.bold,
-                                                          ),
-                                                          color: const Color(
-                                                              0xFF1F2937),
-                                                          fontSize: 14.0,
-                                                          fontWeight:
-                                                              FontWeight.bold,
-                                                        ),
-                                                    em: FlutterFlowTheme.of(
-                                                            context)
-                                                        .bodyMedium
-                                                        .override(
-                                                          font:
-                                                              GoogleFonts.inter(
-                                                            fontStyle: FontStyle
-                                                                .italic,
-                                                          ),
-                                                          color: const Color(
-                                                              0xFF1F2937),
-                                                          fontSize: 14.0,
-                                                          fontStyle:
-                                                              FontStyle.italic,
-                                                        ),
-                                                  ),
-                                                ),
-                                              if (widget.message?.image !=
-                                                      null &&
-                                                  widget.message?.image != '')
-                                                Container(
-                                                  width: 265.0,
-                                                  height: 207.2,
-                                                  decoration: BoxDecoration(
-                                                    color:
-                                                        const Color(0xFFE5E7EB),
-                                                    borderRadius:
-                                                        BorderRadius.circular(
-                                                            8.0),
-                                                  ),
-                                                  child: InkWell(
-                                                    splashColor:
-                                                        Colors.transparent,
-                                                    focusColor:
-                                                        Colors.transparent,
-                                                    hoverColor:
-                                                        Colors.transparent,
-                                                    highlightColor:
-                                                        Colors.transparent,
-                                                    onTap: () async {
-                                                      await Navigator.push(
-                                                        context,
-                                                        PageTransition(
-                                                          type:
-                                                              PageTransitionType
-                                                                  .fade,
-                                                          child:
-                                                              FlutterFlowExpandedImageView(
-                                                            image:
-                                                                CachedNetworkImage(
-                                                              fadeInDuration:
-                                                                  const Duration(
-                                                                      milliseconds:
-                                                                          300),
-                                                              fadeOutDuration:
-                                                                  const Duration(
-                                                                      milliseconds:
-                                                                          300),
-                                                              imageUrl:
+                                                    child: InkWell(
+                                                      splashColor:
+                                                          Colors.transparent,
+                                                      focusColor:
+                                                          Colors.transparent,
+                                                      hoverColor:
+                                                          Colors.transparent,
+                                                      highlightColor:
+                                                          Colors.transparent,
+                                                      onTap: () async {
+                                                        await Navigator.push(
+                                                          context,
+                                                          PageTransition(
+                                                            type:
+                                                                PageTransitionType
+                                                                    .fade,
+                                                            child:
+                                                                FlutterFlowExpandedImageView(
+                                                              image:
+                                                                  CachedNetworkImage(
+                                                                fadeInDuration:
+                                                                    const Duration(
+                                                                        milliseconds:
+                                                                            300),
+                                                                fadeOutDuration:
+                                                                    const Duration(
+                                                                        milliseconds:
+                                                                            300),
+                                                                imageUrl:
+                                                                    valueOrDefault<
+                                                                        String>(
+                                                                  widget.message
+                                                                      ?.image,
+                                                                  'https://firebasestorage.googleapis.com/v0/b/linkedup-c3e29.firebasestorage.app/o/asset%2Fdefault-user.png?alt=media&token=35d4da12-13b0-4f43-8b8e-375e6e126683',
+                                                                ),
+                                                                fit: BoxFit
+                                                                    .contain,
+                                                              ),
+                                                              allowRotation:
+                                                                  false,
+                                                              tag:
                                                                   valueOrDefault<
                                                                       String>(
                                                                 widget.message
                                                                     ?.image,
                                                                 'https://firebasestorage.googleapis.com/v0/b/linkedup-c3e29.firebasestorage.app/o/asset%2Fdefault-user.png?alt=media&token=35d4da12-13b0-4f43-8b8e-375e6e126683',
                                                               ),
-                                                              fit: BoxFit
-                                                                  .contain,
+                                                              useHeroAnimation:
+                                                                  true,
                                                             ),
-                                                            allowRotation:
-                                                                false,
-                                                            tag: valueOrDefault<
-                                                                String>(
+                                                          ),
+                                                        );
+                                                      },
+                                                      child: Hero(
+                                                        tag: valueOrDefault<
+                                                            String>(
+                                                          widget.message?.image,
+                                                          'https://firebasestorage.googleapis.com/v0/b/linkedup-c3e29.firebasestorage.app/o/asset%2Fdefault-user.png?alt=media&token=35d4da12-13b0-4f43-8b8e-375e6e126683',
+                                                        ),
+                                                        transitionOnUserGestures:
+                                                            true,
+                                                        child: ClipRRect(
+                                                          borderRadius:
+                                                              BorderRadius
+                                                                  .circular(
+                                                                      8.0),
+                                                          child:
+                                                              CachedNetworkImage(
+                                                            fadeInDuration:
+                                                                const Duration(
+                                                                    milliseconds:
+                                                                        300),
+                                                            fadeOutDuration:
+                                                                const Duration(
+                                                                    milliseconds:
+                                                                        300),
+                                                            imageUrl:
+                                                                valueOrDefault<
+                                                                    String>(
                                                               widget.message
                                                                   ?.image,
                                                               'https://firebasestorage.googleapis.com/v0/b/linkedup-c3e29.firebasestorage.app/o/asset%2Fdefault-user.png?alt=media&token=35d4da12-13b0-4f43-8b8e-375e6e126683',
                                                             ),
-                                                            useHeroAnimation:
-                                                                true,
+                                                            width: 222.23,
+                                                            height: 144.0,
+                                                            fit: BoxFit.cover,
                                                           ),
-                                                        ),
-                                                      );
-                                                    },
-                                                    child: Hero(
-                                                      tag: valueOrDefault<
-                                                          String>(
-                                                        widget.message?.image,
-                                                        'https://firebasestorage.googleapis.com/v0/b/linkedup-c3e29.firebasestorage.app/o/asset%2Fdefault-user.png?alt=media&token=35d4da12-13b0-4f43-8b8e-375e6e126683',
-                                                      ),
-                                                      transitionOnUserGestures:
-                                                          true,
-                                                      child: ClipRRect(
-                                                        borderRadius:
-                                                            BorderRadius
-                                                                .circular(8.0),
-                                                        child:
-                                                            CachedNetworkImage(
-                                                          fadeInDuration:
-                                                              const Duration(
-                                                                  milliseconds:
-                                                                      300),
-                                                          fadeOutDuration:
-                                                              const Duration(
-                                                                  milliseconds:
-                                                                      300),
-                                                          imageUrl:
-                                                              valueOrDefault<
-                                                                  String>(
-                                                            widget
-                                                                .message?.image,
-                                                            'https://firebasestorage.googleapis.com/v0/b/linkedup-c3e29.firebasestorage.app/o/asset%2Fdefault-user.png?alt=media&token=35d4da12-13b0-4f43-8b8e-375e6e126683',
-                                                          ),
-                                                          width: 222.23,
-                                                          height: 144.0,
-                                                          fit: BoxFit.cover,
                                                         ),
                                                       ),
                                                     ),
                                                   ),
-                                                ),
-                                              if ((widget.message?.images !=
-                                                          null &&
-                                                      (widget.message?.images)!
-                                                          .isNotEmpty) ==
-                                                  true)
-                                                Material(
-                                                  color: Colors.transparent,
-                                                  elevation: 0.0,
-                                                  shape: RoundedRectangleBorder(
-                                                    borderRadius:
-                                                        BorderRadius.circular(
-                                                            8.0),
-                                                  ),
-                                                  child: Container(
-                                                    width: 265.0,
-                                                    decoration: BoxDecoration(
-                                                      color: Colors.transparent,
+                                                if ((widget.message?.images !=
+                                                            null &&
+                                                        (widget.message
+                                                                ?.images)!
+                                                            .isNotEmpty) ==
+                                                    true)
+                                                  Material(
+                                                    color: Colors.transparent,
+                                                    elevation: 0.0,
+                                                    shape:
+                                                        RoundedRectangleBorder(
                                                       borderRadius:
                                                           BorderRadius.circular(
                                                               8.0),
                                                     ),
-                                                    child: Builder(
-                                                      builder: (context) {
-                                                        final multipleImages =
-                                                            widget.message
-                                                                    ?.images
-                                                                    .toList() ??
-                                                                [];
-                                                        return Column(
-                                                          mainAxisSize:
-                                                              MainAxisSize.min,
-                                                          children: List
-                                                              .generate(
-                                                            multipleImages
-                                                                .length,
-                                                            (multipleImagesIndex) {
-                                                              final multipleImagesItem =
-                                                                  multipleImages[
-                                                                      multipleImagesIndex];
-                                                              return InkWell(
-                                                                splashColor: Colors
-                                                                    .transparent,
-                                                                focusColor: Colors
-                                                                    .transparent,
-                                                                hoverColor: Colors
-                                                                    .transparent,
-                                                                highlightColor:
-                                                                    Colors
-                                                                        .transparent,
-                                                                onTap:
-                                                                    () async {
-                                                                  await Navigator
-                                                                      .push(
-                                                                    context,
-                                                                    PageTransition(
-                                                                      type: PageTransitionType
-                                                                          .fade,
-                                                                      child:
-                                                                          FlutterFlowExpandedImageView(
-                                                                        image:
-                                                                            CachedNetworkImage(
-                                                                          fadeInDuration:
-                                                                              const Duration(milliseconds: 300),
-                                                                          fadeOutDuration:
-                                                                              const Duration(milliseconds: 300),
-                                                                          imageUrl:
-                                                                              valueOrDefault<String>(
-                                                                            multipleImagesItem,
-                                                                            'https://firebasestorage.googleapis.com/v0/b/linkedup-c3e29.firebasestorage.app/o/asset%2Fdefault-user.png?alt=media&token=35d4da12-13b0-4f43-8b8e-375e6e126683',
-                                                                          ),
-                                                                          fit: BoxFit
-                                                                              .contain,
-                                                                          errorWidget: (context, error, stackTrace) =>
-                                                                              Image.asset(
-                                                                            'assets/images/error_image.png',
+                                                    child: Container(
+                                                      width: 265.0,
+                                                      decoration: BoxDecoration(
+                                                        color:
+                                                            Colors.transparent,
+                                                        borderRadius:
+                                                            BorderRadius
+                                                                .circular(8.0),
+                                                      ),
+                                                      child: Builder(
+                                                        builder: (context) {
+                                                          final multipleImages =
+                                                              widget.message
+                                                                      ?.images
+                                                                      .toList() ??
+                                                                  [];
+                                                          return Column(
+                                                            mainAxisSize:
+                                                                MainAxisSize
+                                                                    .min,
+                                                            children: List
+                                                                .generate(
+                                                              multipleImages
+                                                                  .length,
+                                                              (multipleImagesIndex) {
+                                                                final multipleImagesItem =
+                                                                    multipleImages[
+                                                                        multipleImagesIndex];
+                                                                return InkWell(
+                                                                  splashColor:
+                                                                      Colors
+                                                                          .transparent,
+                                                                  focusColor: Colors
+                                                                      .transparent,
+                                                                  hoverColor: Colors
+                                                                      .transparent,
+                                                                  highlightColor:
+                                                                      Colors
+                                                                          .transparent,
+                                                                  onTap:
+                                                                      () async {
+                                                                    await Navigator
+                                                                        .push(
+                                                                      context,
+                                                                      PageTransition(
+                                                                        type: PageTransitionType
+                                                                            .fade,
+                                                                        child:
+                                                                            FlutterFlowExpandedImageView(
+                                                                          image:
+                                                                              CachedNetworkImage(
+                                                                            fadeInDuration:
+                                                                                const Duration(milliseconds: 300),
+                                                                            fadeOutDuration:
+                                                                                const Duration(milliseconds: 300),
+                                                                            imageUrl:
+                                                                                valueOrDefault<String>(
+                                                                              multipleImagesItem,
+                                                                              'https://firebasestorage.googleapis.com/v0/b/linkedup-c3e29.firebasestorage.app/o/asset%2Fdefault-user.png?alt=media&token=35d4da12-13b0-4f43-8b8e-375e6e126683',
+                                                                            ),
                                                                             fit:
                                                                                 BoxFit.contain,
+                                                                            errorWidget: (context, error, stackTrace) =>
+                                                                                Image.asset(
+                                                                              'assets/images/error_image.png',
+                                                                              fit: BoxFit.contain,
+                                                                            ),
                                                                           ),
-                                                                        ),
-                                                                        allowRotation:
-                                                                            false,
-                                                                        tag: valueOrDefault<
-                                                                            String>(
-                                                                          multipleImagesItem,
-                                                                          'https://firebasestorage.googleapis.com/v0/b/linkedup-c3e29.firebasestorage.app/o/asset%2Fdefault-user.png?alt=media&token=35d4da12-13b0-4f43-8b8e-375e6e126683$multipleImagesIndex',
-                                                                        ),
-                                                                        useHeroAnimation:
-                                                                            true,
-                                                                      ),
-                                                                    ),
-                                                                  );
-                                                                },
-                                                                child: Hero(
-                                                                  tag: valueOrDefault<
-                                                                      String>(
-                                                                    multipleImagesItem,
-                                                                    'https://firebasestorage.googleapis.com/v0/b/linkedup-c3e29.firebasestorage.app/o/asset%2Fdefault-user.png?alt=media&token=35d4da12-13b0-4f43-8b8e-375e6e126683$multipleImagesIndex',
-                                                                  ),
-                                                                  transitionOnUserGestures:
-                                                                      true,
-                                                                  child:
-                                                                      ClipRRect(
-                                                                    borderRadius:
-                                                                        BorderRadius.circular(
-                                                                            8.0),
-                                                                    child:
-                                                                        CachedNetworkImage(
-                                                                      fadeInDuration:
-                                                                          const Duration(
-                                                                              milliseconds: 300),
-                                                                      fadeOutDuration:
-                                                                          const Duration(
-                                                                              milliseconds: 300),
-                                                                      imageUrl:
-                                                                          valueOrDefault<
+                                                                          allowRotation:
+                                                                              false,
+                                                                          tag: valueOrDefault<
                                                                               String>(
-                                                                        multipleImagesItem,
-                                                                        'https://firebasestorage.googleapis.com/v0/b/linkedup-c3e29.firebasestorage.app/o/asset%2Fdefault-user.png?alt=media&token=35d4da12-13b0-4f43-8b8e-375e6e126683',
+                                                                            multipleImagesItem,
+                                                                            'https://firebasestorage.googleapis.com/v0/b/linkedup-c3e29.firebasestorage.app/o/asset%2Fdefault-user.png?alt=media&token=35d4da12-13b0-4f43-8b8e-375e6e126683$multipleImagesIndex',
+                                                                          ),
+                                                                          useHeroAnimation:
+                                                                              true,
+                                                                        ),
                                                                       ),
-                                                                      width: double
-                                                                          .infinity,
-                                                                      height:
-                                                                          207.2,
-                                                                      fit: BoxFit
-                                                                          .cover,
-                                                                      errorWidget: (context,
-                                                                              error,
-                                                                              stackTrace) =>
-                                                                          Image
-                                                                              .asset(
-                                                                        'assets/images/error_image.png',
+                                                                    );
+                                                                  },
+                                                                  child: Hero(
+                                                                    tag: valueOrDefault<
+                                                                        String>(
+                                                                      multipleImagesItem,
+                                                                      'https://firebasestorage.googleapis.com/v0/b/linkedup-c3e29.firebasestorage.app/o/asset%2Fdefault-user.png?alt=media&token=35d4da12-13b0-4f43-8b8e-375e6e126683$multipleImagesIndex',
+                                                                    ),
+                                                                    transitionOnUserGestures:
+                                                                        true,
+                                                                    child:
+                                                                        ClipRRect(
+                                                                      borderRadius:
+                                                                          BorderRadius.circular(
+                                                                              8.0),
+                                                                      child:
+                                                                          CachedNetworkImage(
+                                                                        fadeInDuration:
+                                                                            const Duration(milliseconds: 300),
+                                                                        fadeOutDuration:
+                                                                            const Duration(milliseconds: 300),
+                                                                        imageUrl:
+                                                                            valueOrDefault<String>(
+                                                                          multipleImagesItem,
+                                                                          'https://firebasestorage.googleapis.com/v0/b/linkedup-c3e29.firebasestorage.app/o/asset%2Fdefault-user.png?alt=media&token=35d4da12-13b0-4f43-8b8e-375e6e126683',
+                                                                        ),
                                                                         width: double
                                                                             .infinity,
                                                                         height:
                                                                             207.2,
                                                                         fit: BoxFit
                                                                             .cover,
+                                                                        errorWidget: (context,
+                                                                                error,
+                                                                                stackTrace) =>
+                                                                            Image.asset(
+                                                                          'assets/images/error_image.png',
+                                                                          width:
+                                                                              double.infinity,
+                                                                          height:
+                                                                              207.2,
+                                                                          fit: BoxFit
+                                                                              .cover,
+                                                                        ),
                                                                       ),
                                                                     ),
                                                                   ),
-                                                                ),
-                                                              );
-                                                            },
-                                                          ).divide(
-                                                              const SizedBox(
-                                                                  height: 8.0)),
-                                                        );
-                                                      },
-                                                    ),
-                                                  ),
-                                                ),
-                                              if (widget.message?.audio !=
-                                                      null &&
-                                                  widget.message?.audio != '')
-                                                Container(
-                                                  width: double.infinity,
-                                                  decoration: BoxDecoration(
-                                                    color:
-                                                        const Color(0xFFE5E7EB),
-                                                    borderRadius:
-                                                        BorderRadius.circular(
-                                                            8.0),
-                                                  ),
-                                                  child: FlutterFlowAudioPlayer(
-                                                    audio: Audio.network(
-                                                      widget.message!.audioPath,
-                                                      metas: Metas(
-                                                        title: 'Voice',
-                                                      ),
-                                                    ),
-                                                    titleTextStyle:
-                                                        FlutterFlowTheme.of(
-                                                                context)
-                                                            .titleLarge
-                                                            .override(
-                                                              font: GoogleFonts
-                                                                  .inter(
-                                                                fontWeight: FlutterFlowTheme.of(
-                                                                        context)
-                                                                    .titleLarge
-                                                                    .fontWeight,
-                                                                fontStyle: FlutterFlowTheme.of(
-                                                                        context)
-                                                                    .titleLarge
-                                                                    .fontStyle,
-                                                              ),
-                                                              fontSize: 16.0,
-                                                              letterSpacing:
-                                                                  0.0,
-                                                              fontWeight:
-                                                                  FlutterFlowTheme.of(
-                                                                          context)
-                                                                      .titleLarge
-                                                                      .fontWeight,
-                                                              fontStyle:
-                                                                  FlutterFlowTheme.of(
-                                                                          context)
-                                                                      .titleLarge
-                                                                      .fontStyle,
-                                                            ),
-                                                    playbackDurationTextStyle:
-                                                        FlutterFlowTheme.of(
-                                                                context)
-                                                            .labelMedium
-                                                            .override(
-                                                              font: GoogleFonts
-                                                                  .inter(
-                                                                fontWeight: FlutterFlowTheme.of(
-                                                                        context)
-                                                                    .labelMedium
-                                                                    .fontWeight,
-                                                                fontStyle: FlutterFlowTheme.of(
-                                                                        context)
-                                                                    .labelMedium
-                                                                    .fontStyle,
-                                                              ),
-                                                              letterSpacing:
-                                                                  0.0,
-                                                              fontWeight:
-                                                                  FlutterFlowTheme.of(
-                                                                          context)
-                                                                      .labelMedium
-                                                                      .fontWeight,
-                                                              fontStyle:
-                                                                  FlutterFlowTheme.of(
-                                                                          context)
-                                                                      .labelMedium
-                                                                      .fontStyle,
-                                                            ),
-                                                    fillColor: FlutterFlowTheme
-                                                            .of(context)
-                                                        .secondaryBackground,
-                                                    playbackButtonColor:
-                                                        FlutterFlowTheme.of(
-                                                                context)
-                                                            .primary,
-                                                    activeTrackColor:
-                                                        FlutterFlowTheme.of(
-                                                                context)
-                                                            .primary,
-                                                    inactiveTrackColor:
-                                                        FlutterFlowTheme.of(
-                                                                context)
-                                                            .alternate,
-                                                    elevation: 0.0,
-                                                    playInBackground:
-                                                        PlayInBackground
-                                                            .enabled,
-                                                  ),
-                                                ),
-                                              if (widget.message
-                                                          ?.attachmentUrl !=
-                                                      null &&
-                                                  widget.message
-                                                          ?.attachmentUrl !=
-                                                      '')
-                                                Builder(
-                                                  builder: (context) => InkWell(
-                                                    splashColor:
-                                                        Colors.transparent,
-                                                    focusColor:
-                                                        Colors.transparent,
-                                                    hoverColor:
-                                                        Colors.transparent,
-                                                    highlightColor:
-                                                        Colors.transparent,
-                                                    onTap: () async {
-                                                      await showDialog(
-                                                        context: context,
-                                                        builder:
-                                                            (dialogContext) {
-                                                          return Dialog(
-                                                            elevation: 0,
-                                                            insetPadding:
-                                                                EdgeInsets.zero,
-                                                            backgroundColor:
-                                                                Colors
-                                                                    .transparent,
-                                                            alignment: const AlignmentDirectional(
-                                                                    0.0, 0.0)
-                                                                .resolve(
-                                                                    Directionality.of(
-                                                                        context)),
-                                                            child:
-                                                                PDFViewWidget(
-                                                              url: widget
-                                                                  .message!
-                                                                  .attachmentUrl,
-                                                            ),
+                                                                );
+                                                              },
+                                                            ).divide(
+                                                                const SizedBox(
+                                                                    height:
+                                                                        8.0)),
                                                           );
                                                         },
-                                                      );
-                                                    },
-                                                    child: Container(
-                                                      width: double.infinity,
-                                                      height: 65.0,
-                                                      decoration: BoxDecoration(
-                                                        color: FlutterFlowTheme
-                                                                .of(context)
-                                                            .secondaryBackground,
-                                                        borderRadius:
-                                                            BorderRadius
-                                                                .circular(12.0),
                                                       ),
-                                                      child: Align(
-                                                        alignment:
-                                                            const AlignmentDirectional(
-                                                                0.0, 0.0),
-                                                        child: Padding(
-                                                          padding:
-                                                              const EdgeInsets
-                                                                  .all(9.0),
-                                                          child: Row(
-                                                            mainAxisSize:
-                                                                MainAxisSize
-                                                                    .max,
-                                                            mainAxisAlignment:
-                                                                MainAxisAlignment
-                                                                    .center,
-                                                            children: [
-                                                              Text(
-                                                                'View PDF File',
-                                                                style: FlutterFlowTheme.of(
+                                                    ),
+                                                  ),
+                                                if (widget.message?.audio !=
+                                                        null &&
+                                                    widget.message?.audio != '')
+                                                  Container(
+                                                    width: double.infinity,
+                                                    decoration: BoxDecoration(
+                                                      color: const Color(
+                                                          0xFFE5E7EB),
+                                                      borderRadius:
+                                                          BorderRadius.circular(
+                                                              8.0),
+                                                    ),
+                                                    child:
+                                                        FlutterFlowAudioPlayer(
+                                                      audio: Audio.network(
+                                                        widget
+                                                            .message!.audioPath,
+                                                        metas: Metas(
+                                                          title: 'Voice',
+                                                        ),
+                                                      ),
+                                                      titleTextStyle:
+                                                          FlutterFlowTheme.of(
+                                                                  context)
+                                                              .titleLarge
+                                                              .override(
+                                                                font:
+                                                                    GoogleFonts
+                                                                        .inter(
+                                                                  fontWeight: FlutterFlowTheme.of(
+                                                                          context)
+                                                                      .titleLarge
+                                                                      .fontWeight,
+                                                                  fontStyle: FlutterFlowTheme.of(
+                                                                          context)
+                                                                      .titleLarge
+                                                                      .fontStyle,
+                                                                ),
+                                                                fontSize: 16.0,
+                                                                letterSpacing:
+                                                                    0.0,
+                                                                fontWeight: FlutterFlowTheme.of(
                                                                         context)
-                                                                    .bodyMedium
-                                                                    .override(
-                                                                      font: GoogleFonts
-                                                                          .inter(
+                                                                    .titleLarge
+                                                                    .fontWeight,
+                                                                fontStyle: FlutterFlowTheme.of(
+                                                                        context)
+                                                                    .titleLarge
+                                                                    .fontStyle,
+                                                              ),
+                                                      playbackDurationTextStyle:
+                                                          FlutterFlowTheme.of(
+                                                                  context)
+                                                              .labelMedium
+                                                              .override(
+                                                                font:
+                                                                    GoogleFonts
+                                                                        .inter(
+                                                                  fontWeight: FlutterFlowTheme.of(
+                                                                          context)
+                                                                      .labelMedium
+                                                                      .fontWeight,
+                                                                  fontStyle: FlutterFlowTheme.of(
+                                                                          context)
+                                                                      .labelMedium
+                                                                      .fontStyle,
+                                                                ),
+                                                                letterSpacing:
+                                                                    0.0,
+                                                                fontWeight: FlutterFlowTheme.of(
+                                                                        context)
+                                                                    .labelMedium
+                                                                    .fontWeight,
+                                                                fontStyle: FlutterFlowTheme.of(
+                                                                        context)
+                                                                    .labelMedium
+                                                                    .fontStyle,
+                                                              ),
+                                                      fillColor: FlutterFlowTheme
+                                                              .of(context)
+                                                          .secondaryBackground,
+                                                      playbackButtonColor:
+                                                          FlutterFlowTheme.of(
+                                                                  context)
+                                                              .primary,
+                                                      activeTrackColor:
+                                                          FlutterFlowTheme.of(
+                                                                  context)
+                                                              .primary,
+                                                      inactiveTrackColor:
+                                                          FlutterFlowTheme.of(
+                                                                  context)
+                                                              .alternate,
+                                                      elevation: 0.0,
+                                                      playInBackground:
+                                                          PlayInBackground
+                                                              .enabled,
+                                                    ),
+                                                  ),
+                                                if (widget.message
+                                                            ?.attachmentUrl !=
+                                                        null &&
+                                                    widget.message
+                                                            ?.attachmentUrl !=
+                                                        '')
+                                                  Builder(
+                                                    builder: (context) =>
+                                                        InkWell(
+                                                      splashColor:
+                                                          Colors.transparent,
+                                                      focusColor:
+                                                          Colors.transparent,
+                                                      hoverColor:
+                                                          Colors.transparent,
+                                                      highlightColor:
+                                                          Colors.transparent,
+                                                      onTap: () async {
+                                                        await showDialog(
+                                                          context: context,
+                                                          builder:
+                                                              (dialogContext) {
+                                                            return Dialog(
+                                                              elevation: 0,
+                                                              insetPadding:
+                                                                  EdgeInsets
+                                                                      .zero,
+                                                              backgroundColor:
+                                                                  Colors
+                                                                      .transparent,
+                                                              alignment: const AlignmentDirectional(
+                                                                      0.0, 0.0)
+                                                                  .resolve(
+                                                                      Directionality.of(
+                                                                          context)),
+                                                              child:
+                                                                  PDFViewWidget(
+                                                                url: widget
+                                                                    .message!
+                                                                    .attachmentUrl,
+                                                              ),
+                                                            );
+                                                          },
+                                                        );
+                                                      },
+                                                      child: Container(
+                                                        width: double.infinity,
+                                                        height: 65.0,
+                                                        decoration:
+                                                            BoxDecoration(
+                                                          color: FlutterFlowTheme
+                                                                  .of(context)
+                                                              .secondaryBackground,
+                                                          borderRadius:
+                                                              BorderRadius
+                                                                  .circular(
+                                                                      12.0),
+                                                        ),
+                                                        child: Align(
+                                                          alignment:
+                                                              const AlignmentDirectional(
+                                                                  0.0, 0.0),
+                                                          child: Padding(
+                                                            padding:
+                                                                const EdgeInsets
+                                                                    .all(9.0),
+                                                            child: Row(
+                                                              mainAxisSize:
+                                                                  MainAxisSize
+                                                                      .max,
+                                                              mainAxisAlignment:
+                                                                  MainAxisAlignment
+                                                                      .center,
+                                                              children: [
+                                                                Text(
+                                                                  'View PDF File',
+                                                                  style: FlutterFlowTheme.of(
+                                                                          context)
+                                                                      .bodyMedium
+                                                                      .override(
+                                                                        font: GoogleFonts
+                                                                            .inter(
+                                                                          fontWeight: FlutterFlowTheme.of(context)
+                                                                              .bodyMedium
+                                                                              .fontWeight,
+                                                                          fontStyle: FlutterFlowTheme.of(context)
+                                                                              .bodyMedium
+                                                                              .fontStyle,
+                                                                        ),
+                                                                        letterSpacing:
+                                                                            0.0,
                                                                         fontWeight: FlutterFlowTheme.of(context)
                                                                             .bodyMedium
                                                                             .fontWeight,
@@ -1053,57 +1133,58 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
                                                                             .bodyMedium
                                                                             .fontStyle,
                                                                       ),
-                                                                      letterSpacing:
-                                                                          0.0,
-                                                                      fontWeight: FlutterFlowTheme.of(
-                                                                              context)
-                                                                          .bodyMedium
-                                                                          .fontWeight,
-                                                                      fontStyle: FlutterFlowTheme.of(
-                                                                              context)
-                                                                          .bodyMedium
-                                                                          .fontStyle,
-                                                                    ),
-                                                              ),
-                                                              Icon(
-                                                                Icons
-                                                                    .cloud_download,
-                                                                color: FlutterFlowTheme.of(
-                                                                        context)
-                                                                    .primary,
-                                                                size: 24.0,
-                                                              ),
-                                                            ].divide(
-                                                                const SizedBox(
-                                                                    width:
-                                                                        15.0)),
+                                                                ),
+                                                                Icon(
+                                                                  Icons
+                                                                      .cloud_download,
+                                                                  color: FlutterFlowTheme.of(
+                                                                          context)
+                                                                      .primary,
+                                                                  size: 24.0,
+                                                                ),
+                                                              ].divide(
+                                                                  const SizedBox(
+                                                                      width:
+                                                                          15.0)),
+                                                            ),
                                                           ),
                                                         ),
                                                       ),
                                                     ),
                                                   ),
-                                                ),
-                                            ].divide(
-                                                const SizedBox(height: 8.0)),
+                                              ].divide(
+                                                  const SizedBox(height: 8.0)),
+                                            ),
                                           ),
                                         ),
                                       ),
                                     ),
                                   ),
                                 ),
-                              ),
-                              Padding(
-                                padding: const EdgeInsetsDirectional.fromSTEB(
-                                    12.0, 0.0, 12.0, 0.0),
-                                child: Row(
-                                  mainAxisAlignment: MainAxisAlignment.end,
-                                  children: [
-                                    Text(
-                                      'You',
-                                      style: FlutterFlowTheme.of(context)
-                                          .bodySmall
-                                          .override(
-                                            font: GoogleFonts.inter(
+                                Padding(
+                                  padding: const EdgeInsetsDirectional.fromSTEB(
+                                      12.0, 0.0, 12.0, 0.0),
+                                  child: Row(
+                                    mainAxisAlignment: MainAxisAlignment.end,
+                                    children: [
+                                      Text(
+                                        'You',
+                                        style: FlutterFlowTheme.of(context)
+                                            .bodySmall
+                                            .override(
+                                              font: GoogleFonts.inter(
+                                                fontWeight:
+                                                    FlutterFlowTheme.of(context)
+                                                        .bodySmall
+                                                        .fontWeight,
+                                                fontStyle:
+                                                    FlutterFlowTheme.of(context)
+                                                        .bodySmall
+                                                        .fontStyle,
+                                              ),
+                                              color: const Color(0xFF6B7280),
+                                              fontSize: 12.0,
+                                              letterSpacing: 0.0,
                                               fontWeight:
                                                   FlutterFlowTheme.of(context)
                                                       .bodySmall
@@ -1113,40 +1194,40 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
                                                       .bodySmall
                                                       .fontStyle,
                                             ),
-                                            color: const Color(0xFF6B7280),
-                                            fontSize: 12.0,
-                                            letterSpacing: 0.0,
-                                            fontWeight:
-                                                FlutterFlowTheme.of(context)
-                                                    .bodySmall
-                                                    .fontWeight,
-                                            fontStyle:
-                                                FlutterFlowTheme.of(context)
-                                                    .bodySmall
-                                                    .fontStyle,
-                                          ),
-                                    ),
-                                    Text(
-                                      ' • ',
-                                      style: FlutterFlowTheme.of(context)
-                                          .bodySmall
-                                          .override(
-                                            font: GoogleFonts.inter(),
-                                            color: const Color(0xFF6B7280),
-                                            fontSize: 12.0,
-                                            letterSpacing: 0.0,
-                                          ),
-                                    ),
-                                    Text(
-                                      valueOrDefault<String>(
-                                        dateTimeFormat("relative",
-                                            widget.message?.createdAt),
-                                        'N/A',
                                       ),
-                                      style: FlutterFlowTheme.of(context)
-                                          .bodySmall
-                                          .override(
-                                            font: GoogleFonts.inter(
+                                      Text(
+                                        ' • ',
+                                        style: FlutterFlowTheme.of(context)
+                                            .bodySmall
+                                            .override(
+                                              font: GoogleFonts.inter(),
+                                              color: const Color(0xFF6B7280),
+                                              fontSize: 12.0,
+                                              letterSpacing: 0.0,
+                                            ),
+                                      ),
+                                      Text(
+                                        valueOrDefault<String>(
+                                          dateTimeFormat("relative",
+                                              widget.message?.createdAt),
+                                          'N/A',
+                                        ),
+                                        style: FlutterFlowTheme.of(context)
+                                            .bodySmall
+                                            .override(
+                                              font: GoogleFonts.inter(
+                                                fontWeight:
+                                                    FlutterFlowTheme.of(context)
+                                                        .bodySmall
+                                                        .fontWeight,
+                                                fontStyle:
+                                                    FlutterFlowTheme.of(context)
+                                                        .bodySmall
+                                                        .fontStyle,
+                                              ),
+                                              color: const Color(0xFF6B7280),
+                                              fontSize: 12.0,
+                                              letterSpacing: 0.0,
                                               fontWeight:
                                                   FlutterFlowTheme.of(context)
                                                       .bodySmall
@@ -1156,23 +1237,12 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
                                                       .bodySmall
                                                       .fontStyle,
                                             ),
-                                            color: const Color(0xFF6B7280),
-                                            fontSize: 12.0,
-                                            letterSpacing: 0.0,
-                                            fontWeight:
-                                                FlutterFlowTheme.of(context)
-                                                    .bodySmall
-                                                    .fontWeight,
-                                            fontStyle:
-                                                FlutterFlowTheme.of(context)
-                                                    .bodySmall
-                                                    .fontStyle,
-                                          ),
-                                    ),
-                                  ],
+                                      ),
+                                    ],
+                                  ),
                                 ),
-                              ),
-                            ].divide(const SizedBox(height: 4.0)),
+                              ].divide(const SizedBox(height: 4.0)),
+                            ),
                           ),
                         ),
                         ClipRRect(
@@ -1234,60 +1304,83 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
                             fit: BoxFit.cover,
                           ),
                         ),
-                        Expanded(
-                          child: Column(
-                            mainAxisSize: MainAxisSize.max,
-                            crossAxisAlignment: CrossAxisAlignment.end,
-                            children: [
-                              Align(
-                                alignment:
-                                    const AlignmentDirectional(-1.0, -1.0),
-                                child: Padding(
-                                  padding: const EdgeInsetsDirectional.fromSTEB(
-                                      12.0, 0.0, 12.0, 0.0),
-                                  child: InkWell(
-                                    splashColor: Colors.transparent,
-                                    focusColor: Colors.transparent,
-                                    hoverColor: Colors.transparent,
-                                    highlightColor: Colors.transparent,
-                                    onLongPress: _copyContentIfAny,
-                                    child: _withMessageMenu(
-                                      bubble: Container(
-                                        decoration: BoxDecoration(
-                                          color: const Color(0xFFF3F4F6),
-                                          borderRadius:
-                                              BorderRadius.circular(16.0),
-                                        ),
-                                        child: Padding(
-                                          padding: const EdgeInsets.all(16.0),
-                                          child: Column(
-                                            mainAxisSize: MainAxisSize.min,
-                                            crossAxisAlignment:
-                                                CrossAxisAlignment.end,
-                                            children: [
-                                              if (widget.message?.content !=
-                                                      null &&
-                                                  widget.message?.content != '')
-                                                MarkdownBody(
-                                                  data: valueOrDefault<String>(
-                                                    widget.message?.content,
-                                                    'I\'m at the venue now. Here\'s the map with the room highlighted:',
-                                                  ),
-                                                  selectable: true,
-                                                  onTapLink:
-                                                      (text, url, title) async {
-                                                    if (url != null) {
-                                                      await _launchURL(url);
-                                                    }
-                                                  },
-                                                  styleSheet:
-                                                      MarkdownStyleSheet(
-                                                    p: FlutterFlowTheme.of(
-                                                            context)
-                                                        .bodyMedium
-                                                        .override(
-                                                          font:
-                                                              GoogleFonts.inter(
+                        Flexible(
+                          child: ConstrainedBox(
+                            constraints: BoxConstraints(
+                              maxWidth: MediaQuery.of(context).size.width * 0.6,
+                              minHeight: 60,
+                            ),
+                            child: Column(
+                              mainAxisSize: MainAxisSize.max,
+                              crossAxisAlignment: CrossAxisAlignment.end,
+                              children: [
+                                Align(
+                                  alignment:
+                                      const AlignmentDirectional(-1.0, -1.0),
+                                  child: Padding(
+                                    padding:
+                                        const EdgeInsetsDirectional.fromSTEB(
+                                            12.0, 0.0, 12.0, 0.0),
+                                    child: InkWell(
+                                      splashColor: Colors.transparent,
+                                      focusColor: Colors.transparent,
+                                      hoverColor: Colors.transparent,
+                                      highlightColor: Colors.transparent,
+                                      onLongPress: _copyContentIfAny,
+                                      child: _withMessageMenu(
+                                        bubble: Container(
+                                          decoration: BoxDecoration(
+                                            color: const Color(0xFFF3F4F6),
+                                            borderRadius:
+                                                BorderRadius.circular(16.0),
+                                          ),
+                                          child: Padding(
+                                            padding: const EdgeInsets.all(16.0),
+                                            child: Column(
+                                              mainAxisSize: MainAxisSize.min,
+                                              crossAxisAlignment:
+                                                  CrossAxisAlignment.end,
+                                              children: [
+                                                if (widget.message?.content !=
+                                                        null &&
+                                                    widget.message?.content !=
+                                                        '')
+                                                  MarkdownBody(
+                                                    data:
+                                                        valueOrDefault<String>(
+                                                      widget.message?.content,
+                                                      'I\'m at the venue now. Here\'s the map with the room highlighted:',
+                                                    ),
+                                                    selectable: true,
+                                                    onTapLink: (text, url,
+                                                        title) async {
+                                                      if (url != null) {
+                                                        await _launchURL(url);
+                                                      }
+                                                    },
+                                                    styleSheet:
+                                                        MarkdownStyleSheet(
+                                                      p: FlutterFlowTheme.of(
+                                                              context)
+                                                          .bodyMedium
+                                                          .override(
+                                                            font: GoogleFonts
+                                                                .inter(
+                                                              fontWeight:
+                                                                  FlutterFlowTheme.of(
+                                                                          context)
+                                                                      .bodyMedium
+                                                                      .fontWeight,
+                                                              fontStyle:
+                                                                  FlutterFlowTheme.of(
+                                                                          context)
+                                                                      .bodyMedium
+                                                                      .fontStyle,
+                                                            ),
+                                                            color: const Color(
+                                                                0xFF1F2937),
+                                                            fontSize: 14.0,
+                                                            letterSpacing: 0.0,
                                                             fontWeight:
                                                                 FlutterFlowTheme.of(
                                                                         context)
@@ -1299,538 +1392,539 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
                                                                     .bodyMedium
                                                                     .fontStyle,
                                                           ),
-                                                          color: const Color(
-                                                              0xFF1F2937),
-                                                          fontSize: 14.0,
-                                                          letterSpacing: 0.0,
-                                                          fontWeight:
-                                                              FlutterFlowTheme.of(
-                                                                      context)
-                                                                  .bodyMedium
-                                                                  .fontWeight,
-                                                          fontStyle:
-                                                              FlutterFlowTheme.of(
-                                                                      context)
-                                                                  .bodyMedium
-                                                                  .fontStyle,
-                                                        ),
-                                                    a: FlutterFlowTheme.of(
-                                                            context)
-                                                        .bodyMedium
-                                                        .override(
-                                                          font: GoogleFonts
-                                                              .inter(),
-                                                          color: const Color(
-                                                              0xFF2563EB),
-                                                          fontSize: 14.0,
-                                                          letterSpacing: 0.0,
-                                                          decoration:
-                                                              TextDecoration
-                                                                  .underline,
-                                                        ),
-                                                    code: FlutterFlowTheme.of(
-                                                            context)
-                                                        .bodyMedium
-                                                        .override(
-                                                          font: GoogleFonts
-                                                              .robotoMono(),
-                                                          color: const Color(
-                                                              0xFF1F2937),
-                                                          fontSize: 13.0,
-                                                        ),
-                                                    codeblockDecoration:
-                                                        BoxDecoration(
+                                                      a: FlutterFlowTheme.of(
+                                                              context)
+                                                          .bodyMedium
+                                                          .override(
+                                                            font: GoogleFonts
+                                                                .inter(),
+                                                            color: const Color(
+                                                                0xFF2563EB),
+                                                            fontSize: 14.0,
+                                                            letterSpacing: 0.0,
+                                                            decoration:
+                                                                TextDecoration
+                                                                    .underline,
+                                                          ),
+                                                      code: FlutterFlowTheme.of(
+                                                              context)
+                                                          .bodyMedium
+                                                          .override(
+                                                            font: GoogleFonts
+                                                                .robotoMono(),
+                                                            color: const Color(
+                                                                0xFF1F2937),
+                                                            fontSize: 13.0,
+                                                          ),
+                                                      codeblockDecoration:
+                                                          BoxDecoration(
+                                                        color: const Color(
+                                                            0xFFE5E7EB),
+                                                        borderRadius:
+                                                            BorderRadius
+                                                                .circular(4),
+                                                      ),
+                                                      strong: FlutterFlowTheme
+                                                              .of(context)
+                                                          .bodyMedium
+                                                          .override(
+                                                            font: GoogleFonts
+                                                                .inter(
+                                                              fontWeight:
+                                                                  FontWeight
+                                                                      .bold,
+                                                            ),
+                                                            color: const Color(
+                                                                0xFF1F2937),
+                                                            fontSize: 14.0,
+                                                            fontWeight:
+                                                                FontWeight.bold,
+                                                          ),
+                                                      em: FlutterFlowTheme.of(
+                                                              context)
+                                                          .bodyMedium
+                                                          .override(
+                                                            font: GoogleFonts
+                                                                .inter(
+                                                              fontStyle:
+                                                                  FontStyle
+                                                                      .italic,
+                                                            ),
+                                                            color: const Color(
+                                                                0xFF1F2937),
+                                                            fontSize: 14.0,
+                                                            fontStyle: FontStyle
+                                                                .italic,
+                                                          ),
+                                                    ),
+                                                  ),
+                                                if (widget.message?.image !=
+                                                        null &&
+                                                    widget.message?.image != '')
+                                                  Container(
+                                                    width: 265.0,
+                                                    height: 207.2,
+                                                    decoration: BoxDecoration(
                                                       color: const Color(
                                                           0xFFE5E7EB),
                                                       borderRadius:
                                                           BorderRadius.circular(
-                                                              4),
+                                                              8.0),
                                                     ),
-                                                    strong: FlutterFlowTheme.of(
-                                                            context)
-                                                        .bodyMedium
-                                                        .override(
-                                                          font:
-                                                              GoogleFonts.inter(
-                                                            fontWeight:
-                                                                FontWeight.bold,
-                                                          ),
-                                                          color: const Color(
-                                                              0xFF1F2937),
-                                                          fontSize: 14.0,
-                                                          fontWeight:
-                                                              FontWeight.bold,
-                                                        ),
-                                                    em: FlutterFlowTheme.of(
-                                                            context)
-                                                        .bodyMedium
-                                                        .override(
-                                                          font:
-                                                              GoogleFonts.inter(
-                                                            fontStyle: FontStyle
-                                                                .italic,
-                                                          ),
-                                                          color: const Color(
-                                                              0xFF1F2937),
-                                                          fontSize: 14.0,
-                                                          fontStyle:
-                                                              FontStyle.italic,
-                                                        ),
-                                                  ),
-                                                ),
-                                              if (widget.message?.image !=
-                                                      null &&
-                                                  widget.message?.image != '')
-                                                Container(
-                                                  width: 265.0,
-                                                  height: 207.2,
-                                                  decoration: BoxDecoration(
-                                                    color:
-                                                        const Color(0xFFE5E7EB),
-                                                    borderRadius:
-                                                        BorderRadius.circular(
-                                                            8.0),
-                                                  ),
-                                                  child: InkWell(
-                                                    splashColor:
-                                                        Colors.transparent,
-                                                    focusColor:
-                                                        Colors.transparent,
-                                                    hoverColor:
-                                                        Colors.transparent,
-                                                    highlightColor:
-                                                        Colors.transparent,
-                                                    onTap: () async {
-                                                      await Navigator.push(
-                                                        context,
-                                                        PageTransition(
-                                                          type:
-                                                              PageTransitionType
-                                                                  .fade,
-                                                          child:
-                                                              FlutterFlowExpandedImageView(
-                                                            image:
-                                                                CachedNetworkImage(
-                                                              fadeInDuration:
-                                                                  const Duration(
-                                                                      milliseconds:
-                                                                          300),
-                                                              fadeOutDuration:
-                                                                  const Duration(
-                                                                      milliseconds:
-                                                                          300),
-                                                              imageUrl:
+                                                    child: InkWell(
+                                                      splashColor:
+                                                          Colors.transparent,
+                                                      focusColor:
+                                                          Colors.transparent,
+                                                      hoverColor:
+                                                          Colors.transparent,
+                                                      highlightColor:
+                                                          Colors.transparent,
+                                                      onTap: () async {
+                                                        await Navigator.push(
+                                                          context,
+                                                          PageTransition(
+                                                            type:
+                                                                PageTransitionType
+                                                                    .fade,
+                                                            child:
+                                                                FlutterFlowExpandedImageView(
+                                                              image:
+                                                                  CachedNetworkImage(
+                                                                fadeInDuration:
+                                                                    const Duration(
+                                                                        milliseconds:
+                                                                            300),
+                                                                fadeOutDuration:
+                                                                    const Duration(
+                                                                        milliseconds:
+                                                                            300),
+                                                                imageUrl:
+                                                                    valueOrDefault<
+                                                                        String>(
+                                                                  widget.message
+                                                                      ?.image,
+                                                                  'https://firebasestorage.googleapis.com/v0/b/linkedup-c3e29.firebasestorage.app/o/asset%2Fdefault-user.png?alt=media&token=35d4da12-13b0-4f43-8b8e-375e6e126683',
+                                                                ),
+                                                                fit: BoxFit
+                                                                    .contain,
+                                                                errorWidget: (context,
+                                                                        error,
+                                                                        stackTrace) =>
+                                                                    Image.asset(
+                                                                  'assets/images/error_image.png',
+                                                                  fit: BoxFit
+                                                                      .contain,
+                                                                ),
+                                                              ),
+                                                              allowRotation:
+                                                                  false,
+                                                              tag:
                                                                   valueOrDefault<
                                                                       String>(
                                                                 widget.message
                                                                     ?.image,
                                                                 'https://firebasestorage.googleapis.com/v0/b/linkedup-c3e29.firebasestorage.app/o/asset%2Fdefault-user.png?alt=media&token=35d4da12-13b0-4f43-8b8e-375e6e126683',
                                                               ),
-                                                              fit: BoxFit
-                                                                  .contain,
-                                                              errorWidget: (context,
-                                                                      error,
-                                                                      stackTrace) =>
-                                                                  Image.asset(
-                                                                'assets/images/error_image.png',
-                                                                fit: BoxFit
-                                                                    .contain,
-                                                              ),
+                                                              useHeroAnimation:
+                                                                  true,
                                                             ),
-                                                            allowRotation:
-                                                                false,
-                                                            tag: valueOrDefault<
-                                                                String>(
+                                                          ),
+                                                        );
+                                                      },
+                                                      child: Hero(
+                                                        tag: valueOrDefault<
+                                                            String>(
+                                                          widget.message?.image,
+                                                          'https://firebasestorage.googleapis.com/v0/b/linkedup-c3e29.firebasestorage.app/o/asset%2Fdefault-user.png?alt=media&token=35d4da12-13b0-4f43-8b8e-375e6e126683',
+                                                        ),
+                                                        transitionOnUserGestures:
+                                                            true,
+                                                        child: ClipRRect(
+                                                          borderRadius:
+                                                              BorderRadius
+                                                                  .circular(
+                                                                      8.0),
+                                                          child:
+                                                              CachedNetworkImage(
+                                                            fadeInDuration:
+                                                                const Duration(
+                                                                    milliseconds:
+                                                                        300),
+                                                            fadeOutDuration:
+                                                                const Duration(
+                                                                    milliseconds:
+                                                                        300),
+                                                            imageUrl:
+                                                                valueOrDefault<
+                                                                    String>(
                                                               widget.message
                                                                   ?.image,
                                                               'https://firebasestorage.googleapis.com/v0/b/linkedup-c3e29.firebasestorage.app/o/asset%2Fdefault-user.png?alt=media&token=35d4da12-13b0-4f43-8b8e-375e6e126683',
                                                             ),
-                                                            useHeroAnimation:
-                                                                true,
-                                                          ),
-                                                        ),
-                                                      );
-                                                    },
-                                                    child: Hero(
-                                                      tag: valueOrDefault<
-                                                          String>(
-                                                        widget.message?.image,
-                                                        'https://firebasestorage.googleapis.com/v0/b/linkedup-c3e29.firebasestorage.app/o/asset%2Fdefault-user.png?alt=media&token=35d4da12-13b0-4f43-8b8e-375e6e126683',
-                                                      ),
-                                                      transitionOnUserGestures:
-                                                          true,
-                                                      child: ClipRRect(
-                                                        borderRadius:
-                                                            BorderRadius
-                                                                .circular(8.0),
-                                                        child:
-                                                            CachedNetworkImage(
-                                                          fadeInDuration:
-                                                              const Duration(
-                                                                  milliseconds:
-                                                                      300),
-                                                          fadeOutDuration:
-                                                              const Duration(
-                                                                  milliseconds:
-                                                                      300),
-                                                          imageUrl:
-                                                              valueOrDefault<
-                                                                  String>(
-                                                            widget
-                                                                .message?.image,
-                                                            'https://firebasestorage.googleapis.com/v0/b/linkedup-c3e29.firebasestorage.app/o/asset%2Fdefault-user.png?alt=media&token=35d4da12-13b0-4f43-8b8e-375e6e126683',
-                                                          ),
-                                                          width: 222.2,
-                                                          height: 144.0,
-                                                          fit: BoxFit.cover,
-                                                          errorWidget: (context,
-                                                                  error,
-                                                                  stackTrace) =>
-                                                              Image.asset(
-                                                            'assets/images/error_image.png',
                                                             width: 222.2,
                                                             height: 144.0,
                                                             fit: BoxFit.cover,
+                                                            errorWidget: (context,
+                                                                    error,
+                                                                    stackTrace) =>
+                                                                Image.asset(
+                                                              'assets/images/error_image.png',
+                                                              width: 222.2,
+                                                              height: 144.0,
+                                                              fit: BoxFit.cover,
+                                                            ),
                                                           ),
                                                         ),
                                                       ),
                                                     ),
                                                   ),
-                                                ),
-                                              if ((widget.message?.images !=
-                                                          null &&
-                                                      (widget.message?.images)!
-                                                          .isNotEmpty) ==
-                                                  true)
-                                                Material(
-                                                  color: Colors.transparent,
-                                                  elevation: 0.0,
-                                                  shape: RoundedRectangleBorder(
-                                                    borderRadius:
-                                                        BorderRadius.circular(
-                                                            8.0),
-                                                  ),
-                                                  child: Container(
-                                                    width: 265.0,
-                                                    decoration: BoxDecoration(
-                                                      color: Colors.transparent,
+                                                if ((widget.message?.images !=
+                                                            null &&
+                                                        (widget.message
+                                                                ?.images)!
+                                                            .isNotEmpty) ==
+                                                    true)
+                                                  Material(
+                                                    color: Colors.transparent,
+                                                    elevation: 0.0,
+                                                    shape:
+                                                        RoundedRectangleBorder(
                                                       borderRadius:
                                                           BorderRadius.circular(
                                                               8.0),
                                                     ),
-                                                    child: Builder(
-                                                      builder: (context) {
-                                                        final multipleImages =
-                                                            widget.message
-                                                                    ?.images
-                                                                    .toList() ??
-                                                                [];
-                                                        return Column(
-                                                          mainAxisSize:
-                                                              MainAxisSize.min,
-                                                          children: List
-                                                              .generate(
-                                                            multipleImages
-                                                                .length,
-                                                            (multipleImagesIndex) {
-                                                              final multipleImagesItem =
-                                                                  multipleImages[
-                                                                      multipleImagesIndex];
-                                                              return InkWell(
-                                                                splashColor: Colors
-                                                                    .transparent,
-                                                                focusColor: Colors
-                                                                    .transparent,
-                                                                hoverColor: Colors
-                                                                    .transparent,
-                                                                highlightColor:
-                                                                    Colors
-                                                                        .transparent,
-                                                                onTap:
-                                                                    () async {
-                                                                  await Navigator
-                                                                      .push(
-                                                                    context,
-                                                                    PageTransition(
-                                                                      type: PageTransitionType
-                                                                          .fade,
-                                                                      child:
-                                                                          FlutterFlowExpandedImageView(
-                                                                        image:
-                                                                            CachedNetworkImage(
-                                                                          fadeInDuration:
-                                                                              const Duration(milliseconds: 300),
-                                                                          fadeOutDuration:
-                                                                              const Duration(milliseconds: 300),
-                                                                          imageUrl:
-                                                                              valueOrDefault<String>(
-                                                                            multipleImagesItem,
-                                                                            'https://firebasestorage.googleapis.com/v0/b/linkedup-c3e29.firebasestorage.app/o/asset%2Fdefault-user.png?alt=media&token=35d4da12-13b0-4f43-8b8e-375e6e126683',
-                                                                          ),
-                                                                          fit: BoxFit
-                                                                              .contain,
-                                                                          errorWidget: (context, error, stackTrace) =>
-                                                                              Image.asset(
-                                                                            'assets/images/error_image.png',
+                                                    child: Container(
+                                                      width: 265.0,
+                                                      decoration: BoxDecoration(
+                                                        color:
+                                                            Colors.transparent,
+                                                        borderRadius:
+                                                            BorderRadius
+                                                                .circular(8.0),
+                                                      ),
+                                                      child: Builder(
+                                                        builder: (context) {
+                                                          final multipleImages =
+                                                              widget.message
+                                                                      ?.images
+                                                                      .toList() ??
+                                                                  [];
+                                                          return Column(
+                                                            mainAxisSize:
+                                                                MainAxisSize
+                                                                    .min,
+                                                            children: List
+                                                                .generate(
+                                                              multipleImages
+                                                                  .length,
+                                                              (multipleImagesIndex) {
+                                                                final multipleImagesItem =
+                                                                    multipleImages[
+                                                                        multipleImagesIndex];
+                                                                return InkWell(
+                                                                  splashColor:
+                                                                      Colors
+                                                                          .transparent,
+                                                                  focusColor: Colors
+                                                                      .transparent,
+                                                                  hoverColor: Colors
+                                                                      .transparent,
+                                                                  highlightColor:
+                                                                      Colors
+                                                                          .transparent,
+                                                                  onTap:
+                                                                      () async {
+                                                                    await Navigator
+                                                                        .push(
+                                                                      context,
+                                                                      PageTransition(
+                                                                        type: PageTransitionType
+                                                                            .fade,
+                                                                        child:
+                                                                            FlutterFlowExpandedImageView(
+                                                                          image:
+                                                                              CachedNetworkImage(
+                                                                            fadeInDuration:
+                                                                                const Duration(milliseconds: 300),
+                                                                            fadeOutDuration:
+                                                                                const Duration(milliseconds: 300),
+                                                                            imageUrl:
+                                                                                valueOrDefault<String>(
+                                                                              multipleImagesItem,
+                                                                              'https://firebasestorage.googleapis.com/v0/b/linkedup-c3e29.firebasestorage.app/o/asset%2Fdefault-user.png?alt=media&token=35d4da12-13b0-4f43-8b8e-375e6e126683',
+                                                                            ),
                                                                             fit:
                                                                                 BoxFit.contain,
+                                                                            errorWidget: (context, error, stackTrace) =>
+                                                                                Image.asset(
+                                                                              'assets/images/error_image.png',
+                                                                              fit: BoxFit.contain,
+                                                                            ),
                                                                           ),
-                                                                        ),
-                                                                        allowRotation:
-                                                                            false,
-                                                                        tag: valueOrDefault<
-                                                                            String>(
-                                                                          multipleImagesItem,
-                                                                          'https://firebasestorage.googleapis.com/v0/b/linkedup-c3e29.firebasestorage.app/o/asset%2Fdefault-user.png?alt=media&token=35d4da12-13b0-4f43-8b8e-375e6e126683$multipleImagesIndex',
-                                                                        ),
-                                                                        useHeroAnimation:
-                                                                            true,
-                                                                      ),
-                                                                    ),
-                                                                  );
-                                                                },
-                                                                child: Hero(
-                                                                  tag: valueOrDefault<
-                                                                      String>(
-                                                                    multipleImagesItem,
-                                                                    'https://firebasestorage.googleapis.com/v0/b/linkedup-c3e29.firebasestorage.app/o/asset%2Fdefault-user.png?alt=media&token=35d4da12-13b0-4f43-8b8e-375e6e126683$multipleImagesIndex',
-                                                                  ),
-                                                                  transitionOnUserGestures:
-                                                                      true,
-                                                                  child:
-                                                                      ClipRRect(
-                                                                    borderRadius:
-                                                                        BorderRadius.circular(
-                                                                            8.0),
-                                                                    child:
-                                                                        CachedNetworkImage(
-                                                                      fadeInDuration:
-                                                                          const Duration(
-                                                                              milliseconds: 300),
-                                                                      fadeOutDuration:
-                                                                          const Duration(
-                                                                              milliseconds: 300),
-                                                                      imageUrl:
-                                                                          valueOrDefault<
+                                                                          allowRotation:
+                                                                              false,
+                                                                          tag: valueOrDefault<
                                                                               String>(
-                                                                        multipleImagesItem,
-                                                                        'https://firebasestorage.googleapis.com/v0/b/linkedup-c3e29.firebasestorage.app/o/asset%2Fdefault-user.png?alt=media&token=35d4da12-13b0-4f43-8b8e-375e6e126683',
+                                                                            multipleImagesItem,
+                                                                            'https://firebasestorage.googleapis.com/v0/b/linkedup-c3e29.firebasestorage.app/o/asset%2Fdefault-user.png?alt=media&token=35d4da12-13b0-4f43-8b8e-375e6e126683$multipleImagesIndex',
+                                                                          ),
+                                                                          useHeroAnimation:
+                                                                              true,
+                                                                        ),
                                                                       ),
-                                                                      width: double
-                                                                          .infinity,
-                                                                      height:
-                                                                          207.2,
-                                                                      fit: BoxFit
-                                                                          .cover,
-                                                                      errorWidget: (context,
-                                                                              error,
-                                                                              stackTrace) =>
-                                                                          Image
-                                                                              .asset(
-                                                                        'assets/images/error_image.png',
+                                                                    );
+                                                                  },
+                                                                  child: Hero(
+                                                                    tag: valueOrDefault<
+                                                                        String>(
+                                                                      multipleImagesItem,
+                                                                      'https://firebasestorage.googleapis.com/v0/b/linkedup-c3e29.firebasestorage.app/o/asset%2Fdefault-user.png?alt=media&token=35d4da12-13b0-4f43-8b8e-375e6e126683$multipleImagesIndex',
+                                                                    ),
+                                                                    transitionOnUserGestures:
+                                                                        true,
+                                                                    child:
+                                                                        ClipRRect(
+                                                                      borderRadius:
+                                                                          BorderRadius.circular(
+                                                                              8.0),
+                                                                      child:
+                                                                          CachedNetworkImage(
+                                                                        fadeInDuration:
+                                                                            const Duration(milliseconds: 300),
+                                                                        fadeOutDuration:
+                                                                            const Duration(milliseconds: 300),
+                                                                        imageUrl:
+                                                                            valueOrDefault<String>(
+                                                                          multipleImagesItem,
+                                                                          'https://firebasestorage.googleapis.com/v0/b/linkedup-c3e29.firebasestorage.app/o/asset%2Fdefault-user.png?alt=media&token=35d4da12-13b0-4f43-8b8e-375e6e126683',
+                                                                        ),
                                                                         width: double
                                                                             .infinity,
                                                                         height:
                                                                             207.2,
                                                                         fit: BoxFit
                                                                             .cover,
+                                                                        errorWidget: (context,
+                                                                                error,
+                                                                                stackTrace) =>
+                                                                            Image.asset(
+                                                                          'assets/images/error_image.png',
+                                                                          width:
+                                                                              double.infinity,
+                                                                          height:
+                                                                              207.2,
+                                                                          fit: BoxFit
+                                                                              .cover,
+                                                                        ),
                                                                       ),
                                                                     ),
                                                                   ),
-                                                                ),
-                                                              );
-                                                            },
-                                                          ).divide(
-                                                              const SizedBox(
-                                                                  height: 8.0)),
-                                                        );
-                                                      },
-                                                    ),
-                                                  ),
-                                                ),
-                                              if (widget.message?.audio !=
-                                                      null &&
-                                                  widget.message?.audio != '')
-                                                Container(
-                                                  width: double.infinity,
-                                                  decoration: BoxDecoration(
-                                                    color:
-                                                        const Color(0xFFE5E7EB),
-                                                    borderRadius:
-                                                        BorderRadius.circular(
-                                                            8.0),
-                                                  ),
-                                                  child: Column(
-                                                    mainAxisSize:
-                                                        MainAxisSize.max,
-                                                    children: [
-                                                      FlutterFlowAudioPlayer(
-                                                        audio: Audio.network(
-                                                          widget.message!
-                                                              .audioPath,
-                                                          metas: Metas(
-                                                            title: 'Voice',
-                                                          ),
-                                                        ),
-                                                        titleTextStyle:
-                                                            FlutterFlowTheme.of(
-                                                                    context)
-                                                                .titleLarge
-                                                                .override(
-                                                                  font:
-                                                                      GoogleFonts
-                                                                          .inter(
-                                                                    fontWeight: FlutterFlowTheme.of(
-                                                                            context)
-                                                                        .titleLarge
-                                                                        .fontWeight,
-                                                                    fontStyle: FlutterFlowTheme.of(
-                                                                            context)
-                                                                        .titleLarge
-                                                                        .fontStyle,
-                                                                  ),
-                                                                  fontSize:
-                                                                      16.0,
-                                                                  letterSpacing:
-                                                                      0.0,
-                                                                  fontWeight: FlutterFlowTheme.of(
-                                                                          context)
-                                                                      .titleLarge
-                                                                      .fontWeight,
-                                                                  fontStyle: FlutterFlowTheme.of(
-                                                                          context)
-                                                                      .titleLarge
-                                                                      .fontStyle,
-                                                                ),
-                                                        playbackDurationTextStyle:
-                                                            FlutterFlowTheme.of(
-                                                                    context)
-                                                                .labelMedium
-                                                                .override(
-                                                                  font:
-                                                                      GoogleFonts
-                                                                          .inter(
-                                                                    fontWeight: FlutterFlowTheme.of(
-                                                                            context)
-                                                                        .labelMedium
-                                                                        .fontWeight,
-                                                                    fontStyle: FlutterFlowTheme.of(
-                                                                            context)
-                                                                        .labelMedium
-                                                                        .fontStyle,
-                                                                  ),
-                                                                  letterSpacing:
-                                                                      0.0,
-                                                                  fontWeight: FlutterFlowTheme.of(
-                                                                          context)
-                                                                      .labelMedium
-                                                                      .fontWeight,
-                                                                  fontStyle: FlutterFlowTheme.of(
-                                                                          context)
-                                                                      .labelMedium
-                                                                      .fontStyle,
-                                                                ),
-                                                        fillColor: FlutterFlowTheme
-                                                                .of(context)
-                                                            .secondaryBackground,
-                                                        playbackButtonColor:
-                                                            FlutterFlowTheme.of(
-                                                                    context)
-                                                                .primary,
-                                                        activeTrackColor:
-                                                            FlutterFlowTheme.of(
-                                                                    context)
-                                                                .primary,
-                                                        inactiveTrackColor:
-                                                            FlutterFlowTheme.of(
-                                                                    context)
-                                                                .alternate,
-                                                        elevation: 0.0,
-                                                        playInBackground:
-                                                            PlayInBackground
-                                                                .enabled,
-                                                      ),
-                                                    ],
-                                                  ),
-                                                ),
-                                              if (widget.message
-                                                          ?.attachmentUrl !=
-                                                      null &&
-                                                  widget.message
-                                                          ?.attachmentUrl !=
-                                                      '')
-                                                Builder(
-                                                  builder: (context) => InkWell(
-                                                    splashColor:
-                                                        Colors.transparent,
-                                                    focusColor:
-                                                        Colors.transparent,
-                                                    hoverColor:
-                                                        Colors.transparent,
-                                                    highlightColor:
-                                                        Colors.transparent,
-                                                    onTap: () async {
-                                                      await showDialog(
-                                                        context: context,
-                                                        builder:
-                                                            (dialogContext) {
-                                                          return Dialog(
-                                                            elevation: 0,
-                                                            insetPadding:
-                                                                EdgeInsets.zero,
-                                                            backgroundColor:
-                                                                Colors
-                                                                    .transparent,
-                                                            alignment: const AlignmentDirectional(
-                                                                    0.0, 0.0)
-                                                                .resolve(
-                                                                    Directionality.of(
-                                                                        context)),
-                                                            child:
-                                                                PDFViewWidget(
-                                                              url: widget
-                                                                  .message!
-                                                                  .attachmentUrl,
-                                                            ),
+                                                                );
+                                                              },
+                                                            ).divide(
+                                                                const SizedBox(
+                                                                    height:
+                                                                        8.0)),
                                                           );
                                                         },
-                                                      );
-                                                    },
-                                                    child: Container(
-                                                      width: double.infinity,
-                                                      height: 65.0,
-                                                      decoration: BoxDecoration(
-                                                        color: FlutterFlowTheme
-                                                                .of(context)
-                                                            .secondaryBackground,
-                                                        borderRadius:
-                                                            BorderRadius
-                                                                .circular(12.0),
                                                       ),
-                                                      child: Align(
-                                                        alignment:
-                                                            const AlignmentDirectional(
-                                                                0.0, 0.0),
-                                                        child: Padding(
-                                                          padding:
-                                                              const EdgeInsets
-                                                                  .all(9.0),
-                                                          child: Row(
-                                                            mainAxisSize:
-                                                                MainAxisSize
-                                                                    .max,
-                                                            mainAxisAlignment:
-                                                                MainAxisAlignment
-                                                                    .center,
-                                                            children: [
-                                                              Text(
-                                                                'View PDF File',
-                                                                style: FlutterFlowTheme.of(
-                                                                        context)
-                                                                    .bodyMedium
-                                                                    .override(
-                                                                      font: GoogleFonts
-                                                                          .inter(
+                                                    ),
+                                                  ),
+                                                if (widget.message?.audio !=
+                                                        null &&
+                                                    widget.message?.audio != '')
+                                                  Container(
+                                                    width: double.infinity,
+                                                    decoration: BoxDecoration(
+                                                      color: const Color(
+                                                          0xFFE5E7EB),
+                                                      borderRadius:
+                                                          BorderRadius.circular(
+                                                              8.0),
+                                                    ),
+                                                    child: Column(
+                                                      mainAxisSize:
+                                                          MainAxisSize.max,
+                                                      children: [
+                                                        FlutterFlowAudioPlayer(
+                                                          audio: Audio.network(
+                                                            widget.message!
+                                                                .audioPath,
+                                                            metas: Metas(
+                                                              title: 'Voice',
+                                                            ),
+                                                          ),
+                                                          titleTextStyle:
+                                                              FlutterFlowTheme.of(
+                                                                      context)
+                                                                  .titleLarge
+                                                                  .override(
+                                                                    font: GoogleFonts
+                                                                        .inter(
+                                                                      fontWeight: FlutterFlowTheme.of(
+                                                                              context)
+                                                                          .titleLarge
+                                                                          .fontWeight,
+                                                                      fontStyle: FlutterFlowTheme.of(
+                                                                              context)
+                                                                          .titleLarge
+                                                                          .fontStyle,
+                                                                    ),
+                                                                    fontSize:
+                                                                        16.0,
+                                                                    letterSpacing:
+                                                                        0.0,
+                                                                    fontWeight: FlutterFlowTheme.of(
+                                                                            context)
+                                                                        .titleLarge
+                                                                        .fontWeight,
+                                                                    fontStyle: FlutterFlowTheme.of(
+                                                                            context)
+                                                                        .titleLarge
+                                                                        .fontStyle,
+                                                                  ),
+                                                          playbackDurationTextStyle:
+                                                              FlutterFlowTheme.of(
+                                                                      context)
+                                                                  .labelMedium
+                                                                  .override(
+                                                                    font: GoogleFonts
+                                                                        .inter(
+                                                                      fontWeight: FlutterFlowTheme.of(
+                                                                              context)
+                                                                          .labelMedium
+                                                                          .fontWeight,
+                                                                      fontStyle: FlutterFlowTheme.of(
+                                                                              context)
+                                                                          .labelMedium
+                                                                          .fontStyle,
+                                                                    ),
+                                                                    letterSpacing:
+                                                                        0.0,
+                                                                    fontWeight: FlutterFlowTheme.of(
+                                                                            context)
+                                                                        .labelMedium
+                                                                        .fontWeight,
+                                                                    fontStyle: FlutterFlowTheme.of(
+                                                                            context)
+                                                                        .labelMedium
+                                                                        .fontStyle,
+                                                                  ),
+                                                          fillColor: FlutterFlowTheme
+                                                                  .of(context)
+                                                              .secondaryBackground,
+                                                          playbackButtonColor:
+                                                              FlutterFlowTheme.of(
+                                                                      context)
+                                                                  .primary,
+                                                          activeTrackColor:
+                                                              FlutterFlowTheme.of(
+                                                                      context)
+                                                                  .primary,
+                                                          inactiveTrackColor:
+                                                              FlutterFlowTheme.of(
+                                                                      context)
+                                                                  .alternate,
+                                                          elevation: 0.0,
+                                                          playInBackground:
+                                                              PlayInBackground
+                                                                  .enabled,
+                                                        ),
+                                                      ],
+                                                    ),
+                                                  ),
+                                                if (widget.message
+                                                            ?.attachmentUrl !=
+                                                        null &&
+                                                    widget.message
+                                                            ?.attachmentUrl !=
+                                                        '')
+                                                  Builder(
+                                                    builder: (context) =>
+                                                        InkWell(
+                                                      splashColor:
+                                                          Colors.transparent,
+                                                      focusColor:
+                                                          Colors.transparent,
+                                                      hoverColor:
+                                                          Colors.transparent,
+                                                      highlightColor:
+                                                          Colors.transparent,
+                                                      onTap: () async {
+                                                        await showDialog(
+                                                          context: context,
+                                                          builder:
+                                                              (dialogContext) {
+                                                            return Dialog(
+                                                              elevation: 0,
+                                                              insetPadding:
+                                                                  EdgeInsets
+                                                                      .zero,
+                                                              backgroundColor:
+                                                                  Colors
+                                                                      .transparent,
+                                                              alignment: const AlignmentDirectional(
+                                                                      0.0, 0.0)
+                                                                  .resolve(
+                                                                      Directionality.of(
+                                                                          context)),
+                                                              child:
+                                                                  PDFViewWidget(
+                                                                url: widget
+                                                                    .message!
+                                                                    .attachmentUrl,
+                                                              ),
+                                                            );
+                                                          },
+                                                        );
+                                                      },
+                                                      child: Container(
+                                                        width: double.infinity,
+                                                        height: 65.0,
+                                                        decoration:
+                                                            BoxDecoration(
+                                                          color: FlutterFlowTheme
+                                                                  .of(context)
+                                                              .secondaryBackground,
+                                                          borderRadius:
+                                                              BorderRadius
+                                                                  .circular(
+                                                                      12.0),
+                                                        ),
+                                                        child: Align(
+                                                          alignment:
+                                                              const AlignmentDirectional(
+                                                                  0.0, 0.0),
+                                                          child: Padding(
+                                                            padding:
+                                                                const EdgeInsets
+                                                                    .all(9.0),
+                                                            child: Row(
+                                                              mainAxisSize:
+                                                                  MainAxisSize
+                                                                      .max,
+                                                              mainAxisAlignment:
+                                                                  MainAxisAlignment
+                                                                      .center,
+                                                              children: [
+                                                                Text(
+                                                                  'View PDF File',
+                                                                  style: FlutterFlowTheme.of(
+                                                                          context)
+                                                                      .bodyMedium
+                                                                      .override(
+                                                                        font: GoogleFonts
+                                                                            .inter(
+                                                                          fontWeight: FlutterFlowTheme.of(context)
+                                                                              .bodyMedium
+                                                                              .fontWeight,
+                                                                          fontStyle: FlutterFlowTheme.of(context)
+                                                                              .bodyMedium
+                                                                              .fontStyle,
+                                                                        ),
+                                                                        letterSpacing:
+                                                                            0.0,
                                                                         fontWeight: FlutterFlowTheme.of(context)
                                                                             .bodyMedium
                                                                             .fontWeight,
@@ -1838,65 +1932,70 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
                                                                             .bodyMedium
                                                                             .fontStyle,
                                                                       ),
-                                                                      letterSpacing:
-                                                                          0.0,
-                                                                      fontWeight: FlutterFlowTheme.of(
-                                                                              context)
-                                                                          .bodyMedium
-                                                                          .fontWeight,
-                                                                      fontStyle: FlutterFlowTheme.of(
-                                                                              context)
-                                                                          .bodyMedium
-                                                                          .fontStyle,
-                                                                    ),
-                                                              ),
-                                                              Icon(
-                                                                Icons
-                                                                    .cloud_download,
-                                                                color: FlutterFlowTheme.of(
-                                                                        context)
-                                                                    .primary,
-                                                                size: 24.0,
-                                                              ),
-                                                            ].divide(
-                                                                const SizedBox(
-                                                                    width:
-                                                                        15.0)),
+                                                                ),
+                                                                Icon(
+                                                                  Icons
+                                                                      .cloud_download,
+                                                                  color: FlutterFlowTheme.of(
+                                                                          context)
+                                                                      .primary,
+                                                                  size: 24.0,
+                                                                ),
+                                                              ].divide(
+                                                                  const SizedBox(
+                                                                      width:
+                                                                          15.0)),
+                                                            ),
                                                           ),
                                                         ),
                                                       ),
                                                     ),
                                                   ),
-                                                ),
-                                            ].divide(
-                                                const SizedBox(height: 8.0)),
+                                              ].divide(
+                                                  const SizedBox(height: 8.0)),
+                                            ),
                                           ),
                                         ),
                                       ),
                                     ),
                                   ),
                                 ),
-                              ),
-                              Align(
-                                alignment:
-                                    const AlignmentDirectional(-1.0, -1.0),
-                                child: Padding(
-                                  padding: const EdgeInsetsDirectional.fromSTEB(
-                                      12.0, 0.0, 12.0, 0.0),
-                                  child: RichText(
-                                    textScaler:
-                                        MediaQuery.of(context).textScaler,
-                                    text: TextSpan(
-                                      children: [
-                                        TextSpan(
-                                          text: valueOrDefault<String>(
-                                            widget.name,
-                                            'No One',
-                                          ),
-                                          style: FlutterFlowTheme.of(context)
-                                              .bodySmall
-                                              .override(
-                                                font: GoogleFonts.inter(
+                                Align(
+                                  alignment:
+                                      const AlignmentDirectional(-1.0, -1.0),
+                                  child: Padding(
+                                    padding:
+                                        const EdgeInsetsDirectional.fromSTEB(
+                                            12.0, 0.0, 12.0, 0.0),
+                                    child: RichText(
+                                      textScaler:
+                                          MediaQuery.of(context).textScaler,
+                                      text: TextSpan(
+                                        children: [
+                                          TextSpan(
+                                            text: valueOrDefault<String>(
+                                              widget.name,
+                                              'No One',
+                                            ),
+                                            style: FlutterFlowTheme.of(context)
+                                                .bodySmall
+                                                .override(
+                                                  font: GoogleFonts.inter(
+                                                    fontWeight:
+                                                        FlutterFlowTheme.of(
+                                                                context)
+                                                            .bodySmall
+                                                            .fontWeight,
+                                                    fontStyle:
+                                                        FlutterFlowTheme.of(
+                                                                context)
+                                                            .bodySmall
+                                                            .fontStyle,
+                                                  ),
+                                                  color:
+                                                      const Color(0xFF6B7280),
+                                                  fontSize: 12.0,
+                                                  letterSpacing: 0.0,
                                                   fontWeight:
                                                       FlutterFlowTheme.of(
                                                               context)
@@ -1908,9 +2007,24 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
                                                           .bodySmall
                                                           .fontStyle,
                                                 ),
-                                                color: const Color(0xFF6B7280),
-                                                fontSize: 12.0,
-                                                letterSpacing: 0.0,
+                                          ),
+                                          const TextSpan(
+                                            text: ' • ',
+                                            style: TextStyle(),
+                                          ),
+                                          TextSpan(
+                                            text: valueOrDefault<String>(
+                                              dateTimeFormat("relative",
+                                                  widget.message?.createdAt),
+                                              'N/A',
+                                            ),
+                                            style: const TextStyle(),
+                                          )
+                                        ],
+                                        style: FlutterFlowTheme.of(context)
+                                            .bodySmall
+                                            .override(
+                                              font: GoogleFonts.inter(
                                                 fontWeight:
                                                     FlutterFlowTheme.of(context)
                                                         .bodySmall
@@ -1920,24 +2034,9 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
                                                         .bodySmall
                                                         .fontStyle,
                                               ),
-                                        ),
-                                        const TextSpan(
-                                          text: ' • ',
-                                          style: TextStyle(),
-                                        ),
-                                        TextSpan(
-                                          text: valueOrDefault<String>(
-                                            dateTimeFormat("relative",
-                                                widget.message?.createdAt),
-                                            'N/A',
-                                          ),
-                                          style: const TextStyle(),
-                                        )
-                                      ],
-                                      style: FlutterFlowTheme.of(context)
-                                          .bodySmall
-                                          .override(
-                                            font: GoogleFonts.inter(
+                                              color: const Color(0xFF6B7280),
+                                              fontSize: 12.0,
+                                              letterSpacing: 0.0,
                                               fontWeight:
                                                   FlutterFlowTheme.of(context)
                                                       .bodySmall
@@ -1947,23 +2046,12 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
                                                       .bodySmall
                                                       .fontStyle,
                                             ),
-                                            color: const Color(0xFF6B7280),
-                                            fontSize: 12.0,
-                                            letterSpacing: 0.0,
-                                            fontWeight:
-                                                FlutterFlowTheme.of(context)
-                                                    .bodySmall
-                                                    .fontWeight,
-                                            fontStyle:
-                                                FlutterFlowTheme.of(context)
-                                                    .bodySmall
-                                                    .fontStyle,
-                                          ),
+                                      ),
                                     ),
                                   ),
                                 ),
-                              ),
-                            ].divide(const SizedBox(height: 4.0)),
+                              ].divide(const SizedBox(height: 4.0)),
+                            ),
                           ),
                         ),
                       ],
@@ -1986,27 +2074,30 @@ enum _MsgAction { react, copy, report }
 class _MenuRow extends StatelessWidget {
   final IconData icon;
   final String label;
-  final Color? color;
-  final double? fontSize;
+  final Color? textColor;
 
   const _MenuRow({
     required this.icon,
     required this.label,
-    this.color,
-    this.fontSize,
+    this.textColor,
   });
 
   @override
   Widget build(BuildContext context) {
     return Row(
       children: [
-        Icon(icon, size: 16, color: color), // reduce icon size too if you want
-        const SizedBox(width: 6),
+        Icon(
+          icon,
+          size: 18,
+          color: textColor ?? Colors.white,
+        ),
+        const SizedBox(width: 12),
         Text(
           label,
           style: TextStyle(
-            color: color ?? Colors.white,
-            fontSize: fontSize ?? 13,
+            color: textColor ?? Colors.white,
+            fontSize: 16,
+            fontWeight: FontWeight.w500,
           ),
         ),
       ],

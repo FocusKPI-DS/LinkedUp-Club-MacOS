@@ -394,31 +394,46 @@ class _ChatDetailWidgetState extends State<ChatDetailWidget> {
                                                                 },
                                                               );
                                                             },
-                                                            child: PopupMenuButton<String>(
+                                                            child:
+                                                                PopupMenuButton<
+                                                                    String>(
                                                               icon: Icon(
                                                                 Icons.more_vert,
-                                                                color: FlutterFlowTheme
-                                                                        .of(context)
+                                                                color: FlutterFlowTheme.of(
+                                                                        context)
                                                                     .primaryText,
                                                                 size: 24.0,
                                                               ),
-                                                              onSelected: (String value) async {
-                                                                if (value == 'block') {
+                                                              onSelected: (String
+                                                                  value) async {
+                                                                if (value ==
+                                                                    'block') {
                                                                   // Show confirmation dialog
-                                                                  final shouldBlock = await showDialog<bool>(
-                                                                    context: context,
-                                                                    builder: (BuildContext context) {
+                                                                  final shouldBlock =
+                                                                      await showDialog<
+                                                                          bool>(
+                                                                    context:
+                                                                        context,
+                                                                    builder:
+                                                                        (BuildContext
+                                                                            context) {
                                                                       return AlertDialog(
-                                                                        title: Text('Block User'),
-                                                                        content: Text('Are you sure you want to block this user? You will no longer see their messages or be able to contact them.'),
+                                                                        title: Text(
+                                                                            'Block User'),
+                                                                        content:
+                                                                            Text('Are you sure you want to block this user? You will no longer see their messages or be able to contact them.'),
                                                                         actions: [
                                                                           TextButton(
-                                                                            onPressed: () => Navigator.of(context).pop(false),
-                                                                            child: Text('Cancel'),
+                                                                            onPressed: () =>
+                                                                                Navigator.of(context).pop(false),
+                                                                            child:
+                                                                                Text('Cancel'),
                                                                           ),
                                                                           TextButton(
-                                                                            onPressed: () => Navigator.of(context).pop(true),
-                                                                            child: Text(
+                                                                            onPressed: () =>
+                                                                                Navigator.of(context).pop(true),
+                                                                            child:
+                                                                                Text(
                                                                               'Block',
                                                                               style: TextStyle(color: Colors.red),
                                                                             ),
@@ -427,58 +442,101 @@ class _ChatDetailWidgetState extends State<ChatDetailWidget> {
                                                                       );
                                                                     },
                                                                   );
-                                                                  
-                                                                  if (shouldBlock == true) {
+
+                                                                  if (shouldBlock ==
+                                                                      true) {
                                                                     // Create blocked user record
-                                                                    await BlockedUsersRecord.collection.add({
+                                                                    await BlockedUsersRecord
+                                                                        .collection
+                                                                        .add({
                                                                       ...createBlockedUsersRecordData(
-                                                                        blockerUser: currentUserReference,
-                                                                        blockedUser: bigUsersRecord.reference,
-                                                                        createdAt: getCurrentTimestamp,
+                                                                        blockerUser:
+                                                                            currentUserReference,
+                                                                        blockedUser:
+                                                                            bigUsersRecord.reference,
+                                                                        createdAt:
+                                                                            getCurrentTimestamp,
                                                                       ),
                                                                     });
-                                                                    
+
                                                                     // Show success message and go back
-                                                                    ScaffoldMessenger.of(context).showSnackBar(
-                                                                      SnackBar(content: Text('User has been blocked')),
+                                                                    ScaffoldMessenger.of(
+                                                                            context)
+                                                                        .showSnackBar(
+                                                                      SnackBar(
+                                                                          content:
+                                                                              Text('User has been blocked')),
                                                                     );
-                                                                    context.safePop();
+                                                                    context
+                                                                        .safePop();
                                                                   }
-                                                                } else if (value == 'profile') {
-                                                                  context.pushNamed(
+                                                                } else if (value ==
+                                                                    'profile') {
+                                                                  context
+                                                                      .pushNamed(
                                                                     'Profile',
-                                                                    queryParameters: {
-                                                                      'userRef': serializeParam(
-                                                                        bigUsersRecord.reference,
-                                                                        ParamType.DocumentReference,
+                                                                    queryParameters:
+                                                                        {
+                                                                      'userRef':
+                                                                          serializeParam(
+                                                                        bigUsersRecord
+                                                                            .reference,
+                                                                        ParamType
+                                                                            .DocumentReference,
                                                                       ),
                                                                     }.withoutNulls,
-                                                                    extra: <String, dynamic>{
-                                                                      'user': bigUsersRecord,
+                                                                    extra: <String,
+                                                                        dynamic>{
+                                                                      'user':
+                                                                          bigUsersRecord,
                                                                     },
                                                                   );
                                                                 }
                                                               },
-                                                              itemBuilder: (BuildContext context) => <PopupMenuEntry<String>>[
-                                                                PopupMenuItem<String>(
-                                                                  value: 'profile',
+                                                              itemBuilder: (BuildContext
+                                                                      context) =>
+                                                                  <PopupMenuEntry<
+                                                                      String>>[
+                                                                PopupMenuItem<
+                                                                    String>(
+                                                                  value:
+                                                                      'profile',
                                                                   child: Row(
                                                                     children: [
-                                                                      Icon(Icons.person, size: 20),
-                                                                      SizedBox(width: 8),
-                                                                      Text('View Profile'),
+                                                                      Icon(
+                                                                          Icons
+                                                                              .person,
+                                                                          size:
+                                                                              20),
+                                                                      SizedBox(
+                                                                          width:
+                                                                              8),
+                                                                      Text(
+                                                                          'View Profile'),
                                                                     ],
                                                                   ),
                                                                 ),
-                                                                PopupMenuItem<String>(
-                                                                  value: 'block',
+                                                                PopupMenuItem<
+                                                                    String>(
+                                                                  value:
+                                                                      'block',
                                                                   child: Row(
                                                                     children: [
-                                                                      Icon(Icons.block, color: Colors.red, size: 20),
-                                                                      SizedBox(width: 8),
+                                                                      Icon(
+                                                                          Icons
+                                                                              .block,
+                                                                          color: Colors
+                                                                              .red,
+                                                                          size:
+                                                                              20),
+                                                                      SizedBox(
+                                                                          width:
+                                                                              8),
                                                                       Text(
                                                                         'Block User',
-                                                                        style: TextStyle(color: Colors.red),
+                                                                        style: TextStyle(
+                                                                            color:
+                                                                                Colors.red),
                                                                       ),
                                                                     ],
                                                                   ),

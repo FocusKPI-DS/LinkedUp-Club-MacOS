@@ -12,6 +12,8 @@ export '/on_boarding/onboarding_profile/onboarding_profile_widget.dart'
     show OnboardingProfileWidget;
 export '/main/discover/discover_widget.dart' show DiscoverWidget;
 export '/main/profile/profile_widget.dart' show ProfileWidget;
+export '/pages/profile_settings/profile_settings_widget.dart'
+    show ProfileSettingsWidget;
 export '/pages/event/create_event/create_event_widget.dart'
     show CreateEventWidget;
 export '/auth/invitation_code/invitation_code_widget.dart'
@@ -52,3 +54,4 @@ export '/eventbrite_dashboard/eventbrite_dashboard_widget.dart'
 export '/payment_history_page/payment_history_page_widget.dart'
     show PaymentHistoryPageWidget;
 export '/payment_success/payment_success_widget.dart' show PaymentSuccessWidget;
+export '/pages/desktop_chat/desktop_chat_widget.dart' show DesktopChatWidget;

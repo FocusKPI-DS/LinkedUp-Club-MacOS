@@ -17,22 +17,13 @@ import 'package:flutter/foundation.dart'
 class DefaultFirebaseOptions {
   static FirebaseOptions get currentPlatform {
     if (kIsWeb) {
-      throw UnsupportedError(
-        'DefaultFirebaseOptions have not been configured for web - '
-        'you can reconfigure this by running the FlutterFire CLI again.',
-      );
+      return web;
     }
     switch (defaultTargetPlatform) {
       case TargetPlatform.android:
-        throw UnsupportedError(
-          'DefaultFirebaseOptions have not been configured for android - '
-          'you can reconfigure this by running the FlutterFire CLI again.',
-        );
+        return android;
       case TargetPlatform.iOS:
-        throw UnsupportedError(
-          'DefaultFirebaseOptions have not been configured for ios - '
-          'you can reconfigure this by running the FlutterFire CLI again.',
-        );
+        return ios;
       case TargetPlatform.macOS:
         return macos;
       case TargetPlatform.windows:
@@ -61,6 +52,35 @@ class DefaultFirebaseOptions {
     androidClientId: '548534727055-cvurvl4svlrljksn7f1vngpvsvo6ksku.apps.googleusercontent.com',
     iosClientId: '548534727055-nudrbc4rnh96q9uumdkknfcq7hqp3fle.apps.googleusercontent.com',
     iosBundleId: 'com.focuskpi.linkedup',
+  );
+
+  static const FirebaseOptions web = FirebaseOptions(
+    apiKey: 'AIzaSyB7hpucMa-mSk6Bp9_OOt_1BFaO7E7HPTw',
+    appId: '1:548534727055:web:d770e39d4c066094bb5bfa',
+    messagingSenderId: '548534727055',
+    projectId: 'linkedup-c3e29',
+    authDomain: 'linkedup-c3e29.firebaseapp.com',
+    storageBucket: 'linkedup-c3e29.firebasestorage.app',
+    measurementId: 'G-LRGXVB1ZKH',
+  );
+
+  static const FirebaseOptions ios = FirebaseOptions(
+    apiKey: 'AIzaSyBukmJg2BakNbyd0gzorFCNQfv_ggfWEXQ',
+    appId: '1:548534727055:ios:8343a86672d8b349bb5bfa',
+    messagingSenderId: '548534727055',
+    projectId: 'linkedup-c3e29',
+    storageBucket: 'linkedup-c3e29.firebasestorage.app',
+    androidClientId: '548534727055-cvurvl4svlrljksn7f1vngpvsvo6ksku.apps.googleusercontent.com',
+    iosClientId: '548534727055-nudrbc4rnh96q9uumdkknfcq7hqp3fle.apps.googleusercontent.com',
+    iosBundleId: 'com.focuskpi.linkedup',
+  );
+
+  static const FirebaseOptions android = FirebaseOptions(
+    apiKey: 'AIzaSyCNTcPxtfJOLI8PYFzNHvblEIWBnL2Ovlo',
+    appId: '1:548534727055:android:f3f3d5491d9b0fb8bb5bfa',
+    messagingSenderId: '548534727055',
+    projectId: 'linkedup-c3e29',
+    storageBucket: 'linkedup-c3e29.firebasestorage.app',
   );
 
 }

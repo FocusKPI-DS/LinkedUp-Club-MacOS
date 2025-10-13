@@ -1,13 +1,8 @@
 // Automatic FlutterFlow imports
 import '/backend/backend.dart';
 import '/backend/schema/structs/index.dart';
-import '/backend/schema/enums/enums.dart';
-import '/actions/actions.dart' as action_blocks;
 import 'package:ff_theme/flutter_flow/flutter_flow_theme.dart';
 import '/flutter_flow/flutter_flow_util.dart';
-import 'index.dart'; // Imports other custom widgets
-import '/custom_code/actions/index.dart'; // Imports custom actions
-import '/flutter_flow/custom_functions.dart'; // Imports custom functions
 import 'package:flutter/material.dart';
 // Begin custom widget code
 // DO NOT REMOVE OR MODIFY THE CODE ABOVE!
@@ -15,11 +10,8 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import '/auth/firebase_auth/auth_util.dart';
-import '/flutter_flow/flutter_flow_icon_button.dart';
 import '/flutter_flow/flutter_flow_expanded_image_view.dart';
-import '/pages/feed/post_detail/post_detail_widget.dart';
 import '/pages/chat/user_profile_detail/user_profile_detail_widget.dart';
-import 'package:flutter_animate/flutter_animate.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 class PostItem extends StatefulWidget {
@@ -42,73 +34,31 @@ class PostItem extends StatefulWidget {
   State<PostItem> createState() => _PostItemState();
 }
 
-class _PostItemState extends State<PostItem> with TickerProviderStateMixin {
-  late AnimationController _likeAnimationController;
-  late AnimationController _saveAnimationController;
-  bool _isLikeAnimating = false;
-  bool _isSaveAnimating = false;
-
+class _PostItemState extends State<PostItem> {
   @override
   void initState() {
     super.initState();
-    _likeAnimationController = AnimationController(
-      duration: const Duration(milliseconds: 200),
-      vsync: this,
-    );
-    _saveAnimationController = AnimationController(
-      duration: const Duration(milliseconds: 200),
-      vsync: this,
-    );
   }
 
   @override
   void dispose() {
-    _likeAnimationController.dispose();
-    _saveAnimationController.dispose();
     super.dispose();
   }
 
-  Future<void> _toggleLike(PostsRecord post, bool isLiked) async {
-    if (!isLiked) {
-      setState(() => _isLikeAnimating = true);
-      _likeAnimationController.forward(from: 0.0).then((_) {
-        _likeAnimationController.reverse().then((_) {
-          if (mounted) setState(() => _isLikeAnimating = false);
-        });
-      });
-    }
-
-    if (isLiked) {
-      await widget.postRef.update({
-        'like_count': FieldValue.increment(-1),
-        'liked_by': FieldValue.arrayRemove([currentUserReference]),
-      });
-    } else {
-      await widget.postRef.update({
-        'like_count': FieldValue.increment(1),
-        'liked_by': FieldValue.arrayUnion([currentUserReference]),
-      });
-    }
-  }
-
-  Future<void> _toggleSave(PostsRecord post, bool isSaved) async {
-    if (!isSaved) {
-      setState(() => _isSaveAnimating = true);
-      _saveAnimationController.forward(from: 0.0).then((_) {
-        _saveAnimationController.reverse().then((_) {
-          if (mounted) setState(() => _isSaveAnimating = false);
-        });
-      });
-    }
-
-    if (isSaved) {
-      await widget.postRef.update({
-        'saved_by': FieldValue.arrayRemove([currentUserReference]),
-      });
-    } else {
-      await widget.postRef.update({
-        'saved_by': FieldValue.arrayUnion([currentUserReference]),
-      });
+  Color _getCategoryColor(String category) {
+    switch (category.toLowerCase()) {
+      case 'event':
+        return const Color(0xFF4CAF50); // Green
+      case 'policy':
+        return const Color(0xFF2196F3); // Blue
+      case 'urgent':
+        return const Color(0xFFF44336); // Red
+      case 'news':
+        return const Color(0xFFFF9800); // Orange
+      case 'discussion':
+        return const Color(0xFF9C27B0); // Purple
+      default:
+        return FlutterFlowTheme.of(context).primary; // Default color
     }
   }
 
@@ -120,7 +70,9 @@ class _PostItemState extends State<PostItem> with TickerProviderStateMixin {
         if (!snapshot.hasData) {
           return Container(
             width: widget.width,
-            height: widget.height,
+            height: widget.height > 0
+                ? widget.height
+                : 200.0, // Use flexible height
             decoration: BoxDecoration(
               color: FlutterFlowTheme.of(context).secondaryBackground,
               borderRadius: BorderRadius.circular(12.0),
@@ -134,16 +86,18 @@ class _PostItemState extends State<PostItem> with TickerProviderStateMixin {
         }
 
         final post = snapshot.data!;
-        final isLiked = post.likedBy.contains(currentUserReference);
-        final isSaved = post.savedBy.contains(currentUserReference);
 
         // Debug print to check data
-        debugPrint('Post likes: ${post.likeCount}, isLiked: $isLiked');
+        debugPrint('Post likes: ${post.likeCount}');
         debugPrint('Post likedBy array: ${post.likedBy}');
         debugPrint('Current user ref: $currentUserReference');
 
         return Container(
           width: widget.width,
+          constraints: widget.height > 0
+              ? BoxConstraints(
+                  minHeight: widget.height, maxHeight: widget.height)
+              : const BoxConstraints(), // No height constraint if height is 0
           decoration: BoxDecoration(
             color: FlutterFlowTheme.of(context).secondaryBackground,
             boxShadow: const [
@@ -234,14 +188,17 @@ class _PostItemState extends State<PostItem> with TickerProviderStateMixin {
                               builder: (BuildContext context) {
                                 return AlertDialog(
                                   title: const Text('Report Post'),
-                                  content: const Text('Are you sure you want to report this post for inappropriate content?'),
+                                  content: const Text(
+                                      'Are you sure you want to report this post for inappropriate content?'),
                                   actions: [
                                     TextButton(
-                                      onPressed: () => Navigator.of(context).pop(false),
+                                      onPressed: () =>
+                                          Navigator.of(context).pop(false),
                                       child: const Text('Cancel'),
                                     ),
                                     TextButton(
-                                      onPressed: () => Navigator.of(context).pop(true),
+                                      onPressed: () =>
+                                          Navigator.of(context).pop(true),
                                       child: const Text(
                                         'Report',
                                         style: TextStyle(color: Colors.red),
@@ -251,21 +208,24 @@ class _PostItemState extends State<PostItem> with TickerProviderStateMixin {
                                 );
                               },
                             );
-                            
+
                             if (shouldReport == true) {
                               // Create report record
                               await ReportsRecord.collection.add({
                                 ...createReportsRecordData(
                                   reportedBy: currentUserReference,
                                   reportedUser: post.authorRef,
-                                  messageRef: post.reference, // Using messageRef for post reference
-                                  reason: 'User reported this post as inappropriate',
+                                  messageRef: post
+                                      .reference, // Using messageRef for post reference
+                                  reason:
+                                      'User reported this post as inappropriate',
                                   timestamp: getCurrentTimestamp,
                                 ),
                               });
-                              
+
                               ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(content: Text('Post has been reported')),
+                                const SnackBar(
+                                    content: Text('Post has been reported')),
                               );
                             }
                           } else if (value == 'block') {
@@ -275,14 +235,17 @@ class _PostItemState extends State<PostItem> with TickerProviderStateMixin {
                               builder: (BuildContext context) {
                                 return AlertDialog(
                                   title: const Text('Block User'),
-                                  content: Text('Are you sure you want to block ${post.authorName}? You will no longer see their posts or be able to contact them.'),
+                                  content: Text(
+                                      'Are you sure you want to block ${post.authorName}? You will no longer see their posts or be able to contact them.'),
                                   actions: [
                                     TextButton(
-                                      onPressed: () => Navigator.of(context).pop(false),
+                                      onPressed: () =>
+                                          Navigator.of(context).pop(false),
                                       child: const Text('Cancel'),
                                     ),
                                     TextButton(
-                                      onPressed: () => Navigator.of(context).pop(true),
+                                      onPressed: () =>
+                                          Navigator.of(context).pop(true),
                                       child: const Text(
                                         'Block',
                                         style: TextStyle(color: Colors.red),
@@ -292,7 +255,7 @@ class _PostItemState extends State<PostItem> with TickerProviderStateMixin {
                                 );
                               },
                             );
-                            
+
                             if (shouldBlock == true) {
                               // Create blocked user record
                               await BlockedUsersRecord.collection.add({
@@ -302,29 +265,34 @@ class _PostItemState extends State<PostItem> with TickerProviderStateMixin {
                                   createdAt: getCurrentTimestamp,
                                 ),
                               });
-                              
+
                               ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(content: Text('User has been blocked')),
+                                const SnackBar(
+                                    content: Text('User has been blocked')),
                               );
                             }
                           } else if (value == 'view_user') {
                             // Navigate to user profile
-                            final user = await UsersRecord.getDocumentOnce(post.authorRef!);
+                            final user = await UsersRecord.getDocumentOnce(
+                                post.authorRef!);
                             if (context.mounted) {
                               context.pushNamed(
                                 UserProfileDetailWidget.routeName,
                                 queryParameters: {
-                                  'user': serializeParam(user, ParamType.Document),
+                                  'user':
+                                      serializeParam(user, ParamType.Document),
                                 }.withoutNulls,
                                 extra: <String, dynamic>{'user': user},
                               );
                             }
-                          } else if (value == 'edit' && post.authorRef == currentUserReference) {
+                          } else if (value == 'edit' &&
+                              post.authorRef == currentUserReference) {
                             // Edit post (only for post author)
                             await widget.actionEdit?.call();
                           }
                         },
-                        itemBuilder: (BuildContext context) => <PopupMenuEntry<String>>[
+                        itemBuilder: (BuildContext context) =>
+                            <PopupMenuEntry<String>>[
                           if (post.authorRef != currentUserReference) ...[
                             const PopupMenuItem<String>(
                               value: 'view_user',
@@ -340,7 +308,8 @@ class _PostItemState extends State<PostItem> with TickerProviderStateMixin {
                               value: 'report',
                               child: Row(
                                 children: [
-                                  Icon(Icons.flag, color: Colors.orange, size: 20),
+                                  Icon(Icons.flag,
+                                      color: Colors.orange, size: 20),
                                   SizedBox(width: 8),
                                   Text(
                                     'Report',
@@ -353,7 +322,8 @@ class _PostItemState extends State<PostItem> with TickerProviderStateMixin {
                               value: 'block',
                               child: Row(
                                 children: [
-                                  Icon(Icons.block, color: Colors.red, size: 20),
+                                  Icon(Icons.block,
+                                      color: Colors.red, size: 20),
                                   SizedBox(width: 8),
                                   Text(
                                     'Block User',
@@ -381,6 +351,70 @@ class _PostItemState extends State<PostItem> with TickerProviderStateMixin {
                 ),
                 const SizedBox(height: 12.0),
 
+                // Category Tag and Pin Indicator
+                Row(
+                  children: [
+                    if (post.postType.isNotEmpty) ...[
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 8.0, vertical: 4.0),
+                        decoration: BoxDecoration(
+                          color: _getCategoryColor(post.postType),
+                          borderRadius: BorderRadius.circular(12.0),
+                        ),
+                        child: Text(
+                          post.postType,
+                          style:
+                              FlutterFlowTheme.of(context).bodySmall.override(
+                                    font: GoogleFonts.inter(
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                    color: Colors.white,
+                                    letterSpacing: 0.0,
+                                    fontSize: 11.0,
+                                  ),
+                        ),
+                      ),
+                      const SizedBox(width: 8.0),
+                    ],
+                    if (post.isPinned) ...[
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 8.0, vertical: 4.0),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFFF6B35), // Orange for pinned
+                          borderRadius: BorderRadius.circular(12.0),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              Icons.push_pin,
+                              color: Colors.white,
+                              size: 12.0,
+                            ),
+                            const SizedBox(width: 4.0),
+                            Text(
+                              'PINNED',
+                              style: FlutterFlowTheme.of(context)
+                                  .bodySmall
+                                  .override(
+                                    font: GoogleFonts.inter(
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                    color: Colors.white,
+                                    letterSpacing: 0.0,
+                                    fontSize: 10.0,
+                                  ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+                const SizedBox(height: 8.0),
+
                 // Caption
                 Text(
                   post.text
@@ -390,49 +424,56 @@ class _PostItemState extends State<PostItem> with TickerProviderStateMixin {
                         letterSpacing: 0.0,
                         lineHeight: 1.4,
                       ),
+                  maxLines: 5, // Limit to 5 lines to prevent overflow
+                  overflow: TextOverflow.ellipsis,
                 ),
                 const SizedBox(height: 12.0),
 
-                // Image
-                InkWell(
-                  onTap: () async {
-                    await Navigator.push(
-                      context,
-                      PageTransition(
-                        type: PageTransitionType.fade,
-                        child: FlutterFlowExpandedImageView(
-                          image: CachedNetworkImage(
-                            fadeInDuration: const Duration(milliseconds: 300),
-                            fadeOutDuration: const Duration(milliseconds: 300),
-                            imageUrl: post.imageUrl,
-                            fit: BoxFit.contain,
+                // Image (only show if imageUrl is not empty)
+                if (post.imageUrl.isNotEmpty) ...[
+                  InkWell(
+                    onTap: () async {
+                      await Navigator.push(
+                        context,
+                        PageTransition(
+                          type: PageTransitionType.fade,
+                          child: FlutterFlowExpandedImageView(
+                            image: CachedNetworkImage(
+                              fadeInDuration: const Duration(milliseconds: 300),
+                              fadeOutDuration:
+                                  const Duration(milliseconds: 300),
+                              imageUrl: post.imageUrl,
+                              fit: BoxFit.contain,
+                            ),
+                            allowRotation: false,
+                            tag: post.imageUrl,
+                            useHeroAnimation: true,
                           ),
-                          allowRotation: false,
-                          tag: post.imageUrl,
-                          useHeroAnimation: true,
                         ),
-                      ),
-                    );
-                  },
-                  child: Hero(
-                    tag: post.imageUrl,
-                    transitionOnUserGestures: true,
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(8.0),
-                      child: CachedNetworkImage(
-                        fadeInDuration: const Duration(milliseconds: 300),
-                        fadeOutDuration: const Duration(milliseconds: 300),
-                        imageUrl: post.imageUrl,
-                        width: double.infinity,
-                        height: 300.0,
-                        fit: BoxFit.cover,
+                      );
+                    },
+                    child: Hero(
+                      tag: post.imageUrl,
+                      transitionOnUserGestures: true,
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(8.0),
+                        child: CachedNetworkImage(
+                          fadeInDuration: const Duration(milliseconds: 300),
+                          fadeOutDuration: const Duration(milliseconds: 300),
+                          imageUrl: post.imageUrl,
+                          width: double.infinity,
+                          height: 300.0,
+                          fit: BoxFit.cover,
+                        ),
                       ),
                     ),
                   ),
-                ),
+                  const SizedBox(height: 12.0),
+                ],
                 const SizedBox(height: 12.0),
 
-                // Actions row
+                // Actions row - TEMPORARILY COMMENTED OUT
+                /*
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
@@ -539,6 +580,7 @@ class _PostItemState extends State<PostItem> with TickerProviderStateMixin {
                     ),
                   ],
                 ),
+                */
               ],
             ),
           ),

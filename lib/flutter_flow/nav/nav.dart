@@ -20,6 +20,10 @@ import '/flutter_flow/flutter_flow_util.dart';
 import 'serialization_util.dart';
 
 import '/index.dart';
+import '/pages/workspace_management/workspace_management_widget.dart';
+import '/pages/create_workspace/create_workspace_widget.dart';
+import '/pages/mobile_chat/mobile_chat_widget.dart';
+import '/pages/mobile_settings/mobile_settings_widget.dart';
 import 'package:branchio_dynamic_linking_akp5u6/index.dart'
     as $branchio_dynamic_linking_akp5u6;
 
@@ -203,8 +207,30 @@ GoRouter createRouter(AppStateNotifier appStateNotifier) {
         path: ProfileWidget.routePath,
         requireAuth: true,
         builder: (context, params) => params.isEmpty
-            ? NavBarPage(initialPage: 'Profile')
+            ? NavBarPage(initialPage: 'Settings')
             : const ProfileWidget(),
+      ),
+      FFRoute(
+        name: MobileSettingsWidget.routeName,
+        path: MobileSettingsWidget.routePath,
+        requireAuth: true,
+        builder: (context, params) => params.isEmpty
+            ? NavBarPage(initialPage: 'MobileSettings')
+            : MobileSettingsWidget(
+                initialSection: params.getParam('section', ParamType.String),
+              ),
+      ),
+      FFRoute(
+        name: 'WorkspaceManagement',
+        path: '/workspace-management',
+        requireAuth: true,
+        builder: (context, params) => const WorkspaceManagementWidget(),
+      ),
+      FFRoute(
+        name: 'CreateWorkspace',
+        path: '/create-workspace',
+        requireAuth: true,
+        builder: (context, params) => const CreateWorkspaceWidget(),
       ),
       FFRoute(
         name: CreateEventWidget.routeName,
@@ -361,6 +387,14 @@ GoRouter createRouter(AppStateNotifier appStateNotifier) {
         builder: (context, params) => const SearchChatWidget(),
       ),
       FFRoute(
+        name: MobileChatWidget.routeName,
+        path: MobileChatWidget.routePath,
+        requireAuth: true,
+        builder: (context, params) => params.isEmpty
+            ? NavBarPage(initialPage: 'MobileChat')
+            : const MobileChatWidget(),
+      ),
+      FFRoute(
         name: TermsPrivacyWidget.routeName,
         path: TermsPrivacyWidget.routePath,
         builder: (context, params) => TermsPrivacyWidget(
@@ -389,7 +423,7 @@ GoRouter createRouter(AppStateNotifier appStateNotifier) {
         path: FeedWidget.routePath,
         requireAuth: true,
         builder: (context, params) => params.isEmpty
-            ? NavBarPage(initialPage: 'Feed')
+            ? NavBarPage(initialPage: 'Announcements')
             : const FeedWidget(),
       ),
       FFRoute(

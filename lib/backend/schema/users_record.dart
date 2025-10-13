@@ -192,6 +192,21 @@ class UsersRecord extends FirestoreRecord {
   String get accountStatus => _accountStatus ?? '';
   bool hasAccountStatus() => _accountStatus != null;
 
+  // "current_workspace_ref" field.
+  DocumentReference? _currentWorkspaceRef;
+  DocumentReference? get currentWorkspaceRef => _currentWorkspaceRef;
+  bool hasCurrentWorkspaceRef() => _currentWorkspaceRef != null;
+
+  // "workspaces" field.
+  List<DocumentReference>? _workspaces;
+  List<DocumentReference> get workspaces => _workspaces ?? const [];
+  bool hasWorkspaces() => _workspaces != null;
+
+  // "default_workspace_ref" field.
+  DocumentReference? _defaultWorkspaceRef;
+  DocumentReference? get defaultWorkspaceRef => _defaultWorkspaceRef;
+  bool hasDefaultWorkspaceRef() => _defaultWorkspaceRef != null;
+
   void _initializeFields() {
     _email = snapshotData['email'] as String?;
     _displayName = snapshotData['display_name'] as String?;
@@ -231,6 +246,11 @@ class UsersRecord extends FirestoreRecord {
     _hasInvitationCode = snapshotData['has_invitation_code'] as bool?;
     _registrationType = snapshotData['registration_type'] as String?;
     _accountStatus = snapshotData['account_status'] as String?;
+    _currentWorkspaceRef =
+        snapshotData['current_workspace_ref'] as DocumentReference?;
+    _workspaces = getDataList(snapshotData['workspaces']);
+    _defaultWorkspaceRef =
+        snapshotData['default_workspace_ref'] as DocumentReference?;
   }
 
   static CollectionReference get collection =>
@@ -297,6 +317,8 @@ Map<String, dynamic> createUsersRecordData({
   bool? hasInvitationCode,
   String? registrationType,
   String? accountStatus,
+  DocumentReference? currentWorkspaceRef,
+  DocumentReference? defaultWorkspaceRef,
 }) {
   final firestoreData = mapToFirestore(
     <String, dynamic>{
@@ -330,6 +352,8 @@ Map<String, dynamic> createUsersRecordData({
       'has_invitation_code': hasInvitationCode,
       'registration_type': registrationType,
       'account_status': accountStatus,
+      'current_workspace_ref': currentWorkspaceRef,
+      'default_workspace_ref': defaultWorkspaceRef,
     }.withoutNulls,
   );
 
@@ -376,7 +400,10 @@ class UsersRecordDocumentEquality implements Equality<UsersRecord> {
         e1?.eventbriteLastSync == e2?.eventbriteLastSync &&
         e1?.hasInvitationCode == e2?.hasInvitationCode &&
         e1?.registrationType == e2?.registrationType &&
-        e1?.accountStatus == e2?.accountStatus;
+        e1?.accountStatus == e2?.accountStatus &&
+        e1?.currentWorkspaceRef == e2?.currentWorkspaceRef &&
+        listEquality.equals(e1?.workspaces, e2?.workspaces) &&
+        e1?.defaultWorkspaceRef == e2?.defaultWorkspaceRef;
   }
 
   @override
@@ -415,7 +442,10 @@ class UsersRecordDocumentEquality implements Equality<UsersRecord> {
         e?.eventbriteLastSync,
         e?.hasInvitationCode,
         e?.registrationType,
-        e?.accountStatus
+        e?.accountStatus,
+        e?.currentWorkspaceRef,
+        e?.workspaces,
+        e?.defaultWorkspaceRef
       ]);
 
   @override

@@ -1,6 +1,5 @@
 import '/backend/backend.dart';
 import '/flutter_flow/flutter_flow_util.dart';
-import '/flutter_flow/flutter_flow_widgets.dart';
 import '/custom_code/widgets/index.dart' as custom_widgets;
 import '/index.dart';
 import '/auth/firebase_auth/auth_util.dart';
@@ -10,8 +9,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:infinite_scroll_pagination/infinite_scroll_pagination.dart';
-import 'package:provider/provider.dart';
 import 'feed_model.dart';
 export 'feed_model.dart';
 
@@ -60,18 +57,43 @@ class _FeedWidgetState extends State<FeedWidget> {
     super.dispose();
   }
 
+  Future<List<PostsRecord>> _fetchAllPosts() async {
+    try {
+      final query = await PostsRecord.collection
+          .orderBy('created_at', descending: true)
+          .get();
+
+      final List<PostsRecord> allPosts = [];
+      for (final doc in query.docs) {
+        allPosts.add(PostsRecord.fromSnapshot(doc));
+      }
+
+      // Sort posts: pinned first, then by creation date
+      allPosts.sort((a, b) {
+        if (a.isPinned && !b.isPinned) return -1;
+        if (!a.isPinned && b.isPinned) return 1;
+        return b.createdAt!.compareTo(a.createdAt!);
+      });
+
+      return allPosts;
+    } catch (e) {
+      print('Error fetching posts: $e');
+      return [];
+    }
+  }
+
   Future<bool> _isUserBlocked(DocumentReference? userRef) async {
     if (userRef == null || userRef == currentUserReference) {
       return false; // Don't block yourself
     }
-    
+
     try {
       final blockedQuery = await BlockedUsersRecord.collection
           .where('blocker_user', isEqualTo: currentUserReference)
           .where('blocked_user', isEqualTo: userRef)
           .limit(1)
           .get();
-      
+
       return blockedQuery.docs.isNotEmpty;
     } catch (e) {
       print('Error checking blocked user: $e');
@@ -132,7 +154,7 @@ class _FeedWidgetState extends State<FeedWidget> {
                 ),
                 0.0),
             child: Text(
-              'Feed',
+              'Announcements',
               style: FlutterFlowTheme.of(context).headlineLarge.override(
                     font: GoogleFonts.inter(
                       fontWeight: FontWeight.w600,
@@ -167,84 +189,122 @@ class _FeedWidgetState extends State<FeedWidget> {
                       if (_model.loading == false) {
                         return RefreshIndicator(
                           key: const Key('RefreshIndicator_wsurvo3x'),
-                          onRefresh: () async {},
-                          child: PagedListView<DocumentSnapshot<Object?>?,
-                              PostsRecord>.separated(
-                            pagingController: _model.setListViewController(
-                              PostsRecord.collection
-                                  .orderBy('created_at', descending: true),
-                            ),
-                            padding: const EdgeInsets.fromLTRB(
-                              0,
-                              0,
-                              0,
-                              16.0,
-                            ),
-                            primary: false,
-                            shrinkWrap: true,
-                            reverse: false,
-                            scrollDirection: Axis.vertical,
-                            separatorBuilder: (_, __) => const SizedBox(height: 16.0),
-                            builderDelegate:
-                                PagedChildBuilderDelegate<PostsRecord>(
-                              // Customize what your widget looks like when it's loading the first page.
-                              firstPageProgressIndicatorBuilder: (_) => Center(
-                                child: SizedBox(
-                                  width: 50.0,
-                                  height: 50.0,
-                                  child: CircularProgressIndicator(
-                                    valueColor: AlwaysStoppedAnimation<Color>(
-                                      FlutterFlowTheme.of(context).primary,
-                                    ),
-                                  ),
-                                ),
-                              ),
-                              // Customize what your widget looks like when it's loading another page.
-                              newPageProgressIndicatorBuilder: (_) => Center(
-                                child: SizedBox(
-                                  width: 50.0,
-                                  height: 50.0,
-                                  child: CircularProgressIndicator(
-                                    valueColor: AlwaysStoppedAnimation<Color>(
-                                      FlutterFlowTheme.of(context).primary,
-                                    ),
-                                  ),
-                                ),
-                              ),
+                          onRefresh: () async {
+                            setState(() {});
+                          },
+                          child: FutureBuilder<List<PostsRecord>>(
+                            future: _fetchAllPosts(),
+                            builder: (context, snapshot) {
+                              if (snapshot.connectionState ==
+                                  ConnectionState.waiting) {
+                                return const Center(
+                                  child: CircularProgressIndicator(),
+                                );
+                              }
 
-                              itemBuilder: (context, _, listViewIndex) {
-                                final listViewPostsRecord = _model
-                                    .listViewPagingController!
-                                    .itemList![listViewIndex];
-                                
-                                // Check if the post author is blocked
-                                return FutureBuilder<bool>(
-                                  future: _isUserBlocked(listViewPostsRecord.authorRef),
-                                  builder: (context, snapshot) {
-                                    // If still loading, show the post (to avoid flickering)
-                                    if (!snapshot.hasData) {
+                              if (snapshot.hasError) {
+                                return Center(
+                                  child: Text('Error: ${snapshot.error}'),
+                                );
+                              }
+
+                              final posts = snapshot.data ?? [];
+
+                              return ListView.separated(
+                                padding: const EdgeInsets.fromLTRB(
+                                  16.0,
+                                  16.0,
+                                  16.0,
+                                  16.0,
+                                ),
+                                primary: false,
+                                shrinkWrap: true,
+                                itemCount:
+                                    posts.length + 1, // +1 for AI summary
+                                separatorBuilder: (_, __) =>
+                                    const SizedBox(height: 16.0),
+                                itemBuilder: (context, index) {
+                                  // Show AI summary as first item
+                                  if (index == 0) {
+                                    return custom_widgets
+                                        .AIAnnouncementsSummary(
+                                      width: double.infinity,
+                                    );
+                                  }
+
+                                  // Show posts (adjust index by -1)
+                                  final post = posts[index - 1];
+
+                                  // Check if the post author is blocked
+                                  return FutureBuilder<bool>(
+                                    future: _isUserBlocked(post.authorRef),
+                                    builder: (context, snapshot) {
+                                      // If still loading, show the post (to avoid flickering)
+                                      if (!snapshot.hasData) {
+                                        return SizedBox(
+                                          width: double.infinity,
+                                          child: custom_widgets.PostItem(
+                                            width: double.infinity,
+                                            height: 0.0,
+                                            isPostDetail: false,
+                                            postRef: post.reference,
+                                            actionEdit: () async {
+                                              context.pushNamed(
+                                                CreatePostWidget.routeName,
+                                                queryParameters: {
+                                                  'image': serializeParam(
+                                                    post.imageUrl,
+                                                    ParamType.String,
+                                                  ),
+                                                  'caption': serializeParam(
+                                                    post.text,
+                                                    ParamType.String,
+                                                  ),
+                                                  'feeling': serializeParam(
+                                                    post.postType,
+                                                    ParamType.String,
+                                                  ),
+                                                  'isEdit': serializeParam(
+                                                    true,
+                                                    ParamType.bool,
+                                                  ),
+                                                  'postDoc': serializeParam(
+                                                    post.reference,
+                                                    ParamType.DocumentReference,
+                                                  ),
+                                                }.withoutNulls,
+                                              );
+                                            },
+                                          ),
+                                        );
+                                      }
+
+                                      // If user is blocked, don't show the post
+                                      if (snapshot.data == true) {
+                                        return const SizedBox.shrink();
+                                      }
+
                                       return SizedBox(
                                         width: double.infinity,
-                                        height: 475.0,
                                         child: custom_widgets.PostItem(
                                           width: double.infinity,
-                                          height: 475.0,
+                                          height: 0.0,
                                           isPostDetail: false,
-                                          postRef: listViewPostsRecord.reference,
+                                          postRef: post.reference,
                                           actionEdit: () async {
                                             context.pushNamed(
                                               CreatePostWidget.routeName,
                                               queryParameters: {
                                                 'image': serializeParam(
-                                                  listViewPostsRecord.imageUrl,
+                                                  post.imageUrl,
                                                   ParamType.String,
                                                 ),
                                                 'caption': serializeParam(
-                                                  listViewPostsRecord.text,
+                                                  post.text,
                                                   ParamType.String,
                                                 ),
                                                 'feeling': serializeParam(
-                                                  listViewPostsRecord.postType,
+                                                  post.postType,
                                                   ParamType.String,
                                                 ),
                                                 'isEdit': serializeParam(
@@ -252,7 +312,7 @@ class _FeedWidgetState extends State<FeedWidget> {
                                                   ParamType.bool,
                                                 ),
                                                 'postDoc': serializeParam(
-                                                  listViewPostsRecord.reference,
+                                                  post.reference,
                                                   ParamType.DocumentReference,
                                                 ),
                                               }.withoutNulls,
@@ -260,55 +320,11 @@ class _FeedWidgetState extends State<FeedWidget> {
                                           },
                                         ),
                                       );
-                                    }
-                                    
-                                    // If user is blocked, return empty container
-                                    if (snapshot.data == true) {
-                                      return const SizedBox.shrink();
-                                    }
-                                    
-                                    // If user is not blocked, show the post
-                                    return SizedBox(
-                                      width: double.infinity,
-                                      height: 475.0,
-                                      child: custom_widgets.PostItem(
-                                        width: double.infinity,
-                                        height: 475.0,
-                                        isPostDetail: false,
-                                        postRef: listViewPostsRecord.reference,
-                                        actionEdit: () async {
-                                          context.pushNamed(
-                                            CreatePostWidget.routeName,
-                                            queryParameters: {
-                                              'image': serializeParam(
-                                                listViewPostsRecord.imageUrl,
-                                                ParamType.String,
-                                              ),
-                                              'caption': serializeParam(
-                                                listViewPostsRecord.text,
-                                                ParamType.String,
-                                              ),
-                                              'feeling': serializeParam(
-                                                listViewPostsRecord.postType,
-                                                ParamType.String,
-                                              ),
-                                              'isEdit': serializeParam(
-                                                true,
-                                                ParamType.bool,
-                                              ),
-                                              'postDoc': serializeParam(
-                                                listViewPostsRecord.reference,
-                                                ParamType.DocumentReference,
-                                              ),
-                                            }.withoutNulls,
-                                          );
-                                        },
-                                      ),
-                                    );
-                                  },
-                                );
-                              },
-                            ),
+                                    },
+                                  );
+                                },
+                              );
+                            },
                           ),
                         );
                       } else {

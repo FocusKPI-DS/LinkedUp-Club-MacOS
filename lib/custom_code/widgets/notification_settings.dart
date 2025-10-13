@@ -1,13 +1,9 @@
 // Automatic FlutterFlow imports
 import '/backend/backend.dart';
 import '/backend/schema/structs/index.dart';
-import '/backend/schema/enums/enums.dart';
-import '/actions/actions.dart' as action_blocks;
 import 'package:ff_theme/flutter_flow/flutter_flow_theme.dart';
 import '/flutter_flow/flutter_flow_util.dart';
 import 'index.dart'; // Imports other custom widgets
-import '/custom_code/actions/index.dart'; // Imports custom actions
-import '/flutter_flow/custom_functions.dart'; // Imports custom functions
 import 'package:flutter/material.dart';
 // Begin custom widget code
 // DO NOT REMOVE OR MODIFY THE CODE ABOVE!
@@ -19,7 +15,9 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import '/auth/firebase_auth/auth_util.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:badges/badges.dart' as badges;
+import 'package:firebase_messaging/firebase_messaging.dart';
 import 'paginated_notifications.dart';
+import 'in_app_notification_service.dart';
 
 class NotificationSettings extends StatefulWidget {
   const NotificationSettings({
@@ -247,7 +245,8 @@ class _NotificationSettingsState extends State<NotificationSettings> {
           mainAxisSize: MainAxisSize.max,
           children: [
             Padding(
-              padding: const EdgeInsetsDirectional.fromSTEB(0.0, 0.0, 0.0, 20.0),
+              padding:
+                  const EdgeInsetsDirectional.fromSTEB(0.0, 0.0, 0.0, 20.0),
               child: Column(
                 mainAxisSize: MainAxisSize.max,
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -329,7 +328,8 @@ class _NotificationSettingsState extends State<NotificationSettings> {
               ].divide(const SizedBox(height: 16.0)),
             ),
             Padding(
-              padding: const EdgeInsetsDirectional.fromSTEB(0.0, 20.0, 0.0, 20.0),
+              padding:
+                  const EdgeInsetsDirectional.fromSTEB(0.0, 20.0, 0.0, 20.0),
               child: Column(
                 mainAxisSize: MainAxisSize.max,
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -433,6 +433,54 @@ class _NotificationSettingsState extends State<NotificationSettings> {
                       ),
                     ],
                   ),
+                  // Test In-App Notification Button
+                  Container(
+                    width: double.infinity,
+                    decoration: BoxDecoration(
+                      color: Colors.green,
+                      borderRadius: BorderRadius.circular(12.0),
+                    ),
+                    child: InkWell(
+                      onTap: () async {
+                        await _testInAppNotification();
+                      },
+                      child: Padding(
+                        padding: const EdgeInsets.all(16.0),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.max,
+                          children: [
+                            Icon(
+                              Icons.notifications_active,
+                              color: Colors.white,
+                              size: 24.0,
+                            ),
+                            SizedBox(width: 12.0),
+                            Expanded(
+                              child: Text(
+                                'Test In-App Notification (TOP)',
+                                style: FlutterFlowTheme.of(context)
+                                    .bodyMedium
+                                    .override(
+                                      font: GoogleFonts.inter(
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                      color: Colors.white,
+                                      fontSize: 16.0,
+                                      letterSpacing: 0.0,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                              ),
+                            ),
+                            Icon(
+                              Icons.arrow_forward_ios,
+                              color: Colors.white,
+                              size: 16.0,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
                   // PaginatedNotifications with dynamic height
                   PaginatedNotifications(
                     width: double.infinity,
@@ -447,5 +495,29 @@ class _NotificationSettingsState extends State<NotificationSettings> {
         ),
       ),
     );
+  }
+
+  /// Test in-app notification function
+  Future<void> _testInAppNotification() async {
+    try {
+      print('🔔 Testing in-app notification...');
+
+      // Show in-app notification overlay from top
+      InAppNotificationService.showInAppNotification(
+        context: context,
+        title: '🎉 Test Notification',
+        body: 'In-app notifications are working perfectly!',
+        soundFile: 'new-notification-3-398649.mp3',
+        duration: Duration(seconds: 3),
+      );
+    } catch (e) {
+      print('❌ Error testing in-app notification: $e');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('❌ Error: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
   }
 }

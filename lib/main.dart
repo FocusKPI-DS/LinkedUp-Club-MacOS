@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io' show Platform;
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
@@ -7,17 +8,25 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_web_plugins/url_strategy.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
+import 'package:cached_network_image/cached_network_image.dart';
+import 'package:get/get.dart';
 
 // Import for macOS camera delegate
 import 'package:image_picker_platform_interface/image_picker_platform_interface.dart';
 import 'package:image_picker_macos/image_picker_macos.dart';
 
 import '/custom_code/actions/index.dart' as actions;
+import '/pages/mobile_assistant/mobile_assistant_widget.dart';
+import '/pages/mobile_settings/mobile_settings_widget.dart';
+import '/main/home/home_widget.dart';
+// import '/pages/chat/chat/chat_widget.dart'; // Commented out - using MobileChat (now called Chat) instead
+import '/pages/mobile_chat/mobile_chat_widget.dart';
 import 'auth/firebase_auth/firebase_user_provider.dart';
 import 'auth/firebase_auth/auth_util.dart';
+import 'backend/backend.dart';
+import 'pages/desktop_chat/chat_controller.dart';
 import 'backend/push_notifications/push_notifications_util.dart';
 import 'backend/firebase/firebase_config.dart';
-import 'package:ff_theme/flutter_flow/flutter_flow_theme.dart';
 import 'flutter_flow/flutter_flow_util.dart';
 import 'flutter_flow/nav/nav.dart';
 import 'flutter_flow/revenue_cat_util.dart' as revenue_cat;
@@ -64,10 +73,8 @@ void main() async {
           loadDataAfterLaunch: true,
         );
       } catch (e) {
-        print('RevenueCat initialization failed: $e');
+        // RevenueCat initialization failed
       }
-    } else {
-      print('RevenueCat disabled on macOS for App Store compliance');
     }
 
     // Handle app badge (only on mobile platforms)
@@ -80,7 +87,7 @@ void main() async {
           await actions.clearAppBadge();
         }
       } catch (e) {
-        print('App badge setup failed: $e');
+        // App badge setup failed
       }
     }
 
@@ -99,10 +106,8 @@ void main() async {
 
         await branchio_dynamic_linking_akp5u6_actions.initBranch();
       } catch (e) {
-        print('Branch SDK initialization failed: $e');
+        // Branch SDK initialization failed
       }
-    } else {
-      print('Branch SDK not supported on this platform');
     }
 
     runApp(MultiProvider(
@@ -114,7 +119,7 @@ void main() async {
       child: MyApp(),
     ));
   } catch (e) {
-    print('Error during app initialization: $e');
+    // Error during app initialization
     // Run app with minimal configuration if initialization fails
     runApp(MaterialApp(
       home: Scaffold(
@@ -125,7 +130,7 @@ void main() async {
               const Icon(Icons.error, size: 64, color: Colors.red),
               const SizedBox(height: 16),
               const Text('App initialization failed'),
-              Text('Error: $e'),
+              const Text('Please restart the app'),
             ],
           ),
         ),
@@ -140,17 +145,19 @@ void _initializePushNotificationsAsync() async {
     try {
       final messaging = FirebaseMessaging.instance;
 
-      // Request notification permission
+      // Request notification permission with more aggressive settings
       final settings = await messaging.requestPermission(
         alert: true,
         badge: true,
         sound: true,
         provisional: false,
+        announcement: true,
+        carPlay: false,
+        criticalAlert: false,
       );
 
-      print('Notification permission status: ${settings.authorizationStatus}');
-
-      if (settings.authorizationStatus == AuthorizationStatus.authorized) {
+      if (settings.authorizationStatus == AuthorizationStatus.authorized ||
+          settings.authorizationStatus == AuthorizationStatus.provisional) {
         // Show system banners while app is in foreground
         await FirebaseMessaging.instance
             .setForegroundNotificationPresentationOptions(
@@ -159,38 +166,63 @@ void _initializePushNotificationsAsync() async {
           sound: true,
         );
 
-        // For macOS, wait a bit for APNS token
-        if (Platform.isMacOS) {
-          await Future.delayed(const Duration(seconds: 2));
-        }
-
-        // Get and print FCM token
-        try {
-          final token = await messaging.getToken();
-          print('FCM token: $token');
-        } catch (e) {
-          print('Error getting FCM token: $e');
-        }
+        // Get FCM token with smart retry for APNS token
+        await _getFCMTokenWithRetry(messaging);
 
         // Listen for foreground messages
         FirebaseMessaging.onMessage.listen((RemoteMessage message) {
-          print(
-              '📱 Foreground message: ${message.notification?.title} — ${message.notification?.body}');
+          // Foreground message received
         });
 
         // Listen for notification taps
         FirebaseMessaging.onMessageOpenedApp.listen((RemoteMessage message) {
-          print('🔔 Notification tapped with data: ${message.data}');
+          // Notification tapped
         });
 
         // Listen for token refresh
         FirebaseMessaging.instance.onTokenRefresh.listen((newToken) {
-          print('🔄 FCM token refreshed: $newToken');
+          // FCM token refreshed
         });
       }
     } catch (e) {
-      print('Push notification setup failed: $e');
+      // Push notification setup failed
     }
+  }
+}
+
+/// Get FCM token with simple retry (only 2 attempts)
+Future<void> _getFCMTokenWithRetry(FirebaseMessaging messaging) async {
+  try {
+    // Try immediately first
+    String? apnsToken = await messaging.getAPNSToken();
+    if (apnsToken != null) {
+      await _getFCMTokenWhenReady(messaging);
+      return;
+    }
+
+    // Wait 5 seconds and try once more
+    Timer(Duration(seconds: 5), () async {
+      try {
+        String? apnsToken = await messaging.getAPNSToken();
+        if (apnsToken != null) {
+          await _getFCMTokenWhenReady(messaging);
+        }
+      } catch (e) {
+        // Error on second attempt
+      }
+    });
+  } catch (e) {
+    // Error in FCM token setup
+  }
+}
+
+/// Get FCM token when APNS is ready
+Future<void> _getFCMTokenWhenReady(FirebaseMessaging messaging) async {
+  try {
+    await messaging.getToken();
+    // FCM token obtained or null
+  } catch (e) {
+    // Error getting FCM token
   }
 }
 
@@ -272,7 +304,10 @@ class _MyAppState extends State<MyApp> {
     _router = createRouter(_appStateNotifier);
     userStream = linkedupFirebaseUserStream()
       ..listen((user) {
-        _appStateNotifier.update(user);
+        // Only update if the widget is still mounted to prevent state errors
+        if (mounted) {
+          _appStateNotifier.update(user);
+        }
       });
     jwtTokenStream.listen((_) {});
     // Show loading page immediately, hide it when initialization is complete
@@ -292,19 +327,27 @@ class _MyAppState extends State<MyApp> {
 
   /// Optimize app initialization to show loading page immediately
   Future<void> _initializeAppAsync() async {
-    // Wait for essential services to initialize in parallel
-    await Future.wait([
-      // Wait for user stream to emit at least once
-      userStream.first.timeout(
-        const Duration(milliseconds: 1200),
-      ),
-      // Keep loading page for exactly 1000ms as requested
-      Future.delayed(const Duration(milliseconds: 1000)),
-    ]);
-
-    // Hide loading page once initialization is complete
-    if (mounted) {
-      _appStateNotifier.stopShowingSplashImage();
+    try {
+      // Wait for essential services to initialize in parallel
+      await Future.wait([
+        // Wait for user stream to emit at least once (with graceful timeout handling)
+        userStream.first.timeout(
+          const Duration(milliseconds: 3000),
+          onTimeout: () {
+            // User stream timeout - continuing with initialization
+            return linkedupFirebaseUserStream().first.then((user) => user);
+          },
+        ),
+        // Keep loading page for at least 1000ms
+        Future.delayed(const Duration(milliseconds: 1000)),
+      ]);
+    } catch (e) {
+      // App initialization error - continue anyway
+    } finally {
+      // Always hide loading page, even if there's an error
+      if (mounted) {
+        _appStateNotifier.stopShowingSplashImage();
+      }
     }
   }
 
@@ -365,8 +408,9 @@ class NavBarPage extends StatefulWidget {
 
 /// This is the private State class that goes with NavBarPage.
 class _NavBarPageState extends State<NavBarPage> {
-  String _currentPageName = 'Chat';
+  String _currentPageName = 'Home';
   late Widget? _currentPage;
+  bool _isChatOpen = false;
 
   @override
   void initState() {
@@ -378,72 +422,761 @@ class _NavBarPageState extends State<NavBarPage> {
   @override
   Widget build(BuildContext context) {
     final tabs = {
-      'Chat': const ChatWidget(),
-      'Discover': const DiscoverWidget(),
-      // 'Event': EventWidget(),
-      'Feed': const FeedWidget(),
-      'Profile': const ProfileWidget(),
+      'Home': const HomeWidget(),
+      // 'Chat': const ChatWidget(), // Commented out - using MobileChat (now called Chat) instead
+      'MobileChat': MobileChatWidget(
+        onChatStateChanged: (isChatOpen) {
+          setState(() {
+            _isChatOpen = isChatOpen;
+          });
+        },
+      ),
+      // 'AIAssistant': const AIAssistantWidget(), // Commented out - using MobileAssistant instead
+      'MobileAssistant': const MobileAssistantWidget(),
+      // 'Discover': const DiscoverWidget(), // Commented out since Home serves the same purpose
+      'Announcements': const FeedWidget(),
+      // 'Settings': const ProfileWidget(),
+      // 'ProfileSettings': const ProfileSettingsWidget(), // Commented out - using MobileSettings instead
+      'MobileSettings': const MobileSettingsWidget(),
     };
-    final currentIndex = tabs.keys.toList().indexOf(_currentPageName);
 
-    return Scaffold(
-      resizeToAvoidBottomInset: !widget.disableResizeToAvoidBottomInset,
-      body: _currentPage ?? tabs[_currentPageName],
-      bottomNavigationBar: BottomNavigationBar(
-        currentIndex: currentIndex,
-        onTap: (i) => safeSetState(() {
-          _currentPage = null;
-          _currentPageName = tabs.keys.toList()[i];
-        }),
-        backgroundColor: FlutterFlowTheme.of(context).secondaryBackground,
-        selectedItemColor: FlutterFlowTheme.of(context).primary,
-        unselectedItemColor: FlutterFlowTheme.of(context).secondaryText,
-        showSelectedLabels: true,
-        showUnselectedLabels: true,
-        type: BottomNavigationBarType.fixed,
-        items: const <BottomNavigationBarItem>[
-          BottomNavigationBarItem(
-            icon: Icon(
-              Icons.chat_rounded,
-              size: 24.0,
-            ),
-            label: 'Chat',
-            tooltip: '',
-          ),
-          BottomNavigationBarItem(
-            icon: FaIcon(
-              FontAwesomeIcons.solidCompass,
-              size: 20.0,
-            ),
-            label: 'Discover',
-            tooltip: '',
-          ),
-          // BottomNavigationBarItem(
-          //   icon: FaIcon(
-          //     FontAwesomeIcons.solidCalendarAlt,
-          //     size: 20.0,
-          //   ),
-          //   label: 'Event',
-          //   tooltip: '',
-          // ),
+    // Create a mapping for the navbar items to their corresponding tab indices
+    final navItemToIndex = {
+      'Home': 0,
+      // 'Chat': 1, // Commented out - using MobileChat instead
+      'MobileChat': 1, // Chat (renamed from Mobile Chat)
+      // 'AIAssistant': 2, // Commented out - using MobileAssistant instead
+      'MobileAssistant': 2, // LinkAI
+      // 'Discover': 3, // Commented out
+      'Announcements': 3, // Updated indices
+      // 'ProfileSettings': 4, // Commented out - using MobileSettings instead
+      'MobileSettings': 4, // Mobile Settings
+    };
 
-          BottomNavigationBarItem(
-            icon: Icon(
-              Icons.groups_sharp,
-              size: 30.0,
+    final currentIndex = navItemToIndex[_currentPageName] ?? 0;
+
+    // Platform-specific layout
+    if (Platform.isIOS) {
+      return Scaffold(
+        resizeToAvoidBottomInset: !widget.disableResizeToAvoidBottomInset,
+        body: _currentPage ?? tabs[_currentPageName]!,
+        bottomNavigationBar: _isChatOpen
+            ? null
+            : _buildHorizontalNavBar(tabs, currentIndex, navItemToIndex),
+      );
+    } else {
+      // macOS - Keep existing vertical layout
+      return Scaffold(
+        resizeToAvoidBottomInset: !widget.disableResizeToAvoidBottomInset,
+        body: Row(
+          children: [
+            // Vertical Navigation Bar
+            _buildVerticalNavBar(tabs, currentIndex, navItemToIndex),
+            // Main Content Area
+            Expanded(
+              child: _currentPage ?? tabs[_currentPageName]!,
             ),
-            label: 'Feed',
-            tooltip: '',
+          ],
+        ),
+      );
+    }
+  }
+
+  Widget _buildVerticalNavBar(Map<String, Widget> tabs, int currentIndex,
+      Map<String, int> navItemToIndex) {
+    final navItems = [
+      {
+        'icon': Icons.home_rounded,
+        'label': 'Home',
+        'page': 'Home',
+      },
+      // {
+      //   'icon': Icons.chat_rounded,
+      //   'label': 'Chat',
+      //   'page': 'Chat',
+      // }, // Commented out - using MobileChat (now called Chat) instead
+      {
+        'icon': Icons.chat_bubble_outline_rounded,
+        'label': 'Chat',
+        'page': 'MobileChat',
+      },
+      {
+        'icon': Icons.smart_toy_rounded,
+        'label': 'AI Assistant',
+        'page': 'AIAssistant',
+      },
+      {
+        'icon': Icons.campaign_rounded,
+        'label': 'Announcements',
+        'page': 'Announcements',
+      },
+      {
+        'icon': Icons.settings_outlined,
+        'label': 'Mobile Settings',
+        'page': 'MobileSettings',
+      },
+    ];
+
+    return Container(
+      width: 100,
+      height: double.infinity,
+      decoration: BoxDecoration(
+        color: Color(0xFF2D3142),
+        border: Border(
+          right: BorderSide(
+            color: Color(0xFF374151),
+            width: 1,
           ),
-          BottomNavigationBarItem(
-            icon: Icon(
-              Icons.person_2,
-              size: 28.0,
+        ),
+      ),
+      child: Column(
+        children: [
+          // Workspace Name at top (like Slack)
+          if (currentUserReference != null)
+            StreamBuilder<UsersRecord>(
+              stream: UsersRecord.getDocument(currentUserReference ??
+                  FirebaseFirestore.instance
+                      .collection('users')
+                      .doc('placeholder')),
+              builder: (context, snapshot) {
+                if (!snapshot.hasData || currentUserReference == null) {
+                  return SizedBox(height: 20);
+                }
+
+                final currentUser = snapshot.data!;
+
+                // Get all workspace memberships
+                return StreamBuilder<List<WorkspaceMembersRecord>>(
+                  stream: queryWorkspaceMembersRecord(
+                    queryBuilder: (q) =>
+                        q.where('user_ref', isEqualTo: currentUserReference),
+                  ),
+                  builder: (context, membershipSnapshot) {
+                    if (!membershipSnapshot.hasData) {
+                      return SizedBox(height: 20);
+                    }
+
+                    final memberships = membershipSnapshot.data!;
+
+                    // If no workspace, show message
+                    if (!currentUser.hasCurrentWorkspaceRef()) {
+                      return Container(
+                        width: double.infinity,
+                        margin: EdgeInsets.only(
+                            top: 16, bottom: 20, left: 8, right: 8),
+                        padding:
+                            EdgeInsets.symmetric(vertical: 16, horizontal: 12),
+                        decoration: BoxDecoration(
+                          color: Color(0xFF374151),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Text(
+                          'No Workspace',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            color: Color(0xFF9CA3AF),
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      );
+                    }
+
+                    // Show current workspace with switcher
+                    final workspaceRef = currentUser.currentWorkspaceRef;
+                    if (workspaceRef == null) {
+                      return Container(
+                        width: double.infinity,
+                        margin: EdgeInsets.only(
+                            top: 16, bottom: 20, left: 8, right: 8),
+                        padding:
+                            EdgeInsets.symmetric(vertical: 16, horizontal: 12),
+                        decoration: BoxDecoration(
+                          color: Color(0xFF374151),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Text(
+                          'No Workspace',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            color: Color(0xFF9CA3AF),
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      );
+                    }
+
+                    return FutureBuilder<WorkspacesRecord>(
+                      future: WorkspacesRecord.getDocumentOnce(workspaceRef),
+                      builder: (context, workspaceSnapshot) {
+                        final workspaceName = workspaceSnapshot.hasData
+                            ? workspaceSnapshot.data?.name ?? 'Loading...'
+                            : 'Loading...';
+
+                        // If only one workspace, just show it (Slack style)
+                        if (memberships.length <= 1) {
+                          final workspace = workspaceSnapshot.data;
+                          final hasLogo =
+                              workspace?.logoUrl.isNotEmpty ?? false;
+
+                          return Container(
+                            width: double.infinity,
+                            margin: EdgeInsets.only(
+                                top: 16, bottom: 20, left: 8, right: 8),
+                            padding: EdgeInsets.symmetric(
+                                vertical: 16, horizontal: 8),
+                            decoration: BoxDecoration(
+                              color: Color(0xFF1F2937),
+                              borderRadius: BorderRadius.circular(12),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.black.withOpacity(0.1),
+                                  blurRadius: 8,
+                                  offset: Offset(0, 2),
+                                ),
+                              ],
+                            ),
+                            child: Column(
+                              children: [
+                                // Workspace logo or initial
+                                Container(
+                                  width: 48,
+                                  height: 48,
+                                  decoration: BoxDecoration(
+                                    color: hasLogo
+                                        ? Colors.white
+                                        : Color(0xFF3B82F6),
+                                    borderRadius: BorderRadius.circular(10),
+                                  ),
+                                  child: hasLogo
+                                      ? ClipRRect(
+                                          borderRadius:
+                                              BorderRadius.circular(10),
+                                          child: CachedNetworkImage(
+                                            imageUrl: workspace?.logoUrl ?? '',
+                                            width: 48,
+                                            height: 48,
+                                            fit: BoxFit.cover,
+                                            placeholder: (context, url) =>
+                                                Center(
+                                              child: CircularProgressIndicator(
+                                                strokeWidth: 2,
+                                                valueColor:
+                                                    AlwaysStoppedAnimation<
+                                                        Color>(
+                                                  Color(0xFF3B82F6),
+                                                ),
+                                              ),
+                                            ),
+                                            errorWidget:
+                                                (context, url, error) => Center(
+                                              child: Text(
+                                                workspaceName.isNotEmpty
+                                                    ? workspaceName[0]
+                                                        .toUpperCase()
+                                                    : 'W',
+                                                style: TextStyle(
+                                                  color: Colors.white,
+                                                  fontSize: 20,
+                                                  fontWeight: FontWeight.w700,
+                                                ),
+                                              ),
+                                            ),
+                                          ),
+                                        )
+                                      : Center(
+                                          child: Text(
+                                            workspaceName.isNotEmpty
+                                                ? workspaceName[0].toUpperCase()
+                                                : 'W',
+                                            style: TextStyle(
+                                              color: Colors.white,
+                                              fontSize: 20,
+                                              fontWeight: FontWeight.w700,
+                                            ),
+                                          ),
+                                        ),
+                                ),
+                                SizedBox(height: 8),
+                                Text(
+                                  workspaceName,
+                                  textAlign: TextAlign.center,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.visible,
+                                  style: TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w700,
+                                    letterSpacing: 0.2,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          );
+                        }
+
+                        // Multiple workspaces - show dropdown (Slack style)
+                        final workspace = workspaceSnapshot.data;
+                        final hasLogo = workspace?.logoUrl.isNotEmpty ?? false;
+
+                        return PopupMenuButton<DocumentReference>(
+                          offset: Offset(100, 0),
+                          child: Container(
+                            width: double.infinity,
+                            margin: EdgeInsets.only(
+                                top: 16, bottom: 20, left: 8, right: 8),
+                            padding: EdgeInsets.symmetric(
+                                vertical: 16, horizontal: 8),
+                            decoration: BoxDecoration(
+                              color: Color(0xFF1F2937),
+                              borderRadius: BorderRadius.circular(12),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.black.withOpacity(0.1),
+                                  blurRadius: 8,
+                                  offset: Offset(0, 2),
+                                ),
+                              ],
+                            ),
+                            child: Column(
+                              children: [
+                                // Workspace logo or initial
+                                Container(
+                                  width: 48,
+                                  height: 48,
+                                  decoration: BoxDecoration(
+                                    color: hasLogo
+                                        ? Colors.white
+                                        : Color(0xFF3B82F6),
+                                    borderRadius: BorderRadius.circular(10),
+                                  ),
+                                  child: hasLogo
+                                      ? ClipRRect(
+                                          borderRadius:
+                                              BorderRadius.circular(10),
+                                          child: CachedNetworkImage(
+                                            imageUrl: workspace?.logoUrl ?? '',
+                                            width: 48,
+                                            height: 48,
+                                            fit: BoxFit.cover,
+                                            placeholder: (context, url) =>
+                                                Center(
+                                              child: CircularProgressIndicator(
+                                                strokeWidth: 2,
+                                                valueColor:
+                                                    AlwaysStoppedAnimation<
+                                                        Color>(
+                                                  Color(0xFF3B82F6),
+                                                ),
+                                              ),
+                                            ),
+                                            errorWidget:
+                                                (context, url, error) => Center(
+                                              child: Text(
+                                                workspaceName.isNotEmpty
+                                                    ? workspaceName[0]
+                                                        .toUpperCase()
+                                                    : 'W',
+                                                style: TextStyle(
+                                                  color: Colors.white,
+                                                  fontSize: 20,
+                                                  fontWeight: FontWeight.w700,
+                                                ),
+                                              ),
+                                            ),
+                                          ),
+                                        )
+                                      : Center(
+                                          child: Text(
+                                            workspaceName.isNotEmpty
+                                                ? workspaceName[0].toUpperCase()
+                                                : 'W',
+                                            style: TextStyle(
+                                              color: Colors.white,
+                                              fontSize: 20,
+                                              fontWeight: FontWeight.w700,
+                                            ),
+                                          ),
+                                        ),
+                                ),
+                                SizedBox(height: 8),
+                                Text(
+                                  workspaceName,
+                                  textAlign: TextAlign.center,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.visible,
+                                  style: TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w700,
+                                    letterSpacing: 0.2,
+                                  ),
+                                ),
+                                SizedBox(height: 4),
+                                Row(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    Icon(
+                                      Icons.unfold_more_rounded,
+                                      color: Color(0xFF9CA3AF),
+                                      size: 16,
+                                    ),
+                                  ],
+                                ),
+                              ],
+                            ),
+                          ),
+                          onSelected: (workspaceRef) async {
+                            // Update user's current workspace
+                            final userRef = currentUserReference;
+                            if (userRef != null) {
+                              await userRef.update({
+                                'current_workspace_ref': workspaceRef,
+                              });
+
+                              // Update chat controller with new workspace
+                              try {
+                                final chatController =
+                                    Get.find<ChatController>();
+                                chatController
+                                    .updateCurrentWorkspace(workspaceRef);
+                              } catch (e) {
+                                // ChatController not found
+                              }
+
+                              // Show confirmation
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text('Workspace switched'),
+                                  duration: Duration(seconds: 2),
+                                ),
+                              );
+
+                              // Refresh the page
+                              safeSetState(() {});
+                            }
+                          },
+                          itemBuilder: (context) {
+                            return memberships.map((membership) {
+                              return PopupMenuItem<DocumentReference>(
+                                value: membership.workspaceRef,
+                                child: FutureBuilder<WorkspacesRecord>(
+                                  future: WorkspacesRecord.getDocumentOnce(
+                                    membership.workspaceRef ??
+                                        FirebaseFirestore.instance
+                                            .collection('workspaces')
+                                            .doc('placeholder'),
+                                  ),
+                                  builder: (context, ws) {
+                                    final name = ws.hasData
+                                        ? ws.data?.name ?? 'Loading...'
+                                        : 'Loading...';
+                                    final isSelected =
+                                        currentUser.currentWorkspaceRef?.id ==
+                                            membership.workspaceRef?.id;
+
+                                    return Row(
+                                      children: [
+                                        if (isSelected)
+                                          Icon(
+                                            Icons.check_circle,
+                                            color: Color(0xFF3B82F6),
+                                            size: 16,
+                                          ),
+                                        if (isSelected) SizedBox(width: 8),
+                                        Expanded(
+                                          child: Text(
+                                            name,
+                                            style: TextStyle(
+                                              fontWeight: isSelected
+                                                  ? FontWeight.w600
+                                                  : FontWeight.w400,
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    );
+                                  },
+                                ),
+                              );
+                            }).toList();
+                          },
+                        );
+                      },
+                    );
+                  },
+                );
+              },
             ),
-            label: 'Profile',
-            tooltip: '',
-          )
+          // Navigation Items
+          Expanded(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.start,
+              children: navItems.map((item) {
+                final isSelected = navItemToIndex[item['page']] == currentIndex;
+
+                return Container(
+                  width: double.infinity,
+                  margin: EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                  child: Material(
+                    color: Colors.transparent,
+                    child: InkWell(
+                      onTap: () => safeSetState(() {
+                        _currentPage = null;
+                        _currentPageName = item['page'] as String;
+                      }),
+                      borderRadius: BorderRadius.circular(12),
+                      child: Container(
+                        height: 56,
+                        decoration: BoxDecoration(
+                          color: isSelected
+                              ? Color(0xFF1F2937)
+                              : Colors.transparent,
+                          borderRadius: BorderRadius.circular(12),
+                          border: isSelected
+                              ? Border.all(
+                                  color: Color(0xFF3B82F6),
+                                  width: 2,
+                                )
+                              : null,
+                        ),
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            // Icon
+                            item['icon'] is IconData
+                                ? Icon(
+                                    item['icon'] as IconData,
+                                    color: isSelected
+                                        ? Colors.white
+                                        : Color(0xFFD1D5DB),
+                                    size: 24,
+                                  )
+                                : FaIcon(
+                                    item['icon'] as IconData,
+                                    color: isSelected
+                                        ? Colors.white
+                                        : Color(0xFFD1D5DB),
+                                    size: 20,
+                                  ),
+                            SizedBox(height: 4),
+                            // Label
+                            Text(
+                              item['label'] as String,
+                              style: TextStyle(
+                                fontFamily: 'Inter',
+                                color: isSelected
+                                    ? Colors.white
+                                    : Color(0xFFD1D5DB),
+                                fontSize: 10,
+                                fontWeight: isSelected
+                                    ? FontWeight.w600
+                                    : FontWeight.w500,
+                              ),
+                              textAlign: TextAlign.center,
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                );
+              }).toList(),
+            ),
+          ),
+          // Logout Button
+          Container(
+            width: double.infinity,
+            margin: EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+            child: Material(
+              color: Colors.transparent,
+              child: InkWell(
+                onTap: () async {
+                  await authManager.signOut();
+                  if (context.mounted) {
+                    context.goNamedAuth('OnBoarding', context.mounted);
+                  }
+                },
+                borderRadius: BorderRadius.circular(12),
+                child: Container(
+                  height: 48,
+                  decoration: BoxDecoration(
+                    color: Color(0xFF374151),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      // Logout Icon
+                      Icon(
+                        Icons.logout,
+                        color: Colors.white,
+                        size: 20,
+                      ),
+                      SizedBox(height: 4),
+                      // Logout Label
+                      Text(
+                        'Logout',
+                        style: TextStyle(
+                          fontFamily: 'Inter',
+                          color: Colors.white,
+                          fontSize: 10,
+                          fontWeight: FontWeight.w600,
+                        ),
+                        textAlign: TextAlign.center,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+          // Bottom spacing
+          SizedBox(height: 20),
         ],
+      ),
+    );
+  }
+
+  Widget _buildHorizontalNavBar(Map<String, Widget> tabs, int currentIndex,
+      Map<String, int> navItemToIndex) {
+    final navItems = [
+      {
+        'icon': Icons.home_rounded,
+        'label': 'Home',
+        'page': 'Home',
+      },
+      // {
+      //   'icon': Icons.chat_rounded,
+      //   'label': 'Chat',
+      //   'page': 'Chat',
+      // }, // Commented out - using MobileChat (now called Chat) instead
+      {
+        'icon': Icons.chat_bubble_outline_rounded,
+        'label': 'Chat',
+        'page': 'MobileChat',
+      },
+      // {
+      //   'icon': Icons.smart_toy_rounded,
+      //   'label': 'AI Assistant',
+      //   'page': 'AIAssistant',
+      // }, // Commented out - using MobileAssistant instead
+      {
+        'icon': 'assets/images/67b27b2cda06e9c69e5d000615c1153f80b09576.png',
+        'label': 'LinkAI',
+        'page': 'MobileAssistant',
+      },
+      {
+        'icon': Icons.campaign_rounded,
+        'label': 'Announcements',
+        'page': 'Announcements',
+      },
+      {
+        'icon': Icons.settings_outlined,
+        'label': 'Mobile Settings',
+        'page': 'MobileSettings',
+      },
+    ];
+
+    return Container(
+      height: 80,
+      decoration: BoxDecoration(
+        color: Color(0xFF2D3142),
+        border: Border(
+          top: BorderSide(
+            color: Color(0xFF374151),
+            width: 1,
+          ),
+        ),
+      ),
+      child: SafeArea(
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+          children: navItems.map((item) {
+            final isSelected = navItemToIndex[item['page']] == currentIndex;
+
+            return Expanded(
+              child: Container(
+                margin: EdgeInsets.symmetric(horizontal: 2),
+                child: Material(
+                  color: Colors.transparent,
+                  child: InkWell(
+                    onTap: () => safeSetState(() {
+                      _currentPage = null;
+                      _currentPageName = item['page'] as String;
+                    }),
+                    borderRadius: BorderRadius.circular(8),
+                    child: Container(
+                      height: 60,
+                      decoration: BoxDecoration(
+                        color:
+                            isSelected ? Color(0xFF1F2937) : Colors.transparent,
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          // Icon
+                          item['icon'] is String
+                              ? Container(
+                                  width: 24,
+                                  height: 24,
+                                  child: ClipRRect(
+                                    borderRadius: BorderRadius.circular(4),
+                                    child: Image.asset(
+                                      item['icon'] as String,
+                                      width: 24,
+                                      height: 24,
+                                      fit: BoxFit.cover,
+                                    ),
+                                  ),
+                                )
+                              : item['icon'] is IconData
+                                  ? Icon(
+                                      item['icon'] as IconData,
+                                      color: isSelected
+                                          ? Colors.white
+                                          : Color(0xFFD1D5DB),
+                                      size: 24,
+                                    )
+                                  : FaIcon(
+                                      item['icon'] as IconData,
+                                      color: isSelected
+                                          ? Colors.white
+                                          : Color(0xFFD1D5DB),
+                                      size: 22,
+                                    ),
+                          SizedBox(height: 4),
+                          // Label
+                          Text(
+                            item['label'] as String,
+                            style: TextStyle(
+                              fontFamily: 'Inter',
+                              color:
+                                  isSelected ? Colors.white : Color(0xFFD1D5DB),
+                              fontSize: 10,
+                              fontWeight: isSelected
+                                  ? FontWeight.w600
+                                  : FontWeight.w500,
+                            ),
+                            textAlign: TextAlign.center,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            );
+          }).toList(),
+        ),
       ),
     );
   }

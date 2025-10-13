@@ -17,6 +17,8 @@ import 'schema/posts_record.dart';
 import 'schema/comments_record.dart';
 import 'schema/event_attendees_record.dart';
 import 'schema/payment_history_record.dart';
+import 'schema/workspaces_record.dart';
+import 'schema/workspace_members_record.dart';
 import 'dart:async';
 import 'package:infinite_scroll_pagination/infinite_scroll_pagination.dart';
 
@@ -40,6 +42,8 @@ export 'schema/comments_record.dart';
 export 'schema/event_attendees_record.dart';
 export 'schema/payment_history_record.dart';
 export 'schema/blocked_users_record.dart';
+export 'schema/workspaces_record.dart';
+export 'schema/workspace_members_record.dart';
 
 /// Functions to query UsersRecords (as a Stream and as a Future).
 Future<int> queryUsersRecordCount({
@@ -988,6 +992,80 @@ Future<FFFirestorePage<PaymentHistoryRecord>> queryPaymentHistoryRecordPage({
       }
       return page;
     });
+
+/// Functions to query WorkspacesRecords (as a Stream and as a Future).
+Future<int> queryWorkspacesRecordCount({
+  Query Function(Query)? queryBuilder,
+  int limit = -1,
+}) =>
+    queryCollectionCount(
+      WorkspacesRecord.collection,
+      queryBuilder: queryBuilder,
+      limit: limit,
+    );
+
+Stream<List<WorkspacesRecord>> queryWorkspacesRecord({
+  Query Function(Query)? queryBuilder,
+  int limit = -1,
+  bool singleRecord = false,
+}) =>
+    queryCollection(
+      WorkspacesRecord.collection,
+      WorkspacesRecord.fromSnapshot,
+      queryBuilder: queryBuilder,
+      limit: limit,
+      singleRecord: singleRecord,
+    );
+
+Future<List<WorkspacesRecord>> queryWorkspacesRecordOnce({
+  Query Function(Query)? queryBuilder,
+  int limit = -1,
+  bool singleRecord = false,
+}) =>
+    queryCollectionOnce(
+      WorkspacesRecord.collection,
+      WorkspacesRecord.fromSnapshot,
+      queryBuilder: queryBuilder,
+      limit: limit,
+      singleRecord: singleRecord,
+    );
+
+/// Functions to query WorkspaceMembersRecords (as a Stream and as a Future).
+Future<int> queryWorkspaceMembersRecordCount({
+  Query Function(Query)? queryBuilder,
+  int limit = -1,
+}) =>
+    queryCollectionCount(
+      WorkspaceMembersRecord.collection,
+      queryBuilder: queryBuilder,
+      limit: limit,
+    );
+
+Stream<List<WorkspaceMembersRecord>> queryWorkspaceMembersRecord({
+  Query Function(Query)? queryBuilder,
+  int limit = -1,
+  bool singleRecord = false,
+}) =>
+    queryCollection(
+      WorkspaceMembersRecord.collection,
+      WorkspaceMembersRecord.fromSnapshot,
+      queryBuilder: queryBuilder,
+      limit: limit,
+      singleRecord: singleRecord,
+    );
+
+Future<List<WorkspaceMembersRecord>> queryWorkspaceMembersRecordOnce({
+  Query Function(Query)? queryBuilder,
+  int limit = -1,
+  bool singleRecord = false,
+}) =>
+    queryCollectionOnce(
+      WorkspaceMembersRecord.collection,
+      WorkspaceMembersRecord.fromSnapshot,
+      queryBuilder: queryBuilder,
+      limit: limit,
+      singleRecord: singleRecord,
+    );
 
 Future<int> queryCollectionCount(
   Query collection, {

@@ -117,6 +117,11 @@ class ChatsRecord extends FirestoreRecord {
   DocumentReference? get lastSeen => _lastSeen;
   bool hasLastSeen() => _lastSeen != null;
 
+  // "workspace_ref" field.
+  DocumentReference? _workspaceRef;
+  DocumentReference? get workspaceRef => _workspaceRef;
+  bool hasWorkspaceRef() => _workspaceRef != null;
+
   void _initializeFields() {
     _title = snapshotData['title'] as String?;
     _isGroup = snapshotData['is_group'] as bool?;
@@ -140,6 +145,7 @@ class ChatsRecord extends FirestoreRecord {
     _blockedUser = getDataList(snapshotData['blocked_user']);
     _reminderFrequency = castToType<int>(snapshotData['reminder_frequency']);
     _lastSeen = snapshotData['last_seen'] as DocumentReference?;
+    _workspaceRef = snapshotData['workspace_ref'] as DocumentReference?;
   }
 
   static CollectionReference get collection =>
@@ -192,6 +198,7 @@ Map<String, dynamic> createChatsRecordData({
   DocumentReference? admin,
   int? reminderFrequency,
   DocumentReference? lastSeen,
+  DocumentReference? workspaceRef,
 }) {
   final firestoreData = mapToFirestore(
     <String, dynamic>{
@@ -211,6 +218,7 @@ Map<String, dynamic> createChatsRecordData({
       'admin': admin,
       'reminder_frequency': reminderFrequency,
       'last_seen': lastSeen,
+      'workspace_ref': workspaceRef,
     }.withoutNulls,
   );
 
@@ -242,7 +250,8 @@ class ChatsRecordDocumentEquality implements Equality<ChatsRecord> {
         listEquality.equals(e1?.searchNames, e2?.searchNames) &&
         listEquality.equals(e1?.blockedUser, e2?.blockedUser) &&
         e1?.reminderFrequency == e2?.reminderFrequency &&
-        e1?.lastSeen == e2?.lastSeen;
+        e1?.lastSeen == e2?.lastSeen &&
+        e1?.workspaceRef == e2?.workspaceRef;
   }
 
   @override
@@ -266,7 +275,8 @@ class ChatsRecordDocumentEquality implements Equality<ChatsRecord> {
         e?.searchNames,
         e?.blockedUser,
         e?.reminderFrequency,
-        e?.lastSeen
+        e?.lastSeen,
+        e?.workspaceRef
       ]);
 
   @override

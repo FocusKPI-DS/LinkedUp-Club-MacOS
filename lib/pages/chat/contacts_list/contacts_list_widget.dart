@@ -4,12 +4,10 @@ import '/component/empty_friend_list/empty_friend_list_widget.dart';
 import '/flutter_flow/flutter_flow_animations.dart';
 import '/flutter_flow/flutter_flow_util.dart';
 import '/flutter_flow/flutter_flow_widgets.dart';
-import 'dart:math';
 import 'dart:ui';
 import '/custom_code/actions/index.dart' as actions;
 import '/index.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:collection/collection.dart';
 import 'package:ff_theme/flutter_flow/flutter_flow_theme.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
@@ -87,6 +85,91 @@ class _ContactsListWidgetState extends State<ContactsListWidget>
     super.dispose();
   }
 
+  Color _getRoleColor(String role) {
+    switch (role.toLowerCase()) {
+      case 'owner':
+        return Color(0xFFDC2626); // Red
+      case 'moderator':
+        return Color(0xFF059669); // Green
+      case 'member':
+        return Color(0xFF6B7280); // Gray
+      default:
+        return Color(0xFF6B7280); // Default gray
+    }
+  }
+
+  Future<void> _startNewChatWithUser(UsersRecord user) async {
+    try {
+      // Check if a chat already exists between current user and this user IN THE CURRENT WORKSPACE
+      final currentWorkspaceRef = currentUserDocument?.currentWorkspaceRef;
+
+      final existingChats = await queryChatsRecordOnce(
+        queryBuilder: (chatsRecord) => chatsRecord
+            .where('members', arrayContains: currentUserReference)
+            .where('is_group', isEqualTo: false)
+            .where('workspace_ref', isEqualTo: currentWorkspaceRef),
+      );
+
+      // Find if there's already a direct chat with this user in the current workspace
+      ChatsRecord? existingChat;
+      for (final chat in existingChats) {
+        if (chat.members.contains(user.reference) &&
+            chat.members.length == 2 &&
+            !chat.isGroup &&
+            chat.workspaceRef?.path == currentWorkspaceRef?.path) {
+          existingChat = chat;
+          break;
+        }
+      }
+
+      if (existingChat != null) {
+        // Chat already exists, navigate to it
+        context.pushNamed(
+          ChatWidget.routeName,
+          queryParameters: {
+            'chatDoc': serializeParam(existingChat, ParamType.Document),
+          }.withoutNulls,
+          extra: <String, dynamic>{'chatDoc': existingChat},
+        );
+      } else {
+        // Create a new chat
+        final newChatRef = await ChatsRecord.collection.add({
+          ...createChatsRecordData(
+            isGroup: false,
+            title: '', // Empty for direct chats
+            createdAt: getCurrentTimestamp,
+            lastMessageAt: getCurrentTimestamp,
+            lastMessage: '',
+            lastMessageSent: currentUserReference,
+            workspaceRef: currentUserDocument?.currentWorkspaceRef,
+          ),
+          'members': [currentUserReference!, user.reference],
+          'last_message_seen': [currentUserReference!],
+        });
+
+        // Get the created chat document
+        final newChat = await ChatsRecord.getDocumentOnce(newChatRef);
+
+        // Navigate to the new chat
+        context.pushNamed(
+          ChatWidget.routeName,
+          queryParameters: {
+            'chatDoc': serializeParam(newChat, ParamType.Document),
+          }.withoutNulls,
+          extra: <String, dynamic>{'chatDoc': newChat},
+        );
+      }
+    } catch (e) {
+      // Show error message
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error starting chat: $e'),
+          backgroundColor: Color(0xFFEF4444),
+        ),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     context.watch<FFAppState>();
@@ -126,8 +209,8 @@ class _ContactsListWidgetState extends State<ContactsListWidget>
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Padding(
-                      padding:
-                          const EdgeInsetsDirectional.fromSTEB(16.0, 0.0, 0.0, 0.0),
+                      padding: const EdgeInsetsDirectional.fromSTEB(
+                          16.0, 0.0, 0.0, 0.0),
                       child: InkWell(
                         splashColor: Colors.transparent,
                         focusColor: Colors.transparent,
@@ -144,8 +227,8 @@ class _ContactsListWidgetState extends State<ContactsListWidget>
                       ),
                     ),
                     Padding(
-                      padding:
-                          const EdgeInsetsDirectional.fromSTEB(16.0, 0.0, 16.0, 0.0),
+                      padding: const EdgeInsetsDirectional.fromSTEB(
+                          16.0, 0.0, 16.0, 0.0),
                       child: InkWell(
                         splashColor: Colors.transparent,
                         focusColor: Colors.transparent,
@@ -211,8 +294,8 @@ class _ContactsListWidgetState extends State<ContactsListWidget>
                       ),
                     ),
                     Padding(
-                      padding:
-                          const EdgeInsetsDirectional.fromSTEB(16.0, 0.0, 16.0, 0.0),
+                      padding: const EdgeInsetsDirectional.fromSTEB(
+                          16.0, 0.0, 16.0, 0.0),
                       child: Container(
                         width: double.infinity,
                         decoration: const BoxDecoration(
@@ -342,7 +425,8 @@ class _ContactsListWidgetState extends State<ContactsListWidget>
                                                   snapshot.data!;
 
                                               return Container(
-                                                decoration: const BoxDecoration(),
+                                                decoration:
+                                                    const BoxDecoration(),
                                                 child: Row(
                                                   mainAxisSize:
                                                       MainAxisSize.max,
@@ -507,14 +591,16 @@ class _ContactsListWidgetState extends State<ContactsListWidget>
                                                                 text: 'Accept',
                                                                 options:
                                                                     FFButtonOptions(
-                                                                  padding: const EdgeInsetsDirectional
-                                                                      .fromSTEB(
+                                                                  padding:
+                                                                      const EdgeInsetsDirectional
+                                                                          .fromSTEB(
                                                                           16.0,
                                                                           0.0,
                                                                           16.0,
                                                                           0.0),
-                                                                  iconPadding: const EdgeInsetsDirectional
-                                                                      .fromSTEB(
+                                                                  iconPadding:
+                                                                      const EdgeInsetsDirectional
+                                                                          .fromSTEB(
                                                                           0.0,
                                                                           0.0,
                                                                           0.0,
@@ -572,14 +658,16 @@ class _ContactsListWidgetState extends State<ContactsListWidget>
                                                                 text: 'Decline',
                                                                 options:
                                                                     FFButtonOptions(
-                                                                  padding: const EdgeInsetsDirectional
-                                                                      .fromSTEB(
+                                                                  padding:
+                                                                      const EdgeInsetsDirectional
+                                                                          .fromSTEB(
                                                                           16.0,
                                                                           6.0,
                                                                           16.0,
                                                                           6.0),
-                                                                  iconPadding: const EdgeInsetsDirectional
-                                                                      .fromSTEB(
+                                                                  iconPadding:
+                                                                      const EdgeInsetsDirectional
+                                                                          .fromSTEB(
                                                                           0.0,
                                                                           0.0,
                                                                           0.0,
@@ -618,15 +706,17 @@ class _ContactsListWidgetState extends State<ContactsListWidget>
                                                                               12.0),
                                                                 ),
                                                               ),
-                                                            ].divide(const SizedBox(
-                                                                width: 8.0)),
+                                                            ].divide(
+                                                                const SizedBox(
+                                                                    width:
+                                                                        8.0)),
                                                           ),
                                                         ].divide(const SizedBox(
                                                             height: 4.0)),
                                                       ),
                                                     ),
-                                                  ].divide(
-                                                      const SizedBox(width: 12.0)),
+                                                  ].divide(const SizedBox(
+                                                      width: 12.0)),
                                                 ),
                                               );
                                             },
@@ -644,8 +734,8 @@ class _ContactsListWidgetState extends State<ContactsListWidget>
                       ),
                     ),
                     Padding(
-                      padding:
-                          const EdgeInsetsDirectional.fromSTEB(16.0, 0.0, 16.0, 0.0),
+                      padding: const EdgeInsetsDirectional.fromSTEB(
+                          16.0, 0.0, 16.0, 0.0),
                       child: Container(
                         width: double.infinity,
                         decoration: BoxDecoration(
@@ -742,7 +832,7 @@ class _ContactsListWidgetState extends State<ContactsListWidget>
                               child: Padding(
                                 padding: const EdgeInsets.all(16.0),
                                 child: Text(
-                                  'All Contact',
+                                  'Workspace Members',
                                   style: FlutterFlowTheme.of(context)
                                       .bodyMedium
                                       .override(
@@ -806,225 +896,241 @@ class _ContactsListWidgetState extends State<ContactsListWidget>
                         ),
                       ),
                     Padding(
-                      padding:
-                          const EdgeInsetsDirectional.fromSTEB(16.0, 0.0, 16.0, 0.0),
-                      child: StreamBuilder<List<UsersRecord>>(
-                        stream: queryUsersRecord(
-                          queryBuilder: (usersRecord) => usersRecord.where(
-                            'friends',
-                            arrayContains: currentUserReference,
-                          ),
-                        ),
-                        builder: (context, snapshot) {
-                          // Customize what your widget looks like when it's loading.
-                          if (!snapshot.hasData) {
-                            return Center(
-                              child: SizedBox(
-                                width: 50.0,
-                                height: 50.0,
-                                child: CircularProgressIndicator(
-                                  valueColor: AlwaysStoppedAnimation<Color>(
-                                    FlutterFlowTheme.of(context).primary,
+                      padding: const EdgeInsetsDirectional.fromSTEB(
+                          16.0, 0.0, 16.0, 0.0),
+                      child: AuthUserStreamWidget(
+                        builder: (context) {
+                          final currentUser = currentUserDocument;
+                          if (currentUser?.currentWorkspaceRef == null) {
+                            return Container(
+                              width: double.infinity,
+                              decoration: BoxDecoration(
+                                color: FlutterFlowTheme.of(context)
+                                    .secondaryBackground,
+                              ),
+                              child: Padding(
+                                padding: const EdgeInsets.all(16.0),
+                                child: Center(
+                                  child: Text(
+                                    'No workspace selected',
+                                    style: FlutterFlowTheme.of(context)
+                                        .bodyMedium
+                                        .override(
+                                          color: const Color(0xFF6B7280),
+                                        ),
                                   ),
                                 ),
                               ),
                             );
                           }
-                          List<UsersRecord> containerUsersRecordList =
-                              snapshot.data!;
 
-                          return Container(
-                            width: double.infinity,
-                            decoration: BoxDecoration(
-                              color: FlutterFlowTheme.of(context)
-                                  .secondaryBackground,
+                          return StreamBuilder<List<WorkspaceMembersRecord>>(
+                            stream: queryWorkspaceMembersRecord(
+                              queryBuilder: (workspaceMembersRecord) =>
+                                  workspaceMembersRecord.where('workspace_ref',
+                                      isEqualTo:
+                                          currentUser?.currentWorkspaceRef),
                             ),
-                            child: Padding(
-                              padding: const EdgeInsets.all(16.0),
-                              child: Builder(
-                                builder: (context) {
-                                  final friend =
-                                      containerUsersRecordList.toList();
+                            builder: (context, membersSnapshot) {
+                              if (!membersSnapshot.hasData) {
+                                return Center(
+                                  child: SizedBox(
+                                    width: 50.0,
+                                    height: 50.0,
+                                    child: CircularProgressIndicator(
+                                      valueColor: AlwaysStoppedAnimation<Color>(
+                                        FlutterFlowTheme.of(context).primary,
+                                      ),
+                                    ),
+                                  ),
+                                );
+                              }
 
-                                  return Column(
+                              final members = membersSnapshot.data!;
+
+                              return Container(
+                                width: double.infinity,
+                                decoration: BoxDecoration(
+                                  color: FlutterFlowTheme.of(context)
+                                      .secondaryBackground,
+                                ),
+                                child: Padding(
+                                  padding: const EdgeInsets.all(16.0),
+                                  child: Column(
                                     mainAxisSize: MainAxisSize.max,
-                                    children: List.generate(friend.length,
-                                        (friendIndex) {
-                                      final friendItem = friend[friendIndex];
-                                      return Visibility(
-                                        visible: friendItem.reference !=
-                                            currentUserReference,
-                                        child: InkWell(
-                                          splashColor: Colors.transparent,
-                                          focusColor: Colors.transparent,
-                                          hoverColor: Colors.transparent,
-                                          highlightColor: Colors.transparent,
-                                          onTap: () async {
-                                            context.pushNamed(
-                                              UserProfileDetailWidget.routeName,
-                                              queryParameters: {
-                                                'user': serializeParam(
-                                                  friendItem,
-                                                  ParamType.Document,
-                                                ),
-                                              }.withoutNulls,
-                                              extra: <String, dynamic>{
-                                                'user': friendItem,
-                                              },
-                                            );
-                                          },
-                                          child: Row(
-                                            mainAxisSize: MainAxisSize.max,
-                                            children: [
-                                              ClipRRect(
+                                    children: members.map((member) {
+                                      return StreamBuilder<UsersRecord>(
+                                        stream: UsersRecord.getDocument(
+                                            member.userRef!),
+                                        builder: (context, userSnapshot) {
+                                          if (!userSnapshot.hasData) {
+                                            return SizedBox.shrink();
+                                          }
+
+                                          final user = userSnapshot.data!;
+                                          final isCurrentUser =
+                                              user.reference ==
+                                                  currentUserReference;
+
+                                          if (isCurrentUser) {
+                                            return SizedBox.shrink();
+                                          }
+
+                                          return InkWell(
+                                            splashColor: Colors.transparent,
+                                            focusColor: Colors.transparent,
+                                            hoverColor: Colors.transparent,
+                                            highlightColor: Colors.transparent,
+                                            onTap: () async {
+                                              // Start a new chat with this workspace member
+                                              await _startNewChatWithUser(user);
+                                            },
+                                            child: Container(
+                                              margin:
+                                                  EdgeInsets.only(bottom: 12),
+                                              padding: EdgeInsets.all(12),
+                                              decoration: BoxDecoration(
+                                                color:
+                                                    FlutterFlowTheme.of(context)
+                                                        .primaryBackground,
                                                 borderRadius:
-                                                    BorderRadius.circular(24.0),
-                                                child: Image.network(
-                                                  valueOrDefault<String>(
-                                                    friendItem.photoUrl,
-                                                    'https://firebasestorage.googleapis.com/v0/b/linkedup-c3e29.firebasestorage.app/o/asset%2Fjurica-koletic-7YVZYZeITc8-unsplash.jpg?alt=media&token=d05a38c8-e024-4624-bdb3-82e4f7c6afab',
-                                                  ),
-                                                  width: 48.0,
-                                                  height: 48.0,
-                                                  fit: BoxFit.cover,
+                                                    BorderRadius.circular(12),
+                                                border: Border.all(
+                                                  color: FlutterFlowTheme.of(
+                                                          context)
+                                                      .alternate,
+                                                  width: 1,
                                                 ),
                                               ),
-                                              Column(
-                                                mainAxisSize: MainAxisSize.min,
-                                                crossAxisAlignment:
-                                                    CrossAxisAlignment.start,
+                                              child: Row(
+                                                mainAxisSize: MainAxisSize.max,
                                                 children: [
-                                                  Text(
-                                                    friendItem.displayName,
-                                                    style: FlutterFlowTheme.of(
-                                                            context)
-                                                        .titleMedium
-                                                        .override(
-                                                          font:
-                                                              GoogleFonts.inter(
-                                                            fontWeight:
-                                                                FontWeight.w500,
-                                                            fontStyle:
-                                                                FlutterFlowTheme.of(
-                                                                        context)
-                                                                    .titleMedium
-                                                                    .fontStyle,
-                                                          ),
-                                                          color:
-                                                              const Color(0xFF1F2937),
-                                                          fontSize: 14.0,
-                                                          letterSpacing: 0.0,
-                                                          fontWeight:
-                                                              FontWeight.w500,
-                                                          fontStyle:
-                                                              FlutterFlowTheme.of(
-                                                                      context)
-                                                                  .titleMedium
-                                                                  .fontStyle,
-                                                        ),
-                                                  ),
-                                                  Text(
-                                                    friendItem.email,
-                                                    style: FlutterFlowTheme.of(
-                                                            context)
-                                                        .bodySmall
-                                                        .override(
-                                                          font:
-                                                              GoogleFonts.inter(
-                                                            fontWeight:
-                                                                FontWeight
-                                                                    .normal,
-                                                            fontStyle:
-                                                                FlutterFlowTheme.of(
-                                                                        context)
-                                                                    .bodySmall
-                                                                    .fontStyle,
-                                                          ),
-                                                          color:
-                                                              const Color(0xFF6B7280),
-                                                          fontSize: 12.0,
-                                                          letterSpacing: 0.0,
-                                                          fontWeight:
-                                                              FontWeight.normal,
-                                                          fontStyle:
-                                                              FlutterFlowTheme.of(
-                                                                      context)
-                                                                  .bodySmall
-                                                                  .fontStyle,
-                                                        ),
-                                                  ),
-                                                  Padding(
-                                                    padding:
-                                                        const EdgeInsetsDirectional
-                                                            .fromSTEB(0.0, 0.0,
-                                                                8.0, 0.0),
-                                                    child: Container(
-                                                      decoration: BoxDecoration(
-                                                        color:
-                                                            const Color(0xFFF3F4F6),
-                                                        borderRadius:
-                                                            BorderRadius
-                                                                .circular(10.0),
+                                                  ClipRRect(
+                                                    borderRadius:
+                                                        BorderRadius.circular(
+                                                            24.0),
+                                                    child: Image.network(
+                                                      valueOrDefault<String>(
+                                                        user.photoUrl,
+                                                        'https://firebasestorage.googleapis.com/v0/b/linkedup-c3e29.firebasestorage.app/o/asset%2Fjurica-koletic-7YVZYZeITc8-unsplash.jpg?alt=media&token=d05a38c8-e024-4624-bdb3-82e4f7c6afab',
                                                       ),
-                                                      child: Padding(
-                                                        padding:
-                                                            const EdgeInsets.all(8.0),
-                                                        child: Text(
-                                                          friendItem.bio
-                                                              .maybeHandleOverflow(
-                                                            maxChars: 25,
-                                                          ),
-                                                          style: FlutterFlowTheme
-                                                                  .of(context)
-                                                              .labelSmall
-                                                              .override(
-                                                                font:
-                                                                    GoogleFonts
-                                                                        .inter(
-                                                                  fontWeight:
-                                                                      FontWeight
-                                                                          .normal,
-                                                                  fontStyle: FlutterFlowTheme.of(
-                                                                          context)
-                                                                      .labelSmall
-                                                                      .fontStyle,
-                                                                ),
-                                                                color: FlutterFlowTheme.of(
-                                                                        context)
-                                                                    .secondaryText,
-                                                                fontSize: 12.0,
-                                                                letterSpacing:
-                                                                    0.0,
-                                                                fontWeight:
-                                                                    FontWeight
-                                                                        .normal,
-                                                                fontStyle: FlutterFlowTheme.of(
-                                                                        context)
-                                                                    .labelSmall
-                                                                    .fontStyle,
-                                                              ),
-                                                        ),
-                                                      ),
+                                                      width: 48.0,
+                                                      height: 48.0,
+                                                      fit: BoxFit.cover,
                                                     ),
                                                   ),
-                                                ].divide(const SizedBox(height: 4.0)),
+                                                  SizedBox(width: 12),
+                                                  Expanded(
+                                                    child: Column(
+                                                      mainAxisSize:
+                                                          MainAxisSize.min,
+                                                      crossAxisAlignment:
+                                                          CrossAxisAlignment
+                                                              .start,
+                                                      children: [
+                                                        Row(
+                                                          children: [
+                                                            Expanded(
+                                                              child: Text(
+                                                                user.displayName,
+                                                                style: FlutterFlowTheme.of(
+                                                                        context)
+                                                                    .titleMedium
+                                                                    .override(
+                                                                      font: GoogleFonts
+                                                                          .inter(
+                                                                        fontWeight:
+                                                                            FontWeight.w600,
+                                                                      ),
+                                                                      color: const Color(
+                                                                          0xFF1F2937),
+                                                                      fontSize:
+                                                                          16.0,
+                                                                    ),
+                                                              ),
+                                                            ),
+                                                            Container(
+                                                              padding: EdgeInsets
+                                                                  .symmetric(
+                                                                      horizontal:
+                                                                          8,
+                                                                      vertical:
+                                                                          4),
+                                                              decoration:
+                                                                  BoxDecoration(
+                                                                color: _getRoleColor(
+                                                                    member
+                                                                        .role),
+                                                                borderRadius:
+                                                                    BorderRadius
+                                                                        .circular(
+                                                                            12),
+                                                              ),
+                                                              child: Text(
+                                                                member.role
+                                                                    .toUpperCase(),
+                                                                style:
+                                                                    TextStyle(
+                                                                  color: Colors
+                                                                      .white,
+                                                                  fontSize: 10,
+                                                                  fontWeight:
+                                                                      FontWeight
+                                                                          .w600,
+                                                                ),
+                                                              ),
+                                                            ),
+                                                          ],
+                                                        ),
+                                                        SizedBox(height: 4),
+                                                        Text(
+                                                          user.email,
+                                                          style: FlutterFlowTheme
+                                                                  .of(context)
+                                                              .bodySmall
+                                                              .override(
+                                                                color: const Color(
+                                                                    0xFF6B7280),
+                                                                fontSize: 12.0,
+                                                              ),
+                                                        ),
+                                                        SizedBox(height: 4),
+                                                        Text(
+                                                          'Tap to start a chat',
+                                                          style: FlutterFlowTheme
+                                                                  .of(context)
+                                                              .bodySmall
+                                                              .override(
+                                                                color: FlutterFlowTheme.of(
+                                                                        context)
+                                                                    .primary,
+                                                                fontSize: 12.0,
+                                                                fontWeight:
+                                                                    FontWeight
+                                                                        .w500,
+                                                              ),
+                                                        ),
+                                                      ],
+                                                    ),
+                                                  ),
+                                                  Icon(
+                                                    Icons.chat_bubble_outline,
+                                                    color: FlutterFlowTheme.of(
+                                                            context)
+                                                        .primary,
+                                                    size: 20,
+                                                  ),
+                                                ],
                                               ),
-                                            ].divide(const SizedBox(width: 12.0)),
-                                          ),
-                                        ),
+                                            ),
+                                          );
+                                        },
                                       );
-                                    }).divide(
-                                      const SizedBox(height: 16.0),
-                                      filterFn: (friendIndex) {
-                                        final friendItem = friend[friendIndex];
-                                        return friendItem.reference !=
-                                            currentUserReference;
-                                      },
-                                    ),
-                                  );
-                                },
-                              ),
-                            ),
+                                    }).toList(),
+                                  ),
+                                ),
+                              );
+                            },
                           );
                         },
                       ),

@@ -4,7 +4,6 @@ import 'package:collection/collection.dart';
 
 import '/backend/schema/util/firestore_util.dart';
 import '/backend/schema/util/schema_util.dart';
-import '/backend/schema/enums/enums.dart';
 
 import 'index.dart';
 import '/flutter_flow/flutter_flow_util.dart';
@@ -72,6 +71,11 @@ class PostsRecord extends FirestoreRecord {
   List<DocumentReference> get savedBy => _savedBy ?? const [];
   bool hasSavedBy() => _savedBy != null;
 
+  // "is_pinned" field.
+  bool? _isPinned;
+  bool get isPinned => _isPinned ?? false;
+  bool hasIsPinned() => _isPinned != null;
+
   void _initializeFields() {
     _authorRef = snapshotData['author_ref'] as DocumentReference?;
     _text = snapshotData['text'] as String?;
@@ -84,6 +88,7 @@ class PostsRecord extends FirestoreRecord {
     _authorImage = snapshotData['author_image'] as String?;
     _authorName = snapshotData['author_name'] as String?;
     _savedBy = getDataList(snapshotData['saved_by']);
+    _isPinned = snapshotData['is_pinned'] as bool?;
   }
 
   static CollectionReference get collection =>
@@ -129,6 +134,7 @@ Map<String, dynamic> createPostsRecordData({
   String? postType,
   String? authorImage,
   String? authorName,
+  bool? isPinned,
 }) {
   final firestoreData = mapToFirestore(
     <String, dynamic>{
@@ -141,6 +147,7 @@ Map<String, dynamic> createPostsRecordData({
       'post_type': postType,
       'author_image': authorImage,
       'author_name': authorName,
+      'is_pinned': isPinned,
     }.withoutNulls,
   );
 
@@ -163,7 +170,8 @@ class PostsRecordDocumentEquality implements Equality<PostsRecord> {
         e1?.postType == e2?.postType &&
         e1?.authorImage == e2?.authorImage &&
         e1?.authorName == e2?.authorName &&
-        listEquality.equals(e1?.savedBy, e2?.savedBy);
+        listEquality.equals(e1?.savedBy, e2?.savedBy) &&
+        e1?.isPinned == e2?.isPinned;
   }
 
   @override
@@ -178,7 +186,8 @@ class PostsRecordDocumentEquality implements Equality<PostsRecord> {
         e?.postType,
         e?.authorImage,
         e?.authorName,
-        e?.savedBy
+        e?.savedBy,
+        e?.isPinned
       ]);
 
   @override

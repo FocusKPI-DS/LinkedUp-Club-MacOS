@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:device_info_plus/device_info_plus.dart';
+import 'dart:io' show Platform;
 
 import '/flutter_flow/flutter_flow_util.dart';
 
@@ -18,18 +19,37 @@ const microphonePermission = Permission.microphone;
 const locationPermission = Permission.location;
 
 Future<bool> getPermissionStatus(Permission setting) async {
-  final status = await setting.status;
-  return kPermissionStateToBool[status]!;
+  // Skip permission checks on macOS to avoid plugin errors
+  if (Platform.isMacOS) {
+    return true; // Assume permissions are granted on macOS
+  }
+
+  try {
+    final status = await setting.status;
+    return kPermissionStateToBool[status]!;
+  } catch (e) {
+    // If permission check fails, assume granted to prevent crashes
+    return true;
+  }
 }
 
 Future<void> requestPermission(Permission setting) async {
-  if (setting == Permission.photos && isAndroid) {
-    final androidInfo = await DeviceInfoPlugin().androidInfo;
-    if (androidInfo.version.sdkInt <= 32) {
-      await Permission.storage.request();
-    } else {
-      await Permission.photos.request();
-    }
+  // Skip permission requests on macOS to avoid plugin errors
+  if (Platform.isMacOS) {
+    return; // No-op on macOS
   }
-  await setting.request();
+
+  try {
+    if (setting == Permission.photos && isAndroid) {
+      final androidInfo = await DeviceInfoPlugin().androidInfo;
+      if (androidInfo.version.sdkInt <= 32) {
+        await Permission.storage.request();
+      } else {
+        await Permission.photos.request();
+      }
+    }
+    await setting.request();
+  } catch (e) {
+    // If permission request fails, silently continue
+  }
 }

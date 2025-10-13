@@ -2,10 +2,10 @@ import '/auth/firebase_auth/auth_util.dart';
 import '/flutter_flow/flutter_flow_animations.dart';
 import '/flutter_flow/flutter_flow_util.dart';
 import '/flutter_flow/flutter_flow_widgets.dart';
-import 'dart:math';
 import 'dart:ui';
 import '/custom_code/actions/index.dart' as actions;
 import '/custom_code/widgets/index.dart' as custom_widgets;
+import '/backend/push_notifications/push_notifications_util.dart';
 import '/index.dart';
 import 'package:branchio_dynamic_linking_akp5u6/custom_code/actions/index.dart'
     as branchio_dynamic_linking_akp5u6_actions;
@@ -18,7 +18,6 @@ import 'package:flutter/scheduler.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:provider/provider.dart';
 import 'package:share_plus/share_plus.dart';
 import 'profile_model.dart';
 export 'profile_model.dart';
@@ -159,8 +158,8 @@ class _ProfileWidgetState extends State<ProfileWidget>
                                       mainAxisSize: MainAxisSize.max,
                                       children: [
                                         Stack(
-                                          alignment:
-                                              const AlignmentDirectional(1.0, 1.0),
+                                          alignment: const AlignmentDirectional(
+                                              1.0, 1.0),
                                           children: [
                                             AuthUserStreamWidget(
                                               builder: (context) => Container(
@@ -171,10 +170,12 @@ class _ProfileWidgetState extends State<ProfileWidget>
                                                   shape: BoxShape.circle,
                                                 ),
                                                 child: CachedNetworkImage(
-                                                  fadeInDuration: const Duration(
-                                                      milliseconds: 500),
-                                                  fadeOutDuration: const Duration(
-                                                      milliseconds: 500),
+                                                  fadeInDuration:
+                                                      const Duration(
+                                                          milliseconds: 500),
+                                                  fadeOutDuration:
+                                                      const Duration(
+                                                          milliseconds: 500),
                                                   imageUrl:
                                                       valueOrDefault<String>(
                                                     currentUserPhoto,
@@ -194,8 +195,9 @@ class _ProfileWidgetState extends State<ProfileWidget>
                                                 shape: BoxShape.circle,
                                               ),
                                               child: Align(
-                                                alignment: const AlignmentDirectional(
-                                                    0.0, 0.0),
+                                                alignment:
+                                                    const AlignmentDirectional(
+                                                        0.0, 0.0),
                                                 child: FaIcon(
                                                   FontAwesomeIcons.camera,
                                                   color: FlutterFlowTheme.of(
@@ -340,8 +342,9 @@ class _ProfileWidgetState extends State<ProfileWidget>
                                           ),
                                           Expanded(
                                             child: Padding(
-                                              padding: const EdgeInsetsDirectional
-                                                  .fromSTEB(
+                                              padding:
+                                                  const EdgeInsetsDirectional
+                                                      .fromSTEB(
                                                       16.0, 0.0, 0.0, 0.0),
                                               child: Text(
                                                 'Personal Information',
@@ -379,7 +382,8 @@ class _ProfileWidgetState extends State<ProfileWidget>
                                           ),
                                           Align(
                                             alignment:
-                                                const AlignmentDirectional(0.9, 0.0),
+                                                const AlignmentDirectional(
+                                                    0.9, 0.0),
                                             child: Icon(
                                               Icons.arrow_forward_ios,
                                               color:
@@ -434,8 +438,9 @@ class _ProfileWidgetState extends State<ProfileWidget>
                                           ),
                                           Expanded(
                                             child: Padding(
-                                              padding: const EdgeInsetsDirectional
-                                                  .fromSTEB(
+                                              padding:
+                                                  const EdgeInsetsDirectional
+                                                      .fromSTEB(
                                                       16.0, 0.0, 0.0, 0.0),
                                               child: Text(
                                                 'Notification ',
@@ -473,7 +478,8 @@ class _ProfileWidgetState extends State<ProfileWidget>
                                           ),
                                           Align(
                                             alignment:
-                                                const AlignmentDirectional(0.9, 0.0),
+                                                const AlignmentDirectional(
+                                                    0.9, 0.0),
                                             child: Icon(
                                               Icons.arrow_forward_ios,
                                               color:
@@ -624,8 +630,9 @@ class _ProfileWidgetState extends State<ProfileWidget>
                                           ),
                                           Expanded(
                                             child: Padding(
-                                              padding: const EdgeInsetsDirectional
-                                                  .fromSTEB(
+                                              padding:
+                                                  const EdgeInsetsDirectional
+                                                      .fromSTEB(
                                                       16.0, 0.0, 0.0, 0.0),
                                               child: Text(
                                                 'Contact Support',
@@ -663,7 +670,8 @@ class _ProfileWidgetState extends State<ProfileWidget>
                                           ),
                                           Align(
                                             alignment:
-                                                const AlignmentDirectional(0.9, 0.0),
+                                                const AlignmentDirectional(
+                                                    0.9, 0.0),
                                             child: Icon(
                                               Icons.arrow_forward_ios,
                                               color:
@@ -724,8 +732,9 @@ class _ProfileWidgetState extends State<ProfileWidget>
                                           ),
                                           Expanded(
                                             child: Padding(
-                                              padding: const EdgeInsetsDirectional
-                                                  .fromSTEB(
+                                              padding:
+                                                  const EdgeInsetsDirectional
+                                                      .fromSTEB(
                                                       16.0, 0.0, 0.0, 0.0),
                                               child: Text(
                                                 'Privacy & Security',
@@ -763,7 +772,8 @@ class _ProfileWidgetState extends State<ProfileWidget>
                                           ),
                                           Align(
                                             alignment:
-                                                const AlignmentDirectional(0.9, 0.0),
+                                                const AlignmentDirectional(
+                                                    0.9, 0.0),
                                             child: Icon(
                                               Icons.arrow_forward_ios,
                                               color:
@@ -823,8 +833,9 @@ class _ProfileWidgetState extends State<ProfileWidget>
                                           ),
                                           Expanded(
                                             child: Padding(
-                                              padding: const EdgeInsetsDirectional
-                                                  .fromSTEB(
+                                              padding:
+                                                  const EdgeInsetsDirectional
+                                                      .fromSTEB(
                                                       16.0, 0.0, 0.0, 0.0),
                                               child: Text(
                                                 'FAQs',
@@ -862,7 +873,110 @@ class _ProfileWidgetState extends State<ProfileWidget>
                                           ),
                                           Align(
                                             alignment:
-                                                const AlignmentDirectional(0.9, 0.0),
+                                                const AlignmentDirectional(
+                                                    0.9, 0.0),
+                                            child: Icon(
+                                              Icons.arrow_forward_ios,
+                                              color:
+                                                  FlutterFlowTheme.of(context)
+                                                      .secondaryText,
+                                              size: 18.0,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                              Divider(
+                                height: 0.5,
+                                thickness: 0.5,
+                                indent: 32.0,
+                                endIndent: 32.0,
+                                color: FlutterFlowTheme.of(context).alternate,
+                              ),
+                              // Workspace Management Menu Item
+                              Padding(
+                                padding: const EdgeInsetsDirectional.fromSTEB(
+                                    16.0, 0.0, 16.0, 0.0),
+                                child: InkWell(
+                                  splashColor: Colors.transparent,
+                                  focusColor: Colors.transparent,
+                                  hoverColor: Colors.transparent,
+                                  highlightColor: Colors.transparent,
+                                  onTap: () async {
+                                    context.pushNamed('WorkspaceManagement');
+                                  },
+                                  child: Container(
+                                    width: double.infinity,
+                                    height: 60.0,
+                                    decoration: BoxDecoration(
+                                      color: FlutterFlowTheme.of(context)
+                                          .secondaryBackground,
+                                      borderRadius: const BorderRadius.only(
+                                        bottomLeft: Radius.circular(0.0),
+                                        bottomRight: Radius.circular(0.0),
+                                        topLeft: Radius.circular(0.0),
+                                        topRight: Radius.circular(0.0),
+                                      ),
+                                      shape: BoxShape.rectangle,
+                                    ),
+                                    child: Padding(
+                                      padding: const EdgeInsets.all(8.0),
+                                      child: Row(
+                                        mainAxisSize: MainAxisSize.max,
+                                        children: [
+                                          Icon(
+                                            Icons.business,
+                                            color: FlutterFlowTheme.of(context)
+                                                .secondaryText,
+                                            size: 16.0,
+                                          ),
+                                          Expanded(
+                                            child: Padding(
+                                              padding:
+                                                  const EdgeInsetsDirectional
+                                                      .fromSTEB(
+                                                      16.0, 0.0, 0.0, 0.0),
+                                              child: Text(
+                                                'Workspace Management',
+                                                style:
+                                                    FlutterFlowTheme.of(context)
+                                                        .bodyLarge
+                                                        .override(
+                                                          font:
+                                                              GoogleFonts.inter(
+                                                            fontWeight:
+                                                                FlutterFlowTheme.of(
+                                                                        context)
+                                                                    .bodyLarge
+                                                                    .fontWeight,
+                                                            fontStyle:
+                                                                FlutterFlowTheme.of(
+                                                                        context)
+                                                                    .bodyLarge
+                                                                    .fontStyle,
+                                                          ),
+                                                          letterSpacing: 0.0,
+                                                          fontWeight:
+                                                              FlutterFlowTheme.of(
+                                                                      context)
+                                                                  .bodyLarge
+                                                                  .fontWeight,
+                                                          fontStyle:
+                                                              FlutterFlowTheme.of(
+                                                                      context)
+                                                                  .bodyLarge
+                                                                  .fontStyle,
+                                                        ),
+                                              ),
+                                            ),
+                                          ),
+                                          Align(
+                                            alignment:
+                                                const AlignmentDirectional(
+                                                    0.9, 0.0),
                                             child: Icon(
                                               Icons.arrow_forward_ios,
                                               color:
@@ -953,8 +1067,9 @@ class _ProfileWidgetState extends State<ProfileWidget>
                                             ),
                                             Expanded(
                                               child: Padding(
-                                                padding: const EdgeInsetsDirectional
-                                                    .fromSTEB(
+                                                padding:
+                                                    const EdgeInsetsDirectional
+                                                        .fromSTEB(
                                                         16.0, 0.0, 0.0, 0.0),
                                                 child: Text(
                                                   'Log Out',
@@ -1062,8 +1177,9 @@ class _ProfileWidgetState extends State<ProfileWidget>
                                 height: 48.0,
                                 padding: const EdgeInsetsDirectional.fromSTEB(
                                     0.0, 0.0, 0.0, 0.0),
-                                iconPadding: const EdgeInsetsDirectional.fromSTEB(
-                                    0.0, 0.0, 0.0, 0.0),
+                                iconPadding:
+                                    const EdgeInsetsDirectional.fromSTEB(
+                                        0.0, 0.0, 0.0, 0.0),
                                 color: FlutterFlowTheme.of(context).primary,
                                 textStyle: FlutterFlowTheme.of(context)
                                     .titleSmall
@@ -1090,6 +1206,90 @@ class _ProfileWidgetState extends State<ProfileWidget>
                               ),
                             ).animateOnPageLoad(
                                 animationsMap['buttonOnPageLoadAnimation']!),
+                          ),
+                        ),
+                        // Test Notification Button
+                        Padding(
+                          padding: const EdgeInsetsDirectional.fromSTEB(
+                              16.0, 8.0, 16.0, 0.0),
+                          child: FFButtonWidget(
+                            onPressed: () async {
+                              // Send real push notification to yourself
+                              try {
+                                if (currentUserReference == null) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(
+                                      content:
+                                          Text('Error: User not logged in'),
+                                      backgroundColor: Colors.red,
+                                      duration: Duration(seconds: 3),
+                                    ),
+                                  );
+                                  return;
+                                }
+
+                                // Trigger real push notification via Firebase
+                                triggerPushNotification(
+                                  notificationTitle:
+                                      '🔔 Test Push Notification',
+                                  notificationText:
+                                      'This is a real Firebase push notification!',
+                                  notificationSound: 'default',
+                                  userRefs: [currentUserReference!],
+                                  initialPageName: 'Settings',
+                                  parameterData: {},
+                                );
+
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(
+                                    content: Text(
+                                        '✅ Push notification triggered! Check your device in a few seconds...'),
+                                    duration: Duration(seconds: 4),
+                                    backgroundColor: Color(0xFF10B981),
+                                  ),
+                                );
+
+                                print(
+                                    '✅ Push notification sent to user: ${currentUserReference!.id}');
+                              } catch (e) {
+                                print('❌ Error sending push notification: $e');
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    content: Text(
+                                        'Error sending push notification: $e'),
+                                    backgroundColor: Colors.red,
+                                    duration: const Duration(seconds: 4),
+                                  ),
+                                );
+                              }
+                            },
+                            text: '🔔 Test Push Notification',
+                            icon: const Icon(
+                              Icons.notifications_active,
+                              size: 20.0,
+                            ),
+                            options: FFButtonOptions(
+                              width: double.infinity,
+                              height: 48.0,
+                              padding: const EdgeInsetsDirectional.fromSTEB(
+                                  0.0, 0.0, 0.0, 0.0),
+                              iconPadding: const EdgeInsetsDirectional.fromSTEB(
+                                  0.0, 0.0, 0.0, 0.0),
+                              color: const Color(0xFF10B981),
+                              textStyle: FlutterFlowTheme.of(context)
+                                  .titleSmall
+                                  .override(
+                                    font: GoogleFonts.inter(
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                    color: Colors.white,
+                                    fontSize: 16.0,
+                                    letterSpacing: 0.0,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                              elevation: 0.0,
+                              borderRadius: BorderRadius.circular(12.0),
+                            ),
                           ),
                         ),
                       ]

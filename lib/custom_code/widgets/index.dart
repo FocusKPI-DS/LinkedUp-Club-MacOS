@@ -3,6 +3,7 @@ export 'linked_up_player.dart' show LinkedUpPlayer;
 export 'paginated_notifications.dart' show PaginatedNotifications;
 export 'q_r_scan_widget.dart' show QRScanWidget;
 export 'post_item.dart' show PostItem;
+export 'ai_announcements_summary.dart' show AIAnnouncementsSummary;
 export 'eventbrite_connect_button.dart' show EventbriteConnectButton;
 export 'eventbrite_dashboard.dart' show EventbriteDashboard;
 export 'event_ticketing_selector.dart' show EventTicketingSelector;

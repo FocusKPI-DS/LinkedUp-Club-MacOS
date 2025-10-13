@@ -9,11 +9,9 @@ import '/flutter_flow/flutter_flow_media_display.dart';
 import '/flutter_flow/flutter_flow_pdf_viewer.dart';
 import '/flutter_flow/flutter_flow_util.dart';
 import '/flutter_flow/flutter_flow_video_player.dart';
-import '/flutter_flow/flutter_flow_widgets.dart';
 import '/flutter_flow/upload_data.dart';
 import '/pages/chat/chat_component/chat_thread/chat_thread_widget.dart';
 import 'dart:async';
-import 'dart:math';
 import 'dart:ui';
 import '/custom_code/actions/index.dart' as actions;
 import '/custom_code/widgets/index.dart' as custom_widgets;
@@ -27,7 +25,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:provider/provider.dart';
 import 'package:record/record.dart';
 import 'chat_thread_component_model.dart';
 export 'chat_thread_component_model.dart';
@@ -38,9 +35,11 @@ class ChatThreadComponentWidget extends StatefulWidget {
   const ChatThreadComponentWidget({
     super.key,
     required this.chatReference,
+    this.onMessageLongPress,
   });
 
   final ChatsRecord? chatReference;
+  final Function(MessagesRecord)? onMessageLongPress;
 
   @override
   State<ChatThreadComponentWidget> createState() =>
@@ -238,6 +237,7 @@ class _ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget>
                                     _model.select = false;
                                     safeSetState(() {});
                                   },
+                                  onMessageLongPress: widget.onMessageLongPress,
                                 ),
                               ),
                             );
@@ -378,9 +378,8 @@ class _ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget>
                                                               icon: Icon(
                                                                 Icons
                                                                     .delete_outline_rounded,
-                                                                color: FlutterFlowTheme.of(
-                                                                        context)
-                                                                    .error,
+                                                                color: Colors
+                                                                    .black,
                                                                 size: 24.0,
                                                               ),
                                                               onPressed:
@@ -435,10 +434,7 @@ class _ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget>
                                                       icon: Icon(
                                                         Icons
                                                             .delete_outline_rounded,
-                                                        color:
-                                                            FlutterFlowTheme.of(
-                                                                    context)
-                                                                .error,
+                                                        color: Colors.black,
                                                         size: 24.0,
                                                       ),
                                                       onPressed: () async {
@@ -587,10 +583,7 @@ class _ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget>
                                                       icon: Icon(
                                                         Icons
                                                             .delete_outline_rounded,
-                                                        color:
-                                                            FlutterFlowTheme.of(
-                                                                    context)
-                                                                .error,
+                                                        color: Colors.black,
                                                         size: 24.0,
                                                       ),
                                                       onPressed: () async {
@@ -930,10 +923,7 @@ class _ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget>
                                                     errorBorder:
                                                         OutlineInputBorder(
                                                       borderSide: BorderSide(
-                                                        color:
-                                                            FlutterFlowTheme.of(
-                                                                    context)
-                                                                .error,
+                                                        color: Colors.black,
                                                         width: 1.0,
                                                       ),
                                                       borderRadius:
@@ -943,10 +933,7 @@ class _ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget>
                                                     focusedErrorBorder:
                                                         OutlineInputBorder(
                                                       borderSide: BorderSide(
-                                                        color:
-                                                            FlutterFlowTheme.of(
-                                                                    context)
-                                                                .error,
+                                                        color: Colors.black,
                                                         width: 1.0,
                                                       ),
                                                       borderRadius:

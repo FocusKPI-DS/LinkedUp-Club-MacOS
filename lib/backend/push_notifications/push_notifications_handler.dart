@@ -158,7 +158,7 @@ final parametersBuilderMap =
           'isDeeplink': getParameter<bool>(data, 'isDeeplink'),
         },
       ),
-  'Profile': ParameterData.none(),
+  'Settings': ParameterData.none(),
   'CreateEvent': (data) async => ParameterData(
         allParams: {
           'event': await getDocumentParameter<EventsRecord>(
@@ -221,7 +221,7 @@ final parametersBuilderMap =
               data, 'postDoc', PostsRecord.fromSnapshot),
         },
       ),
-  'Feed': ParameterData.none(),
+  'Announcements': ParameterData.none(),
   'CreatePost': (data) async => ParameterData(
         allParams: {
           'image': getParameter<String>(data, 'image'),

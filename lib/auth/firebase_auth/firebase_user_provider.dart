@@ -44,7 +44,7 @@ class LinkedupFirebaseUser extends BaseAuthUser {
   bool get emailVerified {
     // Reloads the user when checking in order to get the most up to date
     // email verified status.
-    if (loggedIn && !user!.emailVerified) {
+    if (loggedIn && user != null && !user!.emailVerified) {
       refreshUser();
     }
     return user?.emailVerified ?? false;
@@ -63,14 +63,10 @@ class LinkedupFirebaseUser extends BaseAuthUser {
       LinkedupFirebaseUser(user);
 }
 
-Stream<BaseAuthUser> linkedupFirebaseUserStream() => FirebaseAuth.instance
-        .authStateChanges()
-        .debounce((user) => user == null && !loggedIn
-            ? TimerStream(true, const Duration(seconds: 1))
-            : Stream.value(user))
-        .map<BaseAuthUser>(
+Stream<BaseAuthUser> linkedupFirebaseUserStream() =>
+    FirebaseAuth.instance.authStateChanges().map<BaseAuthUser>(
       (user) {
         currentUser = LinkedupFirebaseUser(user);
-        return currentUser!;
+        return currentUser ?? LinkedupFirebaseUser(null);
       },
     );
