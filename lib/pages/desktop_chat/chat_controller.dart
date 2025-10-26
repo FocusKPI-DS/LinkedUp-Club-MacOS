@@ -1,5 +1,6 @@
 import '/auth/firebase_auth/auth_util.dart';
 import '/backend/backend.dart';
+import '/custom_code/services/web_notification_service.dart';
 import 'package:get/get.dart';
 
 enum ChatState { loading, success, error }
@@ -125,11 +126,9 @@ class ChatController extends GetxController {
         'Has current user seen: ${chat.lastMessageSeen.contains(currentUserReference)}');
 
     // Then check Firestore state
-    bool hasUnread = currentUserReference != null &&
-        !chat.lastMessageSeen.contains(currentUserReference ??
-            FirebaseFirestore.instance
-                .collection('users')
-                .doc('placeholder')) &&
+    if (currentUserReference == null) return false;
+
+    bool hasUnread = !chat.lastMessageSeen.contains(currentUserReference) &&
         chat.lastMessage.isNotEmpty &&
         chat.lastMessageSent != currentUserReference;
 
@@ -147,11 +146,9 @@ class ChatController extends GetxController {
           'Has current user seen: ${chat.lastMessageSeen.contains(currentUserReference)}');
 
       // Only update if current user hasn't seen the last message
-      if (currentUserReference != null &&
-          !chat.lastMessageSeen.contains(currentUserReference ??
-              FirebaseFirestore.instance
-                  .collection('users')
-                  .doc('placeholder')) &&
+      if (currentUserReference == null) return;
+
+      if (!chat.lastMessageSeen.contains(currentUserReference) &&
           chat.lastMessage.isNotEmpty &&
           chat.lastMessageSent != currentUserReference) {
         print('Updating last_message_seen for chat: ${chat.reference.id}');
@@ -235,12 +232,34 @@ class ChatController extends GetxController {
 
     // Filter by selected tab
     if (selectedTabIndex.value == 0) {
+      // All - show both direct messages and groups (no filtering)
+      // filteredChats remains unchanged
+    } else if (selectedTabIndex.value == 1) {
       // Direct messages only
       filteredChats = filteredChats.where((chat) => !chat.isGroup).toList();
-    } else if (selectedTabIndex.value == 1) {
+    } else if (selectedTabIndex.value == 2) {
       // Groups only
       filteredChats = filteredChats.where((chat) => chat.isGroup).toList();
     }
+
+    // Sort chats: Pinned chats at the top, then by last message time
+    filteredChats.sort((a, b) {
+      // First, sort by pinned status (pinned chats come first)
+      if (a.isPin != b.isPin) {
+        return a.isPin ? -1 : 1;
+      }
+      // Then sort by last message time (most recent first)
+      if (a.lastMessageAt != null && b.lastMessageAt != null) {
+        return b.lastMessageAt!.compareTo(a.lastMessageAt!);
+      }
+      // Handle null cases - chats with lastMessageAt come first
+      if (a.lastMessageAt != null && b.lastMessageAt == null) return -1;
+      if (a.lastMessageAt == null && b.lastMessageAt != null) return 1;
+      return 0;
+    });
+
+    // Update tab title with unread count
+    _updateTabTitle(filteredChats);
 
     return filteredChats;
   }
@@ -248,5 +267,16 @@ class ChatController extends GetxController {
   // Refresh chats
   Future<void> refreshChats() async {
     await loadChats();
+  }
+
+  // Update tab title with unread message count
+  void _updateTabTitle(List<ChatsRecord> chats) {
+    int unreadCount = 0;
+    for (final chat in chats) {
+      if (hasUnreadMessages(chat)) {
+        unreadCount++;
+      }
+    }
+    WebNotificationService.instance.updateTabTitle(unreadCount);
   }
 }

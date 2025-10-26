@@ -1,14 +1,18 @@
 import '/auth/firebase_auth/auth_util.dart';
 import '/backend/backend.dart';
+import '/backend/schema/enums/enums.dart';
 import '/flutter_flow/flutter_flow_audio_player.dart';
 import '/flutter_flow/flutter_flow_expanded_image_view.dart';
+import '/custom_code/widgets/video_message_widget.dart';
 import '/flutter_flow/flutter_flow_util.dart';
 // import '/flutter_flow/flutter_flow_widgets.dart';
 import '/pages/chat/chat_component/p_d_f_view/p_d_f_view_widget.dart';
 import '/pages/chat/chat_component/report_component/report_component_widget.dart';
 import 'dart:ui';
 import 'dart:io' show Platform;
+import 'package:flutter/foundation.dart' show kIsWeb;
 import '/custom_code/actions/index.dart' as actions;
+import '/custom_code/widgets/index.dart' as custom_widgets;
 import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:aligned_dialog/aligned_dialog.dart';
@@ -35,6 +39,9 @@ class ChatThreadWidget extends StatefulWidget {
     required this.userRef,
     required this.action,
     this.onMessageLongPress,
+    this.onReplyToMessage,
+    this.onScrollToMessage,
+    this.onEditMessage,
   });
 
   final MessagesRecord? message;
@@ -44,6 +51,9 @@ class ChatThreadWidget extends StatefulWidget {
   final DocumentReference? userRef;
   final Future Function()? action;
   final Function(MessagesRecord)? onMessageLongPress;
+  final Function(MessagesRecord)? onReplyToMessage;
+  final Function(String)? onScrollToMessage;
+  final Function(MessagesRecord)? onEditMessage;
 
   @override
   State<ChatThreadWidget> createState() => _ChatThreadWidgetState();
@@ -128,23 +138,188 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
     );
   }
 
+  Future<void> _unsendMessage() async {
+    if (widget.message == null || widget.chatRef == null) return;
+
+    // Check if the message was sent by the current user
+    if (widget.message!.senderRef != currentUserReference) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'You can only unsend your own messages',
+            style: GoogleFonts.inter(
+              color: FlutterFlowTheme.of(context).secondaryBackground,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+          duration: const Duration(milliseconds: 2000),
+          backgroundColor: FlutterFlowTheme.of(context).error,
+        ),
+      );
+      return;
+    }
+
+    // Show confirmation dialog
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: FlutterFlowTheme.of(context).secondaryBackground,
+        title: Text(
+          'Unsend Message',
+          style: FlutterFlowTheme.of(context).headlineSmall.override(
+                color: FlutterFlowTheme.of(context).primaryText,
+              ),
+        ),
+        content: Text(
+          'Are you sure you want to unsend this message? This action cannot be undone.',
+          style: FlutterFlowTheme.of(context).bodyMedium.override(
+                color: FlutterFlowTheme.of(context).secondaryText,
+              ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: Text(
+              'Cancel',
+              style: FlutterFlowTheme.of(context).bodyMedium.override(
+                    color: FlutterFlowTheme.of(context).secondaryText,
+                    fontWeight: FontWeight.w500,
+                  ),
+            ),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: Text(
+              'Unsend',
+              style: FlutterFlowTheme.of(context).bodyMedium.override(
+                    color: FlutterFlowTheme.of(context).error,
+                    fontWeight: FontWeight.w600,
+                  ),
+            ),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true) {
+      try {
+        // Delete the message
+        await widget.message!.reference.delete();
+
+        // Update chat's last message if this was the last message
+        final chatDoc = await widget.chatRef!.get();
+        if (chatDoc.exists) {
+          final chatData = chatDoc.data() as Map<String, dynamic>;
+          final lastMessageSent =
+              chatData['last_message_sent'] as DocumentReference?;
+
+          // If this was the last message, update chat
+          if (lastMessageSent == currentUserReference) {
+            // Get the previous message
+            final previousMessages = await widget.chatRef!
+                .collection('messages')
+                .orderBy('created_at', descending: true)
+                .limit(1)
+                .get();
+
+            if (previousMessages.docs.isNotEmpty) {
+              final previousMessage = previousMessages.docs.first;
+              final previousData = previousMessage.data();
+
+              // Update chat with previous message info
+              await widget.chatRef!.update({
+                'last_message': previousData['content'] ?? '',
+                'last_message_at': previousData['created_at'],
+                'last_message_sent': previousData['sender_ref'],
+                'last_message_type': previousData['message_type'],
+              });
+            } else {
+              // No previous messages, reset chat
+              await widget.chatRef!.update({
+                'last_message': '',
+                'last_message_at': getCurrentTimestamp,
+                'last_message_sent': currentUserReference,
+                'last_message_type': MessageType.text,
+              });
+            }
+          }
+        }
+
+        // Show success message
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                'Message unsent successfully',
+                style: GoogleFonts.inter(
+                  color: FlutterFlowTheme.of(context).secondaryBackground,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+              duration: const Duration(milliseconds: 2000),
+              backgroundColor: FlutterFlowTheme.of(context).success,
+            ),
+          );
+        }
+      } catch (e) {
+        // Show error message
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                'Failed to unsend message: $e',
+                style: GoogleFonts.inter(
+                  color: FlutterFlowTheme.of(context).secondaryBackground,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+              duration: const Duration(milliseconds: 3000),
+              backgroundColor: FlutterFlowTheme.of(context).error,
+            ),
+          );
+        }
+      }
+    }
+  }
+
+  Future<void> _replyToMessage() async {
+    if (widget.message == null) return;
+
+    // Call the parent callback to handle reply
+    widget.onReplyToMessage?.call(widget.message!);
+  }
+
+  Future<void> _editMessage() async {
+    if (widget.message == null) return;
+
+    // Call the parent callback to handle edit
+    widget.onEditMessage?.call(widget.message!);
+  }
+
+  void _scrollToRepliedMessage() {
+    if (widget.message?.replyTo != null && widget.message!.replyTo.isNotEmpty) {
+      widget.onScrollToMessage?.call(widget.message!.replyTo);
+    }
+  }
+
   // Platform-specific dropdown menu - WhatsApp style for macOS, iOS native style for iOS
   Widget _messageMenuButton() {
     return PopupMenuButton<_MsgAction>(
       tooltip: 'Message options',
       padding: EdgeInsets.zero,
-      elevation: Platform.isIOS ? 8 : 6,
+      elevation: (!kIsWeb && Platform.isIOS) ? 8 : 6,
       position: PopupMenuPosition.under,
-      offset: Offset(0, Platform.isIOS ? 16 : 12),
+      offset: Offset(0, (!kIsWeb && Platform.isIOS) ? 16 : 12),
       constraints: BoxConstraints(
-        minWidth: Platform.isIOS ? 120 : 100,
+        minWidth: (!kIsWeb && Platform.isIOS) ? 120 : 100,
       ),
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(Platform.isIOS ? 12 : 10),
+        borderRadius:
+            BorderRadius.circular((!kIsWeb && Platform.isIOS) ? 12 : 10),
       ),
-      color: Platform.isIOS ? Colors.white : Colors.black,
+      color: (!kIsWeb && Platform.isIOS) ? Colors.white : Colors.black,
       onOpened: () {
-        if (Platform.isIOS) {
+        if (!kIsWeb && Platform.isIOS) {
           HapticFeedback.mediumImpact();
         }
         setState(() => _isMenuOpen = true);
@@ -154,23 +329,25 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
         key: _menuIconKey,
         child: Container(
           decoration: BoxDecoration(
-            color: Platform.isIOS
+            color: (!kIsWeb && Platform.isIOS)
                 ? Colors.black.withOpacity(0.1)
                 : const Color.fromARGB(255, 242, 239, 239).withOpacity(0.04),
             shape: BoxShape.circle,
           ),
-          padding: EdgeInsets.all(Platform.isIOS ? 6 : 4),
+          padding: EdgeInsets.all((!kIsWeb && Platform.isIOS) ? 6 : 4),
           child: Icon(
-            Platform.isIOS
+            (!kIsWeb && Platform.isIOS)
                 ? Icons.more_vert_rounded // iOS style: vertical dots
-                : Icons.keyboard_arrow_down_rounded, // macOS style: arrow
-            size: Platform.isIOS ? 16 : 12,
-            color: Platform.isIOS ? Colors.black54 : Color(0xFF4B5563),
+                : Icons.keyboard_arrow_down_rounded, // macOS/Web style: arrow
+            size: (!kIsWeb && Platform.isIOS) ? 16 : 12,
+            color: (!kIsWeb && Platform.isIOS)
+                ? Colors.black54
+                : Color(0xFF4B5563),
           ),
         ),
       ),
       onSelected: (value) async {
-        if (Platform.isIOS) {
+        if (!kIsWeb && Platform.isIOS) {
           HapticFeedback.lightImpact();
         }
         setState(() => _isMenuOpen = false);
@@ -188,6 +365,15 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
           case _MsgAction.report:
             await _openReportDialog();
             break;
+          case _MsgAction.unsend:
+            await _unsendMessage();
+            break;
+          case _MsgAction.reply:
+            await _replyToMessage();
+            break;
+          case _MsgAction.edit:
+            await _editMessage();
+            break;
         }
       },
       itemBuilder: (context) => [
@@ -196,7 +382,8 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
           child: _MenuRow(
             icon: Icons.emoji_emotions_rounded,
             label: 'React',
-            textColor: Platform.isIOS ? Colors.black : Colors.white,
+            textColor:
+                (!kIsWeb && Platform.isIOS) ? Colors.black : Colors.white,
           ),
         ),
         PopupMenuItem(
@@ -204,7 +391,8 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
           child: _MenuRow(
             icon: Icons.copy_rounded,
             label: 'Copy',
-            textColor: Platform.isIOS ? Colors.black : Colors.white,
+            textColor:
+                (!kIsWeb && Platform.isIOS) ? Colors.black : Colors.white,
           ),
         ),
         PopupMenuItem(
@@ -212,9 +400,40 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
           child: _MenuRow(
             icon: Icons.report_gmailerrorred_rounded,
             label: 'Report',
-            textColor: Platform.isIOS ? Colors.black : Colors.white,
+            textColor:
+                (!kIsWeb && Platform.isIOS) ? Colors.black : Colors.white,
           ),
         ),
+        PopupMenuItem(
+          value: _MsgAction.reply,
+          child: _MenuRow(
+            icon: Icons.reply_rounded,
+            label: 'Reply',
+            textColor:
+                (!kIsWeb && Platform.isIOS) ? Colors.black : Colors.white,
+          ),
+        ),
+        // Only show edit and unsend options for messages sent by current user
+        if (widget.message?.senderRef == currentUserReference) ...[
+          PopupMenuItem(
+            value: _MsgAction.edit,
+            child: _MenuRow(
+              icon: Icons.edit_rounded,
+              label: 'Edit',
+              textColor:
+                  (!kIsWeb && Platform.isIOS) ? Colors.black : Colors.white,
+            ),
+          ),
+          PopupMenuItem(
+            value: _MsgAction.unsend,
+            child: _MenuRow(
+              icon: Icons.undo_rounded,
+              label: 'Unsend',
+              textColor:
+                  (!kIsWeb && Platform.isIOS) ? Colors.black : Colors.white,
+            ),
+          ),
+        ],
       ],
     );
   }
@@ -317,7 +536,7 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
   Widget _withMessageMenu({required Widget bubble}) {
     final reactionsBadge = _buildReactionsBadge();
 
-    if (Platform.isIOS) {
+    if (!kIsWeb && Platform.isIOS) {
       // iOS: Call parent callback for fixed top menu
       return GestureDetector(
         onLongPress: () {
@@ -527,9 +746,10 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Flexible(
-                          child: ConstrainedBox(
+                          child: Container(
                             constraints: BoxConstraints(
-                              maxWidth: MediaQuery.of(context).size.width * 0.6,
+                              maxWidth: MediaQuery.of(context).size.width * 0.8,
+                              minWidth: MediaQuery.of(context).size.width * 0.3,
                               minHeight: 60,
                             ),
                             child: Column(
@@ -563,17 +783,106 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
                                               crossAxisAlignment:
                                                   CrossAxisAlignment.start,
                                               children: [
+                                                // Reply indicator
+                                                if (widget.message?.replyTo !=
+                                                        null &&
+                                                    widget.message?.replyTo !=
+                                                        '')
+                                                  GestureDetector(
+                                                    onTap: () =>
+                                                        _scrollToRepliedMessage(),
+                                                    child: Container(
+                                                      width: double.infinity,
+                                                      margin:
+                                                          const EdgeInsets.only(
+                                                              bottom: 8.0),
+                                                      padding:
+                                                          const EdgeInsets.all(
+                                                              8.0),
+                                                      decoration: BoxDecoration(
+                                                        color: FlutterFlowTheme
+                                                                .of(context)
+                                                            .primaryBackground,
+                                                        borderRadius:
+                                                            BorderRadius
+                                                                .circular(8.0),
+                                                        border: Border(
+                                                          left: BorderSide(
+                                                            color: FlutterFlowTheme
+                                                                    .of(context)
+                                                                .primary,
+                                                            width: 4.0,
+                                                          ),
+                                                        ),
+                                                      ),
+                                                      child: Row(
+                                                        children: [
+                                                          const SizedBox(
+                                                              width: 8.0),
+                                                          Expanded(
+                                                            child: Column(
+                                                              crossAxisAlignment:
+                                                                  CrossAxisAlignment
+                                                                      .start,
+                                                              children: [
+                                                                Text(
+                                                                  'Replying to ${widget.message?.replyToSender ?? 'Unknown'}',
+                                                                  style: FlutterFlowTheme.of(
+                                                                          context)
+                                                                      .bodySmall
+                                                                      .override(
+                                                                        color: FlutterFlowTheme.of(context)
+                                                                            .primary,
+                                                                        fontWeight:
+                                                                            FontWeight.w600,
+                                                                      ),
+                                                                ),
+                                                                const SizedBox(
+                                                                    height:
+                                                                        2.0),
+                                                                Text(
+                                                                  widget.message
+                                                                          ?.replyToContent ??
+                                                                      '',
+                                                                  style: FlutterFlowTheme.of(
+                                                                          context)
+                                                                      .bodySmall
+                                                                      .override(
+                                                                        color: FlutterFlowTheme.of(context)
+                                                                            .secondaryText,
+                                                                      ),
+                                                                  maxLines: 1,
+                                                                  overflow:
+                                                                      TextOverflow
+                                                                          .ellipsis,
+                                                                ),
+                                                              ],
+                                                            ),
+                                                          ),
+                                                          Icon(
+                                                            Icons
+                                                                .keyboard_arrow_up,
+                                                            color: FlutterFlowTheme
+                                                                    .of(context)
+                                                                .primary,
+                                                            size: 16.0,
+                                                          ),
+                                                        ],
+                                                      ),
+                                                    ),
+                                                  ),
                                                 if (widget.message?.content !=
                                                         null &&
                                                     widget.message?.content !=
                                                         '')
-                                                  MarkdownBody(
-                                                    data:
+                                                  custom_widgets
+                                                      .MessageContentWidget(
+                                                    content:
                                                         valueOrDefault<String>(
                                                       widget.message?.content,
                                                       'I\'m at the venue now. Here\'s the map with the room highlighted:',
                                                     ),
-                                                    selectable: true,
+                                                    senderName: widget.name,
                                                     onTapLink: (text, url,
                                                         title) async {
                                                       if (url != null) {
@@ -678,6 +987,102 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
                                                             fontStyle: FontStyle
                                                                 .italic,
                                                           ),
+                                                      tableBody:
+                                                          FlutterFlowTheme.of(
+                                                                  context)
+                                                              .bodyMedium
+                                                              .override(
+                                                                font: GoogleFonts
+                                                                    .inter(),
+                                                                color: Colors
+                                                                    .black,
+                                                                fontSize: 14.0,
+                                                              ),
+                                                      tableHead:
+                                                          FlutterFlowTheme.of(
+                                                                  context)
+                                                              .bodyMedium
+                                                              .override(
+                                                                font:
+                                                                    GoogleFonts
+                                                                        .inter(
+                                                                  fontWeight:
+                                                                      FontWeight
+                                                                          .bold,
+                                                                ),
+                                                                color: Colors
+                                                                    .black,
+                                                                fontSize: 14.0,
+                                                                fontWeight:
+                                                                    FontWeight
+                                                                        .bold,
+                                                              ),
+                                                    ),
+                                                  ),
+                                                // Edited indicator
+                                                if (widget.message?.isEdited ==
+                                                    true)
+                                                  Padding(
+                                                    padding:
+                                                        const EdgeInsetsDirectional
+                                                            .fromSTEB(
+                                                            0.0, 4.0, 0.0, 0.0),
+                                                    child: Row(
+                                                      mainAxisSize:
+                                                          MainAxisSize.min,
+                                                      children: [
+                                                        Text(
+                                                          'edited',
+                                                          style: FlutterFlowTheme
+                                                                  .of(context)
+                                                              .bodySmall
+                                                              .override(
+                                                                color: FlutterFlowTheme.of(
+                                                                        context)
+                                                                    .secondaryText,
+                                                                fontSize: 11.0,
+                                                                fontStyle:
+                                                                    FontStyle
+                                                                        .italic,
+                                                              ),
+                                                        ),
+                                                        if (widget.message
+                                                                ?.editedAt !=
+                                                            null) ...[
+                                                          Text(
+                                                            ' • ',
+                                                            style: FlutterFlowTheme
+                                                                    .of(context)
+                                                                .bodySmall
+                                                                .override(
+                                                                  color: FlutterFlowTheme.of(
+                                                                          context)
+                                                                      .secondaryText,
+                                                                  fontSize:
+                                                                      11.0,
+                                                                ),
+                                                          ),
+                                                          Text(
+                                                            dateTimeFormat(
+                                                                'MMM d, h:mm a',
+                                                                widget.message!
+                                                                    .editedAt!),
+                                                            style: FlutterFlowTheme
+                                                                    .of(context)
+                                                                .bodySmall
+                                                                .override(
+                                                                  color: FlutterFlowTheme.of(
+                                                                          context)
+                                                                      .secondaryText,
+                                                                  fontSize:
+                                                                      11.0,
+                                                                  fontStyle:
+                                                                      FontStyle
+                                                                          .italic,
+                                                                ),
+                                                          ),
+                                                        ],
+                                                      ],
                                                     ),
                                                   ),
                                                 if (widget.message?.image !=
@@ -782,6 +1187,28 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
                                                           ),
                                                         ),
                                                       ),
+                                                    ),
+                                                  ),
+                                                if (widget.message?.video !=
+                                                        null &&
+                                                    widget.message?.video != '')
+                                                  Container(
+                                                    width: 265.0,
+                                                    height: 200.0,
+                                                    decoration: BoxDecoration(
+                                                      color: const Color(
+                                                          0xFFE5E7EB),
+                                                      borderRadius:
+                                                          BorderRadius.circular(
+                                                              8.0),
+                                                    ),
+                                                    child: VideoMessageWidget(
+                                                      videoUrl: widget
+                                                              .message?.video ??
+                                                          '',
+                                                      width: 265.0,
+                                                      height: 200.0,
+                                                      isOwnMessage: isMe,
                                                     ),
                                                   ),
                                                 if ((widget.message?.images !=
@@ -1305,9 +1732,10 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
                           ),
                         ),
                         Flexible(
-                          child: ConstrainedBox(
+                          child: Container(
                             constraints: BoxConstraints(
-                              maxWidth: MediaQuery.of(context).size.width * 0.6,
+                              maxWidth: MediaQuery.of(context).size.width * 0.8,
+                              minWidth: MediaQuery.of(context).size.width * 0.3,
                               minHeight: 60,
                             ),
                             child: Column(
@@ -1341,17 +1769,106 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
                                               crossAxisAlignment:
                                                   CrossAxisAlignment.end,
                                               children: [
+                                                // Reply indicator
+                                                if (widget.message?.replyTo !=
+                                                        null &&
+                                                    widget.message?.replyTo !=
+                                                        '')
+                                                  GestureDetector(
+                                                    onTap: () =>
+                                                        _scrollToRepliedMessage(),
+                                                    child: Container(
+                                                      width: double.infinity,
+                                                      margin:
+                                                          const EdgeInsets.only(
+                                                              bottom: 8.0),
+                                                      padding:
+                                                          const EdgeInsets.all(
+                                                              8.0),
+                                                      decoration: BoxDecoration(
+                                                        color: FlutterFlowTheme
+                                                                .of(context)
+                                                            .primaryBackground,
+                                                        borderRadius:
+                                                            BorderRadius
+                                                                .circular(8.0),
+                                                        border: Border(
+                                                          left: BorderSide(
+                                                            color: FlutterFlowTheme
+                                                                    .of(context)
+                                                                .primary,
+                                                            width: 4.0,
+                                                          ),
+                                                        ),
+                                                      ),
+                                                      child: Row(
+                                                        children: [
+                                                          const SizedBox(
+                                                              width: 8.0),
+                                                          Expanded(
+                                                            child: Column(
+                                                              crossAxisAlignment:
+                                                                  CrossAxisAlignment
+                                                                      .start,
+                                                              children: [
+                                                                Text(
+                                                                  'Replying to ${widget.message?.replyToSender ?? 'Unknown'}',
+                                                                  style: FlutterFlowTheme.of(
+                                                                          context)
+                                                                      .bodySmall
+                                                                      .override(
+                                                                        color: FlutterFlowTheme.of(context)
+                                                                            .primary,
+                                                                        fontWeight:
+                                                                            FontWeight.w600,
+                                                                      ),
+                                                                ),
+                                                                const SizedBox(
+                                                                    height:
+                                                                        2.0),
+                                                                Text(
+                                                                  widget.message
+                                                                          ?.replyToContent ??
+                                                                      '',
+                                                                  style: FlutterFlowTheme.of(
+                                                                          context)
+                                                                      .bodySmall
+                                                                      .override(
+                                                                        color: FlutterFlowTheme.of(context)
+                                                                            .secondaryText,
+                                                                      ),
+                                                                  maxLines: 1,
+                                                                  overflow:
+                                                                      TextOverflow
+                                                                          .ellipsis,
+                                                                ),
+                                                              ],
+                                                            ),
+                                                          ),
+                                                          Icon(
+                                                            Icons
+                                                                .keyboard_arrow_up,
+                                                            color: FlutterFlowTheme
+                                                                    .of(context)
+                                                                .primary,
+                                                            size: 16.0,
+                                                          ),
+                                                        ],
+                                                      ),
+                                                    ),
+                                                  ),
                                                 if (widget.message?.content !=
                                                         null &&
                                                     widget.message?.content !=
                                                         '')
-                                                  MarkdownBody(
-                                                    data:
+                                                  custom_widgets
+                                                      .MessageContentWidget(
+                                                    content:
                                                         valueOrDefault<String>(
                                                       widget.message?.content,
                                                       'I\'m at the venue now. Here\'s the map with the room highlighted:',
                                                     ),
-                                                    selectable: true,
+                                                    senderName: widget.name,
                                                     onTapLink: (text, url,
                                                         title) async {
                                                       if (url != null) {
@@ -1456,6 +1973,102 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
                                                             fontStyle: FontStyle
                                                                 .italic,
                                                           ),
+                                                      tableBody:
+                                                          FlutterFlowTheme.of(
+                                                                  context)
+                                                              .bodyMedium
+                                                              .override(
+                                                                font: GoogleFonts
+                                                                    .inter(),
+                                                                color: Colors
+                                                                    .black,
+                                                                fontSize: 14.0,
+                                                              ),
+                                                      tableHead:
+                                                          FlutterFlowTheme.of(
+                                                                  context)
+                                                              .bodyMedium
+                                                              .override(
+                                                                font:
+                                                                    GoogleFonts
+                                                                        .inter(
+                                                                  fontWeight:
+                                                                      FontWeight
+                                                                          .bold,
+                                                                ),
+                                                                color: Colors
+                                                                    .black,
+                                                                fontSize: 14.0,
+                                                                fontWeight:
+                                                                    FontWeight
+                                                                        .bold,
+                                                              ),
+                                                    ),
+                                                  ),
+                                                // Edited indicator
+                                                if (widget.message?.isEdited ==
+                                                    true)
+                                                  Padding(
+                                                    padding:
+                                                        const EdgeInsetsDirectional
+                                                            .fromSTEB(
+                                                            0.0, 4.0, 0.0, 0.0),
+                                                    child: Row(
+                                                      mainAxisSize:
+                                                          MainAxisSize.min,
+                                                      children: [
+                                                        Text(
+                                                          'edited',
+                                                          style: FlutterFlowTheme
+                                                                  .of(context)
+                                                              .bodySmall
+                                                              .override(
+                                                                color: FlutterFlowTheme.of(
+                                                                        context)
+                                                                    .secondaryText,
+                                                                fontSize: 11.0,
+                                                                fontStyle:
+                                                                    FontStyle
+                                                                        .italic,
+                                                              ),
+                                                        ),
+                                                        if (widget.message
+                                                                ?.editedAt !=
+                                                            null) ...[
+                                                          Text(
+                                                            ' • ',
+                                                            style: FlutterFlowTheme
+                                                                    .of(context)
+                                                                .bodySmall
+                                                                .override(
+                                                                  color: FlutterFlowTheme.of(
+                                                                          context)
+                                                                      .secondaryText,
+                                                                  fontSize:
+                                                                      11.0,
+                                                                ),
+                                                          ),
+                                                          Text(
+                                                            dateTimeFormat(
+                                                                'MMM d, h:mm a',
+                                                                widget.message!
+                                                                    .editedAt!),
+                                                            style: FlutterFlowTheme
+                                                                    .of(context)
+                                                                .bodySmall
+                                                                .override(
+                                                                  color: FlutterFlowTheme.of(
+                                                                          context)
+                                                                      .secondaryText,
+                                                                  fontSize:
+                                                                      11.0,
+                                                                  fontStyle:
+                                                                      FontStyle
+                                                                          .italic,
+                                                                ),
+                                                          ),
+                                                        ],
+                                                      ],
                                                     ),
                                                   ),
                                                 if (widget.message?.image !=
@@ -1577,6 +2190,28 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
                                                           ),
                                                         ),
                                                       ),
+                                                    ),
+                                                  ),
+                                                if (widget.message?.video !=
+                                                        null &&
+                                                    widget.message?.video != '')
+                                                  Container(
+                                                    width: 265.0,
+                                                    height: 200.0,
+                                                    decoration: BoxDecoration(
+                                                      color: const Color(
+                                                          0xFFE5E7EB),
+                                                      borderRadius:
+                                                          BorderRadius.circular(
+                                                              8.0),
+                                                    ),
+                                                    child: VideoMessageWidget(
+                                                      videoUrl: widget
+                                                              .message?.video ??
+                                                          '',
+                                                      width: 265.0,
+                                                      height: 200.0,
+                                                      isOwnMessage: isMe,
                                                     ),
                                                   ),
                                                 if ((widget.message?.images !=
@@ -2062,14 +2697,14 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
             ),
           ),
       ]
-          .divide(const SizedBox(height: 16.0))
+          .divide(const SizedBox(height: 2.0))
           .addToStart(const SizedBox(height: 8.0))
           .addToEnd(const SizedBox(height: 8.0)),
     );
   }
 }
 
-enum _MsgAction { react, copy, report }
+enum _MsgAction { react, copy, report, unsend, reply, edit }
 
 class _MenuRow extends StatelessWidget {
   final IconData icon;

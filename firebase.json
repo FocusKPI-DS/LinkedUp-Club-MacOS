@@ -1,1 +1,74 @@
-{"flutter":{"platforms":{"macos":{"default":{"projectId":"linkedup-c3e29","appId":"1:548534727055:ios:8343a86672d8b349bb5bfa","uploadDebugSymbols":false,"fileOutput":"macos/Runner/GoogleService-Info.plist"}},"dart":{"lib/firebase_options.dart":{"projectId":"linkedup-c3e29","configurations":{"android":"1:548534727055:android:f3f3d5491d9b0fb8bb5bfa","ios":"1:548534727055:ios:8343a86672d8b349bb5bfa","macos":"1:548534727055:ios:8343a86672d8b349bb5bfa","web":"1:548534727055:web:d770e39d4c066094bb5bfa"}}},"android":{"default":{"projectId":"linkedup-c3e29","appId":"1:548534727055:android:f3f3d5491d9b0fb8bb5bfa","fileOutput":"android/app/google-services.json"}},"ios":{"default":{"projectId":"linkedup-c3e29","appId":"1:548534727055:ios:8343a86672d8b349bb5bfa","uploadDebugSymbols":false,"fileOutput":"ios/Runner/GoogleService-Info.plist"}}}}}
+{
+  "flutter": {
+    "platforms": {
+      "macos": {
+        "default": {
+          "projectId": "linkedup-c3e29",
+          "appId": "1:548534727055:ios:8343a86672d8b349bb5bfa",
+          "uploadDebugSymbols": false,
+          "fileOutput": "macos/Runner/GoogleService-Info.plist"
+        }
+      },
+      "dart": {
+        "lib/firebase_options.dart": {
+          "projectId": "linkedup-c3e29",
+          "configurations": {
+            "android": "1:548534727055:android:f3f3d5491d9b0fb8bb5bfa",
+            "ios": "1:548534727055:ios:8343a86672d8b349bb5bfa",
+            "macos": "1:548534727055:ios:8343a86672d8b349bb5bfa",
+            "web": "1:548534727055:web:d770e39d4c066094bb5bfa"
+          }
+        }
+      },
+      "android": {
+        "default": {
+          "projectId": "linkedup-c3e29",
+          "appId": "1:548534727055:android:f3f3d5491d9b0fb8bb5bfa",
+          "fileOutput": "android/app/google-services.json"
+        }
+      },
+      "ios": {
+        "default": {
+          "projectId": "linkedup-c3e29",
+          "appId": "1:548534727055:ios:8343a86672d8b349bb5bfa",
+          "uploadDebugSymbols": false,
+          "fileOutput": "ios/Runner/GoogleService-Info.plist"
+        }
+      }
+    }
+  },
+  "hosting": {
+    "public": "build/web",
+    "ignore": [
+      "firebase.json",
+      "**/.*",
+      "**/node_modules/**"
+    ],
+    "rewrites": [
+      {
+        "source": "**",
+        "destination": "/index.html"
+      }
+    ],
+    "headers": [
+      {
+        "source": "**/*.@(jpg|jpeg|gif|png|svg|webp|ico)",
+        "headers": [
+          {
+            "key": "Cache-Control",
+            "value": "max-age=31536000"
+          }
+        ]
+      },
+      {
+        "source": "**/*.@(js|css|woff|woff2|ttf|eot)",
+        "headers": [
+          {
+            "key": "Cache-Control",
+            "value": "max-age=31536000"
+          }
+        ]
+      }
+    ]
+  }
+}

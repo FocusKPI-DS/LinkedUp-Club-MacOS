@@ -23,6 +23,7 @@ enum MessageType {
   file,
   image,
   voice,
+  video,
 }
 
 enum Reports {

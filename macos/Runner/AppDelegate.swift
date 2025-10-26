@@ -2,6 +2,8 @@ import Cocoa
 import FlutterMacOS
 import AVFoundation
 import UserNotifications
+import FirebaseMessaging
+import FirebaseCore
 
 @main
 class AppDelegate: FlutterAppDelegate {
@@ -16,80 +18,45 @@ class AppDelegate: FlutterAppDelegate {
   override func applicationDidFinishLaunching(_ notification: Notification) {
     super.applicationDidFinishLaunching(notification)
     
-    // Set window background to white immediately to prevent black screen
-    if let window = NSApplication.shared.windows.first {
-      window.backgroundColor = NSColor.white
-      window.isOpaque = true
-    }
+    // Initialize Firebase
+    FirebaseApp.configure()
     
-    // Register for remote notifications with explicit error handling
-    print("🚀 AppDelegate: About to register for remote notifications...")
-    
-    // Check if we can register for remote notifications
-    if NSApplication.shared.isRegisteredForRemoteNotifications {
-        print("✅ AppDelegate: Already registered for remote notifications")
-    } else {
-        print("📢 AppDelegate: Registering for remote notifications...")
-        NSApplication.shared.registerForRemoteNotifications()
-        print("🚀 AppDelegate: registerForRemoteNotifications() called")
-        
-        // Give it a moment and check if registration succeeded
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
-            if NSApplication.shared.isRegisteredForRemoteNotifications {
-                print("✅ AppDelegate: Successfully registered for remote notifications")
-            } else {
-                print("❌ AppDelegate: Failed to register for remote notifications")
-            }
-        }
-    }
-    
-    // Set up camera permission method channel
-    if let controller = mainFlutterWindow?.contentViewController as? FlutterViewController {
-      let cameraChannel = FlutterMethodChannel(
-        name: "com.linkedup.camera_permission",
-        binaryMessenger: controller.engine.binaryMessenger
-      )
-      
-      cameraChannel.setMethodCallHandler { (call: FlutterMethodCall, result: @escaping FlutterResult) in
-        switch call.method {
-        case "requestCameraPermission":
-          self.requestCameraPermission(result: result)
-        default:
-          result(FlutterMethodNotImplemented)
-        }
-      }
-    }
-  }
-  
-  private func requestCameraPermission(result: @escaping FlutterResult) {
-    let status = AVCaptureDevice.authorizationStatus(for: .video)
-    
-    switch status {
-    case .authorized:
-      result(true)
-    case .notDetermined:
-      AVCaptureDevice.requestAccess(for: .video) { granted in
+    // Request notification permissions
+    UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .badge, .sound]) { granted, error in
+      if granted {
+        print("✅ Notification permission granted")
         DispatchQueue.main.async {
-          result(granted)
+          NSApplication.shared.registerForRemoteNotifications()
         }
+      } else {
+        print("❌ Notification permission denied: \(error?.localizedDescription ?? "Unknown error")")
       }
-    case .denied, .restricted:
-      result(false)
-    @unknown default:
-      result(false)
     }
+    
+    // Set notification delegate
+    UNUserNotificationCenter.current().delegate = self
   }
   
-  // Handle APNS token registration
   override func application(_ application: NSApplication, didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data) {
-    let tokenString = deviceToken.map { String(format: "%02x", $0) }.joined()
-    print("✅ SUCCESS! APNS Device Token received: \(tokenString)")
-    // Firebase will automatically handle this token
+    print("✅ APNS token received")
+    Messaging.messaging().apnsToken = deviceToken
   }
   
   override func application(_ application: NSApplication, didFailToRegisterForRemoteNotificationsWithError error: Error) {
-    print("❌ FAILED to register for remote notifications!")
-    print("❌ Error: \(error)")
-    print("❌ Error localizedDescription: \(error.localizedDescription)")
+    print("❌ Failed to register for remote notifications: \(error.localizedDescription)")
+  }
+}
+
+// MARK: - UNUserNotificationCenterDelegate
+extension AppDelegate: UNUserNotificationCenterDelegate {
+  func userNotificationCenter(_ center: UNUserNotificationCenter, willPresent notification: UNNotification, withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void) {
+    // Show notification even when app is in foreground
+    completionHandler([.alert, .badge, .sound])
+  }
+  
+  func userNotificationCenter(_ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse, withCompletionHandler completionHandler: @escaping () -> Void) {
+    // Handle notification tap
+    print("📱 Notification tapped: \(response.notification.request.content.userInfo)")
+    completionHandler()
   }
 }

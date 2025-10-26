@@ -15,8 +15,6 @@ PODS:
     - FlutterMacOS
   - assets_audio_player_web (0.0.1):
     - FlutterMacOS
-  - audioplayers_darwin (0.0.1):
-    - FlutterMacOS
   - cloud_firestore (5.6.9):
     - Firebase/CoreOnly (~> 11.13.0)
     - Firebase/Firestore (~> 11.13.0)
@@ -139,8 +137,6 @@ PODS:
     - FirebaseCoreExtension (~> 11.13.0)
     - GoogleUtilities/Environment (~> 8.1)
     - GTMSessionFetcher/Core (< 5.0, >= 3.4)
-  - flutter_local_notifications (0.0.1):
-    - FlutterMacOS
   - FlutterMacOS (1.0.0)
   - geolocator_apple (1.2.0):
     - Flutter
@@ -237,7 +233,6 @@ DEPENDENCIES:
   - app_badge_plus (from `Flutter/ephemeral/.symlinks/plugins/app_badge_plus/macos`)
   - assets_audio_player (from `Flutter/ephemeral/.symlinks/plugins/assets_audio_player/macos`)
   - assets_audio_player_web (from `Flutter/ephemeral/.symlinks/plugins/assets_audio_player_web/macos`)
-  - audioplayers_darwin (from `Flutter/ephemeral/.symlinks/plugins/audioplayers_darwin/macos`)
   - cloud_firestore (from `Flutter/ephemeral/.symlinks/plugins/cloud_firestore/macos`)
   - cloud_functions (from `Flutter/ephemeral/.symlinks/plugins/cloud_functions/macos`)
   - device_info_plus (from `Flutter/ephemeral/.symlinks/plugins/device_info_plus/macos`)
@@ -248,7 +243,6 @@ DEPENDENCIES:
   - firebase_messaging (from `Flutter/ephemeral/.symlinks/plugins/firebase_messaging/macos`)
   - firebase_storage (from `Flutter/ephemeral/.symlinks/plugins/firebase_storage/macos`)
   - FirebaseFirestore (from `https://github.com/invertase/firestore-ios-sdk-frameworks.git`, tag `11.13.0`)
-  - flutter_local_notifications (from `Flutter/ephemeral/.symlinks/plugins/flutter_local_notifications/macos`)
   - FlutterMacOS (from `Flutter/ephemeral`)
   - geolocator_apple (from `Flutter/ephemeral/.symlinks/plugins/geolocator_apple/darwin`)
   - google_sign_in_ios (from `Flutter/ephemeral/.symlinks/plugins/google_sign_in_ios/darwin`)
@@ -307,8 +301,6 @@ EXTERNAL SOURCES:
     :path: Flutter/ephemeral/.symlinks/plugins/assets_audio_player/macos
   assets_audio_player_web:
     :path: Flutter/ephemeral/.symlinks/plugins/assets_audio_player_web/macos
-  audioplayers_darwin:
-    :path: Flutter/ephemeral/.symlinks/plugins/audioplayers_darwin/macos
   cloud_firestore:
     :path: Flutter/ephemeral/.symlinks/plugins/cloud_firestore/macos
   cloud_functions:
@@ -330,8 +322,6 @@ EXTERNAL SOURCES:
   FirebaseFirestore:
     :git: https://github.com/invertase/firestore-ios-sdk-frameworks.git
     :tag: 11.13.0
-  flutter_local_notifications:
-    :path: Flutter/ephemeral/.symlinks/plugins/flutter_local_notifications/macos
   FlutterMacOS:
     :path: Flutter/ephemeral
   geolocator_apple:
@@ -376,7 +366,6 @@ SPEC CHECKSUMS:
   AppCheckCore: cc8fd0a3a230ddd401f326489c99990b013f0c4f
   assets_audio_player: 1d253800981ae53f995171cb526faa127af4d0b3
   assets_audio_player_web: 161867630596dc1217cd941e795845e83d355914
-  audioplayers_darwin: 761f2948df701d05b5db603220c384fb55720012
   cloud_firestore: f9c63a7893036af18566495df7d956a204d5ca81
   cloud_functions: 3df4cd145d5f1c070478644fa91837b0698cab8e
   device_info_plus: 4fb280989f669696856f8b129e4a5e3cd6c48f76
@@ -406,7 +395,6 @@ SPEC CHECKSUMS:
   FirebaseMessagingInterop: 63e504b147a7206cfe64cbe2f40c2ddd009945bd
   FirebaseSharedSwift: aca73668bc95e8efccb618e0167eab05d19d3a75
   FirebaseStorage: 2a3e5402a565e06e121308dadfe0626976fd6b45
-  flutter_local_notifications: 7e5a17a1dbc00d83dc10d43c2c4c05f2ceed233c
   FlutterMacOS: d0db08ddef1a9af05a5ec4b724367152bb0500b1
   geolocator_apple: ab36aa0e8b7d7a2d7639b3b4e48308394e8cef5e
   google_sign_in_ios: b48bb9af78576358a168361173155596c845f0b9
@@ -434,6 +422,6 @@ SPEC CHECKSUMS:
   video_player_avfoundation: 2cef49524dd1f16c5300b9cd6efd9611ce03639b
   wakelock_plus: 21ddc249ac4b8d018838dbdabd65c5976c308497
 
-PODFILE CHECKSUM: f3a81b617e43e58a30b42211e8cfe2525929a7b8
+PODFILE CHECKSUM: 0d6dc722383c1857d5664cfd738a8a4ea49e9273
 
 COCOAPODS: 1.16.2

@@ -60,42 +60,6 @@ class _ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget>
     _model.onUpdate();
   }
 
-  void _insertFormat(String before, String after) {
-    final controller = _model.messageTextController;
-    if (controller == null) return;
-
-    final text = controller.text;
-    final selection = controller.selection;
-    final start = selection.start;
-    final end = selection.end;
-
-    if (start < 0) return;
-
-    final selectedText = text.substring(start, end);
-    final newText = text.substring(0, start) +
-        before +
-        selectedText +
-        after +
-        text.substring(end);
-
-    // If text was selected, position cursor after the formatted text
-    // If no text selected, position cursor between the formatting symbols
-    final newCursorPosition = selectedText.isEmpty
-        ? start + before.length // Position between symbols for typing
-        : start +
-            before.length +
-            selectedText.length +
-            after.length; // Position after formatted text
-
-    controller.value = TextEditingValue(
-      text: newText,
-      selection: TextSelection.collapsed(offset: newCursorPosition),
-    );
-
-    safeSetState(() {});
-    _model.messageFocusNode?.requestFocus();
-  }
-
   @override
   void initState() {
     super.initState();
@@ -103,6 +67,7 @@ class _ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget>
 
     _model.messageTextController ??= TextEditingController();
     _model.messageFocusNode ??= FocusNode();
+    _model.scrollController ??= ScrollController();
 
     animationsMap.addAll({
       'containerOnActionTriggerAnimation1': AnimationInfo(
@@ -151,9 +116,137 @@ class _ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget>
 
   @override
   void dispose() {
+    _model.scrollController?.dispose();
     _model.maybeDispose();
 
     super.dispose();
+  }
+
+  void _scrollToMessage(String messageId, List<MessagesRecord> messages) {
+    if (_model.scrollController == null ||
+        !_model.scrollController!.hasClients) {
+      return;
+    }
+
+    // Find the message in the list and scroll to it
+    for (int i = 0; i < messages.length; i++) {
+      final message = messages[i];
+      if (message.reference.id == messageId) {
+        final scrollController = _model.scrollController!;
+
+        // For reversed ListView, calculate the approximate position
+        // Since ListView is reversed, index 0 is at the bottom
+        final targetIndex = i;
+
+        // Calculate approximate scroll position
+        // In reversed ListView: position = maxScrollExtent - (index * estimatedHeight)
+        double estimatedHeight = 0.0;
+        for (int j = 0; j <= targetIndex; j++) {
+          estimatedHeight += _estimateMessageHeight(messages[j]);
+        }
+
+        final maxScrollExtent = scrollController.position.maxScrollExtent;
+        final minScrollExtent = scrollController.position.minScrollExtent;
+
+        // Calculate target position (from bottom in reversed ListView)
+        double targetPosition = maxScrollExtent - estimatedHeight;
+
+        // Add some offset to center the message
+        final viewportHeight = scrollController.position.viewportDimension;
+        targetPosition +=
+            viewportHeight * 0.3; // Show message in upper third of viewport
+
+        // Ensure we don't scroll beyond bounds
+        targetPosition = targetPosition.clamp(minScrollExtent, maxScrollExtent);
+
+        // Smooth scroll to the calculated position
+        scrollController.animateTo(
+          targetPosition,
+          duration: const Duration(milliseconds: 600),
+          curve: Curves.easeInOut,
+        );
+        break;
+      }
+    }
+  }
+
+  Future<void> _updateMessage() async {
+    if (_model.editingMessage == null) return;
+
+    try {
+      _model.isSending = true;
+      safeSetState(() {});
+
+      // Update the existing message directly
+      await _model.editingMessage!.reference.update({
+        'content': _model.messageTextController?.text ?? '',
+        'is_edited': true,
+        'edited_at': FieldValue.serverTimestamp(),
+      });
+
+      // Clear edit mode
+      _model.editingMessage = null;
+      _model.messageTextController?.clear();
+      _model.replyingToMessage = null;
+      safeSetState(() {});
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Failed to update message: $e',
+            style: TextStyle(
+              color: FlutterFlowTheme.of(context).primaryText,
+            ),
+          ),
+          duration: const Duration(milliseconds: 3000),
+          backgroundColor: FlutterFlowTheme.of(context).error,
+        ),
+      );
+    } finally {
+      _model.isSending = false;
+      safeSetState(() {});
+    }
+  }
+
+  void _cancelEdit() {
+    _model.editingMessage = null;
+    _model.messageTextController?.clear();
+    _model.replyingToMessage = null;
+    safeSetState(() {});
+  }
+
+  double _estimateMessageHeight(MessagesRecord message) {
+    // Estimate message height based on content
+    double baseHeight = 60.0; // Base height for message container
+
+    // Add height for text content
+    if (message.content.isNotEmpty) {
+      final textLength = message.content.length;
+      final lines = (textLength / 50).ceil(); // Approximate 50 chars per line
+      baseHeight += lines * 20.0; // 20 pixels per line
+    }
+
+    // Add height for images
+    if (message.images.isNotEmpty) {
+      baseHeight += 200.0; // Approximate height for images
+    }
+
+    // Add height for video
+    if (message.video.isNotEmpty) {
+      baseHeight += 250.0; // Approximate height for video
+    }
+
+    // Add height for audio
+    if (message.audio.isNotEmpty) {
+      baseHeight += 80.0; // Approximate height for audio player
+    }
+
+    // Add height for reply context
+    if (message.replyTo.isNotEmpty) {
+      baseHeight += 60.0; // Height for reply context
+    }
+
+    return baseHeight;
   }
 
   @override
@@ -208,6 +301,7 @@ class _ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget>
                           await actions.closekeyboard();
                         },
                         child: ListView.builder(
+                          controller: _model.scrollController,
                           padding: EdgeInsets.zero,
                           reverse: true,
                           shrinkWrap: true,
@@ -238,6 +332,20 @@ class _ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget>
                                     safeSetState(() {});
                                   },
                                   onMessageLongPress: widget.onMessageLongPress,
+                                  onReplyToMessage: (message) {
+                                    _model.replyingToMessage = message;
+                                    safeSetState(() {});
+                                  },
+                                  onScrollToMessage: (messageId) {
+                                    _scrollToMessage(
+                                        messageId, listViewMessagesRecordList);
+                                  },
+                                  onEditMessage: (message) {
+                                    _model.editingMessage = message;
+                                    _model.messageTextController?.text =
+                                        message.content;
+                                    safeSetState(() {});
+                                  },
                                 ),
                               ),
                             );
@@ -616,6 +724,105 @@ class _ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget>
                                       ),
                                     ),
                                   ),
+                                  if (_model.selectedVideoFile != null)
+                                    Padding(
+                                      padding:
+                                          const EdgeInsetsDirectional.fromSTEB(
+                                              16.0, 0.0, 0.0, 0.0),
+                                      child: Container(
+                                        width: 200.0,
+                                        height: 150.0,
+                                        decoration: BoxDecoration(
+                                          color: FlutterFlowTheme.of(context)
+                                              .secondaryBackground,
+                                          borderRadius:
+                                              BorderRadius.circular(12.0),
+                                        ),
+                                        child: Stack(
+                                          children: [
+                                            ClipRRect(
+                                              borderRadius:
+                                                  BorderRadius.circular(12.0),
+                                              child: SizedBox(
+                                                width: 200.0,
+                                                height: 150.0,
+                                                child: Container(
+                                                  width: 200.0,
+                                                  height: 150.0,
+                                                  color: FlutterFlowTheme.of(
+                                                          context)
+                                                      .primaryBackground,
+                                                  child: Column(
+                                                    mainAxisAlignment:
+                                                        MainAxisAlignment
+                                                            .center,
+                                                    children: [
+                                                      Icon(
+                                                        Icons.videocam,
+                                                        color:
+                                                            FlutterFlowTheme.of(
+                                                                    context)
+                                                                .primary,
+                                                        size: 40,
+                                                      ),
+                                                      const SizedBox(height: 8),
+                                                      Text(
+                                                        'Video Selected',
+                                                        style:
+                                                            FlutterFlowTheme.of(
+                                                                    context)
+                                                                .bodyMedium,
+                                                      ),
+                                                      Text(
+                                                        _model
+                                                            .selectedVideoFile!
+                                                            .storagePath
+                                                            .split('/')
+                                                            .last,
+                                                        style:
+                                                            FlutterFlowTheme.of(
+                                                                    context)
+                                                                .bodySmall,
+                                                        textAlign:
+                                                            TextAlign.center,
+                                                        maxLines: 1,
+                                                        overflow: TextOverflow
+                                                            .ellipsis,
+                                                      ),
+                                                    ],
+                                                  ),
+                                                ),
+                                              ),
+                                            ),
+                                            Positioned(
+                                              top: 8.0,
+                                              right: 8.0,
+                                              child: Container(
+                                                decoration: BoxDecoration(
+                                                  color: Colors.black
+                                                      .withOpacity(0.6),
+                                                  borderRadius:
+                                                      BorderRadius.circular(
+                                                          20.0),
+                                                ),
+                                                child: IconButton(
+                                                  icon: Icon(
+                                                    Icons.close,
+                                                    color: Colors.white,
+                                                    size: 20.0,
+                                                  ),
+                                                  onPressed: () {
+                                                    _model.selectedVideoFile =
+                                                        null;
+                                                    safeSetState(() {});
+                                                  },
+                                                ),
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    ),
                                   if (_model.isSendingImage == true)
                                     Padding(
                                       padding:
@@ -718,44 +925,179 @@ class _ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget>
                                           hasBeenTriggered:
                                               hasContainerTriggered1),
                                     ),
-                                  // Formatting toolbar
-                                  Padding(
-                                    padding:
-                                        const EdgeInsetsDirectional.fromSTEB(
-                                            16.0, 4.0, 16.0, 0.0),
-                                    child: Row(
-                                      children: [
-                                        IconButton(
-                                          icon: const Icon(Icons.format_bold,
-                                              size: 18, color: Colors.black),
-                                          tooltip: 'Bold',
-                                          onPressed: () =>
-                                              _insertFormat('**', '**'),
+                                  // Reply preview section
+                                  if (_model.replyingToMessage != null)
+                                    Container(
+                                      width: double.infinity,
+                                      decoration: BoxDecoration(
+                                        color: FlutterFlowTheme.of(context)
+                                            .primaryBackground,
+                                        borderRadius:
+                                            BorderRadius.circular(8.0),
+                                        border: Border.all(
+                                          color: FlutterFlowTheme.of(context)
+                                              .primary,
+                                          width: 1.0,
                                         ),
-                                        IconButton(
-                                          icon: const Icon(Icons.format_italic,
-                                              size: 18, color: Colors.black),
-                                          tooltip: 'Italic',
-                                          onPressed: () =>
-                                              _insertFormat('*', '*'),
+                                      ),
+                                      child: Padding(
+                                        padding: const EdgeInsetsDirectional
+                                            .fromSTEB(12.0, 8.0, 12.0, 8.0),
+                                        child: Row(
+                                          children: [
+                                            Container(
+                                              width: 3.0,
+                                              height: 40.0,
+                                              decoration: BoxDecoration(
+                                                border: Border(
+                                                  left: BorderSide(
+                                                    color: FlutterFlowTheme.of(
+                                                            context)
+                                                        .primary,
+                                                    width: 4.0,
+                                                  ),
+                                                ),
+                                              ),
+                                            ),
+                                            Expanded(
+                                              child: Column(
+                                                crossAxisAlignment:
+                                                    CrossAxisAlignment.start,
+                                                children: [
+                                                  Text(
+                                                    'Replying to ${_model.replyingToMessage!.senderName}',
+                                                    style: FlutterFlowTheme.of(
+                                                            context)
+                                                        .bodySmall
+                                                        .override(
+                                                          color: FlutterFlowTheme
+                                                                  .of(context)
+                                                              .primary,
+                                                          fontWeight:
+                                                              FontWeight.w600,
+                                                        ),
+                                                  ),
+                                                  const SizedBox(height: 2.0),
+                                                  Text(
+                                                    _model.replyingToMessage!
+                                                        .content,
+                                                    style: FlutterFlowTheme.of(
+                                                            context)
+                                                        .bodySmall
+                                                        .override(
+                                                          color: FlutterFlowTheme
+                                                                  .of(context)
+                                                              .secondaryText,
+                                                        ),
+                                                    maxLines: 2,
+                                                    overflow:
+                                                        TextOverflow.ellipsis,
+                                                  ),
+                                                ],
+                                              ),
+                                            ),
+                                            IconButton(
+                                              icon: Icon(
+                                                Icons.close,
+                                                color:
+                                                    FlutterFlowTheme.of(context)
+                                                        .secondaryText,
+                                                size: 20.0,
+                                              ),
+                                              onPressed: () {
+                                                _model.replyingToMessage = null;
+                                                safeSetState(() {});
+                                              },
+                                            ),
+                                          ],
                                         ),
-                                        IconButton(
-                                          icon: const Icon(Icons.code,
-                                              size: 18, color: Colors.black),
-                                          tooltip: 'Code',
-                                          onPressed: () =>
-                                              _insertFormat('`', '`'),
-                                        ),
-                                        IconButton(
-                                          icon: const Icon(Icons.link,
-                                              size: 18, color: Colors.black),
-                                          tooltip: 'Link',
-                                          onPressed: () =>
-                                              _insertFormat('[', '](url)'),
-                                        ),
-                                      ],
+                                      ),
                                     ),
-                                  ),
+                                  // Edit preview section
+                                  if (_model.editingMessage != null)
+                                    Container(
+                                      width: double.infinity,
+                                      decoration: BoxDecoration(
+                                        color: FlutterFlowTheme.of(context)
+                                            .secondaryBackground,
+                                        borderRadius:
+                                            BorderRadius.circular(8.0),
+                                        border: Border.all(
+                                          color: FlutterFlowTheme.of(context)
+                                              .warning,
+                                          width: 1.0,
+                                        ),
+                                      ),
+                                      child: Padding(
+                                        padding: const EdgeInsetsDirectional
+                                            .fromSTEB(12.0, 8.0, 12.0, 8.0),
+                                        child: Row(
+                                          children: [
+                                            Container(
+                                              width: 3.0,
+                                              height: 40.0,
+                                              decoration: BoxDecoration(
+                                                color:
+                                                    FlutterFlowTheme.of(context)
+                                                        .warning,
+                                                borderRadius:
+                                                    BorderRadius.circular(2.0),
+                                              ),
+                                            ),
+                                            const SizedBox(width: 8.0),
+                                            Expanded(
+                                              child: Column(
+                                                crossAxisAlignment:
+                                                    CrossAxisAlignment.start,
+                                                children: [
+                                                  Text(
+                                                    'Editing message',
+                                                    style: FlutterFlowTheme.of(
+                                                            context)
+                                                        .bodySmall
+                                                        .override(
+                                                          color: FlutterFlowTheme
+                                                                  .of(context)
+                                                              .warning,
+                                                          fontWeight:
+                                                              FontWeight.w600,
+                                                        ),
+                                                  ),
+                                                  const SizedBox(height: 2.0),
+                                                  Text(
+                                                    _model.editingMessage!
+                                                        .content,
+                                                    style: FlutterFlowTheme.of(
+                                                            context)
+                                                        .bodySmall
+                                                        .override(
+                                                          color: FlutterFlowTheme
+                                                                  .of(context)
+                                                              .secondaryText,
+                                                        ),
+                                                    maxLines: 2,
+                                                    overflow:
+                                                        TextOverflow.ellipsis,
+                                                  ),
+                                                ],
+                                              ),
+                                            ),
+                                            IconButton(
+                                              icon: Icon(
+                                                Icons.close,
+                                                color:
+                                                    FlutterFlowTheme.of(context)
+                                                        .secondaryText,
+                                                size: 20.0,
+                                              ),
+                                              onPressed: () {
+                                                _cancelEdit();
+                                              },
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    ),
                                   Align(
                                     alignment:
                                         const AlignmentDirectional(0.0, 0.0),
@@ -995,7 +1337,10 @@ class _ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget>
                                                                 context)
                                                             .primary,
                                                     icon: Icon(
-                                                      Icons.send_rounded,
+                                                      _model.editingMessage !=
+                                                              null
+                                                          ? Icons.save_rounded
+                                                          : Icons.send_rounded,
                                                       color:
                                                           FlutterFlowTheme.of(
                                                                   context)
@@ -1010,12 +1355,15 @@ class _ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget>
                                                                     null ||
                                                                 _model.audiopath ==
                                                                     '') &&
-                                                            (_model
-                                                                        .image ==
-                                                                    null ||
-                                                                _model
-                                                                        .image ==
+                                                            (_model.image == null ||
+                                                                _model.image ==
                                                                     '') &&
+                                                            (_model.videoUrl ==
+                                                                    null ||
+                                                                _model.videoUrl ==
+                                                                    '') &&
+                                                            (_model.selectedVideoFile ==
+                                                                null) &&
                                                             !(_model.images
                                                                 .isNotEmpty) &&
                                                             !(_model.images
@@ -1026,6 +1374,14 @@ class _ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget>
                                                                     ''))
                                                         ? null
                                                         : () async {
+                                                            // Check if we're in edit mode
+                                                            if (_model
+                                                                    .editingMessage !=
+                                                                null) {
+                                                              await _updateMessage();
+                                                              return;
+                                                            }
+
                                                             final firestoreBatch =
                                                                 FirebaseFirestore
                                                                     .instance
@@ -1047,6 +1403,12 @@ class _ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget>
                                                                           null ||
                                                                       _model.audiopath ==
                                                                           '') &&
+                                                                  (_model.videoUrl ==
+                                                                          null ||
+                                                                      _model.videoUrl ==
+                                                                          '') &&
+                                                                  (_model.selectedVideoFile ==
+                                                                      null) &&
                                                                   !(_model
                                                                       .images
                                                                       .isNotEmpty))) {
@@ -1127,7 +1489,9 @@ class _ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget>
                                                                         ...createChatsRecordData(
                                                                           lastMessage: widget.chatReference?.isGroup == true
                                                                               ? '$currentUserDisplayName: ${() {
-                                                                                  if (_model.image != null && _model.image != '') {
+                                                                                  if (_model.videoUrl != null && _model.videoUrl != '') {
+                                                                                    return 'Sent Video';
+                                                                                  } else if (_model.image != null && _model.image != '') {
                                                                                     return 'Sent Image';
                                                                                   } else if (_model.audiopath != null && _model.audiopath != '') {
                                                                                     return 'Sent Voice Message';
@@ -1137,8 +1501,10 @@ class _ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget>
                                                                                     return _model.messageTextController.text;
                                                                                   }
                                                                                 }()}'
-                                                                              : () {
-                                                                                  if (_model.image != null && _model.image != '') {
+                                                                              : '$currentUserDisplayName: ${() {
+                                                                                  if (_model.videoUrl != null && _model.videoUrl != '') {
+                                                                                    return 'Sent Video';
+                                                                                  } else if (_model.image != null && _model.image != '') {
                                                                                     return 'Sent Image';
                                                                                   } else if (_model.audiopath != null && _model.audiopath != '') {
                                                                                     return 'Sent Voice Message';
@@ -1147,14 +1513,22 @@ class _ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget>
                                                                                   } else {
                                                                                     return _model.messageTextController.text;
                                                                                   }
-                                                                                }(),
+                                                                                }()}',
                                                                           lastMessageAt:
                                                                               getCurrentTimestamp,
                                                                           lastMessageSent:
                                                                               currentUserReference,
-                                                                          lastMessageType: _model.image == null || _model.image == ''
-                                                                              ? MessageType.text
-                                                                              : MessageType.image,
+                                                                          lastMessageType:
+                                                                              () {
+                                                                            if (_model.videoUrl != null &&
+                                                                                _model.videoUrl != '') {
+                                                                              return MessageType.video;
+                                                                            } else if (_model.image == null || _model.image == '') {
+                                                                              return MessageType.text;
+                                                                            } else {
+                                                                              return MessageType.image;
+                                                                            }
+                                                                          }(),
                                                                         ),
                                                                         ...mapToFirestore(
                                                                           {
@@ -1163,6 +1537,68 @@ class _ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget>
                                                                           },
                                                                         ),
                                                                       });
+
+                                                                  // Upload video if selected
+                                                                  if (_model
+                                                                          .selectedVideoFile !=
+                                                                      null) {
+                                                                    try {
+                                                                      showUploadMessage(
+                                                                        context,
+                                                                        'Uploading video...',
+                                                                        showLoading:
+                                                                            true,
+                                                                      );
+                                                                      _model.videoUrl =
+                                                                          await uploadData(
+                                                                        _model
+                                                                            .selectedVideoFile!
+                                                                            .storagePath,
+                                                                        _model
+                                                                            .selectedVideoFile!
+                                                                            .bytes,
+                                                                      );
+                                                                      ScaffoldMessenger.of(
+                                                                              context)
+                                                                          .hideCurrentSnackBar();
+
+                                                                      // Update chat timestamp after video upload completes
+                                                                      await widget
+                                                                          .chatReference!
+                                                                          .reference
+                                                                          .update({
+                                                                        'last_message_at':
+                                                                            getCurrentTimestamp,
+                                                                      });
+                                                                    } catch (e) {
+                                                                      ScaffoldMessenger.of(
+                                                                              context)
+                                                                          .hideCurrentSnackBar();
+                                                                      ScaffoldMessenger.of(
+                                                                              context)
+                                                                          .showSnackBar(
+                                                                        SnackBar(
+                                                                          content:
+                                                                              Text(
+                                                                            'Failed to upload video: $e',
+                                                                            style:
+                                                                                TextStyle(
+                                                                              color: FlutterFlowTheme.of(context).primaryText,
+                                                                            ),
+                                                                          ),
+                                                                          duration:
+                                                                              const Duration(milliseconds: 4000),
+                                                                          backgroundColor:
+                                                                              FlutterFlowTheme.of(context).secondary,
+                                                                        ),
+                                                                      );
+                                                                      _model.isSending =
+                                                                          false;
+                                                                      safeSetState(
+                                                                          () {});
+                                                                      return;
+                                                                    }
+                                                                  }
 
                                                                   var messagesRecordReference =
                                                                       MessagesRecord.createDoc(widget
@@ -1180,10 +1616,24 @@ class _ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget>
                                                                               .text,
                                                                           createdAt:
                                                                               getCurrentTimestamp,
+                                                                          replyTo: _model
+                                                                              .replyingToMessage
+                                                                              ?.reference
+                                                                              .id,
+                                                                          replyToContent: _model
+                                                                              .replyingToMessage
+                                                                              ?.content,
+                                                                          replyToSender: _model
+                                                                              .replyingToMessage
+                                                                              ?.senderName,
                                                                           messageType:
                                                                               () {
-                                                                            if (_model.image == null ||
-                                                                                _model.image == '') {
+                                                                            if (_model.videoUrl != null &&
+                                                                                _model.videoUrl != '') {
+                                                                              return MessageType.video;
+                                                                            } else if (_model.selectedVideoFile != null) {
+                                                                              return MessageType.video;
+                                                                            } else if (_model.image == null || _model.image == '') {
                                                                               return MessageType.text;
                                                                             } else if (_model.audiopath != null && _model.audiopath != '') {
                                                                               return MessageType.voice;
@@ -1196,6 +1646,9 @@ class _ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget>
                                                                               : null,
                                                                           audio:
                                                                               _model.audiopath,
+                                                                          video: _model.videoUrl != null && _model.videoUrl != ''
+                                                                              ? _model.videoUrl
+                                                                              : null,
                                                                           attachmentUrl: _model.file != null && _model.file != ''
                                                                               ? _model.file
                                                                               : '',
@@ -1225,6 +1678,16 @@ class _ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget>
                                                                           .text,
                                                                       createdAt:
                                                                           getCurrentTimestamp,
+                                                                      replyTo: _model
+                                                                          .replyingToMessage
+                                                                          ?.reference
+                                                                          .id,
+                                                                      replyToContent: _model
+                                                                          .replyingToMessage
+                                                                          ?.content,
+                                                                      replyToSender: _model
+                                                                          .replyingToMessage
+                                                                          ?.senderName,
                                                                       messageType:
                                                                           () {
                                                                         if (_model.image ==
@@ -1278,7 +1741,7 @@ class _ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget>
                                                                     notificationTitle:
                                                                         'New Message',
                                                                     notificationText:
-                                                                        '$currentUserDisplayName has sent ${widget.chatReference?.lastMessageType?.name}',
+                                                                        '$currentUserDisplayName: ${_model.messageTextController?.text ?? 'sent a message'}',
                                                                     notificationImageUrl: _model.image !=
                                                                                 null &&
                                                                             _model.image !=
@@ -1319,6 +1782,12 @@ class _ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget>
                                                                       null;
                                                                   _model.images =
                                                                       [];
+                                                                  _model.videoUrl =
+                                                                      null;
+                                                                  _model.selectedVideoFile =
+                                                                      null;
+                                                                  _model.replyingToMessage =
+                                                                      null;
                                                                   safeSetState(
                                                                       () {});
                                                                   safeSetState(
@@ -1421,7 +1890,7 @@ class _ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget>
                   ],
                 ),
               ]
-                  .divide(const SizedBox(height: 16.0))
+                  .divide(const SizedBox(height: 2.0))
                   .addToStart(const SizedBox(height: 8.0))
                   .addToEnd(const SizedBox(height: 8.0)),
             ),
@@ -1975,6 +2444,102 @@ class _ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget>
                                             decoration: const BoxDecoration(),
                                             child: Text(
                                               'File',
+                                              style:
+                                                  FlutterFlowTheme.of(context)
+                                                      .bodyMedium
+                                                      .override(
+                                                        font: GoogleFonts.inter(
+                                                          fontWeight:
+                                                              FlutterFlowTheme.of(
+                                                                      context)
+                                                                  .bodyMedium
+                                                                  .fontWeight,
+                                                          fontStyle:
+                                                              FlutterFlowTheme.of(
+                                                                      context)
+                                                                  .bodyMedium
+                                                                  .fontStyle,
+                                                        ),
+                                                        letterSpacing: 0.0,
+                                                        fontWeight:
+                                                            FlutterFlowTheme.of(
+                                                                    context)
+                                                                .bodyMedium
+                                                                .fontWeight,
+                                                        fontStyle:
+                                                            FlutterFlowTheme.of(
+                                                                    context)
+                                                                .bodyMedium
+                                                                .fontStyle,
+                                                      ),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                    Container(
+                                      width: double.infinity,
+                                      height: 1.0,
+                                      decoration: BoxDecoration(
+                                        color: FlutterFlowTheme.of(context)
+                                            .alternate,
+                                      ),
+                                    ),
+                                    InkWell(
+                                      splashColor: Colors.transparent,
+                                      focusColor: Colors.transparent,
+                                      hoverColor: Colors.transparent,
+                                      highlightColor: Colors.transparent,
+                                      onTap: () async {
+                                        _model.isSendingImage = true;
+                                        _model.select = false;
+                                        safeSetState(() {});
+                                        final selectedMedia =
+                                            await selectMediaWithSourceBottomSheet(
+                                          context: context,
+                                          allowPhoto: false,
+                                          allowVideo: true,
+                                        );
+                                        if (selectedMedia != null &&
+                                            selectedMedia.every((m) =>
+                                                validateFileFormat(
+                                                    m.storagePath, context))) {
+                                          // Store the selected video file locally for preview
+                                          _model.selectedVideoFile =
+                                              selectedMedia.first;
+                                          safeSetState(() {});
+                                        }
+                                        _model.isSendingImage = false;
+                                        safeSetState(() {});
+                                      },
+                                      child: Row(
+                                        mainAxisSize: MainAxisSize.max,
+                                        mainAxisAlignment:
+                                            MainAxisAlignment.start,
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.center,
+                                        children: [
+                                          Container(
+                                            width: 30.0,
+                                            decoration: const BoxDecoration(),
+                                            child: Align(
+                                              alignment:
+                                                  const AlignmentDirectional(
+                                                      -1.0, 0.0),
+                                              child: Icon(
+                                                Icons.videocam,
+                                                color:
+                                                    FlutterFlowTheme.of(context)
+                                                        .primary,
+                                                size: 24.0,
+                                              ),
+                                            ),
+                                          ),
+                                          Container(
+                                            width: 50.0,
+                                            decoration: const BoxDecoration(),
+                                            child: Text(
+                                              'Video',
                                               style:
                                                   FlutterFlowTheme.of(context)
                                                       .bodyMedium

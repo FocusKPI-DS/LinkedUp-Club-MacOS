@@ -23,6 +23,7 @@ class DesktopChatModel extends FlutterFlowModel {
 
   // Loading states
   bool isLoading = false;
+  bool isGeneratingSummary = false;
 
   // Tab controller for chat types
   TabController? tabController;

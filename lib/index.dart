@@ -55,3 +55,4 @@ export '/payment_history_page/payment_history_page_widget.dart'
     show PaymentHistoryPageWidget;
 export '/payment_success/payment_success_widget.dart' show PaymentSuccessWidget;
 export '/pages/desktop_chat/desktop_chat_widget.dart' show DesktopChatWidget;
+export '/pages/ai_assistant/ai_assistant_widget.dart' show AIAssistantWidget;

@@ -20,6 +20,7 @@ import 'dart:async';
 import 'package:image_picker/image_picker.dart';
 import 'package:qr_code_tools/qr_code_tools.dart';
 import '/custom_code/actions/index.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 
 class QRScanWidget extends StatefulWidget {
   const QRScanWidget({
@@ -54,9 +55,9 @@ class _QRScanWidgetState extends State<QRScanWidget> {
   @override
   void reassemble() {
     super.reassemble();
-    if (Platform.isAndroid) {
+    if (!kIsWeb && Platform.isAndroid) {
       controller?.pauseCamera();
-    } else if (Platform.isIOS) {
+    } else if (!kIsWeb && Platform.isIOS) {
       controller?.resumeCamera();
     }
   }

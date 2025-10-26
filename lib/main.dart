@@ -21,11 +21,11 @@ import '/pages/mobile_settings/mobile_settings_widget.dart';
 import '/main/home/home_widget.dart';
 // import '/pages/chat/chat/chat_widget.dart'; // Commented out - using MobileChat (now called Chat) instead
 import '/pages/mobile_chat/mobile_chat_widget.dart';
+import '/pages/desktop_chat/desktop_chat_widget.dart';
 import 'auth/firebase_auth/firebase_user_provider.dart';
 import 'auth/firebase_auth/auth_util.dart';
 import 'backend/backend.dart';
 import 'pages/desktop_chat/chat_controller.dart';
-import 'backend/push_notifications/push_notifications_util.dart';
 import 'backend/firebase/firebase_config.dart';
 import 'flutter_flow/flutter_flow_util.dart';
 import 'flutter_flow/nav/nav.dart';
@@ -37,6 +37,7 @@ import 'package:branchio_dynamic_linking_akp5u6/custom_code/actions/index.dart'
 import 'package:branchio_dynamic_linking_akp5u6/library_values.dart'
     as branchio_dynamic_linking_akp5u6_library_values;
 import 'package:linkedup/backend/schema/structs/index.dart';
+import 'package:linkedup/custom_code/services/web_notification_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -45,7 +46,7 @@ void main() async {
     GoRouter.optionURLReflectsImperativeAPIs = true;
 
     // Configure image picker for macOS
-    if (Platform.isMacOS) {
+    if (!kIsWeb && Platform.isMacOS) {
       ImagePickerPlatform.instance = ImagePickerMacOS();
     }
 
@@ -57,6 +58,11 @@ void main() async {
     // Initialize Firebase first
     await initFirebase();
 
+    // Initialize web notifications (only when tab is open)
+    if (kIsWeb) {
+      await WebNotificationService.instance.initialize();
+    }
+
     // Initialize push notifications asynchronously (non-blocking)
     _initializePushNotificationsAsync();
 
@@ -65,7 +71,7 @@ void main() async {
     await appState.initializePersistedState();
 
     // Initialize RevenueCat with error handling (disabled on macOS for App Store review)
-    if (!Platform.isMacOS) {
+    if (!kIsWeb && !Platform.isMacOS) {
       try {
         await revenue_cat.initialize(
           "appl_gYrKTEbjDTBkjDuoTAZxGQtSKMW",
@@ -156,8 +162,14 @@ void _initializePushNotificationsAsync() async {
         criticalAlert: false,
       );
 
+      print(
+          '🔔 Push notification authorization status: ${settings.authorizationStatus}');
+
       if (settings.authorizationStatus == AuthorizationStatus.authorized ||
           settings.authorizationStatus == AuthorizationStatus.provisional) {
+        print(
+            '✅ Notifications authorized! Setting foreground presentation options...');
+
         // Show system banners while app is in foreground
         await FirebaseMessaging.instance
             .setForegroundNotificationPresentationOptions(
@@ -166,12 +178,19 @@ void _initializePushNotificationsAsync() async {
           sound: true,
         );
 
-        // Get FCM token with smart retry for APNS token
-        await _getFCMTokenWithRetry(messaging);
+        print('✅ Foreground notification presentation options set!');
+
+        // ❌ REMOVED: Don't interfere with APNS registration
+        // The fcmTokenUserStream (line 298) and ensureFcmToken() handle this properly
+        // await _getFCMTokenWithRetry(messaging);
 
         // Listen for foreground messages
         FirebaseMessaging.onMessage.listen((RemoteMessage message) {
-          // Foreground message received
+          print('🔔 FOREGROUND NOTIFICATION RECEIVED!');
+          print('   Title: ${message.notification?.title}');
+          print('   Body: ${message.notification?.body}');
+          print('   Data: ${message.data}');
+          // Note: With setForegroundNotificationPresentationOptions, system will show notification
         });
 
         // Listen for notification taps
@@ -181,50 +200,59 @@ void _initializePushNotificationsAsync() async {
 
         // Listen for token refresh
         FirebaseMessaging.instance.onTokenRefresh.listen((newToken) {
-          // FCM token refreshed
+          print('🔄 FCM token refreshed: ${newToken.substring(0, 10)}...');
         });
+      } else {
+        print(
+            '❌ Notifications NOT authorized! Status: ${settings.authorizationStatus}');
       }
     } catch (e) {
-      // Push notification setup failed
+      print('❌ Push notification setup failed: $e');
+      print('   Stack trace: ${StackTrace.current}');
     }
   }
 }
 
-/// Get FCM token with simple retry (only 2 attempts)
-Future<void> _getFCMTokenWithRetry(FirebaseMessaging messaging) async {
-  try {
-    // Try immediately first
-    String? apnsToken = await messaging.getAPNSToken();
-    if (apnsToken != null) {
-      await _getFCMTokenWhenReady(messaging);
-      return;
-    }
-
-    // Wait 5 seconds and try once more
-    Timer(Duration(seconds: 5), () async {
-      try {
-        String? apnsToken = await messaging.getAPNSToken();
-        if (apnsToken != null) {
-          await _getFCMTokenWhenReady(messaging);
-        }
-      } catch (e) {
-        // Error on second attempt
-      }
-    });
-  } catch (e) {
-    // Error in FCM token setup
-  }
-}
-
-/// Get FCM token when APNS is ready
-Future<void> _getFCMTokenWhenReady(FirebaseMessaging messaging) async {
-  try {
-    await messaging.getToken();
-    // FCM token obtained or null
-  } catch (e) {
-    // Error getting FCM token
-  }
-}
+// ❌ DISABLED: These functions were interfering with APNS registration on macOS
+// The proper token registration happens via:
+// 1. fcmTokenUserStream (line 298) - automatic stream-based registration
+// 2. ensureFcmToken() called from home/discover pages - manual registration
+//
+// /// Get FCM token with simple retry (only 2 attempts)
+// Future<void> _getFCMTokenWithRetry(FirebaseMessaging messaging) async {
+//   try {
+//     // Try immediately first
+//     String? apnsToken = await messaging.getAPNSToken();
+//     if (apnsToken != null) {
+//       await _getFCMTokenWhenReady(messaging);
+//       return;
+//     }
+//
+//     // Wait 5 seconds and try once more
+//     Timer(Duration(seconds: 5), () async {
+//       try {
+//         String? apnsToken = await messaging.getAPNSToken();
+//         if (apnsToken != null) {
+//           await _getFCMTokenWhenReady(messaging);
+//         }
+//       } catch (e) {
+//         // Error on second attempt
+//       }
+//     });
+//   } catch (e) {
+//     // Error in FCM token setup
+//   }
+// }
+//
+// /// Get FCM token when APNS is ready
+// Future<void> _getFCMTokenWhenReady(FirebaseMessaging messaging) async {
+//   try {
+//     await messaging.getToken();
+//     // FCM token obtained or null
+//   } catch (e) {
+//     // Error getting FCM token
+//   }
+// }
 
 class MyApp extends StatefulWidget {
   const MyApp({super.key});
@@ -247,8 +275,8 @@ class MyAppScrollBehavior extends MaterialScrollBehavior {
 
   @override
   ScrollPhysics getScrollPhysics(BuildContext context) {
-    // Use platform-appropriate scroll physics
-    if (Platform.isMacOS) {
+    // Use desktop-appropriate scroll physics for web and macOS
+    if (kIsWeb || (!kIsWeb && Platform.isMacOS)) {
       return const BouncingScrollPhysics();
     }
     return super.getScrollPhysics(context);
@@ -257,8 +285,8 @@ class MyAppScrollBehavior extends MaterialScrollBehavior {
   @override
   Widget buildScrollbar(
       BuildContext context, Widget child, ScrollableDetails details) {
-    // Use platform-appropriate scrollbars
-    if (Platform.isMacOS) {
+    // Use desktop-appropriate scrollbars for web and macOS
+    if (kIsWeb || (!kIsWeb && Platform.isMacOS)) {
       return Scrollbar(
         controller: details.controller,
         child: child,
@@ -290,11 +318,13 @@ class _MyAppState extends State<MyApp> {
 
   final authUserSub = authenticatedUserStream.listen((user) {
     // RevenueCat disabled on macOS for App Store compliance
-    if (!Platform.isMacOS) {
+    if (!kIsWeb && !Platform.isMacOS) {
       revenue_cat.login(user?.uid);
     }
   });
-  final fcmTokenSub = fcmTokenUserStream.listen((_) {});
+  // ❌ DISABLED: Causes race condition with ensureFcmToken() called from home/discover
+  // The manual ensureFcmToken() in home_widget.dart (line 71) handles token registration
+  // final fcmTokenSub = fcmTokenUserStream.listen((_) {});
 
   @override
   void initState() {
@@ -317,7 +347,7 @@ class _MyAppState extends State<MyApp> {
   @override
   void dispose() {
     authUserSub.cancel();
-    fcmTokenSub.cancel();
+    // fcmTokenSub.cancel(); // Commented out since fcmTokenSub is disabled
     super.dispose();
   }
 
@@ -355,7 +385,7 @@ class _MyAppState extends State<MyApp> {
   Widget build(BuildContext context) {
     return MaterialApp.router(
       debugShowCheckedModeBanner: false,
-      title: 'Linkedup',
+      title: 'Lona',
       scrollBehavior: MyAppScrollBehavior(),
       localizationsDelegates: const [
         GlobalMaterialLocalizations.delegate,
@@ -366,8 +396,7 @@ class _MyAppState extends State<MyApp> {
       theme: ThemeData(
         brightness: Brightness.light,
         useMaterial3: false,
-        // Add macOS-specific configurations
-        platform: TargetPlatform.macOS,
+        // Use platform-appropriate configurations
         visualDensity: VisualDensity.adaptivePlatformDensity,
         colorScheme: ColorScheme.fromSeed(
           seedColor: Colors.blue,
@@ -377,7 +406,6 @@ class _MyAppState extends State<MyApp> {
       darkTheme: ThemeData(
         brightness: Brightness.dark,
         useMaterial3: false,
-        platform: TargetPlatform.macOS,
         visualDensity: VisualDensity.adaptivePlatformDensity,
         colorScheme: ColorScheme.fromSeed(
           seedColor: Colors.blue,
@@ -419,6 +447,15 @@ class _NavBarPageState extends State<NavBarPage> {
     _currentPage = widget.page;
   }
 
+  void _setCurrentPageName(String pageName, Map<String, Widget> tabs) {
+    // Ensure the page name exists in tabs, fallback to 'Home' if not
+    if (tabs.containsKey(pageName)) {
+      _currentPageName = pageName;
+    } else {
+      _currentPageName = 'Home';
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final tabs = {
@@ -431,12 +468,13 @@ class _NavBarPageState extends State<NavBarPage> {
           });
         },
       ),
-      // 'AIAssistant': const AIAssistantWidget(), // Commented out - using MobileAssistant instead
-      'MobileAssistant': const MobileAssistantWidget(),
+      'DesktopChat': const DesktopChatWidget(), // Desktop chat for macOS
+      'AIAssistant': const AIAssistantWidget(),
+      'MobileAssistant': const MobileAssistantWidget(), // Mobile AI Assistant
       // 'Discover': const DiscoverWidget(), // Commented out since Home serves the same purpose
       'Announcements': const FeedWidget(),
       // 'Settings': const ProfileWidget(),
-      // 'ProfileSettings': const ProfileSettingsWidget(), // Commented out - using MobileSettings instead
+      'ProfileSettings': const ProfileSettingsWidget(),
       'MobileSettings': const MobileSettingsWidget(),
     };
 
@@ -444,28 +482,31 @@ class _NavBarPageState extends State<NavBarPage> {
     final navItemToIndex = {
       'Home': 0,
       // 'Chat': 1, // Commented out - using MobileChat instead
-      'MobileChat': 1, // Chat (renamed from Mobile Chat)
-      // 'AIAssistant': 2, // Commented out - using MobileAssistant instead
-      'MobileAssistant': 2, // LinkAI
+      'MobileChat': 1, // Chat (renamed from Mobile Chat) - for iOS
+      'DesktopChat': 1, // Desktop Chat - for macOS
+      'AIAssistant': 2, // Desktop AI Assistant
+      'MobileAssistant': 2, // Mobile AI Assistant - for iOS
       // 'Discover': 3, // Commented out
       'Announcements': 3, // Updated indices
-      // 'ProfileSettings': 4, // Commented out - using MobileSettings instead
+      'ProfileSettings': 4, // Settings
       'MobileSettings': 4, // Mobile Settings
     };
 
     final currentIndex = navItemToIndex[_currentPageName] ?? 0;
 
     // Platform-specific layout
-    if (Platform.isIOS) {
+    // Web and macOS use desktop layout with vertical sidebar
+    // iOS uses mobile layout with bottom navigation
+    if (!kIsWeb && Platform.isIOS) {
       return Scaffold(
         resizeToAvoidBottomInset: !widget.disableResizeToAvoidBottomInset,
-        body: _currentPage ?? tabs[_currentPageName]!,
+        body: _currentPage ?? tabs[_currentPageName] ?? tabs['Home']!,
         bottomNavigationBar: _isChatOpen
             ? null
             : _buildHorizontalNavBar(tabs, currentIndex, navItemToIndex),
       );
     } else {
-      // macOS - Keep existing vertical layout
+      // Web and macOS - Use desktop layout with vertical sidebar
       return Scaffold(
         resizeToAvoidBottomInset: !widget.disableResizeToAvoidBottomInset,
         body: Row(
@@ -474,7 +515,7 @@ class _NavBarPageState extends State<NavBarPage> {
             _buildVerticalNavBar(tabs, currentIndex, navItemToIndex),
             // Main Content Area
             Expanded(
-              child: _currentPage ?? tabs[_currentPageName]!,
+              child: _currentPage ?? tabs[_currentPageName] ?? tabs['Home']!,
             ),
           ],
         ),
@@ -494,25 +535,25 @@ class _NavBarPageState extends State<NavBarPage> {
       //   'icon': Icons.chat_rounded,
       //   'label': 'Chat',
       //   'page': 'Chat',
-      // }, // Commented out - using MobileChat (now called Chat) instead
+      // }, // Commented out - using DesktopChat for macOS and web
       {
         'icon': Icons.chat_bubble_outline_rounded,
         'label': 'Chat',
-        'page': 'MobileChat',
+        'page': 'DesktopChat', // Desktop chat for macOS and web
       },
       {
-        'icon': Icons.smart_toy_rounded,
-        'label': 'AI Assistant',
+        'icon': 'assets/images/67b27b2cda06e9c69e5d000615c1153f80b09576.png',
+        'label': 'LonaAI',
         'page': 'AIAssistant',
       },
       {
         'icon': Icons.campaign_rounded,
-        'label': 'Announcements',
+        'label': 'News',
         'page': 'Announcements',
       },
       {
         'icon': Icons.settings_outlined,
-        'label': 'Mobile Settings',
+        'label': 'Settings',
         'page': 'MobileSettings',
       },
     ];
@@ -924,7 +965,7 @@ class _NavBarPageState extends State<NavBarPage> {
                     child: InkWell(
                       onTap: () => safeSetState(() {
                         _currentPage = null;
-                        _currentPageName = item['page'] as String;
+                        _setCurrentPageName(item['page'] as String, tabs);
                       }),
                       borderRadius: BorderRadius.circular(12),
                       child: Container(
@@ -945,21 +986,32 @@ class _NavBarPageState extends State<NavBarPage> {
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
                             // Icon
-                            item['icon'] is IconData
-                                ? Icon(
-                                    item['icon'] as IconData,
-                                    color: isSelected
-                                        ? Colors.white
-                                        : Color(0xFFD1D5DB),
-                                    size: 24,
+                            item['icon'] is String
+                                ? Container(
+                                    width: 24,
+                                    height: 24,
+                                    child: Image.asset(
+                                      item['icon'] as String,
+                                      width: 24,
+                                      height: 24,
+                                      fit: BoxFit.contain,
+                                    ),
                                   )
-                                : FaIcon(
-                                    item['icon'] as IconData,
-                                    color: isSelected
-                                        ? Colors.white
-                                        : Color(0xFFD1D5DB),
-                                    size: 20,
-                                  ),
+                                : item['icon'] is IconData
+                                    ? Icon(
+                                        item['icon'] as IconData,
+                                        color: isSelected
+                                            ? Colors.white
+                                            : Color(0xFFD1D5DB),
+                                        size: 24,
+                                      )
+                                    : FaIcon(
+                                        item['icon'] as IconData,
+                                        color: isSelected
+                                            ? Colors.white
+                                            : Color(0xFFD1D5DB),
+                                        size: 20,
+                                      ),
                             SizedBox(height: 4),
                             // Label
                             Text(
@@ -1061,30 +1113,25 @@ class _NavBarPageState extends State<NavBarPage> {
         'label': 'Chat',
         'page': 'MobileChat',
       },
-      // {
-      //   'icon': Icons.smart_toy_rounded,
-      //   'label': 'AI Assistant',
-      //   'page': 'AIAssistant',
-      // }, // Commented out - using MobileAssistant instead
       {
         'icon': 'assets/images/67b27b2cda06e9c69e5d000615c1153f80b09576.png',
-        'label': 'LinkAI',
+        'label': 'LonaAI',
         'page': 'MobileAssistant',
       },
       {
         'icon': Icons.campaign_rounded,
-        'label': 'Announcements',
+        'label': 'News',
         'page': 'Announcements',
       },
       {
         'icon': Icons.settings_outlined,
-        'label': 'Mobile Settings',
+        'label': 'Settings',
         'page': 'MobileSettings',
       },
     ];
 
     return Container(
-      height: 80,
+      height: 76,
       decoration: BoxDecoration(
         color: Color(0xFF2D3142),
         border: Border(
@@ -1108,11 +1155,11 @@ class _NavBarPageState extends State<NavBarPage> {
                   child: InkWell(
                     onTap: () => safeSetState(() {
                       _currentPage = null;
-                      _currentPageName = item['page'] as String;
+                      _setCurrentPageName(item['page'] as String, tabs);
                     }),
                     borderRadius: BorderRadius.circular(8),
                     child: Container(
-                      height: 60,
+                      height: 56,
                       decoration: BoxDecoration(
                         color:
                             isSelected ? Color(0xFF1F2937) : Colors.transparent,
@@ -1126,14 +1173,11 @@ class _NavBarPageState extends State<NavBarPage> {
                               ? Container(
                                   width: 24,
                                   height: 24,
-                                  child: ClipRRect(
-                                    borderRadius: BorderRadius.circular(4),
-                                    child: Image.asset(
-                                      item['icon'] as String,
-                                      width: 24,
-                                      height: 24,
-                                      fit: BoxFit.cover,
-                                    ),
+                                  child: Image.asset(
+                                    item['icon'] as String,
+                                    width: 24,
+                                    height: 24,
+                                    fit: BoxFit.contain,
                                   ),
                                 )
                               : item['icon'] is IconData

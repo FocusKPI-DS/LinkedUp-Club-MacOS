@@ -156,7 +156,7 @@ class _MobileAssistantWidgetState extends State<MobileAssistantWidget> {
           .add({
         'sender_type': 'ai',
         'content':
-            'Hello! I\'m LinkAI, your community helper. Ask me about events, rules, or anything else!',
+            'Hello! I\'m LonaAI, your community helper. Ask me about events, rules, or anything else!',
         'created_at': FieldValue.serverTimestamp(),
         'message_type': 'text',
         'ai_context': {
@@ -173,7 +173,7 @@ class _MobileAssistantWidgetState extends State<MobileAssistantWidget> {
           .doc(_currentConversationId)
           .update({
         'last_message':
-            'Hello! I\'m LinkAI, your community helper. Ask me about events, rules, or anything else!',
+            'Hello! I\'m LonaAI, your community helper. Ask me about events, rules, or anything else!',
         'last_message_at': FieldValue.serverTimestamp(),
         'message_count': FieldValue.increment(1),
         'updated_at': FieldValue.serverTimestamp(),
@@ -372,7 +372,7 @@ class _MobileAssistantWidgetState extends State<MobileAssistantWidget> {
             ),
           ),
           SizedBox(width: 12),
-          // LinkAI Logo
+          // LonaAI Logo
           ClipRRect(
             borderRadius: BorderRadius.circular(20),
             child: Image.asset(
@@ -389,7 +389,7 @@ class _MobileAssistantWidgetState extends State<MobileAssistantWidget> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'LinkAI',
+                  'LonaAI',
                   style: TextStyle(
                     fontFamily: 'System',
                     fontSize: 20,
@@ -438,7 +438,7 @@ class _MobileAssistantWidgetState extends State<MobileAssistantWidget> {
             ),
             SizedBox(height: 8),
             Text(
-              'Start chatting with LinkAI below',
+              'Start chatting with LonaAI below',
               style: TextStyle(
                 fontFamily: 'System',
                 fontSize: 14,
@@ -784,7 +784,7 @@ class _MobileAssistantWidgetState extends State<MobileAssistantWidget> {
                 enabled: !_isLoading,
                 decoration: InputDecoration(
                   hintText:
-                      _isLoading ? 'AI is thinking...' : 'Message LinkAI...',
+                      _isLoading ? 'AI is thinking...' : 'Message LonaAI...',
                   hintStyle: TextStyle(
                     fontFamily: 'System',
                     color: Color(0xFF8E8E93),
@@ -895,7 +895,7 @@ class _MobileAssistantWidgetState extends State<MobileAssistantWidget> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        'LinkAI',
+                        'LonaAI',
                         style: TextStyle(
                           fontFamily: 'System',
                           fontSize: 18,
@@ -904,7 +904,7 @@ class _MobileAssistantWidgetState extends State<MobileAssistantWidget> {
                         ),
                       ),
                       Text(
-                        'LinkAI',
+                        'LonaAI',
                         style: TextStyle(
                           fontFamily: 'System',
                           fontSize: 14,
@@ -1031,7 +1031,7 @@ class _MobileAssistantWidgetState extends State<MobileAssistantWidget> {
                         ),
                         SizedBox(height: 8),
                         Text(
-                          'Start chatting with LinkAI!',
+                          'Start chatting with LonaAI!',
                           style: TextStyle(
                             fontFamily: 'System',
                             fontSize: 14,

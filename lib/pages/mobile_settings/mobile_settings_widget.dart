@@ -4,6 +4,9 @@ import '/flutter_flow/flutter_flow_util.dart';
 import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/services.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:firebase_storage/firebase_storage.dart';
+import 'dart:io';
 import 'dart:math';
 
 class MobileSettingsWidget extends StatefulWidget {
@@ -26,7 +29,6 @@ class _MobileSettingsWidgetState extends State<MobileSettingsWidget> {
 
   // State variables
   String _selectedSetting = '';
-  bool _isEditingProfile = false;
   bool _isCreatingWorkspace = false;
   bool _isDeletingWorkspace = false;
   bool _isJoiningWorkspace = false;
@@ -191,33 +193,31 @@ class _MobileSettingsWidgetState extends State<MobileSettingsWidget> {
       child: Column(
         children: [
           // Profile Picture
-          Stack(
-            children: [
-              CircleAvatar(
-                radius: 50,
-                backgroundColor: Color(0xFFF2F2F7),
-                child: currentUserPhoto.isNotEmpty
-                    ? ClipOval(
-                        child: CachedNetworkImage(
-                          imageUrl: currentUserPhoto,
-                          width: 100,
-                          height: 100,
-                          fit: BoxFit.cover,
+          GestureDetector(
+            onTap: _showPhotoOptions,
+            child: Stack(
+              children: [
+                CircleAvatar(
+                  radius: 50,
+                  backgroundColor: Color(0xFFF2F2F7),
+                  child: currentUserPhoto.isNotEmpty
+                      ? ClipOval(
+                          child: CachedNetworkImage(
+                            imageUrl: currentUserPhoto,
+                            width: 100,
+                            height: 100,
+                            fit: BoxFit.cover,
+                          ),
+                        )
+                      : Icon(
+                          Icons.person,
+                          size: 50,
+                          color: Color(0xFF8E8E93),
                         ),
-                      )
-                    : Icon(
-                        Icons.person,
-                        size: 50,
-                        color: Color(0xFF8E8E93),
-                      ),
-              ),
-              Positioned(
-                bottom: 0,
-                right: 0,
-                child: GestureDetector(
-                  onTap: () {
-                    // TODO: Implement photo upload
-                  },
+                ),
+                Positioned(
+                  bottom: 0,
+                  right: 0,
                   child: Container(
                     width: 32,
                     height: 32,
@@ -233,8 +233,8 @@ class _MobileSettingsWidgetState extends State<MobileSettingsWidget> {
                     ),
                   ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
           SizedBox(height: 16),
           // User Name
@@ -554,10 +554,25 @@ class _MobileSettingsWidgetState extends State<MobileSettingsWidget> {
               ),
             ),
             TextButton(
-              onPressed: () {
+              onPressed: () async {
                 Navigator.of(context).pop();
-                // TODO: Implement logout functionality
-                // auth.signOut();
+                // Implement logout functionality
+                try {
+                  await authManager.signOut();
+                  if (context.mounted) {
+                    context.goNamedAuth('Welcome', context.mounted);
+                  }
+                } catch (e) {
+                  // Show error message if logout fails
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text('Failed to log out: $e'),
+                        backgroundColor: Colors.red,
+                      ),
+                    );
+                  }
+                }
               },
               child: Text(
                 'Log Out',
@@ -695,33 +710,31 @@ class _MobileSettingsWidgetState extends State<MobileSettingsWidget> {
                 Center(
                   child: Column(
                     children: [
-                      Stack(
-                        children: [
-                          CircleAvatar(
-                            radius: 50,
-                            backgroundColor: Color(0xFFF2F2F7),
-                            child: currentUserPhoto.isNotEmpty
-                                ? ClipOval(
-                                    child: CachedNetworkImage(
-                                      imageUrl: currentUserPhoto,
-                                      width: 100,
-                                      height: 100,
-                                      fit: BoxFit.cover,
+                      GestureDetector(
+                        onTap: _showPhotoOptions,
+                        child: Stack(
+                          children: [
+                            CircleAvatar(
+                              radius: 50,
+                              backgroundColor: Color(0xFFF2F2F7),
+                              child: currentUserPhoto.isNotEmpty
+                                  ? ClipOval(
+                                      child: CachedNetworkImage(
+                                        imageUrl: currentUserPhoto,
+                                        width: 100,
+                                        height: 100,
+                                        fit: BoxFit.cover,
+                                      ),
+                                    )
+                                  : Icon(
+                                      Icons.person,
+                                      size: 50,
+                                      color: Color(0xFF8E8E93),
                                     ),
-                                  )
-                                : Icon(
-                                    Icons.person,
-                                    size: 50,
-                                    color: Color(0xFF8E8E93),
-                                  ),
-                          ),
-                          Positioned(
-                            bottom: 0,
-                            right: 0,
-                            child: GestureDetector(
-                              onTap: () {
-                                // TODO: Implement photo upload
-                              },
+                            ),
+                            Positioned(
+                              bottom: 0,
+                              right: 0,
                               child: Container(
                                 width: 32,
                                 height: 32,
@@ -738,8 +751,8 @@ class _MobileSettingsWidgetState extends State<MobileSettingsWidget> {
                                 ),
                               ),
                             ),
-                          ),
-                        ],
+                          ],
+                        ),
                       ),
                       SizedBox(height: 16),
                       Text(
@@ -759,6 +772,7 @@ class _MobileSettingsWidgetState extends State<MobileSettingsWidget> {
                   label: 'Display Name',
                   controller: _displayNameController,
                   icon: Icons.person_outline,
+                  onChanged: (value) => _autoSaveProfile(),
                 ),
                 SizedBox(height: 16),
                 _buildFormField(
@@ -772,37 +786,9 @@ class _MobileSettingsWidgetState extends State<MobileSettingsWidget> {
                   label: 'Location',
                   controller: _locationController,
                   icon: Icons.location_on_outlined,
+                  onChanged: (value) => _autoSaveProfile(),
                 ),
                 SizedBox(height: 32),
-                // Save Button
-                SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton(
-                    onPressed: _isEditingProfile
-                        ? _saveProfile
-                        : () {
-                            setState(() {
-                              _isEditingProfile = true;
-                            });
-                          },
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Color(0xFF007AFF),
-                      foregroundColor: Colors.white,
-                      padding: EdgeInsets.symmetric(vertical: 16),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                    ),
-                    child: Text(
-                      _isEditingProfile ? 'Save Changes' : 'Edit Profile',
-                      style: TextStyle(
-                        fontFamily: 'System',
-                        fontSize: 16,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ),
-                ),
               ],
             ),
           ),
@@ -816,6 +802,7 @@ class _MobileSettingsWidgetState extends State<MobileSettingsWidget> {
     required TextEditingController controller,
     required IconData icon,
     bool enabled = true,
+    Function(String)? onChanged,
   }) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -839,6 +826,7 @@ class _MobileSettingsWidgetState extends State<MobileSettingsWidget> {
           child: TextField(
             controller: controller,
             enabled: enabled,
+            onChanged: onChanged,
             decoration: InputDecoration(
               prefixIcon: Icon(icon, color: Color(0xFF8E8E93), size: 20),
               border: InputBorder.none,
@@ -854,6 +842,272 @@ class _MobileSettingsWidgetState extends State<MobileSettingsWidget> {
         ),
       ],
     );
+  }
+
+  Future<void> _showPhotoOptions() async {
+    showModalBottomSheet(
+      context: context,
+      builder: (BuildContext context) {
+        return Container(
+          padding: EdgeInsets.all(20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                'Profile Photo',
+                style: TextStyle(
+                  fontFamily: 'System',
+                  fontSize: 18,
+                  fontWeight: FontWeight.w600,
+                  color: Color(0xFF1D1D1F),
+                ),
+              ),
+              SizedBox(height: 20),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                children: [
+                  _buildPhotoOption(
+                    icon: Icons.camera_alt,
+                    label: 'Take Photo',
+                    onTap: () {
+                      Navigator.pop(context);
+                      _pickImage(ImageSource.camera);
+                    },
+                  ),
+                  _buildPhotoOption(
+                    icon: Icons.photo_library,
+                    label: 'Choose from Gallery',
+                    onTap: () {
+                      Navigator.pop(context);
+                      _pickImage(ImageSource.gallery);
+                    },
+                  ),
+                  if (currentUserPhoto.isNotEmpty)
+                    _buildPhotoOption(
+                      icon: Icons.delete,
+                      label: 'Remove Photo',
+                      onTap: () {
+                        Navigator.pop(context);
+                        _deletePhoto();
+                      },
+                      isDestructive: true,
+                    ),
+                ],
+              ),
+              SizedBox(height: 20),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildPhotoOption({
+    required IconData icon,
+    required String label,
+    required VoidCallback onTap,
+    bool isDestructive = false,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: isDestructive
+              ? Color(0xFFFF3B30).withOpacity(0.1)
+              : Color(0xFF007AFF).withOpacity(0.1),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: isDestructive ? Color(0xFFFF3B30) : Color(0xFF007AFF),
+            width: 1,
+          ),
+        ),
+        child: Column(
+          children: [
+            Icon(
+              icon,
+              color: isDestructive ? Color(0xFFFF3B30) : Color(0xFF007AFF),
+              size: 24,
+            ),
+            SizedBox(height: 8),
+            Text(
+              label,
+              style: TextStyle(
+                fontFamily: 'System',
+                fontSize: 12,
+                fontWeight: FontWeight.w500,
+                color: isDestructive ? Color(0xFFFF3B30) : Color(0xFF007AFF),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _pickImage(ImageSource source) async {
+    try {
+      final ImagePicker picker = ImagePicker();
+      final XFile? image = await picker.pickImage(
+        source: source,
+        maxWidth: 1024,
+        maxHeight: 1024,
+        imageQuality: 85,
+      );
+
+      if (image != null) {
+        await _uploadPhoto(image);
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error picking image: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
+  Future<void> _uploadPhoto(XFile imageFile) async {
+    try {
+      // Show loading indicator
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => Center(
+          child: CircularProgressIndicator(),
+        ),
+      );
+
+      // Upload to Firebase Storage
+      final String fileName =
+          'profile_photos/${currentUserReference!.id}_${DateTime.now().millisecondsSinceEpoch}.jpg';
+      final Reference ref = FirebaseStorage.instance.ref().child(fileName);
+
+      await ref.putFile(File(imageFile.path));
+      final String downloadUrl = await ref.getDownloadURL();
+
+      // Update user document with new photo URL
+      await currentUserReference!.update({
+        'photo_url': downloadUrl,
+      });
+
+      Navigator.pop(context); // Close loading dialog
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Profile photo updated successfully'),
+          backgroundColor: Color(0xFF34C759),
+        ),
+      );
+    } catch (e) {
+      Navigator.pop(context); // Close loading dialog
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error uploading photo: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
+  Future<void> _deletePhoto() async {
+    try {
+      // Show confirmation dialog
+      bool? confirmed = await showDialog<bool>(
+        context: context,
+        builder: (BuildContext context) {
+          return AlertDialog(
+            title: Text(
+              'Remove Profile Photo',
+              style: TextStyle(
+                fontFamily: 'System',
+                fontSize: 18,
+                fontWeight: FontWeight.w600,
+                color: Color(0xFF1D1D1F),
+              ),
+            ),
+            content: Text(
+              'Are you sure you want to remove your profile photo?',
+              style: TextStyle(
+                fontFamily: 'System',
+                fontSize: 14,
+                color: Color(0xFF8E8E93),
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context, false),
+                child: Text(
+                  'Cancel',
+                  style: TextStyle(
+                    fontFamily: 'System',
+                    fontSize: 16,
+                    color: Color(0xFF8E8E93),
+                  ),
+                ),
+              ),
+              TextButton(
+                onPressed: () => Navigator.pop(context, true),
+                child: Text(
+                  'Remove',
+                  style: TextStyle(
+                    fontFamily: 'System',
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                    color: Color(0xFFFF3B30),
+                  ),
+                ),
+              ),
+            ],
+          );
+        },
+      );
+
+      if (confirmed == true) {
+        // Update user document to remove photo URL
+        await currentUserReference!.update({
+          'photo_url': '',
+        });
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Profile photo removed successfully'),
+            backgroundColor: Color(0xFF34C759),
+          ),
+        );
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error removing photo: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
+  Future<void> _autoSaveProfile() async {
+    try {
+      // Debounce the save operation to avoid too many API calls
+      await Future.delayed(Duration(milliseconds: 500));
+
+      final currentUser = currentUserReference;
+      if (currentUser == null) return;
+
+      await currentUser.update({
+        'display_name': _displayNameController.text.trim(),
+        'location': _locationController.text.trim(),
+      });
+    } catch (e) {
+      // Show error feedback
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Failed to update profile: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
   }
 
   Widget _buildWorkspaceManagementContent() {
@@ -1027,19 +1281,45 @@ class _MobileSettingsWidgetState extends State<MobileSettingsWidget> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Header with Create Workspace Button
+                // Header with Create and Join Buttons
                 Row(
                   children: [
-                    Text(
-                      'Workspace Management',
-                      style: TextStyle(
-                        fontFamily: 'System',
-                        fontSize: 20,
-                        fontWeight: FontWeight.w600,
-                        color: Color(0xFF1D1D1F),
+                    Spacer(),
+                    GestureDetector(
+                      onTap: () {
+                        setState(() {
+                          _isJoiningWorkspace = true;
+                        });
+                      },
+                      child: Container(
+                        padding:
+                            EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(8),
+                          border:
+                              Border.all(color: Color(0xFF007AFF), width: 1),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(Icons.group_add,
+                                color: Color(0xFF007AFF), size: 16),
+                            SizedBox(width: 4),
+                            Text(
+                              'Join',
+                              style: TextStyle(
+                                fontFamily: 'System',
+                                fontSize: 14,
+                                fontWeight: FontWeight.w600,
+                                color: Color(0xFF007AFF),
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
                     ),
-                    Spacer(),
+                    SizedBox(width: 8),
                     GestureDetector(
                       onTap: () {
                         setState(() {
@@ -1050,13 +1330,21 @@ class _MobileSettingsWidgetState extends State<MobileSettingsWidget> {
                         padding:
                             EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                         decoration: BoxDecoration(
-                          color: Color(0xFF007AFF),
+                          gradient: LinearGradient(
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                            colors: [
+                              Color(0xFF007AFF),
+                              Color(0xFF0056CC),
+                            ],
+                          ),
                           borderRadius: BorderRadius.circular(8),
                         ),
                         child: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            Icon(Icons.add, color: Colors.white, size: 16),
+                            Icon(Icons.add_rounded,
+                                color: Colors.white, size: 16),
                             SizedBox(width: 4),
                             Text(
                               'Create',
@@ -1114,100 +1402,7 @@ class _MobileSettingsWidgetState extends State<MobileSettingsWidget> {
 
                 SizedBox(height: 16),
 
-                // All Workspaces Section
-                Row(
-                  children: [
-                    Text(
-                      'All Workspaces',
-                      style: TextStyle(
-                        fontFamily: 'System',
-                        fontSize: 18,
-                        fontWeight: FontWeight.w600,
-                        color: Color(0xFF1D1D1F),
-                      ),
-                    ),
-                    Spacer(),
-                    GestureDetector(
-                      onTap: () {
-                        setState(() {
-                          _isJoiningWorkspace = true;
-                        });
-                      },
-                      child: Container(
-                        padding:
-                            EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                        decoration: BoxDecoration(
-                          color: Color(0xFF007AFF),
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(Icons.group_add,
-                                color: Colors.white, size: 16),
-                            SizedBox(width: 4),
-                            Text(
-                              'Join',
-                              style: TextStyle(
-                                fontFamily: 'System',
-                                fontSize: 14,
-                                fontWeight: FontWeight.w600,
-                                color: Colors.white,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
                 SizedBox(height: 16),
-
-                // List of all workspaces user belongs to
-                StreamBuilder<List<WorkspaceMembersRecord>>(
-                  stream: queryWorkspaceMembersRecord(
-                    queryBuilder: (workspaceMembersRecord) =>
-                        workspaceMembersRecord.where('user_ref',
-                            isEqualTo: currentUserReference),
-                  ),
-                  builder: (context, allWorkspacesSnapshot) {
-                    if (!allWorkspacesSnapshot.hasData) {
-                      return Center(child: CircularProgressIndicator());
-                    }
-
-                    final workspaceMembers = allWorkspacesSnapshot.data!;
-                    if (workspaceMembers.isEmpty) {
-                      return _buildNoWorkspacesFound();
-                    }
-
-                    return Column(
-                      children: workspaceMembers.map((member) {
-                        if (member.workspaceRef == null) {
-                          return SizedBox.shrink();
-                        }
-
-                        return StreamBuilder<WorkspacesRecord>(
-                          stream: WorkspacesRecord.getDocument(
-                              member.workspaceRef!),
-                          builder: (context, workspaceSnapshot) {
-                            if (!workspaceSnapshot.hasData) {
-                              return SizedBox.shrink();
-                            }
-
-                            final workspace = workspaceSnapshot.data!;
-                            final isCurrentWorkspace =
-                                currentUserReference != null &&
-                                    currentUserReference!.id ==
-                                        workspace.reference.id;
-
-                            return _buildWorkspaceListItem(
-                                workspace, member, isCurrentWorkspace);
-                          },
-                        );
-                      }).toList(),
-                    );
-                  },
-                ),
 
                 SizedBox(height: 16),
 
@@ -1457,6 +1652,98 @@ class _MobileSettingsWidgetState extends State<MobileSettingsWidget> {
                   ],
                 ),
               ),
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  // Delete (bin) icon
+                  IconButton(
+                    onPressed: () {
+                      setState(() {
+                        _isDeletingWorkspace = true;
+                      });
+                    },
+                    icon: Icon(
+                      Icons.delete_outline,
+                      color: Colors.red,
+                      size: 20,
+                    ),
+                    tooltip: 'Delete Workspace',
+                  ),
+                  SizedBox(width: 4),
+                  // Dropdown menu
+                  StreamBuilder<List<WorkspaceMembersRecord>>(
+                    stream: queryWorkspaceMembersRecord(
+                      queryBuilder: (workspaceMembersRecord) =>
+                          workspaceMembersRecord.where('user_ref',
+                              isEqualTo: currentUserReference),
+                    ),
+                    builder: (context, workspaceMembersSnapshot) {
+                      // Always show the dropdown icon, no loading state
+                      final workspaceMembers =
+                          workspaceMembersSnapshot.data ?? [];
+                      final otherWorkspaces = workspaceMembers
+                          .where((member) =>
+                              member.workspaceRef?.id != workspace.reference.id)
+                          .toList();
+
+                      return PopupMenuButton<String>(
+                        icon: Icon(
+                          Icons.keyboard_arrow_down,
+                          color: Color(0xFF8E8E93),
+                          size: 20,
+                        ),
+                        onSelected: (String workspaceId) async {
+                          if (workspaceId != workspace.reference.id) {
+                            await _switchWorkspace(workspaceId);
+                          }
+                        },
+                        itemBuilder: (BuildContext context) {
+                          List<PopupMenuEntry<String>> items = [
+                            PopupMenuItem<String>(
+                              value: workspace.reference.id,
+                              child: _buildWorkspaceMenuItem(
+                                workspace: workspace,
+                                isCurrent: true,
+                              ),
+                            ),
+                          ];
+
+                          if (otherWorkspaces.isNotEmpty) {
+                            items.add(PopupMenuDivider());
+                            items.addAll(otherWorkspaces.map((member) {
+                              return PopupMenuItem<String>(
+                                value: member.workspaceRef!.id,
+                                child: StreamBuilder<WorkspacesRecord>(
+                                  stream: WorkspacesRecord.getDocument(
+                                      member.workspaceRef!),
+                                  builder: (context, workspaceSnapshot) {
+                                    if (!workspaceSnapshot.hasData) {
+                                      return SizedBox.shrink();
+                                    }
+
+                                    final otherWorkspace =
+                                        workspaceSnapshot.data!;
+                                    // Filter out deleted/inactive workspaces
+                                    if (!otherWorkspace.isActive) {
+                                      return SizedBox.shrink();
+                                    }
+                                    return _buildWorkspaceMenuItem(
+                                      workspace: otherWorkspace,
+                                      isCurrent: false,
+                                    );
+                                  },
+                                ),
+                              );
+                            }).toList());
+                          }
+
+                          return items;
+                        },
+                      );
+                    },
+                  ),
+                ],
+              ),
             ],
           ),
           SizedBox(height: 16),
@@ -1469,45 +1756,61 @@ class _MobileSettingsWidgetState extends State<MobileSettingsWidget> {
                   },
                   style: OutlinedButton.styleFrom(
                     foregroundColor: Color(0xFF007AFF),
-                    side: BorderSide(color: Color(0xFF007AFF)),
-                    padding: EdgeInsets.symmetric(vertical: 12),
+                    side: BorderSide(color: Color(0xFF007AFF), width: 1),
+                    padding: EdgeInsets.symmetric(vertical: 14),
                     shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8),
+                      borderRadius: BorderRadius.circular(12),
                     ),
+                    backgroundColor: Colors.white,
                   ),
-                  child: Text(
-                    'Invite Members',
-                    style: TextStyle(
-                      fontFamily: 'System',
-                      fontSize: 14,
-                      fontWeight: FontWeight.w500,
-                    ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.copy, size: 16),
+                      SizedBox(width: 6),
+                      Text(
+                        'Copy Invite Code',
+                        style: TextStyle(
+                          fontFamily: 'System',
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                          letterSpacing: 0.2,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ),
               SizedBox(width: 12),
               Expanded(
-                child: ElevatedButton(
+                child: OutlinedButton(
                   onPressed: () {
-                    setState(() {
-                      _isDeletingWorkspace = true;
-                    });
+                    _showEmailInviteDialog();
                   },
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Color(0xFFFF3B30),
-                    foregroundColor: Colors.white,
-                    padding: EdgeInsets.symmetric(vertical: 12),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: Color(0xFF007AFF),
+                    side: BorderSide(color: Color(0xFF007AFF), width: 1),
+                    padding: EdgeInsets.symmetric(vertical: 14),
                     shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8),
+                      borderRadius: BorderRadius.circular(12),
                     ),
+                    backgroundColor: Colors.white,
                   ),
-                  child: Text(
-                    'Delete',
-                    style: TextStyle(
-                      fontFamily: 'System',
-                      fontSize: 14,
-                      fontWeight: FontWeight.w500,
-                    ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.email_outlined, size: 16),
+                      SizedBox(width: 6),
+                      Text(
+                        'Email Invite',
+                        style: TextStyle(
+                          fontFamily: 'System',
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                          letterSpacing: 0.2,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ),
@@ -2926,26 +3229,6 @@ class _MobileSettingsWidgetState extends State<MobileSettingsWidget> {
   }
 
   // Action Methods
-  Future<void> _saveProfile() async {
-    try {
-      await currentUserReference!.update({
-        'display_name': _displayNameController.text.trim(),
-        'location': _locationController.text.trim(),
-      });
-
-      setState(() {
-        _isEditingProfile = false;
-      });
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Profile updated successfully')),
-      );
-    } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error updating profile: $e')),
-      );
-    }
-  }
 
   Future<void> _createWorkspace() async {
     if (_workspaceNameController.text.isEmpty) {
@@ -3350,6 +3633,248 @@ class _MobileSettingsWidgetState extends State<MobileSettingsWidget> {
           SnackBar(content: Text('Error removing member: $e')),
         );
       }
+    }
+  }
+
+  Widget _buildWorkspaceMenuItem({
+    required WorkspacesRecord workspace,
+    required bool isCurrent,
+  }) {
+    return Row(
+      children: [
+        Container(
+          width: 24,
+          height: 24,
+          decoration: BoxDecoration(
+            color: isCurrent ? Color(0xFF007AFF) : Color(0xFF8E8E93),
+            borderRadius: BorderRadius.circular(4),
+          ),
+          child: workspace.logoUrl.isNotEmpty
+              ? ClipRRect(
+                  borderRadius: BorderRadius.circular(4),
+                  child: CachedNetworkImage(
+                    imageUrl: workspace.logoUrl,
+                    width: 24,
+                    height: 24,
+                    fit: BoxFit.cover,
+                    placeholder: (context, url) => Center(
+                      child: Text(
+                        workspace.name.isNotEmpty
+                            ? workspace.name[0].toUpperCase()
+                            : 'W',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 12,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                    errorWidget: (context, url, error) => Center(
+                      child: Text(
+                        workspace.name.isNotEmpty
+                            ? workspace.name[0].toUpperCase()
+                            : 'W',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 12,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                  ),
+                )
+              : Center(
+                  child: Text(
+                    workspace.name.isNotEmpty
+                        ? workspace.name[0].toUpperCase()
+                        : 'W',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 12,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+        ),
+        SizedBox(width: 8),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                workspace.name,
+                style: TextStyle(
+                  fontFamily: 'System',
+                  fontSize: 14,
+                  fontWeight: isCurrent ? FontWeight.w600 : FontWeight.w500,
+                  color: Color(0xFF1D1D1F),
+                ),
+              ),
+              if (isCurrent)
+                Text(
+                  'Current',
+                  style: TextStyle(
+                    fontFamily: 'System',
+                    fontSize: 12,
+                    color: Color(0xFF007AFF),
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Future<void> _switchWorkspace(String workspaceId) async {
+    try {
+      // Update the current user's workspace reference
+      await currentUserReference!.update({
+        'current_workspace_ref':
+            FirebaseFirestore.instance.doc('workspaces/$workspaceId'),
+      });
+
+      // Show success message
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Workspace switched successfully'),
+          backgroundColor: Color(0xFF34C759),
+        ),
+      );
+
+      // Refresh the UI
+      setState(() {});
+    } catch (e) {
+      // Show error message
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Failed to switch workspace: $e'),
+          backgroundColor: Color(0xFFFF3B30),
+        ),
+      );
+    }
+  }
+
+  void _showEmailInviteDialog() {
+    final emailController = TextEditingController();
+
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: Text(
+            'Email Invite',
+            style: TextStyle(
+              fontFamily: 'System',
+              fontSize: 18,
+              fontWeight: FontWeight.w600,
+              color: Color(0xFF1D1D1F),
+            ),
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Enter the email address of the person you want to invite to this workspace:',
+                style: TextStyle(
+                  fontFamily: 'System',
+                  fontSize: 14,
+                  color: Color(0xFF8E8E93),
+                ),
+              ),
+              SizedBox(height: 16),
+              TextField(
+                controller: emailController,
+                decoration: InputDecoration(
+                  labelText: 'Email Address',
+                  hintText: 'user@example.com',
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  prefixIcon: Icon(Icons.email_outlined),
+                ),
+                keyboardType: TextInputType.emailAddress,
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: Text(
+                'Cancel',
+                style: TextStyle(
+                  fontFamily: 'System',
+                  fontSize: 16,
+                  color: Color(0xFF8E8E93),
+                ),
+              ),
+            ),
+            ElevatedButton(
+              onPressed: () async {
+                if (emailController.text.isNotEmpty &&
+                    emailController.text.contains('@')) {
+                  Navigator.pop(context);
+                  await _sendEmailInvite(emailController.text);
+                } else {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text('Please enter a valid email address'),
+                      backgroundColor: Colors.red,
+                    ),
+                  );
+                }
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Color(0xFF007AFF),
+                foregroundColor: Colors.white,
+              ),
+              child: Text(
+                'Send Invite',
+                style: TextStyle(
+                  fontFamily: 'System',
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Future<void> _sendEmailInvite(String email) async {
+    try {
+      // Show loading indicator
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => Center(
+          child: CircularProgressIndicator(),
+        ),
+      );
+
+      // TODO: Implement actual email invitation logic
+      await Future.delayed(Duration(seconds: 2)); // Simulate API call
+
+      Navigator.pop(context); // Close loading dialog
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Invitation sent to $email'),
+          backgroundColor: Color(0xFF34C759),
+        ),
+      );
+    } catch (e) {
+      Navigator.pop(context); // Close loading dialog
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error sending invitation: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
     }
   }
 }

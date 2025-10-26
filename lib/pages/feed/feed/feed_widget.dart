@@ -154,7 +154,7 @@ class _FeedWidgetState extends State<FeedWidget> {
                 ),
                 0.0),
             child: Text(
-              'Announcements',
+              'News',
               style: FlutterFlowTheme.of(context).headlineLarge.override(
                     font: GoogleFonts.inter(
                       fontWeight: FontWeight.w600,

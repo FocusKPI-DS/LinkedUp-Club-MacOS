@@ -187,6 +187,10 @@ class _ChatWidgetState extends State<ChatWidget> with TickerProviderStateMixin {
               'members',
               arrayContains: currentUserReference,
             )
+            .where(
+              'workspace_ref',
+              isEqualTo: currentUserDocument?.currentWorkspaceRef,
+            )
             .orderBy('last_message_at', descending: true),
       ),
       builder: (context, snapshot) {
@@ -435,10 +439,10 @@ class _ChatWidgetState extends State<ChatWidget> with TickerProviderStateMixin {
                                                         padding:
                                                             const EdgeInsetsDirectional
                                                                 .fromSTEB(
-                                                                    16.0,
-                                                                    12.0,
-                                                                    16.0,
-                                                                    12.0),
+                                                                16.0,
+                                                                12.0,
+                                                                16.0,
+                                                                12.0),
                                                         child: Row(
                                                           mainAxisSize:
                                                               MainAxisSize.max,
@@ -464,7 +468,8 @@ class _ChatWidgetState extends State<ChatWidget> with TickerProviderStateMixin {
                                                                     shape: BoxShape
                                                                         .circle,
                                                                   ),
-                                                                  child: const Align(
+                                                                  child:
+                                                                      const Align(
                                                                     alignment:
                                                                         AlignmentDirectional(
                                                                             0.0,
@@ -506,8 +511,10 @@ class _ChatWidgetState extends State<ChatWidget> with TickerProviderStateMixin {
                                                                             .fontStyle,
                                                                       ),
                                                                 ),
-                                                              ].divide(const SizedBox(
-                                                                  width: 12.0)),
+                                                              ].divide(
+                                                                  const SizedBox(
+                                                                      width:
+                                                                          12.0)),
                                                             ),
                                                             const Icon(
                                                               Icons
@@ -529,11 +536,8 @@ class _ChatWidgetState extends State<ChatWidget> with TickerProviderStateMixin {
                                                     Padding(
                                                       padding:
                                                           const EdgeInsetsDirectional
-                                                              .fromSTEB(
-                                                                  18.0,
-                                                                  0.0,
-                                                                  18.0,
-                                                                  0.0),
+                                                              .fromSTEB(18.0,
+                                                              0.0, 18.0, 0.0),
                                                       child: Column(
                                                         mainAxisSize:
                                                             MainAxisSize.max,
@@ -551,10 +555,10 @@ class _ChatWidgetState extends State<ChatWidget> with TickerProviderStateMixin {
                                                               padding:
                                                                   const EdgeInsetsDirectional
                                                                       .fromSTEB(
-                                                                          0.0,
-                                                                          12.0,
-                                                                          0.0,
-                                                                          12.0),
+                                                                      0.0,
+                                                                      12.0,
+                                                                      0.0,
+                                                                      12.0),
                                                               child: Text(
                                                                 'Pinned',
                                                                 style: FlutterFlowTheme.of(
@@ -799,6 +803,12 @@ class _ChatWidgetState extends State<ChatWidget> with TickerProviderStateMixin {
                                                                                                           if (allChatPinItem.lastMessageType == MessageType.image)
                                                                                                             const Icon(
                                                                                                               Icons.image,
+                                                                                                              color: Color(0xFF6B7280),
+                                                                                                              size: 12.0,
+                                                                                                            ),
+                                                                                                          if (allChatPinItem.lastMessageType == MessageType.video)
+                                                                                                            const Icon(
+                                                                                                              Icons.videocam,
                                                                                                               color: Color(0xFF6B7280),
                                                                                                               size: 12.0,
                                                                                                             ),
@@ -1047,6 +1057,12 @@ class _ChatWidgetState extends State<ChatWidget> with TickerProviderStateMixin {
                                                                                                       color: Color(0xFF6B7280),
                                                                                                       size: 18.0,
                                                                                                     ),
+                                                                                                  if (allChatPinItem.lastMessageType == MessageType.video)
+                                                                                                    const Icon(
+                                                                                                      Icons.videocam,
+                                                                                                      color: Color(0xFF6B7280),
+                                                                                                      size: 18.0,
+                                                                                                    ),
                                                                                                   Text(
                                                                                                     valueOrDefault<String>(
                                                                                                       allChatPinItem.lastMessage,
@@ -1175,11 +1191,8 @@ class _ChatWidgetState extends State<ChatWidget> with TickerProviderStateMixin {
                                                     Padding(
                                                       padding:
                                                           const EdgeInsetsDirectional
-                                                              .fromSTEB(
-                                                                  18.0,
-                                                                  0.0,
-                                                                  18.0,
-                                                                  0.0),
+                                                              .fromSTEB(18.0,
+                                                              0.0, 18.0, 0.0),
                                                       child: Column(
                                                         mainAxisSize:
                                                             MainAxisSize.max,
@@ -1197,10 +1210,10 @@ class _ChatWidgetState extends State<ChatWidget> with TickerProviderStateMixin {
                                                               padding:
                                                                   const EdgeInsetsDirectional
                                                                       .fromSTEB(
-                                                                          0.0,
-                                                                          12.0,
-                                                                          0.0,
-                                                                          12.0),
+                                                                      0.0,
+                                                                      12.0,
+                                                                      0.0,
+                                                                      12.0),
                                                               child: Text(
                                                                 'Recent',
                                                                 style: FlutterFlowTheme.of(
@@ -1446,6 +1459,12 @@ class _ChatWidgetState extends State<ChatWidget> with TickerProviderStateMixin {
                                                                                                           if (allChatAllItem.lastMessageType == MessageType.image)
                                                                                                             const Icon(
                                                                                                               Icons.image,
+                                                                                                              color: Color(0xFF6B7280),
+                                                                                                              size: 12.0,
+                                                                                                            ),
+                                                                                                          if (allChatAllItem.lastMessageType == MessageType.video)
+                                                                                                            const Icon(
+                                                                                                              Icons.videocam,
                                                                                                               color: Color(0xFF6B7280),
                                                                                                               size: 12.0,
                                                                                                             ),
@@ -1695,6 +1714,12 @@ class _ChatWidgetState extends State<ChatWidget> with TickerProviderStateMixin {
                                                                                                       color: Color(0xFF6B7280),
                                                                                                       size: 18.0,
                                                                                                     ),
+                                                                                                  if (allChatAllItem.lastMessageType == MessageType.video)
+                                                                                                    const Icon(
+                                                                                                      Icons.videocam,
+                                                                                                      color: Color(0xFF6B7280),
+                                                                                                      size: 18.0,
+                                                                                                    ),
                                                                                                   Text(
                                                                                                     valueOrDefault<String>(
                                                                                                       allChatAllItem.lastMessage,
@@ -1823,8 +1848,9 @@ class _ChatWidgetState extends State<ChatWidget> with TickerProviderStateMixin {
                                             mainAxisSize: MainAxisSize.max,
                                             children: [
                                               Padding(
-                                                padding: const EdgeInsetsDirectional
-                                                    .fromSTEB(
+                                                padding:
+                                                    const EdgeInsetsDirectional
+                                                        .fromSTEB(
                                                         18.0, 0.0, 18.0, 0.0),
                                                 child: Column(
                                                   mainAxisSize:
@@ -1843,10 +1869,10 @@ class _ChatWidgetState extends State<ChatWidget> with TickerProviderStateMixin {
                                                         padding:
                                                             const EdgeInsetsDirectional
                                                                 .fromSTEB(
-                                                                    0.0,
-                                                                    12.0,
-                                                                    0.0,
-                                                                    12.0),
+                                                                0.0,
+                                                                12.0,
+                                                                0.0,
+                                                                12.0),
                                                         child: Text(
                                                           'Pinned',
                                                           style: FlutterFlowTheme
@@ -2049,7 +2075,8 @@ class _ChatWidgetState extends State<ChatWidget> with TickerProviderStateMixin {
                                                                       ),
                                                                       child:
                                                                           Padding(
-                                                                        padding: const EdgeInsetsDirectional.fromSTEB(
+                                                                        padding: const EdgeInsetsDirectional
+                                                                            .fromSTEB(
                                                                             12.0,
                                                                             12.0,
                                                                             12.0,
@@ -2150,6 +2177,12 @@ class _ChatWidgetState extends State<ChatWidget> with TickerProviderStateMixin {
                                                                                               if (chatVarItem.lastMessageType == MessageType.image)
                                                                                                 const Icon(
                                                                                                   Icons.image,
+                                                                                                  color: Color(0xFF6B7280),
+                                                                                                  size: 12.0,
+                                                                                                ),
+                                                                                              if (chatVarItem.lastMessageType == MessageType.video)
+                                                                                                const Icon(
+                                                                                                  Icons.videocam,
                                                                                                   color: Color(0xFF6B7280),
                                                                                                   size: 12.0,
                                                                                                 ),
@@ -2276,8 +2309,9 @@ class _ChatWidgetState extends State<ChatWidget> with TickerProviderStateMixin {
                                                 ),
                                               ),
                                               Padding(
-                                                padding: const EdgeInsetsDirectional
-                                                    .fromSTEB(
+                                                padding:
+                                                    const EdgeInsetsDirectional
+                                                        .fromSTEB(
                                                         18.0, 0.0, 18.0, 0.0),
                                                 child: Column(
                                                   mainAxisSize:
@@ -2298,10 +2332,10 @@ class _ChatWidgetState extends State<ChatWidget> with TickerProviderStateMixin {
                                                           padding:
                                                               const EdgeInsetsDirectional
                                                                   .fromSTEB(
-                                                                      0.0,
-                                                                      12.0,
-                                                                      0.0,
-                                                                      12.0),
+                                                                  0.0,
+                                                                  12.0,
+                                                                  0.0,
+                                                                  12.0),
                                                           child: Text(
                                                             'Friends',
                                                             style: FlutterFlowTheme
@@ -2591,6 +2625,12 @@ class _ChatWidgetState extends State<ChatWidget> with TickerProviderStateMixin {
                                                                                                       color: Color(0xFF6B7280),
                                                                                                       size: 12.0,
                                                                                                     ),
+                                                                                                  if (chatVarItem.lastMessageType == MessageType.video)
+                                                                                                    const Icon(
+                                                                                                      Icons.videocam,
+                                                                                                      color: Color(0xFF6B7280),
+                                                                                                      size: 12.0,
+                                                                                                    ),
                                                                                                   Text(
                                                                                                     chatVarItem.lastMessage == ''
                                                                                                         ? 'Let\'s start a chat!'
@@ -2728,10 +2768,10 @@ class _ChatWidgetState extends State<ChatWidget> with TickerProviderStateMixin {
                                                           padding:
                                                               const EdgeInsetsDirectional
                                                                   .fromSTEB(
-                                                                      12.0,
-                                                                      12.0,
-                                                                      12.0,
-                                                                      12.0),
+                                                                  12.0,
+                                                                  12.0,
+                                                                  12.0,
+                                                                  12.0),
                                                           child: Row(
                                                             mainAxisSize:
                                                                 MainAxisSize
@@ -2837,9 +2877,10 @@ class _ChatWidgetState extends State<ChatWidget> with TickerProviderStateMixin {
                                                                         height:
                                                                             4.0)),
                                                                   ),
-                                                                ].divide(const SizedBox(
-                                                                    width:
-                                                                        12.0)),
+                                                                ].divide(
+                                                                    const SizedBox(
+                                                                        width:
+                                                                            12.0)),
                                                               ),
                                                               const Icon(
                                                                 Icons.push_pin,
@@ -2865,8 +2906,9 @@ class _ChatWidgetState extends State<ChatWidget> with TickerProviderStateMixin {
                                             mainAxisSize: MainAxisSize.max,
                                             children: [
                                               Padding(
-                                                padding: const EdgeInsetsDirectional
-                                                    .fromSTEB(
+                                                padding:
+                                                    const EdgeInsetsDirectional
+                                                        .fromSTEB(
                                                         18.0, 0.0, 18.0, 0.0),
                                                 child: Column(
                                                   mainAxisSize:
@@ -2884,10 +2926,10 @@ class _ChatWidgetState extends State<ChatWidget> with TickerProviderStateMixin {
                                                         padding:
                                                             const EdgeInsetsDirectional
                                                                 .fromSTEB(
-                                                                    0.0,
-                                                                    12.0,
-                                                                    0.0,
-                                                                    12.0),
+                                                                0.0,
+                                                                12.0,
+                                                                0.0,
+                                                                12.0),
                                                         child: Text(
                                                           'Pinned',
                                                           style: FlutterFlowTheme
@@ -3053,10 +3095,10 @@ class _ChatWidgetState extends State<ChatWidget> with TickerProviderStateMixin {
                                                                       Padding(
                                                                     padding: const EdgeInsetsDirectional
                                                                         .fromSTEB(
-                                                                            12.0,
-                                                                            12.0,
-                                                                            12.0,
-                                                                            12.0),
+                                                                        12.0,
+                                                                        12.0,
+                                                                        12.0,
+                                                                        12.0),
                                                                     child: Row(
                                                                       mainAxisSize:
                                                                           MainAxisSize
@@ -3138,6 +3180,12 @@ class _ChatWidgetState extends State<ChatWidget> with TickerProviderStateMixin {
                                                                                       if (chatVarItem.lastMessageType == MessageType.image)
                                                                                         const Icon(
                                                                                           Icons.image,
+                                                                                          color: Color(0xFF6B7280),
+                                                                                          size: 18.0,
+                                                                                        ),
+                                                                                      if (chatVarItem.lastMessageType == MessageType.video)
+                                                                                        const Icon(
+                                                                                          Icons.videocam,
                                                                                           color: Color(0xFF6B7280),
                                                                                           size: 18.0,
                                                                                         ),
@@ -3245,9 +3293,10 @@ class _ChatWidgetState extends State<ChatWidget> with TickerProviderStateMixin {
                                                                     duration:
                                                                         600.0
                                                                             .ms,
-                                                                    begin: const Offset(
-                                                                        0.0,
-                                                                        30.0),
+                                                                    begin:
+                                                                        const Offset(
+                                                                            0.0,
+                                                                            30.0),
                                                                     end: const Offset(
                                                                         0.0,
                                                                         0.0),
@@ -3263,8 +3312,9 @@ class _ChatWidgetState extends State<ChatWidget> with TickerProviderStateMixin {
                                                 ),
                                               ),
                                               Padding(
-                                                padding: const EdgeInsetsDirectional
-                                                    .fromSTEB(
+                                                padding:
+                                                    const EdgeInsetsDirectional
+                                                        .fromSTEB(
                                                         18.0, 0.0, 18.0, 0.0),
                                                 child: Column(
                                                   mainAxisSize:
@@ -3285,10 +3335,10 @@ class _ChatWidgetState extends State<ChatWidget> with TickerProviderStateMixin {
                                                           padding:
                                                               const EdgeInsetsDirectional
                                                                   .fromSTEB(
-                                                                      0.0,
-                                                                      12.0,
-                                                                      0.0,
-                                                                      12.0),
+                                                                  0.0,
+                                                                  12.0,
+                                                                  0.0,
+                                                                  12.0),
                                                           child: Text(
                                                             'Group',
                                                             style: FlutterFlowTheme
@@ -3450,7 +3500,8 @@ class _ChatWidgetState extends State<ChatWidget> with TickerProviderStateMixin {
                                                                       ),
                                                                       child:
                                                                           Padding(
-                                                                        padding: const EdgeInsetsDirectional.fromSTEB(
+                                                                        padding: const EdgeInsetsDirectional
+                                                                            .fromSTEB(
                                                                             12.0,
                                                                             12.0,
                                                                             12.0,
@@ -3669,10 +3720,10 @@ class _ChatWidgetState extends State<ChatWidget> with TickerProviderStateMixin {
                                                           padding:
                                                               const EdgeInsetsDirectional
                                                                   .fromSTEB(
-                                                                      12.0,
-                                                                      12.0,
-                                                                      12.0,
-                                                                      12.0),
+                                                                  12.0,
+                                                                  12.0,
+                                                                  12.0,
+                                                                  12.0),
                                                           child: Row(
                                                             mainAxisSize:
                                                                 MainAxisSize
@@ -3778,9 +3829,10 @@ class _ChatWidgetState extends State<ChatWidget> with TickerProviderStateMixin {
                                                                         height:
                                                                             4.0)),
                                                                   ),
-                                                                ].divide(const SizedBox(
-                                                                    width:
-                                                                        12.0)),
+                                                                ].divide(
+                                                                    const SizedBox(
+                                                                        width:
+                                                                            12.0)),
                                                               ),
                                                               const Icon(
                                                                 Icons.push_pin,

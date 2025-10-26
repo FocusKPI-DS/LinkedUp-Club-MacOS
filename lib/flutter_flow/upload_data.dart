@@ -4,7 +4,7 @@ import 'dart:io';
 import 'package:blurhash_dart/blurhash_dart.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/foundation.dart';
+import 'package:flutter/foundation.dart' show kIsWeb, compute;
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:image_picker/image_picker.dart';
@@ -39,24 +39,25 @@ Future<List<SelectedFile>?> selectMediaWithSourceBottomSheet({
   bool includeDimensions = false,
   bool includeBlurHash = false,
 }) async {
-  ListTile createUploadMediaListTile(String label, MediaSource mediaSource) => ListTile(
-            title: Text(
-              label,
-              textAlign: TextAlign.center,
-              style: GoogleFonts.getFont(
-                pickerFontFamily,
-                color: textColor,
-                fontWeight: FontWeight.w600,
-                fontSize: 20,
-              ),
-            ),
-            tileColor: backgroundColor,
-            dense: false,
-            onTap: () => Navigator.pop(
-              context,
-              mediaSource,
-            ),
-          );
+  ListTile createUploadMediaListTile(String label, MediaSource mediaSource) =>
+      ListTile(
+        title: Text(
+          label,
+          textAlign: TextAlign.center,
+          style: GoogleFonts.getFont(
+            pickerFontFamily,
+            color: textColor,
+            fontWeight: FontWeight.w600,
+            fontSize: 20,
+          ),
+        ),
+        tileColor: backgroundColor,
+        dense: false,
+        onTap: () => Navigator.pop(
+          context,
+          mediaSource,
+        ),
+      );
   final mediaSource = await showModalBottomSheet<MediaSource>(
       context: context,
       backgroundColor: backgroundColor,
@@ -140,21 +141,21 @@ Future<List<SelectedFile>?> selectMedia({
   bool includeDimensions = false,
   bool includeBlurHash = false,
 }) async {
-  // Configure ImagePicker with camera delegate for macOS
-  if (Platform.isMacOS) {
+  // Configure ImagePicker with camera delegate for macOS (not on web)
+  if (!kIsWeb && Platform.isMacOS) {
     final imagePickerMacOS = ImagePickerMacOS();
     ImagePickerPlatform.instance = imagePickerMacOS;
   }
-  
-  // Request camera permission if using camera
-  if (mediaSource == MediaSource.camera) {
+
+  // Request camera permission if using camera (not on web)
+  if (!kIsWeb && mediaSource == MediaSource.camera) {
     if (Platform.isIOS) {
       try {
         final cameraStatus = await Permission.camera.status;
-        
+
         if (cameraStatus.isDenied || cameraStatus.isPermanentlyDenied) {
           final result = await Permission.camera.request();
-          
+
           if (result.isDenied || result.isPermanentlyDenied) {
             print('Camera permission denied');
             return null;
@@ -168,8 +169,9 @@ Future<List<SelectedFile>?> selectMedia({
       try {
         // Request camera permission on macOS using method channel
         const platform = MethodChannel('com.linkedup.camera_permission');
-        final bool hasPermission = await platform.invokeMethod('requestCameraPermission');
-        
+        final bool hasPermission =
+            await platform.invokeMethod('requestCameraPermission');
+
         if (!hasPermission) {
           print('macOS camera permission denied');
           return null;
@@ -180,7 +182,7 @@ Future<List<SelectedFile>?> selectMedia({
       }
     }
   }
-  
+
   final picker = ImagePicker();
 
   if (multiImage) {
@@ -198,11 +200,14 @@ Future<List<SelectedFile>?> selectMedia({
       final media = e.value;
       final mediaBytes = await media.readAsBytes();
       final path = _getStoragePath(storageFolderPath, media.name, false, index);
-      final dimensions = includeDimensions
-          ? isVideo
-              ? _getVideoDimensions(media.path)
-              : _getImageDimensions(mediaBytes)
-          : null;
+      
+      // Get dimensions - avoid blocking on web for videos
+      MediaDimensions? finalDimensions;
+      if (includeDimensions && !isVideo) {
+        // Only calculate image dimensions
+        finalDimensions = await _getImageDimensions(mediaBytes);
+      }
+      
       final blurHash = includeBlurHash
           ? isVideo
               ? null
@@ -210,20 +215,23 @@ Future<List<SelectedFile>?> selectMedia({
           : null;
       return SelectedFile(
         storagePath: path,
-        filePath: media.path,
+        filePath: kIsWeb
+            ? media.name
+            : media.path, // Use name on web since path is empty
         bytes: mediaBytes,
-        dimensions: await dimensions,
+        dimensions: finalDimensions,
         blurHash: blurHash,
       );
     }));
   }
 
-  final source = mediaSource == MediaSource.camera
-      ? ImageSource.camera
-      : ImageSource.gallery;
-  
+  // On web, camera source doesn't work well, always use gallery
+  final source = (kIsWeb || mediaSource != MediaSource.camera)
+      ? ImageSource.gallery
+      : ImageSource.camera;
+
   XFile? pickedMedia;
-  
+
   try {
     final pickedMediaFuture = isVideo
         ? picker.pickVideo(source: source)
@@ -236,7 +244,7 @@ Future<List<SelectedFile>?> selectMedia({
     pickedMedia = await pickedMediaFuture;
   } catch (e) {
     // Handle macOS camera delegate error by falling back to gallery
-    if (Platform.isMacOS && mediaSource == MediaSource.camera) {
+    if (!kIsWeb && Platform.isMacOS && mediaSource == MediaSource.camera) {
       print('macOS camera access failed, falling back to gallery: $e');
       try {
         final fallbackFuture = isVideo
@@ -262,11 +270,14 @@ Future<List<SelectedFile>?> selectMedia({
     return null;
   }
   final path = _getStoragePath(storageFolderPath, pickedMedia!.name, isVideo);
-  final dimensions = includeDimensions
-      ? isVideo
-          ? _getVideoDimensions(pickedMedia.path)
-          : _getImageDimensions(mediaBytes)
-      : null;
+  
+  // Get dimensions - avoid blocking on web for videos
+  MediaDimensions? finalDimensions;
+  if (includeDimensions && !isVideo) {
+    // Only calculate image dimensions
+    finalDimensions = await _getImageDimensions(mediaBytes);
+  }
+  
   final blurHash = includeBlurHash
       ? isVideo
           ? null
@@ -275,22 +286,36 @@ Future<List<SelectedFile>?> selectMedia({
   return [
     SelectedFile(
       storagePath: path,
-      filePath: pickedMedia.path,
+      filePath: kIsWeb
+          ? pickedMedia.name
+          : pickedMedia.path, // Use name on web since path is empty
       bytes: mediaBytes,
-      dimensions: await dimensions,
+      dimensions: finalDimensions,
       blurHash: blurHash,
     ),
   ];
 }
 
 bool validateFileFormat(String filePath, BuildContext context) {
-  if (allowedFormats.contains(mime(filePath))) {
+  // On web or if path is empty, be more lenient with validation
+  if (kIsWeb || filePath.isEmpty) {
+    // Check file extension from the path/name
+    final extension = filePath.split('.').last.toLowerCase();
+    final validExtensions = ['png', 'jpg', 'jpeg', 'gif', 'mp4', 'mov'];
+    if (validExtensions.contains(extension)) {
+      return true;
+    }
+  }
+
+  final mimeType = mime(filePath);
+  if (mimeType != null && allowedFormats.contains(mimeType)) {
     return true;
   }
+
   ScaffoldMessenger.of(context)
     ..hideCurrentSnackBar()
     ..showSnackBar(SnackBar(
-      content: Text('Invalid file format: ${mime(filePath)}'),
+      content: Text('Invalid file format: ${mime(filePath) ?? 'unknown'}'),
     ));
   return false;
 }
@@ -375,10 +400,16 @@ Future<MediaDimensions> _getImageDimensions(Uint8List mediaBytes) async {
 }
 
 Future<MediaDimensions> _getVideoDimensions(String path) async {
+  // On web, skip video dimensions as VideoPlayerController.asset doesn't work
+  if (kIsWeb) {
+    return MediaDimensions(width: 0, height: 0);
+  }
+
   final VideoPlayerController videoPlayerController =
-      VideoPlayerController.asset(path);
+      VideoPlayerController.file(File(path));
   await videoPlayerController.initialize();
   final size = videoPlayerController.value.size;
+  await videoPlayerController.dispose();
   return MediaDimensions(width: size.width, height: size.height);
 }
 
@@ -442,7 +473,8 @@ void showUploadMessage(
             Text(message),
           ],
         ),
-        duration: showLoading ? const Duration(days: 1) : const Duration(seconds: 4),
+        duration:
+            showLoading ? const Duration(days: 1) : const Duration(seconds: 4),
       ),
     );
 }

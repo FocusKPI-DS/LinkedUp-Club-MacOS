@@ -1240,6 +1240,12 @@ class _ProfileWidgetState extends State<ProfileWidget>
                                   parameterData: {},
                                 );
 
+                                // DEBUG: Check currentUserReference
+                                print(
+                                    '🔍 DEBUG: currentUserReference = ${currentUserReference}');
+                                print(
+                                    '🔍 DEBUG: User ID = ${currentUserReference?.id}');
+
                                 ScaffoldMessenger.of(context).showSnackBar(
                                   const SnackBar(
                                     content: Text(

@@ -70,6 +70,10 @@ class AIAnnouncementsSummary extends StatelessWidget {
                                       fontWeight: FontWeight.w600,
                                     ),
                                     color: const Color(0xFF2D3748),
+                                    fontSize:
+                                        MediaQuery.of(context).size.width < 600
+                                            ? 16.0
+                                            : 18.0,
                                     letterSpacing: 0.0,
                                   ),
                         ),
@@ -79,6 +83,10 @@ class AIAnnouncementsSummary extends StatelessWidget {
                               FlutterFlowTheme.of(context).bodySmall.override(
                                     font: GoogleFonts.inter(),
                                     color: const Color(0xFF718096),
+                                    fontSize:
+                                        MediaQuery.of(context).size.width < 600
+                                            ? 12.0
+                                            : 14.0,
                                     letterSpacing: 0.0,
                                   ),
                         ),
@@ -90,6 +98,9 @@ class AIAnnouncementsSummary extends StatelessWidget {
                     style: FlutterFlowTheme.of(context).bodySmall.override(
                           font: GoogleFonts.inter(),
                           color: const Color(0xFF9C27B0),
+                          fontSize: MediaQuery.of(context).size.width < 600
+                              ? 11.0
+                              : 12.0,
                           letterSpacing: 0.0,
                         ),
                   ),

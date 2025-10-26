@@ -23,11 +23,31 @@ class _ProfileSettingsWidgetState extends State<ProfileSettingsWidget> {
 
   final scaffoldKey = GlobalKey<ScaffoldState>();
 
+  // Notification settings state
+  bool _notificationsEnabled = true;
+  bool _newMessageEnabled = true;
+  bool _emailNotificationsEnabled = true;
+  bool _eventRemindersEnabled = false;
+
   @override
   void initState() {
     super.initState();
     _model = createModel(context, () => ProfileSettingsModel());
     _model.selectedSetting = 'Personal Information';
+    _loadNotificationSettings();
+  }
+
+  Future<void> _loadNotificationSettings() async {
+    if (currentUserDocument != null) {
+      setState(() {
+        _notificationsEnabled = currentUserDocument!.notificationsEnabled;
+        _newMessageEnabled = currentUserDocument!.newMessageEnabled;
+        // Email notifications default to true (field doesn't exist yet in schema)
+        _emailNotificationsEnabled = true;
+        // Event reminders uses notifications_enabled
+        _eventRemindersEnabled = currentUserDocument!.notificationsEnabled;
+      });
+    }
   }
 
   @override
@@ -623,16 +643,18 @@ class _ProfileSettingsWidgetState extends State<ProfileSettingsWidget> {
                 ),
           ),
           SizedBox(height: 24),
-          _buildNotificationToggle('Push Notifications', true),
+          _buildNotificationToggle('Push Notifications', _notificationsEnabled),
           SizedBox(height: 16),
-          _buildNotificationToggle('Email Notifications', true),
+          _buildNotificationToggle(
+              'Email Notifications', _emailNotificationsEnabled),
           SizedBox(height: 16),
-          _buildNotificationToggle('New Message Alerts', true),
+          _buildNotificationToggle('New Message Alerts', _newMessageEnabled),
           SizedBox(height: 16),
-          _buildNotificationToggle('Event Reminders', false),
+          _buildNotificationToggle('Event Reminders', _eventRemindersEnabled),
           SizedBox(height: 24),
           FFButtonWidget(
             onPressed: () async {
+              print('🔍 PROFILE SETTINGS BUTTON PRESSED!');
               try {
                 triggerPushNotification(
                   notificationTitle: '🔔 Test Push Notification',
@@ -643,6 +665,11 @@ class _ProfileSettingsWidgetState extends State<ProfileSettingsWidget> {
                   initialPageName: 'ProfileSettings',
                   parameterData: {},
                 );
+
+                // DEBUG: Check currentUserReference
+                print(
+                    '🔍 DEBUG: currentUserReference = ${currentUserReference}');
+                print('🔍 DEBUG: User ID = ${currentUserReference?.id}');
 
                 ScaffoldMessenger.of(context).showSnackBar(
                   const SnackBar(
@@ -1299,10 +1326,36 @@ class _ProfileSettingsWidgetState extends State<ProfileSettingsWidget> {
                     FFButtonWidget(
                       onPressed: () async {
                         setState(() {
+                          _model.isJoiningWorkspace = true;
+                        });
+                      },
+                      text: 'Join Workspace',
+                      icon: Icon(Icons.group_add, size: 16),
+                      options: FFButtonOptions(
+                        height: 36,
+                        padding: EdgeInsetsDirectional.fromSTEB(16, 0, 16, 0),
+                        iconPadding: EdgeInsetsDirectional.fromSTEB(0, 0, 8, 0),
+                        color: FlutterFlowTheme.of(context).primary,
+                        textStyle:
+                            FlutterFlowTheme.of(context).titleSmall.override(
+                                  fontFamily: 'Inter',
+                                  color: Colors.white,
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w600,
+                                  letterSpacing: 0,
+                                ),
+                        elevation: 0,
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                    ),
+                    SizedBox(width: 12),
+                    FFButtonWidget(
+                      onPressed: () async {
+                        setState(() {
                           _model.isCreatingWorkspace = true;
                         });
                       },
-                      text: 'Create workspace',
+                      text: 'Create New Workspace',
                       icon: Icon(Icons.add, size: 16),
                       options: FFButtonOptions(
                         height: 36,
@@ -1323,63 +1376,6 @@ class _ProfileSettingsWidgetState extends State<ProfileSettingsWidget> {
                     ),
                   ],
                 ),
-                SizedBox(height: 12),
-                // Delete workspace button (owner only)
-                StreamBuilder<List<WorkspaceMembersRecord>>(
-                  stream: queryWorkspaceMembersRecord(
-                    queryBuilder: (workspaceMembersRecord) =>
-                        workspaceMembersRecord
-                            .where('workspace_ref',
-                                isEqualTo: currentUser.currentWorkspaceRef)
-                            .where('user_ref',
-                                isEqualTo: currentUser.reference),
-                  ),
-                  builder: (context, currentUserMemberSnapshot) {
-                    if (currentUserMemberSnapshot.hasData &&
-                        currentUserMemberSnapshot.data!.isNotEmpty) {
-                      final currentUserMember =
-                          currentUserMemberSnapshot.data!.first;
-                      final isOwner = currentUserMember.role == 'owner';
-
-                      if (isOwner) {
-                        return Row(
-                          children: [
-                            Spacer(),
-                            FFButtonWidget(
-                              onPressed: () async {
-                                setState(() {
-                                  _model.isDeletingWorkspace = true;
-                                });
-                              },
-                              text: 'Delete workspace',
-                              icon: Icon(Icons.delete_outline, size: 16),
-                              options: FFButtonOptions(
-                                height: 36,
-                                padding: EdgeInsetsDirectional.fromSTEB(
-                                    16, 0, 16, 0),
-                                iconPadding:
-                                    EdgeInsetsDirectional.fromSTEB(0, 0, 8, 0),
-                                color: Colors.red,
-                                textStyle: FlutterFlowTheme.of(context)
-                                    .titleSmall
-                                    .override(
-                                      fontFamily: 'Inter',
-                                      color: Colors.white,
-                                      fontSize: 14,
-                                      fontWeight: FontWeight.w600,
-                                      letterSpacing: 0,
-                                    ),
-                                elevation: 0,
-                                borderRadius: BorderRadius.circular(8),
-                              ),
-                            ),
-                          ],
-                        );
-                      }
-                    }
-                    return SizedBox.shrink();
-                  },
-                ),
                 SizedBox(height: 16),
                 Text(
                   'Manage your workspaces and team members.',
@@ -1393,127 +1389,6 @@ class _ProfileSettingsWidgetState extends State<ProfileSettingsWidget> {
                 ),
                 SizedBox(height: 24),
 
-                // Current Workspace Info
-                if (currentUser.hasCurrentWorkspaceRef())
-                  StreamBuilder<WorkspacesRecord>(
-                    stream: WorkspacesRecord.getDocument(
-                        currentUser.currentWorkspaceRef!),
-                    builder: (context, workspaceSnapshot) {
-                      if (workspaceSnapshot.hasData) {
-                        final workspace = workspaceSnapshot.data!;
-                        return Container(
-                          padding: EdgeInsets.all(16),
-                          decoration: BoxDecoration(
-                            color:
-                                FlutterFlowTheme.of(context).primaryBackground,
-                            borderRadius: BorderRadius.circular(8),
-                            border: Border.all(
-                              color: FlutterFlowTheme.of(context).alternate,
-                              width: 1,
-                            ),
-                          ),
-                          child: Row(
-                            children: [
-                              // Workspace Logo
-                              Container(
-                                width: 48,
-                                height: 48,
-                                decoration: BoxDecoration(
-                                  color: FlutterFlowTheme.of(context).primary,
-                                  borderRadius: BorderRadius.circular(8),
-                                ),
-                                child: workspace.hasLogoUrl() &&
-                                        workspace.logoUrl.isNotEmpty
-                                    ? ClipRRect(
-                                        borderRadius: BorderRadius.circular(8),
-                                        child: CachedNetworkImage(
-                                          imageUrl: workspace.logoUrl,
-                                          fit: BoxFit.cover,
-                                          placeholder: (context, url) => Center(
-                                            child: Text(
-                                              workspace.name.isNotEmpty
-                                                  ? workspace.name[0]
-                                                      .toUpperCase()
-                                                  : 'W',
-                                              style: TextStyle(
-                                                color: Colors.white,
-                                                fontSize: 20,
-                                                fontWeight: FontWeight.bold,
-                                              ),
-                                            ),
-                                          ),
-                                          errorWidget: (context, url, error) =>
-                                              Center(
-                                            child: Text(
-                                              workspace.name.isNotEmpty
-                                                  ? workspace.name[0]
-                                                      .toUpperCase()
-                                                  : 'W',
-                                              style: TextStyle(
-                                                color: Colors.white,
-                                                fontSize: 20,
-                                                fontWeight: FontWeight.bold,
-                                              ),
-                                            ),
-                                          ),
-                                        ),
-                                      )
-                                    : Center(
-                                        child: Text(
-                                          workspace.name.isNotEmpty
-                                              ? workspace.name[0].toUpperCase()
-                                              : 'W',
-                                          style: TextStyle(
-                                            color: Colors.white,
-                                            fontSize: 20,
-                                            fontWeight: FontWeight.bold,
-                                          ),
-                                        ),
-                                      ),
-                              ),
-                              SizedBox(width: 16),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      workspace.name,
-                                      style: FlutterFlowTheme.of(context)
-                                          .bodyLarge
-                                          .override(
-                                            fontFamily: 'Inter',
-                                            fontSize: 16,
-                                            fontWeight: FontWeight.w600,
-                                            letterSpacing: 0,
-                                          ),
-                                    ),
-                                    SizedBox(height: 4),
-                                    Text(
-                                      workspace.description,
-                                      style: FlutterFlowTheme.of(context)
-                                          .bodySmall
-                                          .override(
-                                            fontFamily: 'Inter',
-                                            fontSize: 12,
-                                            fontWeight: FontWeight.w400,
-                                            letterSpacing: 0,
-                                            color: FlutterFlowTheme.of(context)
-                                                .secondaryText,
-                                          ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ],
-                          ),
-                        );
-                      }
-                      return SizedBox.shrink();
-                    },
-                  ),
-
-                SizedBox(height: 24),
-
                 // All Workspaces Section
                 Row(
                   children: [
@@ -1525,32 +1400,6 @@ class _ProfileSettingsWidgetState extends State<ProfileSettingsWidget> {
                             fontWeight: FontWeight.w600,
                             letterSpacing: 0,
                           ),
-                    ),
-                    Spacer(),
-                    FFButtonWidget(
-                      onPressed: () async {
-                        setState(() {
-                          _model.isJoiningWorkspace = true;
-                        });
-                      },
-                      text: 'Join a new workspace',
-                      icon: Icon(Icons.group_add, size: 16),
-                      options: FFButtonOptions(
-                        height: 36,
-                        padding: EdgeInsetsDirectional.fromSTEB(16, 0, 16, 0),
-                        iconPadding: EdgeInsetsDirectional.fromSTEB(0, 0, 8, 0),
-                        color: FlutterFlowTheme.of(context).primary,
-                        textStyle:
-                            FlutterFlowTheme.of(context).titleSmall.override(
-                                  fontFamily: 'Inter',
-                                  color: Colors.white,
-                                  fontSize: 14,
-                                  fontWeight: FontWeight.w600,
-                                  letterSpacing: 0,
-                                ),
-                        elevation: 0,
-                        borderRadius: BorderRadius.circular(8),
-                      ),
                     ),
                   ],
                 ),
@@ -1782,6 +1631,55 @@ class _ProfileSettingsWidgetState extends State<ProfileSettingsWidget> {
                                                 BorderRadius.circular(6),
                                           ),
                                         ),
+                                      SizedBox(width: 8),
+                                      // 3-dot settings menu
+                                      PopupMenuButton<String>(
+                                        onSelected: (String value) async {
+                                          if (value == 'invite') {
+                                            // Show invite users dialog
+                                            _showInviteUsersDialog(
+                                                context, currentUser);
+                                          } else if (value == 'delete') {
+                                            // Show delete workspace confirmation for this specific workspace
+                                            _showDeleteWorkspaceDialog(
+                                                context, workspace, member);
+                                          }
+                                        },
+                                        itemBuilder: (BuildContext context) => [
+                                          PopupMenuItem<String>(
+                                            value: 'invite',
+                                            child: Row(
+                                              children: [
+                                                Icon(Icons.person_add,
+                                                    size: 18),
+                                                SizedBox(width: 12),
+                                                Text('Invite Users'),
+                                              ],
+                                            ),
+                                          ),
+                                          if (member.role == 'owner')
+                                            PopupMenuItem<String>(
+                                              value: 'delete',
+                                              child: Row(
+                                                children: [
+                                                  Icon(Icons.delete_outline,
+                                                      size: 18,
+                                                      color: Colors.red),
+                                                  SizedBox(width: 12),
+                                                  Text('Delete Workspace',
+                                                      style: TextStyle(
+                                                          color: Colors.red)),
+                                                ],
+                                              ),
+                                            ),
+                                        ],
+                                        icon: Icon(
+                                          Icons.more_vert,
+                                          color: FlutterFlowTheme.of(context)
+                                              .secondaryText,
+                                          size: 20,
+                                        ),
+                                      ),
                                     ],
                                   ),
                                 );
@@ -2469,11 +2367,34 @@ class _ProfileSettingsWidgetState extends State<ProfileSettingsWidget> {
         ),
         Switch(
           value: value,
-          onChanged: (newValue) {
-            setState(() {
-              // Update notification preference
-              // You can add actual notification preference updates here
-            });
+          onChanged: (newValue) async {
+            // Map label to Firestore field and state variable
+            String field = '';
+            if (label == 'Push Notifications') {
+              field = 'notifications_enabled';
+              setState(() => _notificationsEnabled = newValue);
+            } else if (label == 'Event Reminders') {
+              field = 'notifications_enabled';
+              setState(() => _eventRemindersEnabled = newValue);
+            } else if (label == 'New Message Alerts') {
+              field = 'new_message_enabled';
+              setState(() => _newMessageEnabled = newValue);
+            } else if (label == 'Email Notifications') {
+              field = 'email_notifications_enabled';
+              setState(() => _emailNotificationsEnabled = newValue);
+            }
+
+            if (field.isNotEmpty && currentUserReference != null) {
+              await currentUserReference!.update({field: newValue});
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content:
+                      Text('✅ $label ${newValue ? 'enabled' : 'disabled'}'),
+                  backgroundColor: Color(0xFF10B981),
+                  duration: Duration(seconds: 2),
+                ),
+              );
+            }
           },
           activeColor: FlutterFlowTheme.of(context).secondaryText,
         ),
@@ -2706,6 +2627,164 @@ class _ProfileSettingsWidgetState extends State<ProfileSettingsWidget> {
             },
             style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
             child: Text('Remove', style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showInviteUsersDialog(BuildContext context, UsersRecord currentUser) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Row(
+          children: [
+            Icon(Icons.construction, color: Colors.orange, size: 28),
+            SizedBox(width: 12),
+            Text('Under Development'),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Invite Users Feature',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            SizedBox(height: 12),
+            Text(
+              'This feature is currently under development and will be available soon.',
+              style: TextStyle(
+                fontSize: 14,
+                color: Colors.grey[600],
+              ),
+            ),
+            SizedBox(height: 16),
+            Container(
+              padding: EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.orange.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(
+                  color: Colors.orange.withOpacity(0.3),
+                  width: 1,
+                ),
+              ),
+              child: Row(
+                children: [
+                  Icon(Icons.info_outline, color: Colors.orange, size: 20),
+                  SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'Coming soon: Invite users by email and generate invite codes!',
+                      style: TextStyle(
+                        fontSize: 13,
+                        color: Colors.orange[800],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text('OK'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showDeleteWorkspaceDialog(BuildContext context,
+      WorkspacesRecord workspace, WorkspaceMembersRecord member) {
+    final TextEditingController confirmationController =
+        TextEditingController();
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Row(
+          children: [
+            Icon(Icons.warning, color: Colors.red),
+            SizedBox(width: 12),
+            Text('Delete Workspace'),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Are you sure you want to delete "${workspace.name}"?',
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            SizedBox(height: 12),
+            Text(
+              'This action cannot be undone. All data associated with this workspace will be permanently deleted.',
+              style: TextStyle(
+                fontSize: 14,
+                color: Colors.grey[600],
+              ),
+            ),
+            SizedBox(height: 20),
+            Text(
+              'Type "${workspace.name}" to confirm:',
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+            SizedBox(height: 8),
+            TextField(
+              controller: confirmationController,
+              decoration: InputDecoration(
+                hintText: 'Enter workspace name',
+                border: OutlineInputBorder(),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              if (confirmationController.text == workspace.name) {
+                // TODO: Implement workspace deletion logic
+                // This should delete the workspace and all related data
+                await workspace.reference.delete();
+                Navigator.pop(context);
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content:
+                        Text('Workspace "${workspace.name}" has been deleted'),
+                    backgroundColor: Colors.red,
+                  ),
+                );
+              } else {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text('Workspace name does not match'),
+                    backgroundColor: Colors.red,
+                  ),
+                );
+              }
+            },
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            child:
+                Text('Delete Workspace', style: TextStyle(color: Colors.white)),
           ),
         ],
       ),

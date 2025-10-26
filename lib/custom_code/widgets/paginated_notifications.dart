@@ -446,14 +446,19 @@ class _PaginatedNotificationsState extends State<PaginatedNotifications> {
                               children: [
                                 TextSpan(
                                   text: senderName,
-                                  style: const TextStyle(fontWeight: FontWeight.w600),
+                                  style: const TextStyle(
+                                      fontWeight: FontWeight.w600),
                                 ),
-                                TextSpan(
-                                  text:
-                                      ' ${notification['notification_title'] ?? ''}',
-                                  style:
-                                      const TextStyle(fontWeight: FontWeight.normal),
-                                ),
+                                // Only show notification title if it's not a chat notification
+                                if (notification['initial_page_name']
+                                        ?.toLowerCase() !=
+                                    'chatdetail')
+                                  TextSpan(
+                                    text:
+                                        ' ${notification['notification_title'] ?? ''}',
+                                    style: const TextStyle(
+                                        fontWeight: FontWeight.normal),
+                                  ),
                               ],
                             ),
                           ),
@@ -469,7 +474,7 @@ class _PaginatedNotificationsState extends State<PaginatedNotifications> {
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      notification['notification_text'] ?? '',
+                      _getNotificationText(notification),
                       style: TextStyle(
                         fontSize: 14,
                         color: Colors.grey[700],
@@ -478,26 +483,6 @@ class _PaginatedNotificationsState extends State<PaginatedNotifications> {
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
                     ),
-                    if (isClickable &&
-                        notification['initial_page_name'] != null) ...[
-                      const SizedBox(height: 8),
-                      Container(
-                        padding:
-                            const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                        decoration: BoxDecoration(
-                          color: Colors.blue[50],
-                          borderRadius: BorderRadius.circular(4),
-                        ),
-                        child: Text(
-                          _getActionText(notification['initial_page_name']),
-                          style: TextStyle(
-                            fontSize: 13,
-                            color: Colors.blue[700],
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
-                      ),
-                    ],
                   ],
                 ),
               ),
@@ -508,17 +493,16 @@ class _PaginatedNotificationsState extends State<PaginatedNotifications> {
     );
   }
 
-  String _getActionText(String? pageName) {
-    switch (pageName?.toLowerCase()) {
-      case 'eventdetail':
-        return 'View Event';
-      case 'chatdetail':
-        return 'Reply';
-      case 'discover':
-        return 'View';
-      default:
-        return 'Open';
+  String _getNotificationText(Map<String, dynamic> notification) {
+    String? pageName = notification['initial_page_name'];
+
+    // For chat notifications, show "sent a new Message"
+    if (pageName?.toLowerCase() == 'chatdetail') {
+      return notification['notification_text'] ?? '';
     }
+
+    // For other notifications, use the original text
+    return notification['notification_text'] ?? '';
   }
 
   @override
@@ -602,7 +586,8 @@ class _PaginatedNotificationsState extends State<PaginatedNotifications> {
                             if (previousGroup != currentGroup ||
                                 index == 0) ...[
                               Padding(
-                                padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+                                padding:
+                                    const EdgeInsets.fromLTRB(16, 16, 16, 8),
                                 child: Text(
                                   currentGroup,
                                   style: TextStyle(

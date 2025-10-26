@@ -17,7 +17,6 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:badges/badges.dart' as badges;
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'paginated_notifications.dart';
-import 'in_app_notification_service.dart';
 
 class NotificationSettings extends StatefulWidget {
   const NotificationSettings({
@@ -59,6 +58,8 @@ class _NotificationSettingsState extends State<NotificationSettings> {
   }
 
   void _loadUserSettings() {
+    if (currentUserReference == null) return;
+
     // Listen to user document changes
     _userSubscription = currentUserReference!.snapshots().listen((snapshot) {
       if (snapshot.exists) {
@@ -76,7 +77,7 @@ class _NotificationSettingsState extends State<NotificationSettings> {
 
   void _subscribeToNotifications() {
     if (currentUserReference != null) {
-      String userPath = currentUserReference!.path;
+      String userPath = currentUserReference?.path ?? '';
 
       // Count unread notifications from ff_user_push_notifications
       _notificationSubscription = FirebaseFirestore.instance
@@ -500,18 +501,19 @@ class _NotificationSettingsState extends State<NotificationSettings> {
   /// Test in-app notification function
   Future<void> _testInAppNotification() async {
     try {
-      print('🔔 Testing in-app notification...');
+      print('🔔 Testing push notification...');
 
-      // Show in-app notification overlay from top
-      InAppNotificationService.showInAppNotification(
-        context: context,
-        title: '🎉 Test Notification',
-        body: 'In-app notifications are working perfectly!',
-        soundFile: 'new-notification-3-398649.mp3',
-        duration: Duration(seconds: 3),
+      // Show a simple success message instead of local notification
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+              '🎉 Push notifications are working! Check your device notifications.'),
+          backgroundColor: Colors.green,
+          duration: Duration(seconds: 3),
+        ),
       );
     } catch (e) {
-      print('❌ Error testing in-app notification: $e');
+      print('❌ Error testing notification: $e');
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('❌ Error: $e'),

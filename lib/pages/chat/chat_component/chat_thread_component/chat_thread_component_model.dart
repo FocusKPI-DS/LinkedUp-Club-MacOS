@@ -4,6 +4,7 @@ import '/pages/chat/chat_component/chat_thread/chat_thread_widget.dart';
 import 'chat_thread_component_widget.dart' show ChatThreadComponentWidget;
 import 'package:flutter/material.dart';
 import 'package:record/record.dart';
+import '/flutter_flow/upload_data.dart';
 
 class ChatThreadComponentModel
     extends FlutterFlowModel<ChatThreadComponentWidget> {
@@ -22,6 +23,16 @@ class ChatThreadComponentModel
   bool recording = false;
 
   String? audioMainUrl;
+
+  String? videoUrl;
+
+  SelectedFile? selectedVideoFile;
+
+  MessagesRecord? replyingToMessage;
+
+  MessagesRecord? editingMessage;
+
+  ScrollController? scrollController;
 
   bool? isSending = false;
 
@@ -76,6 +87,11 @@ class ChatThreadComponentModel
   FFUploadedFile uploadedLocalFile_uploadDataFile =
       FFUploadedFile(bytes: Uint8List.fromList([]));
   String uploadedFileUrl_uploadDataFile = '';
+
+  bool isDataUploading_uploadDataVideo = false;
+  FFUploadedFile uploadedLocalFile_uploadDataVideo =
+      FFUploadedFile(bytes: Uint8List.fromList([]));
+  String uploadedFileUrl_uploadDataVideo = '';
 
   AudioRecorder? audioRecorder;
   String? stop;

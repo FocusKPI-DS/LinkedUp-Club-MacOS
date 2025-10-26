@@ -118,8 +118,16 @@ void triggerPushNotification({
     'sender': currentUserReference,
     'timestamp': DateTime.now(),
   };
+
+  print('🔍 About to create document in ff_user_push_notifications');
+  print('🔍 Document data: $pushNotificationData');
+
   FirebaseFirestore.instance
       .collection(kUserPushNotificationsCollectionName)
-      .doc()
-      .set(pushNotificationData);
+      .add(pushNotificationData)
+      .then((docRef) {
+    print('✅ Document created successfully! ID: ${docRef.id}');
+  }).catchError((error) {
+    print('❌ Error creating document: $error');
+  });
 }

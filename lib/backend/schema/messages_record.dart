@@ -42,6 +42,16 @@ class MessagesRecord extends FirestoreRecord {
   String get replyTo => _replyTo ?? '';
   bool hasReplyTo() => _replyTo != null;
 
+  // "reply_to_content" field.
+  String? _replyToContent;
+  String get replyToContent => _replyToContent ?? '';
+  bool hasReplyToContent() => _replyToContent != null;
+
+  // "reply_to_sender" field.
+  String? _replyToSender;
+  String get replyToSender => _replyToSender ?? '';
+  bool hasReplyToSender() => _replyToSender != null;
+
   // "attachment_url" field.
   String? _attachmentUrl;
   String get attachmentUrl => _attachmentUrl ?? '';
@@ -92,6 +102,16 @@ class MessagesRecord extends FirestoreRecord {
   Map<String, List<String>> get reactionsByUser => _reactionsByUser ?? const {};
   bool hasReactionsByUser() => _reactionsByUser != null;
 
+  // "is_edited" field.
+  bool? _isEdited;
+  bool get isEdited => _isEdited ?? false;
+  bool hasIsEdited() => _isEdited != null;
+
+  // "edited_at" field.
+  DateTime? _editedAt;
+  DateTime? get editedAt => _editedAt;
+  bool hasEditedAt() => _editedAt != null;
+
   DocumentReference get parentReference => reference.parent.parent!;
 
   void _initializeFields() {
@@ -100,6 +120,8 @@ class MessagesRecord extends FirestoreRecord {
     _createdAt = snapshotData['created_at'] as DateTime?;
     _isReadBy = getDataList(snapshotData['is_read_by']);
     _replyTo = snapshotData['reply_to'] as String?;
+    _replyToContent = snapshotData['reply_to_content'] as String?;
+    _replyToSender = snapshotData['reply_to_sender'] as String?;
     _attachmentUrl = snapshotData['attachment_url'] as String?;
     _messageType = snapshotData['message_type'] is MessageType
         ? snapshotData['message_type']
@@ -111,6 +133,8 @@ class MessagesRecord extends FirestoreRecord {
     _senderPhoto = snapshotData['sender_photo'] as String?;
     _image = snapshotData['image'] as String?;
     _images = getDataList(snapshotData['images']);
+    _isEdited = snapshotData['is_edited'] as bool?;
+    _editedAt = snapshotData['edited_at'] as DateTime?;
     final rbU = snapshotData['reactions_by_user'];
     if (rbU is Map) {
       final Map<String, List<String>> parsed = {};
@@ -172,6 +196,8 @@ Map<String, dynamic> createMessagesRecordData({
   String? content,
   DateTime? createdAt,
   String? replyTo,
+  String? replyToContent,
+  String? replyToSender,
   String? attachmentUrl,
   MessageType? messageType,
   String? video,
@@ -181,6 +207,8 @@ Map<String, dynamic> createMessagesRecordData({
   String? senderPhoto,
   String? image,
   Map<String, List<String>>? reactionsByUser,
+  bool? isEdited,
+  DateTime? editedAt,
 }) {
   final firestoreData = mapToFirestore(
     <String, dynamic>{
@@ -188,6 +216,8 @@ Map<String, dynamic> createMessagesRecordData({
       'content': content,
       'created_at': createdAt,
       'reply_to': replyTo,
+      'reply_to_content': replyToContent,
+      'reply_to_sender': replyToSender,
       'attachment_url': attachmentUrl,
       'message_type': messageType,
       'video': video,
@@ -197,6 +227,8 @@ Map<String, dynamic> createMessagesRecordData({
       'sender_photo': senderPhoto,
       'image': image,
       'reactions_by_user': reactionsByUser,
+      'is_edited': isEdited,
+      'edited_at': editedAt,
     }.withoutNulls,
   );
 
@@ -214,6 +246,8 @@ class MessagesRecordDocumentEquality implements Equality<MessagesRecord> {
         e1?.createdAt == e2?.createdAt &&
         listEquality.equals(e1?.isReadBy, e2?.isReadBy) &&
         e1?.replyTo == e2?.replyTo &&
+        e1?.replyToContent == e2?.replyToContent &&
+        e1?.replyToSender == e2?.replyToSender &&
         e1?.attachmentUrl == e2?.attachmentUrl &&
         e1?.messageType == e2?.messageType &&
         e1?.video == e2?.video &&
@@ -222,7 +256,9 @@ class MessagesRecordDocumentEquality implements Equality<MessagesRecord> {
         e1?.senderName == e2?.senderName &&
         e1?.senderPhoto == e2?.senderPhoto &&
         e1?.image == e2?.image &&
-        listEquality.equals(e1?.images, e2?.images);
+        listEquality.equals(e1?.images, e2?.images) &&
+        e1?.isEdited == e2?.isEdited &&
+        e1?.editedAt == e2?.editedAt;
   }
 
   @override
@@ -232,6 +268,8 @@ class MessagesRecordDocumentEquality implements Equality<MessagesRecord> {
         e?.createdAt,
         e?.isReadBy,
         e?.replyTo,
+        e?.replyToContent,
+        e?.replyToSender,
         e?.attachmentUrl,
         e?.messageType,
         e?.video,
@@ -240,7 +278,9 @@ class MessagesRecordDocumentEquality implements Equality<MessagesRecord> {
         e?.senderName,
         e?.senderPhoto,
         e?.image,
-        e?.images
+        e?.images,
+        e?.isEdited,
+        e?.editedAt
       ]);
 
   @override

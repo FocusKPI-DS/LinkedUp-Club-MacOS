@@ -7,6 +7,7 @@ import '/flutter_flow/flutter_flow_util.dart';
 import '/flutter_flow/flutter_flow_widgets.dart';
 import '/pages/event/event_component/event_component_widget.dart';
 import '/custom_code/widgets/ai_announcements_summary.dart';
+import '/custom_code/widgets/paginated_notifications.dart';
 import 'dart:async';
 import 'dart:ui';
 import '/actions/actions.dart' as action_blocks;
@@ -172,6 +173,9 @@ class _HomeWidgetState extends State<HomeWidget> with TickerProviderStateMixin {
                 // AI Announcements Summary Section
                 _buildAISummarySection(context),
 
+                // Recent Activity Section
+                _buildRecentActivitySection(context),
+
                 // Recent Events Section
                 _buildRecentEventsSection(context),
 
@@ -209,78 +213,119 @@ class _HomeWidgetState extends State<HomeWidget> with TickerProviderStateMixin {
         ),
       ),
       child: Column(
-        mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Welcome Message
-          if (currentUserReference != null)
-            StreamBuilder<UsersRecord>(
-              stream: UsersRecord.getDocument(currentUserReference!),
-              builder: (context, snapshot) {
-                if (!snapshot.hasData) {
-                  return const SizedBox(height: 20);
-                }
-
-                final user = snapshot.data!;
-                final userName = user.displayName.isNotEmpty
-                    ? user.displayName
-                    : user.email.split('@')[0];
-
-                final now = DateTime.now();
-                final hour = now.hour;
-                String greeting;
-                if (hour < 12) {
-                  greeting = 'Good Morning';
-                } else if (hour < 17) {
-                  greeting = 'Good Afternoon';
-                } else {
-                  greeting = 'Good Evening';
-                }
-
-                return Column(
+          // Top row - Greeting and Name
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Left side - Greeting
+              Expanded(
+                child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      '$greeting,',
-                      style: FlutterFlowTheme.of(context)
-                          .headlineSmall
-                          .override(
-                            fontFamily: 'Inter',
-                            color: const Color(0xFF1E293B), // Dark grey-blue
-                            fontSize: 24.0,
-                            fontWeight: FontWeight.w300,
-                          ),
-                    ),
-                    Text(
-                      userName,
-                      style: FlutterFlowTheme.of(context)
-                          .headlineMedium
-                          .override(
-                            fontFamily: 'Inter',
-                            color:
-                                const Color(0xFF0F172A), // Very dark grey-blue
-                            fontSize: 32.0,
-                            fontWeight: FontWeight.w700,
-                          ),
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      DateFormat('EEEE, MMMM d, y').format(now),
-                      style: FlutterFlowTheme.of(context).bodyMedium.override(
-                            fontFamily: 'Inter',
-                            color: const Color(0xFF475569), // Medium grey-blue
-                            fontSize: 16.0,
-                            fontWeight: FontWeight.w400,
-                          ),
-                    ),
+                    if (currentUserReference != null)
+                      StreamBuilder<UsersRecord>(
+                        stream: UsersRecord.getDocument(currentUserReference!),
+                        builder: (context, snapshot) {
+                          if (!snapshot.hasData) {
+                            return const SizedBox(height: 20);
+                          }
+
+                          final user = snapshot.data!;
+                          final userName = user.displayName.isNotEmpty
+                              ? user.displayName
+                              : user.email.split('@')[0];
+
+                          final now = DateTime.now();
+                          final hour = now.hour;
+                          String greeting;
+                          if (hour < 12) {
+                            greeting = 'Good Morning';
+                          } else if (hour < 17) {
+                            greeting = 'Good Afternoon';
+                          } else {
+                            greeting = 'Good Evening';
+                          }
+
+                          return Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                '$greeting,',
+                                style: FlutterFlowTheme.of(context)
+                                    .headlineSmall
+                                    .override(
+                                      fontFamily: 'Inter',
+                                      color: const Color(0xFF1E293B),
+                                      fontSize: MediaQuery.of(context)
+                                                  .size
+                                                  .width <
+                                              400
+                                          ? 16.0
+                                          : MediaQuery.of(context).size.width <
+                                                  600
+                                              ? 20.0
+                                              : 24.0,
+                                      fontWeight: FontWeight.w300,
+                                    ),
+                                overflow: TextOverflow.ellipsis,
+                                maxLines: 1,
+                              ),
+                              Text(
+                                userName,
+                                style: FlutterFlowTheme.of(context)
+                                    .headlineMedium
+                                    .override(
+                                      fontFamily: 'Inter',
+                                      color: const Color(0xFF0F172A),
+                                      fontSize: MediaQuery.of(context)
+                                                  .size
+                                                  .width <
+                                              400
+                                          ? 20.0
+                                          : MediaQuery.of(context).size.width <
+                                                  600
+                                              ? 26.0
+                                              : 32.0,
+                                      fontWeight: FontWeight.w700,
+                                    ),
+                                overflow: TextOverflow.ellipsis,
+                                maxLines: 1,
+                              ),
+                              const SizedBox(height: 8),
+                              Text(
+                                DateFormat('EEEE, MMMM d, y').format(now),
+                                style: FlutterFlowTheme.of(context)
+                                    .bodyMedium
+                                    .override(
+                                      fontFamily: 'Inter',
+                                      color: const Color(0xFF475569),
+                                      fontSize: MediaQuery.of(context)
+                                                  .size
+                                                  .width <
+                                              400
+                                          ? 12.0
+                                          : MediaQuery.of(context).size.width <
+                                                  600
+                                              ? 14.0
+                                              : 16.0,
+                                      fontWeight: FontWeight.w400,
+                                    ),
+                              ),
+                            ],
+                          );
+                        },
+                      ),
                   ],
-                );
-              },
-            ),
+                ),
+              ),
+            ],
+          ),
 
-          const SizedBox(height: 24),
+          const SizedBox(height: 16),
 
-          // Workspace Info
+          // Bottom section - Workspace Info
           if (currentUserReference != null)
             StreamBuilder<UsersRecord>(
               stream: UsersRecord.getDocument(currentUserReference!),
@@ -288,7 +333,8 @@ class _HomeWidgetState extends State<HomeWidget> with TickerProviderStateMixin {
                 if (!userSnapshot.hasData ||
                     !userSnapshot.data!.hasCurrentWorkspaceRef()) {
                   return Container(
-                    padding: const EdgeInsets.all(16),
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 16, vertical: 12),
                     decoration: BoxDecoration(
                       color: Colors.white.withOpacity(0.8),
                       borderRadius: BorderRadius.circular(12),
@@ -304,65 +350,23 @@ class _HomeWidgetState extends State<HomeWidget> with TickerProviderStateMixin {
                       ],
                     ),
                     child: Row(
+                      mainAxisSize: MainAxisSize.min,
                       children: [
                         Icon(
                           Icons.workspace_premium,
                           color: const Color(0xFF475569),
                           size: 24,
                         ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                'Join a Workspace',
-                                style: FlutterFlowTheme.of(context)
-                                    .titleMedium
-                                    .override(
-                                      fontFamily: 'Inter',
-                                      color: const Color(0xFF1E293B),
-                                      fontWeight: FontWeight.w600,
-                                    ),
-                              ),
-                              Text(
-                                'Connect with your team and start collaborating',
-                                style: FlutterFlowTheme.of(context)
-                                    .bodySmall
-                                    .override(
-                                      fontFamily: 'Inter',
-                                      color: const Color(0xFF64748B),
-                                    ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        FFButtonWidget(
-                          onPressed: () {
-                            context.pushNamed('CreateWorkspace');
-                          },
-                          text: 'Join',
-                          options: FFButtonOptions(
-                            height: 36,
-                            padding: const EdgeInsetsDirectional.fromSTEB(
-                                16, 0, 16, 0),
-                            iconPadding: const EdgeInsetsDirectional.fromSTEB(
-                                0, 0, 0, 0),
-                            color: const Color(0xFF475569),
-                            textStyle: FlutterFlowTheme.of(context)
-                                .titleSmall
-                                .override(
-                                  fontFamily: 'Inter',
-                                  color: Colors.white,
-                                  fontWeight: FontWeight.w600,
-                                ),
-                            elevation: 0,
-                            borderSide: const BorderSide(
-                              color: Colors.transparent,
-                              width: 1,
-                            ),
-                            borderRadius: BorderRadius.circular(8),
-                          ),
+                        const SizedBox(width: 8),
+                        Text(
+                          'Join Workspace',
+                          style:
+                              FlutterFlowTheme.of(context).bodyMedium.override(
+                                    fontFamily: 'Inter',
+                                    color: const Color(0xFF64748B),
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w500,
+                                  ),
                         ),
                       ],
                     ),
@@ -370,15 +374,16 @@ class _HomeWidgetState extends State<HomeWidget> with TickerProviderStateMixin {
                 }
 
                 final workspaceRef = userSnapshot.data!.currentWorkspaceRef;
-                return FutureBuilder<WorkspacesRecord>(
-                  future: WorkspacesRecord.getDocumentOnce(workspaceRef!),
+                return StreamBuilder<WorkspacesRecord>(
+                  stream: WorkspacesRecord.getDocument(workspaceRef!),
                   builder: (context, workspaceSnapshot) {
                     final workspace = workspaceSnapshot.data;
                     final workspaceName = workspace?.name ?? 'Loading...';
                     final hasLogo = workspace?.logoUrl.isNotEmpty ?? false;
 
                     return Container(
-                      padding: const EdgeInsets.all(16),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 16, vertical: 12),
                       decoration: BoxDecoration(
                         color: Colors.white.withOpacity(0.8),
                         borderRadius: BorderRadius.circular(12),
@@ -394,10 +399,11 @@ class _HomeWidgetState extends State<HomeWidget> with TickerProviderStateMixin {
                         ],
                       ),
                       child: Row(
+                        mainAxisSize: MainAxisSize.min,
                         children: [
                           Container(
-                            width: 48,
-                            height: 48,
+                            width: 40,
+                            height: 40,
                             decoration: BoxDecoration(
                               color: const Color(0xFFF1F5F9),
                               borderRadius: BorderRadius.circular(8),
@@ -410,8 +416,8 @@ class _HomeWidgetState extends State<HomeWidget> with TickerProviderStateMixin {
                                     borderRadius: BorderRadius.circular(8),
                                     child: CachedNetworkImage(
                                       imageUrl: workspace?.logoUrl ?? '',
-                                      width: 48,
-                                      height: 48,
+                                      width: 40,
+                                      height: 40,
                                       fit: BoxFit.cover,
                                       placeholder: (context, url) => Center(
                                         child: CircularProgressIndicator(
@@ -432,7 +438,7 @@ class _HomeWidgetState extends State<HomeWidget> with TickerProviderStateMixin {
                                           style: TextStyle(
                                             color: FlutterFlowTheme.of(context)
                                                 .primary,
-                                            fontSize: 20,
+                                            fontSize: 18,
                                             fontWeight: FontWeight.w700,
                                           ),
                                         ),
@@ -447,39 +453,48 @@ class _HomeWidgetState extends State<HomeWidget> with TickerProviderStateMixin {
                                       style: TextStyle(
                                         color: FlutterFlowTheme.of(context)
                                             .primary,
-                                        fontSize: 20,
+                                        fontSize: 18,
                                         fontWeight: FontWeight.w700,
                                       ),
                                     ),
                                   ),
                           ),
-                          const SizedBox(width: 16),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  workspaceName,
-                                  style: FlutterFlowTheme.of(context)
-                                      .titleMedium
-                                      .override(
-                                        fontFamily: 'Inter',
-                                        color: Colors.black,
-                                        fontWeight: FontWeight.w600,
-                                      ),
-                                ),
-                                Text(
-                                  'Your workspace',
-                                  style: FlutterFlowTheme.of(context)
-                                      .bodySmall
-                                      .override(
-                                        fontFamily: 'Inter',
-                                        color: const Color(0xFF64748B),
-                                      ),
-                                ),
-                              ],
-                            ),
+                          const SizedBox(width: 12),
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(
+                                workspaceName,
+                                style: FlutterFlowTheme.of(context)
+                                    .bodyMedium
+                                    .override(
+                                      fontFamily: 'Inter',
+                                      color: const Color(0xFF1E293B),
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                              Text(
+                                'Your workspace',
+                                style: FlutterFlowTheme.of(context)
+                                    .bodySmall
+                                    .override(
+                                      fontFamily: 'Inter',
+                                      color: const Color(0xFF64748B),
+                                      fontSize: 12,
+                                    ),
+                              ),
+                            ],
                           ),
+                          SizedBox(
+                              width: MediaQuery.of(context).size.width < 400
+                                  ? 4
+                                  : MediaQuery.of(context).size.width < 600
+                                      ? 6
+                                      : 8),
                           // Workspace Switch Dropdown
                           StreamBuilder<List<WorkspaceMembersRecord>>(
                             stream: queryWorkspaceMembersRecord(
@@ -495,22 +510,31 @@ class _HomeWidgetState extends State<HomeWidget> with TickerProviderStateMixin {
 
                               final memberships = membershipsSnapshot.data!;
                               return PopupMenuButton<DocumentReference?>(
+                                padding: EdgeInsets.zero,
                                 icon: Icon(
                                   Icons.keyboard_arrow_down_rounded,
                                   color: const Color(0xFF64748B),
-                                  size: 20,
+                                  size: MediaQuery.of(context).size.width < 400
+                                      ? 16
+                                      : MediaQuery.of(context).size.width < 600
+                                          ? 18
+                                          : 20,
                                 ),
-                                onSelected: (workspaceRef) async {
+                                offset: Offset(0, 50),
+                                color: const Color(0xFF1E293B),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                elevation: 8,
+                                onSelected: (selectedWorkspaceRef) async {
                                   // Handle "Join a new workspace" button click
-                                  if (workspaceRef == null) {
-                                    Navigator.of(context)
-                                        .pop(); // Close the dropdown
+                                  if (selectedWorkspaceRef == null) {
                                     context.pushNamed(
                                       'MobileSettings',
                                       queryParameters: {
                                         'section': 'Workspace Management',
                                       },
-                                    ); // Navigate to workspace management section
+                                    );
                                     return;
                                   }
 
@@ -518,15 +542,16 @@ class _HomeWidgetState extends State<HomeWidget> with TickerProviderStateMixin {
                                   final userRef = currentUserReference;
                                   if (userRef != null) {
                                     await userRef.update({
-                                      'current_workspace_ref': workspaceRef,
+                                      'current_workspace_ref':
+                                          selectedWorkspaceRef,
                                     });
 
                                     // Update chat controller with new workspace
                                     try {
                                       final chatController =
                                           Get.find<ChatController>();
-                                      chatController
-                                          .updateCurrentWorkspace(workspaceRef);
+                                      chatController.updateCurrentWorkspace(
+                                          selectedWorkspaceRef);
                                     } catch (e) {
                                       // ChatController not found
                                     }
@@ -550,6 +575,8 @@ class _HomeWidgetState extends State<HomeWidget> with TickerProviderStateMixin {
                                       memberships.map((membership) {
                                     return PopupMenuItem<DocumentReference?>(
                                       value: membership.workspaceRef,
+                                      padding: EdgeInsets.symmetric(
+                                          horizontal: 16, vertical: 12),
                                       child: FutureBuilder<WorkspacesRecord>(
                                         future:
                                             WorkspacesRecord.getDocumentOnce(
@@ -562,68 +589,127 @@ class _HomeWidgetState extends State<HomeWidget> with TickerProviderStateMixin {
                                           final name = ws.hasData
                                               ? ws.data?.name ?? 'Loading...'
                                               : 'Loading...';
-                                          final isSelected = workspaceRef.id ==
-                                              membership.workspaceRef?.id;
+                                          final hasLogo = ws.hasData &&
+                                              (ws.data?.logoUrl.isNotEmpty ??
+                                                  false);
+                                          final logoUrl =
+                                              ws.data?.logoUrl ?? '';
 
                                           return Row(
                                             children: [
                                               Container(
-                                                width: 32,
-                                                height: 32,
+                                                width: 40,
+                                                height: 40,
                                                 decoration: BoxDecoration(
-                                                  color:
-                                                      const Color(0xFFF1F5F9),
-                                                  borderRadius:
-                                                      BorderRadius.circular(6),
-                                                  border: Border.all(
-                                                    color:
-                                                        const Color(0xFFCBD5E1),
-                                                  ),
-                                                ),
-                                                child: Center(
-                                                  child: Text(
-                                                    name.isNotEmpty
-                                                        ? name[0].toUpperCase()
-                                                        : 'W',
-                                                    style: TextStyle(
-                                                      color:
-                                                          FlutterFlowTheme.of(
-                                                                  context)
-                                                              .primary,
-                                                      fontSize: 14,
-                                                      fontWeight:
-                                                          FontWeight.w700,
-                                                    ),
-                                                  ),
-                                                ),
-                                              ),
-                                              const SizedBox(width: 12),
-                                              Expanded(
-                                                child: Text(
-                                                  name,
-                                                  style: TextStyle(
-                                                    fontFamily: 'Inter',
-                                                    fontSize: 14,
-                                                    fontWeight: isSelected
-                                                        ? FontWeight.w600
-                                                        : FontWeight.w400,
-                                                    color: isSelected
-                                                        ? FlutterFlowTheme.of(
-                                                                context)
-                                                            .primary
-                                                        : const Color(
-                                                            0xFF1E293B),
-                                                  ),
-                                                ),
-                                              ),
-                                              if (isSelected)
-                                                Icon(
-                                                  Icons.check_rounded,
                                                   color: FlutterFlowTheme.of(
                                                           context)
                                                       .primary,
-                                                  size: 16,
+                                                  borderRadius:
+                                                      BorderRadius.circular(8),
                                                 ),
+                                                child: hasLogo
+                                                    ? ClipRRect(
+                                                        borderRadius:
+                                                            BorderRadius
+                                                                .circular(8),
+                                                        child:
+                                                            CachedNetworkImage(
+                                                          imageUrl: logoUrl,
+                                                          width: 40,
+                                                          height: 40,
+                                                          fit: BoxFit.cover,
+                                                          placeholder:
+                                                              (context, url) =>
+                                                                  Center(
+                                                            child: Text(
+                                                              name.isNotEmpty
+                                                                  ? name[0]
+                                                                      .toUpperCase()
+                                                                  : 'W',
+                                                              style: TextStyle(
+                                                                color: Colors
+                                                                    .white,
+                                                                fontSize: 16,
+                                                                fontWeight:
+                                                                    FontWeight
+                                                                        .w700,
+                                                              ),
+                                                            ),
+                                                          ),
+                                                          errorWidget: (context,
+                                                                  url, error) =>
+                                                              Center(
+                                                            child: Text(
+                                                              name.isNotEmpty
+                                                                  ? name[0]
+                                                                      .toUpperCase()
+                                                                  : 'W',
+                                                              style: TextStyle(
+                                                                color: Colors
+                                                                    .white,
+                                                                fontSize: 16,
+                                                                fontWeight:
+                                                                    FontWeight
+                                                                        .w700,
+                                                              ),
+                                                            ),
+                                                          ),
+                                                        ),
+                                                      )
+                                                    : Center(
+                                                        child: Text(
+                                                          name.isNotEmpty
+                                                              ? name[0]
+                                                                  .toUpperCase()
+                                                              : 'W',
+                                                          style: TextStyle(
+                                                            color: Colors.white,
+                                                            fontSize: 16,
+                                                            fontWeight:
+                                                                FontWeight.w700,
+                                                          ),
+                                                        ),
+                                                      ),
+                                              ),
+                                              const SizedBox(width: 12),
+                                              Expanded(
+                                                child: Column(
+                                                  crossAxisAlignment:
+                                                      CrossAxisAlignment.start,
+                                                  mainAxisSize:
+                                                      MainAxisSize.min,
+                                                  children: [
+                                                    Text(
+                                                      name,
+                                                      style: TextStyle(
+                                                        fontFamily: 'Inter',
+                                                        fontSize: 15,
+                                                        fontWeight:
+                                                            FontWeight.w600,
+                                                        color: Colors.white,
+                                                      ),
+                                                    ),
+                                                    if (ws.hasData &&
+                                                        ws.data?.description
+                                                                .isNotEmpty ==
+                                                            true)
+                                                      Text(
+                                                        ws.data!.description,
+                                                        style: TextStyle(
+                                                          fontFamily: 'Inter',
+                                                          fontSize: 13,
+                                                          fontWeight:
+                                                              FontWeight.w400,
+                                                          color: Colors.white
+                                                              .withOpacity(0.6),
+                                                        ),
+                                                        maxLines: 1,
+                                                        overflow: TextOverflow
+                                                            .ellipsis,
+                                                      ),
+                                                  ],
+                                                ),
+                                              ),
                                             ],
                                           );
                                         },
@@ -635,60 +721,38 @@ class _HomeWidgetState extends State<HomeWidget> with TickerProviderStateMixin {
                                   workspaceItems.add(
                                     PopupMenuItem<DocumentReference?>(
                                       value: null,
-                                      child: GestureDetector(
-                                        onTap: () {
-                                          Navigator.of(context)
-                                              .pop(); // Close the dropdown
-                                          context.pushNamed(
-                                            'MobileSettings',
-                                            queryParameters: {
-                                              'section': 'Workspace Management',
-                                            },
-                                          ); // Navigate to workspace management section
-                                        },
-                                        child: Container(
-                                          padding:
-                                              EdgeInsets.symmetric(vertical: 8),
-                                          child: Row(
-                                            children: [
-                                              Container(
-                                                width: 32,
-                                                height: 32,
-                                                decoration: BoxDecoration(
-                                                  color:
-                                                      const Color(0xFFF1F5F9),
-                                                  borderRadius:
-                                                      BorderRadius.circular(6),
-                                                  border: Border.all(
-                                                    color:
-                                                        const Color(0xFFCBD5E1),
-                                                  ),
-                                                ),
-                                                child: Icon(
-                                                  Icons.add_rounded,
-                                                  color: FlutterFlowTheme.of(
-                                                          context)
-                                                      .primary,
-                                                  size: 16,
-                                                ),
-                                              ),
-                                              const SizedBox(width: 12),
-                                              Expanded(
-                                                child: Text(
-                                                  'Join a new workspace',
-                                                  style: TextStyle(
-                                                    fontFamily: 'Inter',
-                                                    fontSize: 14,
-                                                    fontWeight: FontWeight.w500,
-                                                    color: FlutterFlowTheme.of(
-                                                            context)
-                                                        .primary,
-                                                  ),
-                                                ),
-                                              ),
-                                            ],
+                                      padding: EdgeInsets.symmetric(
+                                          horizontal: 16, vertical: 12),
+                                      child: Row(
+                                        children: [
+                                          Container(
+                                            width: 40,
+                                            height: 40,
+                                            decoration: BoxDecoration(
+                                              color:
+                                                  Colors.white.withOpacity(0.1),
+                                              borderRadius:
+                                                  BorderRadius.circular(8),
+                                            ),
+                                            child: Icon(
+                                              Icons.add_rounded,
+                                              color: Colors.white,
+                                              size: 20,
+                                            ),
                                           ),
-                                        ),
+                                          const SizedBox(width: 12),
+                                          Expanded(
+                                            child: Text(
+                                              'Join New Workspace',
+                                              style: TextStyle(
+                                                fontFamily: 'Inter',
+                                                fontSize: 15,
+                                                fontWeight: FontWeight.w600,
+                                                color: Colors.white,
+                                              ),
+                                            ),
+                                          ),
+                                        ],
                                       ),
                                     ),
                                   );
@@ -721,6 +785,53 @@ class _HomeWidgetState extends State<HomeWidget> with TickerProviderStateMixin {
     ).animateOnPageLoad(animationsMap['aiSummaryOnPageLoadAnimation']!);
   }
 
+  Widget _buildRecentActivitySection(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsetsDirectional.fromSTEB(24.0, 24.0, 24.0, 0.0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Recent Activity',
+            style: FlutterFlowTheme.of(context).headlineSmall.override(
+                  fontFamily: 'Inter',
+                  fontSize: MediaQuery.of(context).size.width < 400
+                      ? 18.0
+                      : MediaQuery.of(context).size.width < 600
+                          ? 20.0
+                          : 24.0,
+                  fontWeight: FontWeight.w600,
+                ),
+          ),
+          const SizedBox(height: 16),
+          Container(
+            height: 400,
+            decoration: BoxDecoration(
+              color: FlutterFlowTheme.of(context).secondaryBackground,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(
+                color: FlutterFlowTheme.of(context).alternate,
+              ),
+            ),
+            child: currentUserReference != null
+                ? PaginatedNotifications(
+                    userRef: currentUserReference!,
+                    width: double.infinity,
+                    height: 400,
+                  )
+                : Center(
+                    child: Text(
+                      'Please log in to view activity',
+                      style: FlutterFlowTheme.of(context).bodyMedium,
+                    ),
+                  ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildRecentEventsSection(BuildContext context) {
     return Container(
       width: double.infinity,
@@ -735,7 +846,8 @@ class _HomeWidgetState extends State<HomeWidget> with TickerProviderStateMixin {
                 'Recent Events',
                 style: FlutterFlowTheme.of(context).headlineSmall.override(
                       fontFamily: 'Inter',
-                      fontSize: 24.0,
+                      fontSize:
+                          MediaQuery.of(context).size.width < 600 ? 20.0 : 24.0,
                       fontWeight: FontWeight.w600,
                     ),
               ),
@@ -885,7 +997,8 @@ class _HomeWidgetState extends State<HomeWidget> with TickerProviderStateMixin {
                 'Recent Announcements',
                 style: FlutterFlowTheme.of(context).headlineSmall.override(
                       fontFamily: 'Inter',
-                      fontSize: 24.0,
+                      fontSize:
+                          MediaQuery.of(context).size.width < 600 ? 20.0 : 24.0,
                       fontWeight: FontWeight.w600,
                     ),
               ),

@@ -43,8 +43,12 @@ Future<bool> ensureFcmToken(DocumentReference userRef) async {
     );
 
     if (settings.authorizationStatus != AuthorizationStatus.authorized) {
-      print('User declined notifications permission');
+      print('❌ User declined notifications permission!');
+      print('   Authorization status: ${settings.authorizationStatus}');
       return false;
+    } else {
+      print('✅ Notification permission granted!');
+      print('   Authorization status: ${settings.authorizationStatus}');
     }
 
     // For macOS and iOS, ensure APNS token is available before getting FCM token
@@ -96,9 +100,11 @@ Future<bool> ensureFcmToken(DocumentReference userRef) async {
     String deviceType = 'unknown';
     if (!kIsWeb) {
       if (Platform.isIOS) {
-        deviceType = 'ios';
+        deviceType = 'iOS';
       } else if (Platform.isAndroid) {
-        deviceType = 'android';
+        deviceType = 'Android';
+      } else if (Platform.isMacOS) {
+        deviceType = 'macOS';
       }
     }
 
@@ -109,13 +115,17 @@ Future<bool> ensureFcmToken(DocumentReference userRef) async {
 
     if (existingTokenQuery.docs.isEmpty) {
       // Token doesn't exist, add it
-      await fcmTokensRef.add({
+      final docRef = await fcmTokensRef.add({
         'fcm_token': token,
         'device_type': deviceType,
         'created_at': FieldValue.serverTimestamp(),
       });
 
-      print('FCM token added successfully: ${token.substring(0, 10)}...');
+      print('✅ FCM token added successfully!');
+      print('   Token: ${token.substring(0, 10)}...');
+      print('   Device: $deviceType');
+      print('   Path: ${docRef.path}');
+      print('   User: ${userRef.path}');
     } else {
       // Token exists, update it if needed
       await existingTokenQuery.docs.first.reference.update({
@@ -123,27 +133,35 @@ Future<bool> ensureFcmToken(DocumentReference userRef) async {
         'device_type': deviceType,
       });
 
-      print('FCM token updated successfully');
+      print('✅ FCM token updated successfully!');
+      print('   Token: ${token.substring(0, 10)}...');
+      print('   Device: $deviceType');
+      print('   Doc: ${existingTokenQuery.docs.first.reference.path}');
     }
 
-    // Also listen for token refresh
+    // Also listen for token refresh - FIXED VERSION
     FirebaseMessaging.instance.onTokenRefresh.listen((newToken) async {
-      // Remove old token if it exists
-      if (token != newToken) {
-        final oldTokenQuery =
-            await fcmTokensRef.where('fcm_token', isEqualTo: token).get();
+      try {
+        print(
+            '🔄 FCM Token refreshed! Old: ${token.substring(0, 10)}... New: ${newToken.substring(0, 10)}...');
 
-        for (var doc in oldTokenQuery.docs) {
+        // Remove ALL old tokens for this user (cleanup)
+        final allTokensQuery = await fcmTokensRef.get();
+        for (var doc in allTokensQuery.docs) {
           await doc.reference.delete();
         }
-      }
 
-      // Add new token
-      await fcmTokensRef.add({
-        'fcm_token': newToken,
-        'device_type': deviceType,
-        'created_at': FieldValue.serverTimestamp(),
-      });
+        // Add new token
+        await fcmTokensRef.add({
+          'fcm_token': newToken,
+          'device_type': deviceType,
+          'created_at': FieldValue.serverTimestamp(),
+        });
+
+        print('✅ FCM token refresh completed! New token registered.');
+      } catch (e) {
+        print('❌ Error during token refresh: $e');
+      }
     });
 
     return true;

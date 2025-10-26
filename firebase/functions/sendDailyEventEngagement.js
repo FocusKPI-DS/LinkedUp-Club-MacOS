@@ -195,7 +195,11 @@ async function sendPushNotifications(snapshot) {
       apns: {
         payload: {
           aps: {
-            ...(sound && { sound: sound }),
+            sound: {
+              name: 'Glass',
+              critical: false,
+              volume: 1.0
+            },
             badge: 1, // This will add a badge to the app icon
             "mutable-content": 1, // Allow notification service extension to modify
             alert: {

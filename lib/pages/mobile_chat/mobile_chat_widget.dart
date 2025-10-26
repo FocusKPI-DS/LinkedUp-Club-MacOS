@@ -1,5 +1,6 @@
 import '/auth/firebase_auth/auth_util.dart';
 import '/backend/backend.dart';
+import '/backend/schema/enums/enums.dart';
 import '/flutter_flow/flutter_flow_animations.dart';
 import '/flutter_flow/flutter_flow_util.dart';
 import '/pages/chat/chat_component/chat_thread_component/chat_thread_component_widget.dart';
@@ -8,19 +9,15 @@ import '/pages/desktop_chat/chat_controller.dart';
 import '/pages/chat/user_profile_detail/user_profile_detail_widget.dart';
 import '/pages/chat/group_chat_detail/group_chat_detail_widget.dart';
 import 'dart:io';
-import 'dart:ui';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:easy_debounce/easy_debounce.dart';
 // import 'package:ff_theme/flutter_flow/flutter_flow_theme.dart'; // Removed unused import
 import 'package:flutter/material.dart';
-import 'package:flutter/rendering.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:get/get.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:timeago/timeago.dart' as timeago;
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/services.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 
 class MobileChatWidget extends StatefulWidget {
   const MobileChatWidget({
@@ -56,7 +53,7 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
 
     _model.tabController = TabController(
       vsync: this,
-      length: 2, // Direct Message and Groups
+      length: 3, // All, Direct Message, and Groups
       initialIndex: 0,
     )..addListener(() {
         safeSetState(() {});
@@ -148,7 +145,7 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
       ),
       child: SafeArea(
         child: Container(
-          height: 60,
+          height: 44,
           padding: EdgeInsets.symmetric(horizontal: 16),
           child: Row(
             children: [
@@ -162,16 +159,16 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
                   widget.onChatStateChanged?.call(false);
                 },
                 child: Container(
-                  width: 40,
-                  height: 40,
+                  width: 36,
+                  height: 36,
                   decoration: BoxDecoration(
                     color: Colors.transparent,
-                    borderRadius: BorderRadius.circular(20),
+                    borderRadius: BorderRadius.circular(18),
                   ),
                   child: Icon(
                     Icons.arrow_back_ios,
                     color: Color(0xFF007AFF), // iOS blue
-                    size: 20,
+                    size: 18,
                   ),
                 ),
               ),
@@ -187,16 +184,16 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
               GestureDetector(
                 onTap: () => _showChatOptions(chat),
                 child: Container(
-                  width: 40,
-                  height: 40,
+                  width: 36,
+                  height: 36,
                   decoration: BoxDecoration(
                     color: Colors.transparent,
-                    borderRadius: BorderRadius.circular(20),
+                    borderRadius: BorderRadius.circular(18),
                   ),
                   child: Icon(
                     Icons.more_vert,
                     color: Color(0xFF007AFF), // iOS blue
-                    size: 20,
+                    size: 18,
                   ),
                 ),
               ),
@@ -227,11 +224,11 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
   Widget _buildIOSHeader() {
     return Container(
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: Color(0xFF2D3142),
         border: Border(
           bottom: BorderSide(
-            color: Color(0xFFE5E7EB),
-            width: 0.5,
+            color: Color(0xFF374151),
+            width: 1,
           ),
         ),
         boxShadow: [
@@ -244,22 +241,19 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
       ),
       child: SafeArea(
         child: Container(
-          height: 60,
+          height: 40,
           padding: EdgeInsets.symmetric(horizontal: 16),
           child: Row(
             children: [
-              // Workspace switcher (Slack-style)
-              _buildWorkspaceSwitcher(),
-              SizedBox(width: 12),
               // App title
               Expanded(
                 child: Text(
-                  'Messages',
+                  'Chats',
                   style: TextStyle(
                     fontFamily: 'System',
-                    color: Color(0xFF1D1D1F),
+                    color: Colors.white,
                     fontSize: 22,
-                    fontWeight: FontWeight.w600,
+                    fontWeight: FontWeight.normal,
                     letterSpacing: -0.2,
                   ),
                 ),
@@ -296,7 +290,7 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
                         Icons.search,
                         color: _model.isSearchVisible
                             ? Color(0xFF007AFF)
-                            : Color(0xFF1D1D1F),
+                            : Colors.white,
                         size: 20,
                       ),
                     ),
@@ -327,7 +321,7 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
                         Icons.add,
                         color: _model.showGroupCreation
                             ? Color(0xFF007AFF)
-                            : Color(0xFF1D1D1F),
+                            : Colors.white,
                         size: 20,
                       ),
                     ),
@@ -348,10 +342,10 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
                         borderRadius: BorderRadius.circular(20),
                       ),
                       child: Icon(
-                        Icons.person_add,
+                        Icons.person,
                         color: _model.showWorkspaceMembers
                             ? Color(0xFF007AFF)
-                            : Color(0xFF1D1D1F),
+                            : Colors.white,
                         size: 20,
                       ),
                     ),
@@ -362,318 +356,6 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
           ),
         ),
       ),
-    );
-  }
-
-  Widget _buildWorkspaceSwitcher() {
-    if (currentUserReference == null) {
-      return Container(
-        width: 40,
-        height: 40,
-        decoration: BoxDecoration(
-          color: Color(0xFFF2F2F7),
-          borderRadius: BorderRadius.circular(8),
-        ),
-        child: Icon(
-          Icons.business,
-          color: Color(0xFF8E8E93),
-          size: 20,
-        ),
-      );
-    }
-
-    return StreamBuilder<UsersRecord>(
-      stream: UsersRecord.getDocument(currentUserReference!),
-      builder: (context, snapshot) {
-        if (!snapshot.hasData || currentUserReference == null) {
-          return Container(
-            width: 40,
-            height: 40,
-            decoration: BoxDecoration(
-              color: Color(0xFFF2F2F7),
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: Icon(
-              Icons.business,
-              color: Color(0xFF8E8E93),
-              size: 20,
-            ),
-          );
-        }
-
-        final currentUser = snapshot.data!;
-
-        // Get all workspace memberships
-        return StreamBuilder<List<WorkspaceMembersRecord>>(
-          stream: queryWorkspaceMembersRecord(
-            queryBuilder: (q) =>
-                q.where('user_ref', isEqualTo: currentUserReference),
-          ),
-          builder: (context, membershipSnapshot) {
-            if (!membershipSnapshot.hasData) {
-              return Container(
-                width: 40,
-                height: 40,
-                decoration: BoxDecoration(
-                  color: Color(0xFFF2F2F7),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Icon(
-                  Icons.business,
-                  color: Color(0xFF8E8E93),
-                  size: 20,
-                ),
-              );
-            }
-
-            final memberships = membershipSnapshot.data!;
-
-            // If no workspace, show placeholder
-            if (!currentUser.hasCurrentWorkspaceRef()) {
-              return Container(
-                width: 40,
-                height: 40,
-                decoration: BoxDecoration(
-                  color: Color(0xFFF2F2F7),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Icon(
-                  Icons.business,
-                  color: Color(0xFF8E8E93),
-                  size: 20,
-                ),
-              );
-            }
-
-            // Show current workspace with switcher
-            final workspaceRef = currentUser.currentWorkspaceRef;
-            if (workspaceRef == null) {
-              return Container(
-                width: 40,
-                height: 40,
-                decoration: BoxDecoration(
-                  color: Color(0xFFF2F2F7),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Icon(
-                  Icons.business,
-                  color: Color(0xFF8E8E93),
-                  size: 20,
-                ),
-              );
-            }
-
-            return FutureBuilder<WorkspacesRecord>(
-              future: WorkspacesRecord.getDocumentOnce(workspaceRef),
-              builder: (context, workspaceSnapshot) {
-                final workspaceName = workspaceSnapshot.hasData
-                    ? workspaceSnapshot.data?.name ?? 'Loading...'
-                    : 'Loading...';
-
-                // If only one workspace, just show it (Slack style)
-                if (memberships.length <= 1) {
-                  final workspace = workspaceSnapshot.data;
-                  final hasLogo = workspace?.logoUrl.isNotEmpty ?? false;
-
-                  return Container(
-                    width: 40,
-                    height: 40,
-                    decoration: BoxDecoration(
-                      color: hasLogo ? Colors.white : Color(0xFF007AFF),
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(
-                        color: Color(0xFFE5E7EB),
-                        width: 0.5,
-                      ),
-                    ),
-                    child: hasLogo
-                        ? ClipRRect(
-                            borderRadius: BorderRadius.circular(8),
-                            child: CachedNetworkImage(
-                              imageUrl: workspace?.logoUrl ?? '',
-                              width: 40,
-                              height: 40,
-                              fit: BoxFit.cover,
-                              placeholder: (context, url) => Center(
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                  valueColor: AlwaysStoppedAnimation<Color>(
-                                    Color(0xFF007AFF),
-                                  ),
-                                ),
-                              ),
-                              errorWidget: (context, url, error) => Center(
-                                child: Text(
-                                  workspaceName.isNotEmpty
-                                      ? workspaceName[0].toUpperCase()
-                                      : 'W',
-                                  style: TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 16,
-                                    fontWeight: FontWeight.w700,
-                                  ),
-                                ),
-                              ),
-                            ),
-                          )
-                        : Center(
-                            child: Text(
-                              workspaceName.isNotEmpty
-                                  ? workspaceName[0].toUpperCase()
-                                  : 'W',
-                              style: TextStyle(
-                                color: Colors.white,
-                                fontSize: 16,
-                                fontWeight: FontWeight.w700,
-                              ),
-                            ),
-                          ),
-                  );
-                }
-
-                // Multiple workspaces - show dropdown (Slack style)
-                final workspace = workspaceSnapshot.data;
-                final hasLogo = workspace?.logoUrl.isNotEmpty ?? false;
-
-                return PopupMenuButton<DocumentReference>(
-                  offset: Offset(0, 50),
-                  child: Container(
-                    width: 40,
-                    height: 40,
-                    decoration: BoxDecoration(
-                      color: hasLogo ? Colors.white : Color(0xFF007AFF),
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(
-                        color: Color(0xFFE5E7EB),
-                        width: 0.5,
-                      ),
-                    ),
-                    child: hasLogo
-                        ? ClipRRect(
-                            borderRadius: BorderRadius.circular(8),
-                            child: CachedNetworkImage(
-                              imageUrl: workspace?.logoUrl ?? '',
-                              width: 40,
-                              height: 40,
-                              fit: BoxFit.cover,
-                              placeholder: (context, url) => Center(
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                  valueColor: AlwaysStoppedAnimation<Color>(
-                                    Color(0xFF007AFF),
-                                  ),
-                                ),
-                              ),
-                              errorWidget: (context, url, error) => Center(
-                                child: Text(
-                                  workspaceName.isNotEmpty
-                                      ? workspaceName[0].toUpperCase()
-                                      : 'W',
-                                  style: TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 16,
-                                    fontWeight: FontWeight.w700,
-                                  ),
-                                ),
-                              ),
-                            ),
-                          )
-                        : Center(
-                            child: Text(
-                              workspaceName.isNotEmpty
-                                  ? workspaceName[0].toUpperCase()
-                                  : 'W',
-                              style: TextStyle(
-                                color: Colors.white,
-                                fontSize: 16,
-                                fontWeight: FontWeight.w700,
-                              ),
-                            ),
-                          ),
-                  ),
-                  onSelected: (workspaceRef) async {
-                    // Update user's current workspace
-                    final userRef = currentUserReference;
-                    if (userRef != null) {
-                      await userRef.update({
-                        'current_workspace_ref': workspaceRef,
-                      });
-
-                      // Update chat controller with new workspace
-                      try {
-                        chatController.updateCurrentWorkspace(workspaceRef);
-                      } catch (e) {
-                        // ChatController not found
-                      }
-
-                      // Show confirmation
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content: Text('Workspace switched'),
-                          duration: Duration(seconds: 2),
-                          backgroundColor: Color(0xFF34C759),
-                        ),
-                      );
-
-                      // Refresh the page
-                      safeSetState(() {});
-                    }
-                  },
-                  itemBuilder: (context) {
-                    return memberships.map((membership) {
-                      return PopupMenuItem<DocumentReference>(
-                        value: membership.workspaceRef,
-                        child: FutureBuilder<WorkspacesRecord>(
-                          future: WorkspacesRecord.getDocumentOnce(
-                            membership.workspaceRef ??
-                                FirebaseFirestore.instance
-                                    .collection('workspaces')
-                                    .doc('placeholder'),
-                          ),
-                          builder: (context, ws) {
-                            final name = ws.hasData
-                                ? ws.data?.name ?? 'Loading...'
-                                : 'Loading...';
-                            final isSelected =
-                                currentUser.currentWorkspaceRef?.id ==
-                                    membership.workspaceRef?.id;
-
-                            return Container(
-                              padding: EdgeInsets.symmetric(vertical: 8),
-                              child: Row(
-                                children: [
-                                  if (isSelected)
-                                    Icon(
-                                      Icons.check_circle,
-                                      color: Color(0xFF007AFF),
-                                      size: 16,
-                                    ),
-                                  if (isSelected) SizedBox(width: 8),
-                                  Expanded(
-                                    child: Text(
-                                      name,
-                                      style: TextStyle(
-                                        fontWeight: isSelected
-                                            ? FontWeight.w600
-                                            : FontWeight.w400,
-                                        fontSize: 16,
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            );
-                          },
-                        ),
-                      );
-                    }).toList();
-                  },
-                );
-              },
-            );
-          },
-        );
-      },
     );
   }
 
@@ -716,6 +398,35 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
                 _showEmojiMenu(message);
               },
             ),
+            _buildMessageMenuOption(
+              icon: Icons.reply_rounded,
+              title: 'Reply',
+              onTap: () {
+                Navigator.pop(context);
+                _replyToMessage(message);
+              },
+            ),
+            // Only show edit and unsend options for messages sent by current user
+            if (message.senderRef == currentUserReference) ...[
+              _buildMessageMenuOption(
+                icon: Icons.edit_rounded,
+                title: 'Edit',
+                onTap: () {
+                  Navigator.pop(context);
+                  _editMessage(message);
+                },
+              ),
+              _buildMessageMenuOption(
+                icon: Icons.undo_rounded,
+                title: 'Unsend',
+                titleColor: Color(0xFFFF3B30),
+                iconColor: Color(0xFFFF3B30),
+                onTap: () {
+                  Navigator.pop(context);
+                  _unsendMessage(message);
+                },
+              ),
+            ],
             _buildMessageMenuOption(
               icon: Icons.report_gmailerrorred_rounded,
               title: 'Report',
@@ -901,7 +612,7 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
               fontFamily: 'System',
               color: Color(0xFF1D1D1F),
               fontSize: 17,
-              fontWeight: FontWeight.w600,
+              fontWeight: FontWeight.normal,
             ),
           ),
           content: Text(
@@ -932,7 +643,7 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
                   fontFamily: 'System',
                   color: Color(0xFFFF3B30),
                   fontSize: 17,
-                  fontWeight: FontWeight.w600,
+                  fontWeight: FontWeight.normal,
                 ),
               ),
             ),
@@ -943,13 +654,622 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
 
     if (shouldReport == true) {
       // Here you would implement the actual reporting logic
-      // For now, just show a success message
+      // Message reported - no snackbar needed
+    }
+  }
+
+  Future<void> _replyToMessage(MessagesRecord message) async {
+    // Show reply input area with the message being replied to
+    _showReplyInput(message);
+  }
+
+  void _showReplyInput(MessagesRecord message) {
+    final TextEditingController replyController = TextEditingController();
+
+    // Create a reply input overlay
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (context) => Container(
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        ),
+        child: Padding(
+          padding: EdgeInsets.only(
+            bottom: MediaQuery.of(context).viewInsets.bottom,
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Handle bar
+              Container(
+                width: 36,
+                height: 5,
+                margin: EdgeInsets.symmetric(vertical: 12),
+                decoration: BoxDecoration(
+                  color: Color(0xFFD1D1D6),
+                  borderRadius: BorderRadius.circular(2.5),
+                ),
+              ),
+              // Reply preview
+              Container(
+                width: double.infinity,
+                margin: EdgeInsets.symmetric(horizontal: 16),
+                padding: EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Color(0xFFF8F9FA),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border(
+                    left: BorderSide(
+                      color: Color(0xFF007AFF),
+                      width: 4.0,
+                    ),
+                  ),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Replying to ${message.senderName}',
+                      style: TextStyle(
+                        fontFamily: 'System',
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                        color: Color(0xFF007AFF),
+                      ),
+                    ),
+                    SizedBox(height: 4),
+                    Text(
+                      message.content,
+                      style: TextStyle(
+                        fontFamily: 'System',
+                        fontSize: 14,
+                        color: Color(0xFF6B7280),
+                      ),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
+                ),
+              ),
+              SizedBox(height: 16),
+              // Message input
+              Container(
+                margin: EdgeInsets.symmetric(horizontal: 16),
+                child: TextField(
+                  controller: replyController,
+                  decoration: InputDecoration(
+                    hintText: 'Type your reply...',
+                    hintStyle: TextStyle(
+                      fontFamily: 'System',
+                      color: Color(0xFF8E8E93),
+                    ),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide(color: Color(0xFFE5E7EB)),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide(color: Color(0xFF007AFF)),
+                    ),
+                    contentPadding: EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 12,
+                    ),
+                  ),
+                  maxLines: 4,
+                  minLines: 1,
+                  onSubmitted: (text) {
+                    if (text.trim().isNotEmpty) {
+                      _sendReplyMessage(message, text.trim());
+                      Navigator.pop(context);
+                    }
+                  },
+                ),
+              ),
+              SizedBox(height: 16),
+              // Send button
+              Container(
+                width: double.infinity,
+                margin: EdgeInsets.symmetric(horizontal: 16),
+                child: ElevatedButton(
+                  onPressed: () {
+                    print('🔘 Send Reply button pressed');
+                    print('📝 Reply text: "${replyController.text}"');
+                    if (replyController.text.trim().isNotEmpty) {
+                      print('✅ Sending reply...');
+                      _sendReplyMessage(message, replyController.text.trim());
+                      Navigator.pop(context);
+                    } else {
+                      print('❌ Reply text is empty');
+                    }
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Color(0xFF007AFF),
+                    foregroundColor: Colors.white,
+                    padding: EdgeInsets.symmetric(vertical: 12),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                  child: Text(
+                    'Send Reply',
+                    style: TextStyle(
+                      fontFamily: 'System',
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+              ),
+              SizedBox(height: 20),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _sendReplyMessage(
+      MessagesRecord originalMessage, String replyText) async {
+    try {
+      print(
+          '🔄 Sending reply: "$replyText" to message: "${originalMessage.content}"');
+
+      // Create the reply message
+      final messageRef =
+          MessagesRecord.createDoc(_model.selectedChat!.reference);
+      await messageRef.set({
+        'content': replyText,
+        'sender_ref': currentUserReference,
+        'sender_name': currentUser?.displayName ?? 'You',
+        'sender_photo': currentUser?.photoUrl ?? '',
+        'created_at': getCurrentTimestamp,
+        'message_type': MessageType.text.serialize(),
+        'reply_to': originalMessage.reference.id,
+        'reply_to_content': originalMessage.content,
+        'reply_to_sender': originalMessage.senderName,
+      });
+
+      print('✅ Reply message created successfully');
+
+      // Update chat's last message
+      if (_model.selectedChat != null) {
+        await _model.selectedChat!.reference.update({
+          'last_message': replyText,
+          'last_message_at': getCurrentTimestamp,
+          'last_message_sent': currentUserReference,
+          'last_message_type': MessageType.text.serialize(),
+        });
+        print('✅ Chat metadata updated');
+      }
+
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Message reported'),
+          content: Text('Reply sent'),
+          duration: Duration(milliseconds: 1000),
           backgroundColor: Color(0xFF34C759),
         ),
       );
+    } catch (e) {
+      print('❌ Error sending reply: $e');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Failed to send reply: $e'),
+          backgroundColor: Color(0xFFFF3B30),
+        ),
+      );
+    }
+  }
+
+  Future<void> _editMessage(MessagesRecord message) async {
+    // Check if the message was sent by the current user
+    if (message.senderRef != currentUserReference) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'You can only edit your own messages',
+            style: TextStyle(
+              fontFamily: 'System',
+              color: Colors.white,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+          duration: Duration(milliseconds: 2000),
+          backgroundColor: Color(0xFFFF3B30),
+        ),
+      );
+      return;
+    }
+
+    // Show edit input area
+    _showEditInput(message);
+  }
+
+  void _showEditInput(MessagesRecord message) {
+    final TextEditingController editController =
+        TextEditingController(text: message.content);
+
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (context) => Container(
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        ),
+        child: Padding(
+          padding: EdgeInsets.only(
+            bottom: MediaQuery.of(context).viewInsets.bottom,
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Handle bar
+              Container(
+                width: 36,
+                height: 5,
+                margin: EdgeInsets.symmetric(vertical: 12),
+                decoration: BoxDecoration(
+                  color: Color(0xFFD1D1D6),
+                  borderRadius: BorderRadius.circular(2.5),
+                ),
+              ),
+              // Edit header
+              Container(
+                width: double.infinity,
+                margin: EdgeInsets.symmetric(horizontal: 16),
+                child: Text(
+                  'Edit Message',
+                  style: TextStyle(
+                    fontFamily: 'System',
+                    fontSize: 18,
+                    fontWeight: FontWeight.w600,
+                    color: Color(0xFF1D1D1F),
+                  ),
+                ),
+              ),
+              SizedBox(height: 16),
+              // Message input
+              Container(
+                margin: EdgeInsets.symmetric(horizontal: 16),
+                child: TextField(
+                  controller: editController,
+                  decoration: InputDecoration(
+                    hintText: 'Edit your message...',
+                    hintStyle: TextStyle(
+                      fontFamily: 'System',
+                      color: Color(0xFF8E8E93),
+                    ),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide(color: Color(0xFFE5E7EB)),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide(color: Color(0xFF007AFF)),
+                    ),
+                    contentPadding: EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 12,
+                    ),
+                  ),
+                  maxLines: 4,
+                  minLines: 1,
+                  onSubmitted: (text) {
+                    if (text.trim().isNotEmpty) {
+                      _updateMessage(message, text.trim());
+                      Navigator.pop(context);
+                    }
+                  },
+                ),
+              ),
+              SizedBox(height: 16),
+              // Action buttons
+              Row(
+                children: [
+                  Expanded(
+                    child: Container(
+                      margin: EdgeInsets.only(left: 16, right: 8),
+                      child: OutlinedButton(
+                        onPressed: () => Navigator.pop(context),
+                        style: OutlinedButton.styleFrom(
+                          side: BorderSide(color: Color(0xFFE5E7EB)),
+                          padding: EdgeInsets.symmetric(vertical: 12),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
+                        child: Text(
+                          'Cancel',
+                          style: TextStyle(
+                            fontFamily: 'System',
+                            fontSize: 16,
+                            fontWeight: FontWeight.w600,
+                            color: Color(0xFF6B7280),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                  Expanded(
+                    child: Container(
+                      margin: EdgeInsets.only(left: 8, right: 16),
+                      child: ElevatedButton(
+                        onPressed: () {
+                          if (editController.text.trim().isNotEmpty) {
+                            _updateMessage(message, editController.text.trim());
+                            Navigator.pop(context);
+                          }
+                        },
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Color(0xFF007AFF),
+                          foregroundColor: Colors.white,
+                          padding: EdgeInsets.symmetric(vertical: 12),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
+                        child: Text(
+                          'Save',
+                          style: TextStyle(
+                            fontFamily: 'System',
+                            fontSize: 16,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              SizedBox(height: 20),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _updateMessage(MessagesRecord message, String newContent) async {
+    try {
+      // Update the message content
+      await message.reference.update({
+        'content': newContent,
+        'edited_at': getCurrentTimestamp,
+        'is_edited': true,
+      });
+
+      // Update chat's last message if this was the last message
+      if (_model.selectedChat != null) {
+        final chatDoc = await _model.selectedChat!.reference.get();
+        if (chatDoc.exists) {
+          final chatData = chatDoc.data() as Map<String, dynamic>;
+          final lastMessageSent =
+              chatData['last_message_sent'] as DocumentReference?;
+          final chatLastMessage = chatData['last_message'] as String? ?? '';
+
+          // If this was the last message, update chat metadata
+          if (lastMessageSent == currentUserReference &&
+              chatLastMessage == message.content) {
+            await _model.selectedChat!.reference.update({
+              'last_message': newContent,
+              'last_message_at': getCurrentTimestamp,
+            });
+          }
+        }
+      }
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Message updated'),
+          duration: Duration(milliseconds: 1000),
+          backgroundColor: Color(0xFF34C759),
+        ),
+      );
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Failed to update message: $e'),
+          backgroundColor: Color(0xFFFF3B30),
+        ),
+      );
+    }
+  }
+
+  Future<void> _unsendMessage(MessagesRecord message) async {
+    // Check if the message was sent by the current user
+    if (message.senderRef != currentUserReference) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'You can only unsend your own messages',
+            style: TextStyle(
+              fontFamily: 'System',
+              color: Colors.white,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+          duration: Duration(milliseconds: 2000),
+          backgroundColor: Color(0xFFFF3B30),
+        ),
+      );
+      return;
+    }
+
+    // Show confirmation dialog
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: Colors.white,
+        title: Text(
+          'Unsend Message',
+          style: TextStyle(
+            fontFamily: 'System',
+            color: Color(0xFF1D1D1F),
+            fontSize: 17,
+            fontWeight: FontWeight.normal,
+          ),
+        ),
+        content: Text(
+          'Are you sure you want to unsend this message? This action cannot be undone.',
+          style: TextStyle(
+            fontFamily: 'System',
+            color: Color(0xFF8E8E93),
+            fontSize: 15,
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: Text(
+              'Cancel',
+              style: TextStyle(
+                fontFamily: 'System',
+                color: Color(0xFF8E8E93),
+                fontSize: 17,
+              ),
+            ),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: Text(
+              'Unsend',
+              style: TextStyle(
+                fontFamily: 'System',
+                color: Color(0xFFFF3B30),
+                fontSize: 17,
+                fontWeight: FontWeight.normal,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true) {
+      try {
+        // Delete the message from Firestore
+        print(
+            '🗑️ Deleting message: "${message.content}" from ${message.reference.path}');
+        await message.reference.delete();
+        print('✅ Message deleted successfully from Firebase');
+
+        // Update chat's last message if this was the last message
+        if (_model.selectedChat != null) {
+          final chatDoc = await _model.selectedChat!.reference.get();
+          if (chatDoc.exists) {
+            final chatData = chatDoc.data() as Map<String, dynamic>;
+            final lastMessageSent =
+                chatData['last_message_sent'] as DocumentReference?;
+
+            // Check if this was the last message by comparing the deleted message with chat's last message
+            final chatLastMessage = chatData['last_message'] as String? ?? '';
+            final deletedMessageContent = message.content;
+
+            print('🔍 DEBUG: Chat last message: "$chatLastMessage"');
+            print(
+                '🔍 DEBUG: Deleted message content: "$deletedMessageContent"');
+            print(
+                '🔍 DEBUG: Last message sent by: ${chatData['last_message_sent']}');
+            print('🔍 DEBUG: Current user: $currentUserReference');
+
+            // If this was the last message, update chat
+            if (lastMessageSent == currentUserReference &&
+                chatLastMessage == deletedMessageContent) {
+              print('🔄 Updating chat metadata - this was the last message');
+
+              // Get the previous message
+              final previousMessages = await _model.selectedChat!.reference
+                  .collection('messages')
+                  .orderBy('created_at', descending: true)
+                  .limit(1)
+                  .get();
+
+              if (previousMessages.docs.isNotEmpty) {
+                final previousMessage = previousMessages.docs.first;
+                final previousData = previousMessage.data();
+
+                print(
+                    '🔄 Found previous message: "${previousData['content']}"');
+
+                // Update chat with previous message info
+                await _model.selectedChat!.reference.update({
+                  'last_message': previousData['content'] ?? '',
+                  'last_message_at': previousData['created_at'] ??
+                      FieldValue.serverTimestamp(),
+                  'last_message_sent': previousData['sender_ref'],
+                  'last_message_type':
+                      previousData['message_type'] ?? MessageType.text,
+                });
+              } else {
+                print('🔄 No previous messages found, resetting chat');
+
+                // No previous messages, reset chat
+                await _model.selectedChat!.reference.update({
+                  'last_message': '',
+                  'last_message_at': FieldValue.serverTimestamp(),
+                  'last_message_sent': currentUserReference,
+                  'last_message_type': MessageType.text,
+                });
+              }
+            } else {
+              print(
+                  'ℹ️ This was not the last message, no chat metadata update needed');
+            }
+          }
+        }
+
+        // Force immediate UI update by refreshing the specific chat
+        print('🔄 Forcing immediate chat list update...');
+
+        // Update the chat controller's local state immediately
+        final chatIndex = chatController.chats.indexWhere(
+          (chat) => chat.reference.id == _model.selectedChat?.reference.id,
+        );
+
+        if (chatIndex != -1) {
+          // Get the updated chat document from Firebase
+          final updatedChatDoc = await _model.selectedChat!.reference.get();
+          if (updatedChatDoc.exists) {
+            final updatedChat = ChatsRecord.fromSnapshot(updatedChatDoc);
+            chatController.chats[chatIndex] = updatedChat;
+            print('✅ Updated chat in controller: ${updatedChat.lastMessage}');
+          }
+        }
+
+        // Force UI update to reflect changes immediately
+        if (mounted) {
+          safeSetState(() {});
+        }
+
+        // Also trigger a complete refresh as backup
+        print('🔄 Triggering complete chat controller refresh...');
+        await chatController.refreshChats();
+
+        print('✅ Immediate chat list update completed');
+
+        // Message unsent successfully - no snackbar needed
+      } catch (e) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Failed to unsend message: $e',
+              style: TextStyle(
+                fontFamily: 'System',
+                color: Colors.white,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+            duration: Duration(milliseconds: 2000),
+            backgroundColor: Color(0xFFFF3B30),
+          ),
+        );
+      }
     }
   }
 
@@ -1029,13 +1349,15 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
 
   Widget _buildNavigationTabs() {
     return Container(
-      height: 44,
-      padding: EdgeInsets.symmetric(horizontal: 16),
+      height: 36,
+      padding: EdgeInsets.symmetric(horizontal: 12),
       child: Row(
         children: [
-          Expanded(child: _buildTab('Direct Message', 0)),
-          SizedBox(width: 8),
-          Expanded(child: _buildTab('Groups', 1)),
+          Expanded(child: _buildTab('All', 0)),
+          SizedBox(width: 6),
+          Expanded(child: _buildTab('DM', 1)),
+          SizedBox(width: 6),
+          Expanded(child: _buildTab('Groups', 2)),
         ],
       ),
     );
@@ -1048,10 +1370,10 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
         _model.tabController?.animateTo(index);
       },
       child: Container(
-        height: 32,
+        height: 28,
         decoration: BoxDecoration(
           color: isSelected ? Color(0xFF007AFF) : Colors.transparent,
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.circular(6),
         ),
         child: Center(
           child: Text(
@@ -1060,7 +1382,7 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
               fontFamily: 'System',
               color: isSelected ? Colors.white : Color(0xFF8E8E93),
               fontSize: 16,
-              fontWeight: FontWeight.w600,
+              fontWeight: FontWeight.normal,
             ),
           ),
         ),
@@ -1095,7 +1417,7 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
                     fontFamily: 'System',
                     color: Color(0xFF1D1D1F),
                     fontSize: 17,
-                    fontWeight: FontWeight.w600,
+                    fontWeight: FontWeight.normal,
                   ),
                 ),
                 SizedBox(height: 8),
@@ -1123,7 +1445,7 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
                       fontFamily: 'System',
                       color: Colors.white,
                       fontSize: 16,
-                      fontWeight: FontWeight.w600,
+                      fontWeight: FontWeight.normal,
                     ),
                   ),
                 ),
@@ -1161,7 +1483,7 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
                       fontFamily: 'System',
                       color: Color(0xFF1D1D1F),
                       fontSize: 17,
-                      fontWeight: FontWeight.w600,
+                      fontWeight: FontWeight.normal,
                     ),
                   ),
                   SizedBox(height: 8),
@@ -1282,7 +1604,7 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
                     fontFamily: 'System',
                     color: Color(0xFF1D1D1F),
                     fontSize: 17,
-                    fontWeight: FontWeight.w600,
+                    fontWeight: FontWeight.normal,
                   ),
                 ),
               ),
@@ -1437,7 +1759,7 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
                                               fontFamily: 'System',
                                               color: Color(0xFF1D1D1F),
                                               fontSize: 17,
-                                              fontWeight: FontWeight.w600,
+                                              fontWeight: FontWeight.normal,
                                             ),
                                             maxLines: 1,
                                             overflow: TextOverflow.ellipsis,
@@ -1456,7 +1778,7 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
                                             style: TextStyle(
                                               color: Colors.white,
                                               fontSize: 10,
-                                              fontWeight: FontWeight.w600,
+                                              fontWeight: FontWeight.normal,
                                             ),
                                           ),
                                         ),
@@ -1538,7 +1860,7 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
                     fontFamily: 'System',
                     color: Color(0xFF1D1D1F),
                     fontSize: 17,
-                    fontWeight: FontWeight.w600,
+                    fontWeight: FontWeight.normal,
                   ),
                 ),
               ),
@@ -1577,7 +1899,7 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
                     fontFamily: 'System',
                     color: Color(0xFF1D1D1F),
                     fontSize: 17,
-                    fontWeight: FontWeight.w600,
+                    fontWeight: FontWeight.normal,
                   ),
                 ),
                 SizedBox(height: 8),
@@ -1623,7 +1945,7 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
                     fontFamily: 'System',
                     color: Color(0xFF1D1D1F),
                     fontSize: 17,
-                    fontWeight: FontWeight.w600,
+                    fontWeight: FontWeight.normal,
                   ),
                 ),
                 SizedBox(height: 8),
@@ -1750,7 +2072,7 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
                                       fontFamily: 'System',
                                       color: Colors.white,
                                       fontSize: 14,
-                                      fontWeight: FontWeight.w600,
+                                      fontWeight: FontWeight.normal,
                                     ),
                                   ),
                                 ),
@@ -1777,7 +2099,7 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
                                         fontFamily: 'System',
                                         color: Colors.white,
                                         fontSize: 14,
-                                        fontWeight: FontWeight.w600,
+                                        fontWeight: FontWeight.normal,
                                       ),
                                     ),
                                   ),
@@ -1798,7 +2120,7 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
                     fontFamily: 'System',
                     color: Color(0xFF1D1D1F),
                     fontSize: 17,
-                    fontWeight: FontWeight.w600,
+                    fontWeight: FontWeight.normal,
                   ),
                 ),
                 SizedBox(height: 8),
@@ -1962,7 +2284,7 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
                                                     ? Colors.white
                                                     : Color(0xFF1D1D1F),
                                                 fontSize: 15,
-                                                fontWeight: FontWeight.w600,
+                                                fontWeight: FontWeight.normal,
                                               ),
                                             ),
                                             Text(
@@ -2020,7 +2342,7 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
                         fontFamily: 'System',
                         color: Colors.white,
                         fontSize: 17,
-                        fontWeight: FontWeight.w600,
+                        fontWeight: FontWeight.normal,
                       ),
                     ),
                   ),
@@ -2283,18 +2605,18 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
   Widget _buildHeaderAvatar(ChatsRecord chat) {
     if (chat.isGroup) {
       return Container(
-        width: 40,
-        height: 40,
+        width: 36,
+        height: 36,
         decoration: BoxDecoration(
           color: Colors.white,
           shape: BoxShape.circle,
         ),
         child: ClipRRect(
-          borderRadius: BorderRadius.circular(20),
+          borderRadius: BorderRadius.circular(18),
           child: CachedNetworkImage(
             imageUrl: chat.chatImageUrl,
-            width: 40,
-            height: 40,
+            width: 36,
+            height: 36,
             fit: BoxFit.cover,
             memCacheWidth: 80,
             memCacheHeight: 80,
@@ -2302,8 +2624,8 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
             maxHeightDiskCache: 80,
             filterQuality: FilterQuality.high,
             placeholder: (context, url) => Container(
-              width: 40,
-              height: 40,
+              width: 36,
+              height: 36,
               decoration: BoxDecoration(
                 color: Colors.white,
                 shape: BoxShape.circle,
@@ -2315,8 +2637,8 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
               ),
             ),
             errorWidget: (context, url, error) => Container(
-              width: 40,
-              height: 40,
+              width: 36,
+              height: 36,
               decoration: BoxDecoration(
                 color: Colors.white,
                 shape: BoxShape.circle,
@@ -2342,7 +2664,13 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
         builder: (context, userSnapshot) {
           String imageUrl = '';
           if (userSnapshot.hasData && userSnapshot.data != null) {
-            imageUrl = userSnapshot.data!.photoUrl;
+            // Check if this is Summer
+            if (otherUserRef.path.contains('ai_agent_summerai')) {
+              imageUrl =
+                  'https://firebasestorage.googleapis.com/v0/b/linkedup-c3e29.firebasestorage.app/o/asset%2Fsoftware-agent.png?alt=media&token=99761584-999d-4f8e-b3d1-f9d1baf86120';
+            } else {
+              imageUrl = userSnapshot.data!.photoUrl;
+            }
           }
 
           return Container(
@@ -2405,8 +2733,8 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
         style: TextStyle(
           fontFamily: 'System',
           color: Color(0xFF1D1D1F),
-          fontSize: 17,
-          fontWeight: FontWeight.w600,
+          fontSize: 16,
+          fontWeight: FontWeight.normal,
         ),
         maxLines: 1,
         overflow: TextOverflow.ellipsis,
@@ -2424,8 +2752,14 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
           String displayName = 'Direct Chat';
           if (userSnapshot.hasData && userSnapshot.data != null) {
             final user = userSnapshot.data!;
-            displayName =
-                user.displayName.isNotEmpty ? user.displayName : 'Unknown User';
+            // Check if this is Summer
+            if (otherUserRef.path.contains('ai_agent_summerai')) {
+              displayName = 'Summer';
+            } else {
+              displayName = user.displayName.isNotEmpty
+                  ? user.displayName
+                  : 'Unknown User';
+            }
           }
 
           return Text(
@@ -2434,7 +2768,7 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
               fontFamily: 'System',
               color: Color(0xFF1D1D1F),
               fontSize: 17,
-              fontWeight: FontWeight.w600,
+              fontWeight: FontWeight.normal,
             ),
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
@@ -2598,7 +2932,7 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
                 fontFamily: 'System',
                 color: Color(0xFF1D1D1F),
                 fontSize: 17,
-                fontWeight: FontWeight.w600,
+                fontWeight: FontWeight.normal,
               ),
             ),
             content: Text(
@@ -2629,7 +2963,7 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
                     fontFamily: 'System',
                     color: Color(0xFFFF3B30),
                     fontSize: 17,
-                    fontWeight: FontWeight.w600,
+                    fontWeight: FontWeight.normal,
                   ),
                 ),
               ),
@@ -2720,69 +3054,262 @@ class _MobileChatListItemState extends State<_MobileChatListItem>
   @override
   bool get wantKeepAlive => true;
 
+  // Helper function to format timestamp
+  String _formatTimestamp(DateTime? timestamp) {
+    if (timestamp == null) return 'Unknown';
+
+    final now = DateTime.now();
+    final difference = now.difference(timestamp);
+
+    // If within 24 hours, show exact time
+    if (difference.inHours < 24) {
+      return DateFormat('h:mm a').format(timestamp);
+    }
+    // If more than 24 hours, show date
+    else {
+      return DateFormat('MMM d').format(timestamp);
+    }
+  }
+
+  void _showChatMenu(ChatsRecord chat) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (context) => Container(
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Handle bar
+            Container(
+              width: 36,
+              height: 5,
+              margin: EdgeInsets.symmetric(vertical: 12),
+              decoration: BoxDecoration(
+                color: Color(0xFFD1D1D6),
+                borderRadius: BorderRadius.circular(2.5),
+              ),
+            ),
+            // Menu options
+            _buildMenuOption(
+              icon: chat.isPin ? Icons.push_pin : Icons.push_pin_outlined,
+              title: chat.isPin ? 'Unpin Chat' : 'Pin Chat',
+              onTap: () {
+                Navigator.pop(context);
+                _togglePinChat(chat);
+              },
+            ),
+            _buildMenuOption(
+              icon: Icons.delete_outline,
+              title: 'Delete Chat',
+              onTap: () {
+                Navigator.pop(context);
+                _showDeleteConfirmation(chat);
+              },
+              textColor: Colors.red,
+              iconColor: Colors.red,
+            ),
+            // Bottom spacing
+            SizedBox(height: 20),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildMenuOption({
+    required IconData icon,
+    required String title,
+    required VoidCallback onTap,
+    Color? textColor,
+    Color? iconColor,
+  }) {
+    final defaultColor = Color(0xFF1D1D1F);
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        child: Container(
+          width: double.infinity,
+          padding: EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+          child: Row(
+            children: [
+              Icon(
+                icon,
+                color: iconColor ?? defaultColor,
+                size: 20,
+              ),
+              SizedBox(width: 16),
+              Text(
+                title,
+                style: TextStyle(
+                  fontFamily: 'System',
+                  color: textColor ?? defaultColor,
+                  fontSize: 16,
+                  fontWeight: FontWeight.w400,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _togglePinChat(ChatsRecord chat) async {
+    try {
+      await chat.reference.update({
+        'is_pin': !chat.isPin,
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(chat.isPin ? 'Chat unpinned' : 'Chat pinned'),
+          backgroundColor: Color(0xFF34C759),
+        ),
+      );
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error updating chat'),
+          backgroundColor: Color(0xFFFF3B30),
+        ),
+      );
+    }
+  }
+
+  void _showDeleteConfirmation(ChatsRecord chat) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('Delete Chat'),
+        content: Text(
+            'Are you sure you want to delete this chat? This action cannot be undone.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () {
+              Navigator.pop(context);
+              _deleteChat(chat);
+            },
+            child: Text(
+              'Delete',
+              style: TextStyle(color: Color(0xFFFF3B30)),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _deleteChat(ChatsRecord chat) async {
+    try {
+      await chat.reference.delete();
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Chat deleted'),
+          backgroundColor: Color(0xFF34C759),
+        ),
+      );
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error deleting chat'),
+          backgroundColor: Color(0xFFFF3B30),
+        ),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     super.build(context);
 
-    return InkWell(
-      onTap: widget.onTap,
-      child: Container(
-        width: double.infinity,
-        padding: EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          border: Border(
-            bottom: BorderSide(
-              color: Color(0xFFE5E7EB),
-              width: 0.5,
-            ),
-          ),
-        ),
-        child: Row(
-          children: [
-            // Avatar
-            _buildChatAvatar(widget.chat),
-            SizedBox(width: 12),
-            // Chat Info
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  _getChatDisplayName(widget.chat),
-                  SizedBox(height: 4),
-                  _getLastMessagePreview(widget.chat),
-                ],
+    return GestureDetector(
+      onTap: () => widget.onTap(),
+      onLongPress: () => _showChatMenu(widget.chat),
+      onLongPressStart: (_) {}, // Required for onLongPress to work
+      child: InkWell(
+        onTap: null, // Disable InkWell tap since GestureDetector handles it
+        child: Container(
+          width: double.infinity,
+          padding: EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            border: Border(
+              bottom: BorderSide(
+                color: Color(0xFFE5E7EB),
+                width: 0.5,
               ),
             ),
-            // Timestamp and notification dot
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: [
-                // Timestamp
-                Text(
-                  widget.chat.lastMessageAt != null
-                      ? timeago.format(widget.chat.lastMessageAt!)
-                      : 'Unknown',
-                  style: TextStyle(
-                    fontFamily: 'System',
-                    color: Color(0xFF8E8E93),
-                    fontSize: 13,
-                  ),
+          ),
+          child: Row(
+            children: [
+              // Avatar
+              _buildChatAvatar(widget.chat),
+              SizedBox(width: 12),
+              // Chat Info
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _getChatDisplayName(widget.chat),
+                    SizedBox(height: 4),
+                    _getLastMessagePreview(widget.chat),
+                  ],
                 ),
-                SizedBox(height: 4),
-                // Notification dot for unread messages
-                if (widget.hasUnreadMessages)
-                  Container(
-                    width: 8,
-                    height: 8,
-                    decoration: BoxDecoration(
-                      color: Color(0xFF007AFF),
-                      shape: BoxShape.circle,
+              ),
+              // Timestamp, pin icon, and notification dot
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  // Timestamp
+                  Text(
+                    _formatTimestamp(widget.chat.lastMessageAt),
+                    style: TextStyle(
+                      fontFamily: 'System',
+                      color: Color(0xFF8E8E93),
+                      fontSize: 13,
                     ),
                   ),
-              ],
-            ),
-          ],
+                  SizedBox(height: 4),
+                  // Pin icon and notification dot row
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      // Pin icon for pinned chats
+                      if (widget.chat.isPin)
+                        Container(
+                          margin: EdgeInsets.only(right: 4),
+                          child: Icon(
+                            Icons.push_pin,
+                            size: 12,
+                            color: Color(0xFF8E8E93),
+                          ),
+                        ),
+                      // Notification dot for unread messages
+                      if (widget.hasUnreadMessages)
+                        Container(
+                          width: 8,
+                          height: 8,
+                          decoration: BoxDecoration(
+                            color: Color(0xFF007AFF),
+                            shape: BoxShape.circle,
+                          ),
+                        ),
+                    ],
+                  ),
+                ],
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -2913,8 +3440,8 @@ class _MobileChatListItemState extends State<_MobileChatListItem>
         style: TextStyle(
           fontFamily: 'System',
           color: Color(0xFF1D1D1F),
-          fontSize: 17,
-          fontWeight: FontWeight.w600,
+          fontSize: 16,
+          fontWeight: FontWeight.normal,
         ),
         maxLines: 1,
         overflow: TextOverflow.ellipsis,
@@ -2932,8 +3459,14 @@ class _MobileChatListItemState extends State<_MobileChatListItem>
           String displayName = 'Direct Chat';
           if (userSnapshot.hasData && userSnapshot.data != null) {
             final user = userSnapshot.data!;
-            displayName =
-                user.displayName.isNotEmpty ? user.displayName : 'Unknown User';
+            // Check if this is Summer
+            if (otherUserRef.path.contains('ai_agent_summerai')) {
+              displayName = 'Summer';
+            } else {
+              displayName = user.displayName.isNotEmpty
+                  ? user.displayName
+                  : 'Unknown User';
+            }
           }
 
           return Text(
@@ -2942,7 +3475,7 @@ class _MobileChatListItemState extends State<_MobileChatListItem>
               fontFamily: 'System',
               color: Color(0xFF1D1D1F),
               fontSize: 17,
-              fontWeight: FontWeight.w600,
+              fontWeight: FontWeight.normal,
             ),
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
