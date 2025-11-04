@@ -112,9 +112,8 @@ class _CreateEventWidgetState extends State<CreateEventWidget> {
     _model.priceFocusNode ??= FocusNode();
 
     _model.amountTextController ??= TextEditingController(
-        text: widget.event != null
-            ? widget.event?.ticketAmount.toString()
-            : '1');
+        text:
+            widget.event != null ? widget.event?.ticketAmount.toString() : '1');
     _model.amountFocusNode ??= FocusNode();
 
     _model.groupValue = false;
@@ -163,8 +162,8 @@ class _CreateEventWidgetState extends State<CreateEventWidget> {
                     key: _model.formKey,
                     autovalidateMode: AutovalidateMode.disabled,
                     child: Padding(
-                      padding:
-                          const EdgeInsetsDirectional.fromSTEB(16.0, 0.0, 16.0, 0.0),
+                      padding: const EdgeInsetsDirectional.fromSTEB(
+                          16.0, 0.0, 16.0, 0.0),
                       child: SingleChildScrollView(
                         child: Column(
                           mainAxisSize: MainAxisSize.max,
@@ -220,7 +219,8 @@ class _CreateEventWidgetState extends State<CreateEventWidget> {
                               alignment: const AlignmentDirectional(0.0, 0.0),
                               children: [
                                 Align(
-                                  alignment: const AlignmentDirectional(0.0, 0.0),
+                                  alignment:
+                                      const AlignmentDirectional(0.0, 0.0),
                                   child: ClipRRect(
                                     borderRadius: BorderRadius.circular(12.0),
                                     child: Image.network(
@@ -235,7 +235,8 @@ class _CreateEventWidgetState extends State<CreateEventWidget> {
                                   ),
                                 ),
                                 Align(
-                                  alignment: const AlignmentDirectional(0.0, 0.0),
+                                  alignment:
+                                      const AlignmentDirectional(0.0, 0.0),
                                   child: InkWell(
                                     splashColor: Colors.transparent,
                                     focusColor: Colors.transparent,
@@ -317,8 +318,8 @@ class _CreateEventWidgetState extends State<CreateEventWidget> {
                                         shape: BoxShape.circle,
                                       ),
                                       child: Align(
-                                        alignment:
-                                            const AlignmentDirectional(0.0, 0.0),
+                                        alignment: const AlignmentDirectional(
+                                            0.0, 0.0),
                                         child: FaIcon(
                                           FontAwesomeIcons.camera,
                                           color: FlutterFlowTheme.of(context)
@@ -331,7 +332,8 @@ class _CreateEventWidgetState extends State<CreateEventWidget> {
                                 ),
                                 if (_model.isload == true)
                                   Align(
-                                    alignment: const AlignmentDirectional(0.0, 0.0),
+                                    alignment:
+                                        const AlignmentDirectional(0.0, 0.0),
                                     child: Container(
                                       width: 50.0,
                                       height: 50.0,
@@ -348,7 +350,8 @@ class _CreateEventWidgetState extends State<CreateEventWidget> {
                                           child: custom_widgets.FFlowSpinner(
                                             width: double.infinity,
                                             height: double.infinity,
-                                            backgroundColor: const Color(0x00FFFFFF),
+                                            backgroundColor:
+                                                const Color(0x00FFFFFF),
                                             spinnerColor:
                                                 FlutterFlowTheme.of(context)
                                                     .primary,
@@ -415,7 +418,8 @@ class _CreateEventWidgetState extends State<CreateEventWidget> {
                                                             .bodyMedium
                                                             .fontStyle,
                                                   ),
-                                                  color: const Color(0xFF374151),
+                                                  color:
+                                                      const Color(0xFF374151),
                                                   fontSize: 14.0,
                                                   letterSpacing: 0.0,
                                                   fontWeight: FontWeight.w500,
@@ -517,7 +521,8 @@ class _CreateEventWidgetState extends State<CreateEventWidget> {
                                                 FlutterFlowTheme.of(context)
                                                     .secondaryBackground,
                                             contentPadding:
-                                                const EdgeInsetsDirectional.fromSTEB(
+                                                const EdgeInsetsDirectional
+                                                    .fromSTEB(
                                                     16.0, 12.0, 16.0, 12.0),
                                           ),
                                           style: FlutterFlowTheme.of(context)
@@ -588,8 +593,8 @@ class _CreateEventWidgetState extends State<CreateEventWidget> {
                                                                   .bodyMedium
                                                                   .fontStyle,
                                                         ),
-                                                        color:
-                                                            const Color(0xFF374151),
+                                                        color: const Color(
+                                                            0xFF374151),
                                                         fontSize: 14.0,
                                                         letterSpacing: 0.0,
                                                         fontWeight:
@@ -722,7 +727,7 @@ class _CreateEventWidgetState extends State<CreateEventWidget> {
                                                             initialDateTime:
                                                                 getCurrentTimestamp,
                                                             maximumDate: ((_model
-                                                                        .datePicked2) ??
+                                                                    .datePicked2) ??
                                                                 DateTime(2050)),
                                                             backgroundColor:
                                                                 FlutterFlowTheme.of(
@@ -757,15 +762,18 @@ class _CreateEventWidgetState extends State<CreateEventWidget> {
                                                 borderRadius:
                                                     BorderRadius.circular(8.0),
                                                 border: Border.all(
-                                                  color: const Color(0xFFD1D5DB),
+                                                  color:
+                                                      const Color(0xFFD1D5DB),
                                                 ),
                                               ),
                                               child: Align(
-                                                alignment: const AlignmentDirectional(
-                                                    -1.0, 0.0),
+                                                alignment:
+                                                    const AlignmentDirectional(
+                                                        -1.0, 0.0),
                                                 child: Padding(
-                                                  padding: const EdgeInsetsDirectional
-                                                      .fromSTEB(
+                                                  padding:
+                                                      const EdgeInsetsDirectional
+                                                          .fromSTEB(
                                                           16.0, 0.0, 0.0, 0.0),
                                                   child: Text(
                                                     dateTimeFormat("yMMMd",
@@ -836,8 +844,8 @@ class _CreateEventWidgetState extends State<CreateEventWidget> {
                                                                   .bodyMedium
                                                                   .fontStyle,
                                                         ),
-                                                        color:
-                                                            const Color(0xFF374151),
+                                                        color: const Color(
+                                                            0xFF374151),
                                                         fontSize: 14.0,
                                                         letterSpacing: 0.0,
                                                         fontWeight:
@@ -1015,15 +1023,18 @@ class _CreateEventWidgetState extends State<CreateEventWidget> {
                                                 borderRadius:
                                                     BorderRadius.circular(8.0),
                                                 border: Border.all(
-                                                  color: const Color(0xFFD1D5DB),
+                                                  color:
+                                                      const Color(0xFFD1D5DB),
                                                 ),
                                               ),
                                               child: Align(
-                                                alignment: const AlignmentDirectional(
-                                                    -1.0, 0.0),
+                                                alignment:
+                                                    const AlignmentDirectional(
+                                                        -1.0, 0.0),
                                                 child: Padding(
-                                                  padding: const EdgeInsetsDirectional
-                                                      .fromSTEB(
+                                                  padding:
+                                                      const EdgeInsetsDirectional
+                                                          .fromSTEB(
                                                           16.0, 0.0, 0.0, 0.0),
                                                   child: Text(
                                                     dateTimeFormat("yMMMd",
@@ -1092,7 +1103,8 @@ class _CreateEventWidgetState extends State<CreateEventWidget> {
                                                             .bodyMedium
                                                             .fontStyle,
                                                   ),
-                                                  color: const Color(0xFF374151),
+                                                  color:
+                                                      const Color(0xFF374151),
                                                   fontSize: 14.0,
                                                   letterSpacing: 0.0,
                                                   fontWeight: FontWeight.w500,
@@ -1144,9 +1156,8 @@ class _CreateEventWidgetState extends State<CreateEventWidget> {
                                             ),
                                           ),
                                           child: Padding(
-                                            padding:
-                                                const EdgeInsetsDirectional.fromSTEB(
-                                                    16.0, 0.0, 8.0, 0.0),
+                                            padding: const EdgeInsetsDirectional
+                                                .fromSTEB(16.0, 0.0, 8.0, 0.0),
                                             child: Row(
                                               mainAxisSize: MainAxisSize.max,
                                               children: [
@@ -1154,8 +1165,8 @@ class _CreateEventWidgetState extends State<CreateEventWidget> {
                                                   child: Text(
                                                     valueOrDefault<String>(
                                                       (_model.placePickerValue
-                                                                          .address ==
-                                                                      '') ||
+                                                                      .address ==
+                                                                  '') ||
                                                               (_model.placePickerValue
                                                                       .latLng ==
                                                                   null)
@@ -1204,7 +1215,8 @@ class _CreateEventWidgetState extends State<CreateEventWidget> {
                                                       .accent2,
                                                   size: 24.0,
                                                 ),
-                                              ].divide(const SizedBox(width: 9.0)),
+                                              ].divide(
+                                                  const SizedBox(width: 9.0)),
                                             ),
                                           ),
                                         ),
@@ -1295,7 +1307,8 @@ class _CreateEventWidgetState extends State<CreateEventWidget> {
                                                             .bodyMedium
                                                             .fontStyle,
                                                   ),
-                                                  color: const Color(0xFF374151),
+                                                  color:
+                                                      const Color(0xFF374151),
                                                   fontSize: 14.0,
                                                   letterSpacing: 0.0,
                                                   fontWeight: FontWeight.w500,
@@ -1345,7 +1358,9 @@ class _CreateEventWidgetState extends State<CreateEventWidget> {
                                             const Duration(milliseconds: 1000),
                                             () => safeSetState(() {}),
                                           ),
-                                          autofillHints: const [AutofillHints.url],
+                                          autofillHints: const [
+                                            AutofillHints.url
+                                          ],
                                           obscureText: false,
                                           decoration: InputDecoration(
                                             hintText: 'Tech Leaders Summit',
@@ -1392,7 +1407,8 @@ class _CreateEventWidgetState extends State<CreateEventWidget> {
                                                 FlutterFlowTheme.of(context)
                                                     .secondaryBackground,
                                             contentPadding:
-                                                const EdgeInsetsDirectional.fromSTEB(
+                                                const EdgeInsetsDirectional
+                                                    .fromSTEB(
                                                     16.0, 12.0, 16.0, 12.0),
                                           ),
                                           style: FlutterFlowTheme.of(context)
@@ -1456,7 +1472,8 @@ class _CreateEventWidgetState extends State<CreateEventWidget> {
                                                             .bodyMedium
                                                             .fontStyle,
                                                   ),
-                                                  color: const Color(0xFF374151),
+                                                  color:
+                                                      const Color(0xFF374151),
                                                   letterSpacing: 0.0,
                                                   fontWeight: FontWeight.w500,
                                                   fontStyle:
@@ -1508,7 +1525,8 @@ class _CreateEventWidgetState extends State<CreateEventWidget> {
                                             onChanged: (_) =>
                                                 EasyDebounce.debounce(
                                               '_model.textController3',
-                                              const Duration(milliseconds: 1000),
+                                              const Duration(
+                                                  milliseconds: 1000),
                                               () => safeSetState(() {}),
                                             ),
                                             autofocus: false,
@@ -1854,7 +1872,8 @@ class _CreateEventWidgetState extends State<CreateEventWidget> {
                                                             .bodyMedium
                                                             .fontStyle,
                                                   ),
-                                                  color: const Color(0xFF374151),
+                                                  color:
+                                                      const Color(0xFF374151),
                                                   fontSize: 14.0,
                                                   letterSpacing: 0.0,
                                                   fontWeight: FontWeight.w500,
@@ -1906,10 +1925,12 @@ class _CreateEventWidgetState extends State<CreateEventWidget> {
                                                 insetPadding: EdgeInsets.zero,
                                                 backgroundColor:
                                                     Colors.transparent,
-                                                alignment: const AlignmentDirectional(
-                                                        0.0, 0.0)
-                                                    .resolve(Directionality.of(
-                                                        context)),
+                                                alignment:
+                                                    const AlignmentDirectional(
+                                                            0.0, 0.0)
+                                                        .resolve(
+                                                            Directionality.of(
+                                                                context)),
                                                 child: GestureDetector(
                                                   onTap: () {
                                                     FocusScope.of(dialogContext)
@@ -1952,12 +1973,11 @@ class _CreateEventWidgetState extends State<CreateEventWidget> {
                                           size: 15.0,
                                         ),
                                         options: FFButtonOptions(
-                                          padding:
-                                              const EdgeInsetsDirectional.fromSTEB(
-                                                  16.0, 6.0, 16.0, 6.0),
+                                          padding: const EdgeInsetsDirectional
+                                              .fromSTEB(16.0, 6.0, 16.0, 6.0),
                                           iconPadding:
-                                              const EdgeInsetsDirectional.fromSTEB(
-                                                  0.0, 0.0, 0.0, 0.0),
+                                              const EdgeInsetsDirectional
+                                                  .fromSTEB(0.0, 0.0, 0.0, 0.0),
                                           iconColor:
                                               FlutterFlowTheme.of(context)
                                                   .primary,
@@ -2146,12 +2166,14 @@ class _CreateEventWidgetState extends State<CreateEventWidget> {
                                                         BorderRadius.circular(
                                                             12.0),
                                                     border: Border.all(
-                                                      color: const Color(0xFFE5E7EB),
+                                                      color: const Color(
+                                                          0xFFE5E7EB),
                                                     ),
                                                   ),
                                                   child: Padding(
                                                     padding:
-                                                        const EdgeInsets.all(16.0),
+                                                        const EdgeInsets.all(
+                                                            16.0),
                                                     child: Row(
                                                       mainAxisSize:
                                                           MainAxisSize.max,
@@ -2250,12 +2272,15 @@ class _CreateEventWidgetState extends State<CreateEventWidget> {
                                                                               .fontStyle,
                                                                         ),
                                                                   ),
-                                                                ].divide(const SizedBox(
-                                                                    width:
-                                                                        8.0)),
+                                                                ].divide(
+                                                                    const SizedBox(
+                                                                        width:
+                                                                            8.0)),
                                                               ),
-                                                            ].divide(const SizedBox(
-                                                                height: 8.0)),
+                                                            ].divide(
+                                                                const SizedBox(
+                                                                    height:
+                                                                        8.0)),
                                                           ),
                                                         ),
                                                         Icon(
@@ -2274,10 +2299,12 @@ class _CreateEventWidgetState extends State<CreateEventWidget> {
                                             ),
                                             if (speakersItem.isFeature == true)
                                               Align(
-                                                alignment: const AlignmentDirectional(
-                                                    -0.72, -1.06),
+                                                alignment:
+                                                    const AlignmentDirectional(
+                                                        -0.72, -1.06),
                                                 child: Padding(
-                                                  padding: const EdgeInsets.all(5.0),
+                                                  padding:
+                                                      const EdgeInsets.all(5.0),
                                                   child: Container(
                                                     width: 25.0,
                                                     height: 25.0,
@@ -2338,7 +2365,8 @@ class _CreateEventWidgetState extends State<CreateEventWidget> {
                                                             .bodyMedium
                                                             .fontStyle,
                                                   ),
-                                                  color: const Color(0xFF374151),
+                                                  color:
+                                                      const Color(0xFF374151),
                                                   fontSize: 14.0,
                                                   letterSpacing: 0.0,
                                                   fontWeight: FontWeight.w500,
@@ -2380,9 +2408,8 @@ class _CreateEventWidgetState extends State<CreateEventWidget> {
                                     if (_model.scheduleIndex != null)
                                       Builder(
                                         builder: (context) => Padding(
-                                          padding:
-                                              const EdgeInsetsDirectional.fromSTEB(
-                                                  0.0, 0.0, 5.0, 0.0),
+                                          padding: const EdgeInsetsDirectional
+                                              .fromSTEB(0.0, 0.0, 5.0, 0.0),
                                           child: FFButtonWidget(
                                             onPressed: () async {
                                               await showDialog(
@@ -2449,11 +2476,14 @@ class _CreateEventWidgetState extends State<CreateEventWidget> {
                                             ),
                                             options: FFButtonOptions(
                                               height: 30.0,
-                                              padding: const EdgeInsetsDirectional
-                                                  .fromSTEB(
+                                              padding:
+                                                  const EdgeInsetsDirectional
+                                                      .fromSTEB(
                                                       16.0, 0.0, 16.0, 0.0),
-                                              iconPadding: const EdgeInsetsDirectional
-                                                  .fromSTEB(0.0, 0.0, 0.0, 0.0),
+                                              iconPadding:
+                                                  const EdgeInsetsDirectional
+                                                      .fromSTEB(
+                                                      0.0, 0.0, 0.0, 0.0),
                                               color: const Color(0x002563EB),
                                               textStyle:
                                                   FlutterFlowTheme.of(context)
@@ -2545,8 +2575,9 @@ class _CreateEventWidgetState extends State<CreateEventWidget> {
                                                 ),
                                               ),
                                               child: Align(
-                                                alignment: const AlignmentDirectional(
-                                                    0.0, 0.0),
+                                                alignment:
+                                                    const AlignmentDirectional(
+                                                        0.0, 0.0),
                                                 child: Text(
                                                   valueOrDefault<String>(
                                                     dateItem.date,
@@ -2799,11 +2830,13 @@ class _CreateEventWidgetState extends State<CreateEventWidget> {
                                                       BorderRadius.circular(
                                                           12.0),
                                                   border: Border.all(
-                                                    color: const Color(0xFFE5E7EB),
+                                                    color:
+                                                        const Color(0xFFE5E7EB),
                                                   ),
                                                 ),
                                                 child: Padding(
-                                                  padding: const EdgeInsets.all(16.0),
+                                                  padding: const EdgeInsets.all(
+                                                      16.0),
                                                   child: Row(
                                                     mainAxisSize:
                                                         MainAxisSize.max,
@@ -3001,9 +3034,10 @@ class _CreateEventWidgetState extends State<CreateEventWidget> {
                                                                       ),
                                                                     ),
                                                                   ),
-                                                                ].divide(const SizedBox(
-                                                                    width:
-                                                                        8.0)),
+                                                                ].divide(
+                                                                    const SizedBox(
+                                                                        width:
+                                                                            8.0)),
                                                               ),
                                                             ),
                                                             Row(
@@ -3067,11 +3101,14 @@ class _CreateEventWidgetState extends State<CreateEventWidget> {
                                                                             .fontStyle,
                                                                       ),
                                                                 ),
-                                                              ].divide(const SizedBox(
-                                                                  width: 8.0)),
+                                                              ].divide(
+                                                                  const SizedBox(
+                                                                      width:
+                                                                          8.0)),
                                                             ),
-                                                          ].divide(const SizedBox(
-                                                              height: 8.0)),
+                                                          ].divide(
+                                                              const SizedBox(
+                                                                  height: 8.0)),
                                                         ),
                                                       ),
                                                       Column(
@@ -3212,8 +3249,8 @@ class _CreateEventWidgetState extends State<CreateEventWidget> {
                                                         ].divide(const SizedBox(
                                                             height: 20.0)),
                                                       ),
-                                                    ].divide(
-                                                        const SizedBox(width: 8.0)),
+                                                    ].divide(const SizedBox(
+                                                        width: 8.0)),
                                                   ),
                                                 ),
                                               ),
@@ -3250,30 +3287,32 @@ class _CreateEventWidgetState extends State<CreateEventWidget> {
                                             children: [
                                               TextSpan(
                                                 text: 'Price \$',
-                                                style: FlutterFlowTheme.of(
-                                                        context)
-                                                    .bodyMedium
-                                                    .override(
-                                                      font: GoogleFonts.inter(
-                                                        fontWeight:
-                                                            FontWeight.w500,
-                                                        fontStyle:
-                                                            FlutterFlowTheme.of(
-                                                                    context)
-                                                                .bodyMedium
-                                                                .fontStyle,
-                                                      ),
-                                                      color: const Color(0xFF374151),
-                                                      fontSize: 14.0,
-                                                      letterSpacing: 0.0,
-                                                      fontWeight:
-                                                          FontWeight.w500,
-                                                      fontStyle:
-                                                          FlutterFlowTheme.of(
-                                                                  context)
-                                                              .bodyMedium
-                                                              .fontStyle,
-                                                    ),
+                                                style:
+                                                    FlutterFlowTheme.of(context)
+                                                        .bodyMedium
+                                                        .override(
+                                                          font:
+                                                              GoogleFonts.inter(
+                                                            fontWeight:
+                                                                FontWeight.w500,
+                                                            fontStyle:
+                                                                FlutterFlowTheme.of(
+                                                                        context)
+                                                                    .bodyMedium
+                                                                    .fontStyle,
+                                                          ),
+                                                          color: const Color(
+                                                              0xFF374151),
+                                                          fontSize: 14.0,
+                                                          letterSpacing: 0.0,
+                                                          fontWeight:
+                                                              FontWeight.w500,
+                                                          fontStyle:
+                                                              FlutterFlowTheme.of(
+                                                                      context)
+                                                                  .bodyMedium
+                                                                  .fontStyle,
+                                                        ),
                                               ),
                                               const TextSpan(
                                                 text: '*',
@@ -3319,7 +3358,8 @@ class _CreateEventWidgetState extends State<CreateEventWidget> {
                                                 onChanged: (_) =>
                                                     EasyDebounce.debounce(
                                                   '_model.priceTextController',
-                                                  const Duration(milliseconds: 1000),
+                                                  const Duration(
+                                                      milliseconds: 1000),
                                                   () => safeSetState(() {}),
                                                 ),
                                                 autofocus: false,
@@ -3385,7 +3425,8 @@ class _CreateEventWidgetState extends State<CreateEventWidget> {
                                                       ),
                                                   enabledBorder:
                                                       OutlineInputBorder(
-                                                    borderSide: const BorderSide(
+                                                    borderSide:
+                                                        const BorderSide(
                                                       color: Color(0xFFD1D5DB),
                                                       width: 1.0,
                                                     ),
@@ -3496,30 +3537,32 @@ class _CreateEventWidgetState extends State<CreateEventWidget> {
                                             children: [
                                               TextSpan(
                                                 text: 'Tickets Amount',
-                                                style: FlutterFlowTheme.of(
-                                                        context)
-                                                    .bodyMedium
-                                                    .override(
-                                                      font: GoogleFonts.inter(
-                                                        fontWeight:
-                                                            FontWeight.w500,
-                                                        fontStyle:
-                                                            FlutterFlowTheme.of(
-                                                                    context)
-                                                                .bodyMedium
-                                                                .fontStyle,
-                                                      ),
-                                                      color: const Color(0xFF374151),
-                                                      fontSize: 14.0,
-                                                      letterSpacing: 0.0,
-                                                      fontWeight:
-                                                          FontWeight.w500,
-                                                      fontStyle:
-                                                          FlutterFlowTheme.of(
-                                                                  context)
-                                                              .bodyMedium
-                                                              .fontStyle,
-                                                    ),
+                                                style:
+                                                    FlutterFlowTheme.of(context)
+                                                        .bodyMedium
+                                                        .override(
+                                                          font:
+                                                              GoogleFonts.inter(
+                                                            fontWeight:
+                                                                FontWeight.w500,
+                                                            fontStyle:
+                                                                FlutterFlowTheme.of(
+                                                                        context)
+                                                                    .bodyMedium
+                                                                    .fontStyle,
+                                                          ),
+                                                          color: const Color(
+                                                              0xFF374151),
+                                                          fontSize: 14.0,
+                                                          letterSpacing: 0.0,
+                                                          fontWeight:
+                                                              FontWeight.w500,
+                                                          fontStyle:
+                                                              FlutterFlowTheme.of(
+                                                                      context)
+                                                                  .bodyMedium
+                                                                  .fontStyle,
+                                                        ),
                                               ),
                                               const TextSpan(
                                                 text: '(optional)',
@@ -3566,7 +3609,8 @@ class _CreateEventWidgetState extends State<CreateEventWidget> {
                                                 onChanged: (_) =>
                                                     EasyDebounce.debounce(
                                                   '_model.amountTextController',
-                                                  const Duration(milliseconds: 1000),
+                                                  const Duration(
+                                                      milliseconds: 1000),
                                                   () => safeSetState(() {}),
                                                 ),
                                                 autofocus: false,
@@ -3632,7 +3676,8 @@ class _CreateEventWidgetState extends State<CreateEventWidget> {
                                                       ),
                                                   enabledBorder:
                                                       OutlineInputBorder(
-                                                    borderSide: const BorderSide(
+                                                    borderSide:
+                                                        const BorderSide(
                                                       color: Color(0xFFD1D5DB),
                                                       width: 1.0,
                                                     ),
@@ -3743,30 +3788,32 @@ class _CreateEventWidgetState extends State<CreateEventWidget> {
                                             children: [
                                               TextSpan(
                                                 text: 'Deadline',
-                                                style: FlutterFlowTheme.of(
-                                                        context)
-                                                    .bodyMedium
-                                                    .override(
-                                                      font: GoogleFonts.inter(
-                                                        fontWeight:
-                                                            FontWeight.w500,
-                                                        fontStyle:
-                                                            FlutterFlowTheme.of(
-                                                                    context)
-                                                                .bodyMedium
-                                                                .fontStyle,
-                                                      ),
-                                                      color: const Color(0xFF374151),
-                                                      fontSize: 14.0,
-                                                      letterSpacing: 0.0,
-                                                      fontWeight:
-                                                          FontWeight.w500,
-                                                      fontStyle:
-                                                          FlutterFlowTheme.of(
-                                                                  context)
-                                                              .bodyMedium
-                                                              .fontStyle,
-                                                    ),
+                                                style:
+                                                    FlutterFlowTheme.of(context)
+                                                        .bodyMedium
+                                                        .override(
+                                                          font:
+                                                              GoogleFonts.inter(
+                                                            fontWeight:
+                                                                FontWeight.w500,
+                                                            fontStyle:
+                                                                FlutterFlowTheme.of(
+                                                                        context)
+                                                                    .bodyMedium
+                                                                    .fontStyle,
+                                                          ),
+                                                          color: const Color(
+                                                              0xFF374151),
+                                                          fontSize: 14.0,
+                                                          letterSpacing: 0.0,
+                                                          fontWeight:
+                                                              FontWeight.w500,
+                                                          fontStyle:
+                                                              FlutterFlowTheme.of(
+                                                                      context)
+                                                                  .bodyMedium
+                                                                  .fontStyle,
+                                                        ),
                                               ),
                                               const TextSpan(
                                                 text: '*',
@@ -3977,11 +4024,13 @@ class _CreateEventWidgetState extends State<CreateEventWidget> {
                                               ),
                                             ),
                                             child: Align(
-                                              alignment: const AlignmentDirectional(
-                                                  -1.0, 0.0),
+                                              alignment:
+                                                  const AlignmentDirectional(
+                                                      -1.0, 0.0),
                                               child: Padding(
-                                                padding: const EdgeInsetsDirectional
-                                                    .fromSTEB(
+                                                padding:
+                                                    const EdgeInsetsDirectional
+                                                        .fromSTEB(
                                                         16.0, 0.0, 0.0, 0.0),
                                                 child: Text(
                                                   _model.deadlinePaying != null
@@ -4064,7 +4113,8 @@ class _CreateEventWidgetState extends State<CreateEventWidget> {
                                             children: [
                                               Expanded(
                                                 child: Container(
-                                                  decoration: const BoxDecoration(),
+                                                  decoration:
+                                                      const BoxDecoration(),
                                                   child: Column(
                                                     mainAxisSize:
                                                         MainAxisSize.min,
@@ -4144,12 +4194,13 @@ class _CreateEventWidgetState extends State<CreateEventWidget> {
                                                           ),
                                                         ],
                                                       ),
-                                                    ].divide(
-                                                        const SizedBox(height: 8.0)),
+                                                    ].divide(const SizedBox(
+                                                        height: 8.0)),
                                                   ),
                                                 ),
                                               ),
-                                            ].divide(const SizedBox(width: 12.0)),
+                                            ].divide(
+                                                const SizedBox(width: 12.0)),
                                           ),
                                         ),
                                         Switch.adaptive(
@@ -4198,7 +4249,8 @@ class _CreateEventWidgetState extends State<CreateEventWidget> {
                                             children: [
                                               Expanded(
                                                 child: Container(
-                                                  decoration: const BoxDecoration(),
+                                                  decoration:
+                                                      const BoxDecoration(),
                                                   child: Column(
                                                     mainAxisSize:
                                                         MainAxisSize.max,
@@ -4278,19 +4330,20 @@ class _CreateEventWidgetState extends State<CreateEventWidget> {
                                                           ),
                                                         ],
                                                       ),
-                                                    ].divide(
-                                                        const SizedBox(height: 8.0)),
+                                                    ].divide(const SizedBox(
+                                                        height: 8.0)),
                                                   ),
                                                 ),
                                               ),
-                                            ].divide(const SizedBox(width: 12.0)),
+                                            ].divide(
+                                                const SizedBox(width: 12.0)),
                                           ),
                                         ),
                                         Switch.adaptive(
                                           value: _model.switchValue1!,
                                           onChanged: (newValue) async {
-                                            safeSetState(() => _model
-                                                .switchValue1 = newValue);
+                                            safeSetState(() =>
+                                                _model.switchValue1 = newValue);
                                           },
                                           activeColor:
                                               FlutterFlowTheme.of(context)
@@ -4332,7 +4385,8 @@ class _CreateEventWidgetState extends State<CreateEventWidget> {
                                             children: [
                                               Expanded(
                                                 child: Container(
-                                                  decoration: const BoxDecoration(),
+                                                  decoration:
+                                                      const BoxDecoration(),
                                                   child: Column(
                                                     mainAxisSize:
                                                         MainAxisSize.min,
@@ -4412,19 +4466,20 @@ class _CreateEventWidgetState extends State<CreateEventWidget> {
                                                           ),
                                                         ],
                                                       ),
-                                                    ].divide(
-                                                        const SizedBox(height: 8.0)),
+                                                    ].divide(const SizedBox(
+                                                        height: 8.0)),
                                                   ),
                                                 ),
                                               ),
-                                            ].divide(const SizedBox(width: 12.0)),
+                                            ].divide(
+                                                const SizedBox(width: 12.0)),
                                           ),
                                         ),
                                         Switch.adaptive(
                                           value: _model.switchValue2!,
                                           onChanged: (newValue) async {
-                                            safeSetState(() => _model
-                                                .switchValue2 = newValue);
+                                            safeSetState(() =>
+                                                _model.switchValue2 = newValue);
                                           },
                                           activeColor:
                                               FlutterFlowTheme.of(context)
@@ -4489,8 +4544,7 @@ class _CreateEventWidgetState extends State<CreateEventWidget> {
                                       height: 50.0,
                                       event: widget.event!,
                                       onCancelled: () async {
-                                        context
-                                            .goNamed(DiscoverWidget.routeName);
+                                        context.goNamed(HomeWidget.routeName);
                                       },
                                     ),
                                   ),
@@ -4515,8 +4569,7 @@ class _CreateEventWidgetState extends State<CreateEventWidget> {
                         child: FFButtonWidget(
                           onPressed: (widget.event == null
                                   ? ((_model.speaker.isEmpty) ||
-                                      (_model.titleTextController.text ==
-                                              '') ||
+                                      (_model.titleTextController.text == '') ||
                                       (_model.startDate == null) ||
                                       (_model.endTime == null) ||
                                       (_model.textController3.text == '') ||
@@ -4525,10 +4578,9 @@ class _CreateEventWidgetState extends State<CreateEventWidget> {
                                       ((_model.location == null ||
                                               _model.location == '') &&
                                           (_model.placePickerValue.address ==
-                                                  '')) ||
+                                              '')) ||
                                       (_model.deadlinePaying == null) ||
-                                      (_model.priceTextController.text ==
-                                              ''))
+                                      (_model.priceTextController.text == ''))
                                   : false)
                               ? null
                               : () async {
@@ -4540,9 +4592,8 @@ class _CreateEventWidgetState extends State<CreateEventWidget> {
                                         description:
                                             _model.textController3.text,
                                         location: valueOrDefault<String>(
-                                          (_model.placePickerValue
-                                                              .address ==
-                                                          '') ||
+                                          (_model.placePickerValue.address ==
+                                                      '') ||
                                                   (_model.placePickerValue
                                                           .latLng ==
                                                       null)
@@ -4551,8 +4602,8 @@ class _CreateEventWidgetState extends State<CreateEventWidget> {
                                           'location',
                                         ),
                                         latlng: (_model.placePickerValue
-                                                            .address ==
-                                                        '') ||
+                                                        .address ==
+                                                    '') ||
                                                 (_model.placePickerValue
                                                         .latLng ==
                                                     null)
@@ -4567,8 +4618,8 @@ class _CreateEventWidgetState extends State<CreateEventWidget> {
                                         isTrending: false,
                                         price: int.tryParse(
                                             _model.priceTextController.text),
-                                        ticketDeadline:
-                                            _model.deadlinePaying ?? widget!.event?.ticketDeadline,
+                                        ticketDeadline: _model.deadlinePaying ??
+                                            widget!.event?.ticketDeadline,
                                         ticketAmount: int.tryParse(
                                             _model.amountTextController.text),
                                         eventLink:
@@ -4621,8 +4672,8 @@ class _CreateEventWidgetState extends State<CreateEventWidget> {
                                     }
                                     if (!((_model.placePickerValue != null) ||
                                             (_model.eventLinkTextController
-                                                        .text !=
-                                                    '')
+                                                    .text !=
+                                                '')
                                         ? true
                                         : false)) {
                                       ScaffoldMessenger.of(context)
@@ -4636,8 +4687,8 @@ class _CreateEventWidgetState extends State<CreateEventWidget> {
                                                       .secondaryBackground,
                                             ),
                                           ),
-                                          duration:
-                                              const Duration(milliseconds: 2000),
+                                          duration: const Duration(
+                                              milliseconds: 2000),
                                           backgroundColor:
                                               FlutterFlowTheme.of(context)
                                                   .error,
@@ -4659,8 +4710,8 @@ class _CreateEventWidgetState extends State<CreateEventWidget> {
                                                       .secondaryBackground,
                                             ),
                                           ),
-                                          duration:
-                                              const Duration(milliseconds: 2000),
+                                          duration: const Duration(
+                                              milliseconds: 2000),
                                           backgroundColor:
                                               FlutterFlowTheme.of(context)
                                                   .error,
@@ -4681,8 +4732,8 @@ class _CreateEventWidgetState extends State<CreateEventWidget> {
                                                       .secondaryBackground,
                                             ),
                                           ),
-                                          duration:
-                                              const Duration(milliseconds: 2000),
+                                          duration: const Duration(
+                                              milliseconds: 2000),
                                           backgroundColor:
                                               FlutterFlowTheme.of(context)
                                                   .error,
@@ -4703,8 +4754,8 @@ class _CreateEventWidgetState extends State<CreateEventWidget> {
                                                       .secondaryBackground,
                                             ),
                                           ),
-                                          duration:
-                                              const Duration(milliseconds: 2000),
+                                          duration: const Duration(
+                                              milliseconds: 2000),
                                           backgroundColor:
                                               FlutterFlowTheme.of(context)
                                                   .error,
@@ -4728,8 +4779,8 @@ class _CreateEventWidgetState extends State<CreateEventWidget> {
                                                       .secondaryBackground,
                                             ),
                                           ),
-                                          duration:
-                                              const Duration(milliseconds: 2000),
+                                          duration: const Duration(
+                                              milliseconds: 2000),
                                           backgroundColor:
                                               FlutterFlowTheme.of(context)
                                                   .error,
@@ -4740,21 +4791,19 @@ class _CreateEventWidgetState extends State<CreateEventWidget> {
                                     }
                                     if ((_model.speaker.isEmpty) ||
                                         (_model.titleTextController.text ==
-                                                '') ||
+                                            '') ||
                                         (_model.startDate == null) ||
                                         (_model.endTime == null) ||
-                                        (_model.textController3.text ==
-                                                '') ||
+                                        (_model.textController3.text == '') ||
                                         (_model.categoryValues?.length == 0) ||
                                         (_model.schedule.isEmpty) ||
                                         ((_model.location == null ||
                                                 _model.location == '') &&
-                                            (_model.placePickerValue
-                                                        .address ==
-                                                    '')) ||
+                                            (_model.placePickerValue.address ==
+                                                '')) ||
                                         (_model.deadlinePaying == null) ||
                                         (_model.priceTextController.text ==
-                                                '')) {
+                                            '')) {
                                       await showDialog(
                                         context: context,
                                         builder: (dialogContext) {
@@ -4762,10 +4811,11 @@ class _CreateEventWidgetState extends State<CreateEventWidget> {
                                             elevation: 0,
                                             insetPadding: EdgeInsets.zero,
                                             backgroundColor: Colors.transparent,
-                                            alignment: const AlignmentDirectional(
-                                                    0.0, 0.0)
-                                                .resolve(
-                                                    Directionality.of(context)),
+                                            alignment:
+                                                const AlignmentDirectional(
+                                                        0.0, 0.0)
+                                                    .resolve(Directionality.of(
+                                                        context)),
                                             child: GestureDetector(
                                               onTap: () {
                                                 FocusScope.of(dialogContext)
@@ -4792,9 +4842,8 @@ class _CreateEventWidgetState extends State<CreateEventWidget> {
                                           description:
                                               _model.textController3.text,
                                           location: valueOrDefault<String>(
-                                            (_model.placePickerValue
-                                                                .address ==
-                                                            '') ||
+                                            (_model.placePickerValue.address ==
+                                                        '') ||
                                                     (_model.placePickerValue
                                                             .latLng ==
                                                         null)
@@ -4809,8 +4858,8 @@ class _CreateEventWidgetState extends State<CreateEventWidget> {
                                           isPrivate: false,
                                           createdAt: getCurrentTimestamp,
                                           latlng: (_model.placePickerValue
-                                                              .address ==
-                                                          '') ||
+                                                          .address ==
+                                                      '') ||
                                                   (_model.placePickerValue
                                                           .latLng ==
                                                       null)
@@ -4854,9 +4903,8 @@ class _CreateEventWidgetState extends State<CreateEventWidget> {
                                           description:
                                               _model.textController3.text,
                                           location: valueOrDefault<String>(
-                                            (_model.placePickerValue
-                                                                .address ==
-                                                            '') ||
+                                            (_model.placePickerValue.address ==
+                                                        '') ||
                                                     (_model.placePickerValue
                                                             .latLng ==
                                                         null)
@@ -4871,8 +4919,8 @@ class _CreateEventWidgetState extends State<CreateEventWidget> {
                                           isPrivate: false,
                                           createdAt: getCurrentTimestamp,
                                           latlng: (_model.placePickerValue
-                                                              .address ==
-                                                          '') ||
+                                                          .address ==
+                                                      '') ||
                                                   (_model.placePickerValue
                                                           .latLng ==
                                                       null)
@@ -5071,7 +5119,7 @@ class _CreateEventWidgetState extends State<CreateEventWidget> {
                                       FFAppState().scheduleDate = [];
                                       FFAppState().update(() {});
 
-                                      context.goNamed(DiscoverWidget.routeName);
+                                      context.goNamed(HomeWidget.routeName);
                                     }
                                   }
 

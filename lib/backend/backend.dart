@@ -19,6 +19,7 @@ import 'schema/event_attendees_record.dart';
 import 'schema/payment_history_record.dart';
 import 'schema/workspaces_record.dart';
 import 'schema/workspace_members_record.dart';
+import 'schema/action_items_record.dart';
 import 'dart:async';
 import 'package:infinite_scroll_pagination/infinite_scroll_pagination.dart';
 
@@ -44,6 +45,7 @@ export 'schema/payment_history_record.dart';
 export 'schema/blocked_users_record.dart';
 export 'schema/workspaces_record.dart';
 export 'schema/workspace_members_record.dart';
+export 'schema/action_items_record.dart';
 
 /// Functions to query UsersRecords (as a Stream and as a Future).
 Future<int> queryUsersRecordCount({
@@ -1067,6 +1069,42 @@ Future<List<WorkspaceMembersRecord>> queryWorkspaceMembersRecordOnce({
       singleRecord: singleRecord,
     );
 
+Future<int> queryActionItemsRecordCount({
+  Query Function(Query)? queryBuilder,
+  int limit = -1,
+}) =>
+    queryCollectionCount(
+      ActionItemsRecord.collection,
+      queryBuilder: queryBuilder,
+      limit: limit,
+    );
+
+Stream<List<ActionItemsRecord>> queryActionItemsRecord({
+  Query Function(Query)? queryBuilder,
+  int limit = -1,
+  bool singleRecord = false,
+}) =>
+    queryCollection(
+      ActionItemsRecord.collection,
+      ActionItemsRecord.fromSnapshot,
+      queryBuilder: queryBuilder,
+      limit: limit,
+      singleRecord: singleRecord,
+    );
+
+Future<List<ActionItemsRecord>> queryActionItemsRecordOnce({
+  Query Function(Query)? queryBuilder,
+  int limit = -1,
+  bool singleRecord = false,
+}) =>
+    queryCollectionOnce(
+      ActionItemsRecord.collection,
+      ActionItemsRecord.fromSnapshot,
+      queryBuilder: queryBuilder,
+      limit: limit,
+      singleRecord: singleRecord,
+    );
+
 Future<int> queryCollectionCount(
   Query collection, {
   Query Function(Query)? queryBuilder,
@@ -1078,9 +1116,14 @@ Future<int> queryCollectionCount(
     query = query.limit(limit);
   }
 
-  return query.count().get().catchError((err) {
+  return query
+      .count()
+      .get()
+      .then((value) => value.count ?? 0)
+      .catchError((err) {
     print('Error querying $collection: $err');
-  }).then((value) => value.count!);
+    return 0; // Return 0 count on error
+  });
 }
 
 Stream<List<T>> queryCollection<T>(
@@ -1095,18 +1138,23 @@ Stream<List<T>> queryCollection<T>(
   if (limit > 0 || singleRecord) {
     query = query.limit(singleRecord ? 1 : limit);
   }
-  return query.snapshots().handleError((err) {
-    print('Error querying $collection: $err');
-  }).map((s) => s.docs
-      .map(
-        (d) => safeGet(
-          () => recordBuilder(d),
-          (e) => print('Error serializing doc ${d.reference.path}:\n$e'),
-        ),
-      )
-      .where((d) => d != null)
-      .map((d) => d!)
-      .toList());
+  return query.snapshots().asyncMap((s) async {
+    try {
+      return s.docs
+          .map(
+            (d) => safeGet(
+              () => recordBuilder(d),
+              (e) => print('Error serializing doc ${d.reference.path}:\n$e'),
+            ),
+          )
+          .where((d) => d != null)
+          .map((d) => d!)
+          .toList();
+    } catch (e) {
+      print('Error processing query results: $e');
+      return <T>[];
+    }
+  });
 }
 
 Future<List<T>> queryCollectionOnce<T>(

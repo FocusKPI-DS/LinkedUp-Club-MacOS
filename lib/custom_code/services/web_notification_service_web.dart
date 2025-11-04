@@ -19,6 +19,7 @@ class WebNotificationService {
 
   // Firestore listener for real notifications
   StreamSubscription<QuerySnapshot>? _notificationListener;
+  StreamSubscription<QuerySnapshot>? _notificationListenerEq;
 
   /// Initialize the notification service
   Future<void> initialize() async {
@@ -56,6 +57,7 @@ class WebNotificationService {
     required String body,
     String? senderName,
     String? chatName,
+    bool forceShow = false, // Force show even when tab is hidden (for FCM)
   }) {
     if (!kIsWeb || !_isSupported || !_isInitialized) {
       print(
@@ -72,37 +74,38 @@ class WebNotificationService {
       }
 
       // Only show if tab is visible (user is actively using the app)
-      if (html.document.hidden == true) {
+      // Exception: forceShow=true for FCM notifications (they should show regardless)
+      if (!forceShow && html.document.hidden == true) {
         print('📱 Tab is hidden, skipping notification');
         return;
       }
 
       print('🔔 Showing notification: $title - $body');
 
+      // Create notification - Dart's Notification API supports title, body, and icon
+      // These notifications will appear in macOS Notification Center automatically
       final notification = html.Notification(
         title,
         body: body,
-        icon: '/favicon.png', // Use your app icon
-        tag: 'linkedup-message', // Prevent duplicate notifications
+        icon: '/app_launcher_icon.png', // Use your app logo
       );
 
       // Play notification sound manually
       _playNotificationSound();
 
-      // Auto-close after 5 seconds
-      Future.delayed(Duration(seconds: 5), () {
-        notification.close();
-      });
+      // Don't auto-close - let macOS handle it naturally (stays in Notification Center)
+      // macOS will auto-dismiss it after user sees it or after system timeout
+      // This allows it to appear in the Notification Center
 
-      // Handle click - focus the tab
+      // Handle click - focus the tab and handle navigation
       notification.onClick.listen((_) {
         print('🔔 Notification clicked, focusing tab');
-        // Focus the window/tab
+        // Focus the document element to bring tab to front
         html.document.documentElement?.focus();
         notification.close();
       });
 
-      // Handle errors
+      // Handle errors (using stream instead of setter)
       notification.onError.listen((error) {
         print('❌ Notification error: $error');
       });
@@ -115,12 +118,17 @@ class WebNotificationService {
   void _playNotificationSound() {
     try {
       // Play the macOS Glass notification sound
-      html.AudioElement()
-        ..src = '/assets/audios/mac_os_glass.mp3'
-        ..volume = 0.8
-        ..play();
+      final audio = html.AudioElement();
+      audio.volume = 0.8;
 
-      print('🔊 Playing macOS Glass notification sound');
+      // Use simple path from web/ directory (copied during build)
+      audio.src = '/mac_os_glass.mp3';
+
+      audio.play().catchError((e) {
+        print('❌ Failed to play notification sound: $e');
+      });
+
+      print('🔊 Attempting to play macOS Glass notification sound');
     } catch (e) {
       print('❌ Failed to play macOS Glass notification sound: $e');
     }
@@ -163,12 +171,21 @@ class WebNotificationService {
 
   /// Start listening for real notifications from cloud function
   void _startNotificationListener() {
-    if (!kIsWeb || currentUserReference == null) return;
+    if (!kIsWeb || currentUserReference == null) {
+      print(
+          '⚠️ Cannot start notification listener: kIsWeb=$kIsWeb, currentUserReference=${currentUserReference?.path}');
+      return;
+    }
 
     try {
+      // Dispose existing listeners if any
+      _notificationListener?.cancel();
+      _notificationListenerEq?.cancel();
+
       print(
           '🔔 Starting web notification listener for user: ${currentUserReference?.path}');
 
+      // Listener 1: when user_refs is an ARRAY of user paths
       _notificationListener = FirebaseFirestore.instance
           .collection('ff_user_push_notifications')
           .where('user_refs', arrayContains: currentUserReference?.path ?? '')
@@ -176,15 +193,40 @@ class WebNotificationService {
           .limit(10)
           .snapshots()
           .listen((snapshot) {
+        print(
+            '🔔 [arrayContains] Received ${snapshot.docs.length} notifications');
         _handleNotificationSnapshot(snapshot);
       }, onError: (error) {
-        print('❌ Web notification listener error: $error');
+        print('❌ Web notification listener (arrayContains) error: $error');
       });
 
-      print('✅ Web notification listener started');
+      // Listener 2: when user_refs is a STRING equal to the user path
+      _notificationListenerEq = FirebaseFirestore.instance
+          .collection('ff_user_push_notifications')
+          .where('user_refs', isEqualTo: currentUserReference?.path ?? '')
+          .orderBy('timestamp', descending: true)
+          .limit(10)
+          .snapshots()
+          .listen((snapshot) {
+        print('🔔 [isEqualTo] Received ${snapshot.docs.length} notifications');
+        _handleNotificationSnapshot(snapshot);
+      }, onError: (error) {
+        print('❌ Web notification listener (isEqualTo) error: $error');
+      });
+
+      print('✅ Web notification listeners started');
     } catch (e) {
       print('❌ Failed to start web notification listener: $e');
     }
+  }
+
+  /// Restart notification listener (call this after user logs in)
+  void restartNotificationListener() {
+    if (!kIsWeb || !_isInitialized) return;
+
+    print('🔄 Restarting notification listener...');
+    _processedNotifications.clear(); // Clear processed notifications
+    _startNotificationListener();
   }
 
   /// Handle notification snapshot from Firestore
@@ -233,5 +275,7 @@ class WebNotificationService {
   void dispose() {
     _notificationListener?.cancel();
     _notificationListener = null;
+    _notificationListenerEq?.cancel();
+    _notificationListenerEq = null;
   }
 }

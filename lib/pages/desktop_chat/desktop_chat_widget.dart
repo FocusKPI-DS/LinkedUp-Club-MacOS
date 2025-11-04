@@ -7,6 +7,7 @@ import '/pages/desktop_chat/desktop_chat_model.dart';
 import '/pages/desktop_chat/chat_controller.dart';
 import '/pages/chat/user_profile_detail/user_profile_detail_widget.dart';
 import '/pages/chat/group_chat_detail/group_chat_detail_widget.dart';
+import '/pages/chat/group_action_tasks/group_action_tasks_widget.dart';
 import 'dart:io';
 import 'dart:ui';
 import 'package:flutter/foundation.dart' show kIsWeb;
@@ -134,7 +135,7 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
             // App Name
             Expanded(
               child: Text(
-                'LinkedUp Chat',
+                'Chat',
                 style: TextStyle(
                   fontFamily: 'Inter',
                   color: Colors.white,
@@ -1580,41 +1581,137 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
         ),
         child: _model.showGroupCreation
             ? _buildGroupCreationViewRight()
-            : _model.selectedChat != null
-                ? Column(
+            : _model.showGroupInfoPanel && _model.groupInfoChat != null
+                ? Stack(
                     children: [
-                      // Top panel with user info
-                      _buildChatHeader(),
-                      // Chat thread component
-                      Expanded(
-                        child: ChatThreadComponentWidget(
-                          chatReference: _model.selectedChat,
+                      // Group info displayed inline (keeps vertical navbar)
+                      Positioned.fill(
+                        child: GroupChatDetailWidget(
+                          chatDoc: _model.groupInfoChat,
+                        ),
+                      ),
+                      // Overlay back button to return to chat view
+                      // Positioned to avoid overlap with AppBar title
+                      Positioned(
+                        top: 12,
+                        left: 12,
+                        child: Material(
+                          color: Colors.transparent,
+                          child: InkWell(
+                            onTap: () {
+                              setState(() {
+                                _model.showGroupInfoPanel = false;
+                                _model.groupInfoChat = null;
+                              });
+                            },
+                            borderRadius: BorderRadius.circular(20),
+                            child: Container(
+                              width: 36,
+                              height: 36,
+                              decoration: BoxDecoration(
+                                color: Colors.white,
+                                shape: BoxShape.circle,
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: Color(0x1F000000),
+                                    blurRadius: 6,
+                                    offset: Offset(0, 2),
+                                  ),
+                                ],
+                              ),
+                              child: Icon(Icons.arrow_back,
+                                  size: 20, color: Color(0xFF374151)),
+                            ),
+                          ),
                         ),
                       ),
                     ],
                   )
-                : Center(
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(
-                          Icons.chat_bubble_outline,
-                          color: Color(0xFF9CA3AF),
-                          size: 64,
-                        ),
-                        SizedBox(height: 16),
-                        Text(
-                          'Select a chat to start messaging',
-                          style: TextStyle(
-                            fontFamily: 'Inter',
-                            color: Color(0xFF6B7280),
-                            fontSize: 18,
-                            fontWeight: FontWeight.w500,
+                : _model.selectedChat != null
+                    ? Column(
+                        children: [
+                          // Top panel with user info
+                          _buildChatHeader(),
+                          // Action Items Stats Section (only for group chats)
+                          if (_model.selectedChat!.isGroup)
+                            _buildActionItemsStats(_model.selectedChat!),
+                          // Tasks panel or Chat thread component
+                          Expanded(
+                            child: _model.showTasksPanel &&
+                                    _model.selectedChat!.isGroup
+                                ? Stack(
+                                    children: [
+                                      // Tasks displayed inline (keeps vertical navbar)
+                                      Positioned.fill(
+                                        child: GroupActionTasksWidget(
+                                          chatDoc: _model.selectedChat,
+                                        ),
+                                      ),
+                                      // Overlay back button to return to chat view
+                                      Positioned(
+                                        top: 12,
+                                        left: 12,
+                                        child: Material(
+                                          color: Colors.transparent,
+                                          child: InkWell(
+                                            onTap: () {
+                                              setState(() {
+                                                _model.showTasksPanel = false;
+                                              });
+                                            },
+                                            borderRadius:
+                                                BorderRadius.circular(20),
+                                            child: Container(
+                                              width: 36,
+                                              height: 36,
+                                              decoration: BoxDecoration(
+                                                color: Colors.white,
+                                                shape: BoxShape.circle,
+                                                boxShadow: [
+                                                  BoxShadow(
+                                                    color: Color(0x1F000000),
+                                                    blurRadius: 6,
+                                                    offset: Offset(0, 2),
+                                                  ),
+                                                ],
+                                              ),
+                                              child: Icon(Icons.arrow_back,
+                                                  size: 20,
+                                                  color: Color(0xFF374151)),
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  )
+                                : ChatThreadComponentWidget(
+                                    chatReference: _model.selectedChat,
+                                  ),
                           ),
+                        ],
+                      )
+                    : Center(
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              Icons.chat_bubble_outline,
+                              color: Color(0xFF9CA3AF),
+                              size: 64,
+                            ),
+                            SizedBox(height: 16),
+                            Text(
+                              'Select a chat to start messaging',
+                              style: TextStyle(
+                                fontFamily: 'Inter',
+                                color: Color(0xFF6B7280),
+                                fontSize: 18,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                          ],
                         ),
-                      ],
-                    ),
-                  ),
+                      ),
       ),
     );
   }
@@ -1673,6 +1770,29 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
                           height: 28,
                           fit: BoxFit.contain,
                         ),
+                ),
+              ),
+            ),
+            // Tasks button next to SummerAI icon
+            TextButton(
+              onPressed: () {
+                setState(() {
+                  _model.showTasksPanel = !_model.showTasksPanel;
+                });
+              },
+              style: TextButton.styleFrom(
+                padding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                minimumSize: Size(0, 0),
+                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                foregroundColor: Color(0xFF2563EB),
+              ),
+              child: Text(
+                'Tasks',
+                style: TextStyle(
+                  fontFamily: 'Inter',
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                  color: Color(0xFF2563EB),
                 ),
               ),
             ),
@@ -1777,6 +1897,208 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
           ),
         ],
       ),
+    );
+  }
+
+  Widget _buildActionItemsStats(ChatsRecord chat) {
+    return StreamBuilder<List<ActionItemsRecord>>(
+      stream: queryActionItemsRecord(
+        queryBuilder: (actionItemsRecord) => actionItemsRecord.where(
+          'chat_ref',
+          isEqualTo: chat.reference,
+        ),
+      ),
+      builder: (context, snapshot) {
+        if (!snapshot.hasData) {
+          return SizedBox.shrink();
+        }
+
+        final allActionItems = snapshot.data ?? [];
+
+        // Filter out completed tasks (same logic as GroupActionTasksWidget)
+        // Deduplicate tasks by title - same logic as the Group Action Tasks page
+        final Map<String, ActionItemsRecord> uniqueTodos = {};
+        for (var todo in allActionItems) {
+          // Exclude completed tasks - must match exactly like the GroupActionTasksWidget
+          if (todo.status == 'completed') {
+            continue;
+          }
+          // Deduplicate by title - show only one task per unique title
+          if (!uniqueTodos.containsKey(todo.title)) {
+            uniqueTodos[todo.title] = todo;
+          }
+        }
+        final pendingItems = uniqueTodos.values.toList();
+
+        final highPriority = pendingItems
+            .where((item) => item.priority.toLowerCase() == 'high')
+            .length;
+        final moderatePriority = pendingItems
+            .where((item) => item.priority.toLowerCase() == 'moderate')
+            .length;
+        final lowPriority = pendingItems
+            .where((item) => item.priority.toLowerCase() == 'low')
+            .length;
+
+        if (pendingItems.isEmpty) {
+          return SizedBox.shrink();
+        }
+
+        return Container(
+          padding: EdgeInsetsDirectional.fromSTEB(20, 12, 20, 12),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            border: Border(
+              bottom: BorderSide(
+                color: Color(0xFFE5E7EB),
+                width: 1,
+              ),
+            ),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        'Action Items',
+                        style: TextStyle(
+                          fontFamily: 'Inter',
+                          color: Color(0xFF111827),
+                          fontSize: 15,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      SizedBox(width: 8),
+                      InkWell(
+                        onTap: () {
+                          setState(() {
+                            _model.isActionItemsExpanded =
+                                !_model.isActionItemsExpanded;
+                          });
+                        },
+                        child: Icon(
+                          _model.isActionItemsExpanded
+                              ? Icons.expand_less
+                              : Icons.expand_more,
+                          size: 20,
+                          color: Color(0xFF6B7280),
+                        ),
+                      ),
+                    ],
+                  ),
+                  Text(
+                    '${pendingItems.length} pending',
+                    style: TextStyle(
+                      fontFamily: 'Inter',
+                      color: Color(0xFF6B7280),
+                      fontSize: 13,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ],
+              ),
+              if (_model.isActionItemsExpanded) ...[
+                SizedBox(height: 12),
+                Wrap(
+                  spacing: 10,
+                  runSpacing: 8,
+                  children: [
+                    if (highPriority > 0)
+                      Container(
+                        padding: EdgeInsetsDirectional.fromSTEB(10, 6, 10, 6),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFFEE2E2),
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              Icons.flag,
+                              size: 13,
+                              color: const Color(0xFFDC2626),
+                            ),
+                            SizedBox(width: 5),
+                            Text(
+                              '$highPriority High',
+                              style: TextStyle(
+                                fontFamily: 'Inter',
+                                fontSize: 12,
+                                fontWeight: FontWeight.w500,
+                                color: const Color(0xFFDC2626),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    if (moderatePriority > 0)
+                      Container(
+                        padding: EdgeInsetsDirectional.fromSTEB(10, 6, 10, 6),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFFEF3C7),
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              Icons.flag,
+                              size: 13,
+                              color: const Color(0xFFD97706),
+                            ),
+                            SizedBox(width: 5),
+                            Text(
+                              '$moderatePriority Moderate',
+                              style: TextStyle(
+                                fontFamily: 'Inter',
+                                fontSize: 12,
+                                fontWeight: FontWeight.w500,
+                                color: const Color(0xFFD97706),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    if (lowPriority > 0)
+                      Container(
+                        padding: EdgeInsetsDirectional.fromSTEB(10, 6, 10, 6),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFE0E7FF),
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              Icons.flag,
+                              size: 13,
+                              color: const Color(0xFF4F46E5),
+                            ),
+                            SizedBox(width: 5),
+                            Text(
+                              '$lowPriority Low',
+                              style: TextStyle(
+                                fontFamily: 'Inter',
+                                fontSize: 12,
+                                fontWeight: FontWeight.w500,
+                                color: const Color(0xFF4F46E5),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                  ],
+                ),
+              ],
+            ],
+          ),
+        );
+      },
     );
   }
 
@@ -2198,13 +2520,10 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
     }
 
     try {
-      context.pushNamed(
-        GroupChatDetailWidget.routeName,
-        queryParameters: {
-          'chatDoc': serializeParam(chat, ParamType.Document),
-        }.withoutNulls,
-        extra: <String, dynamic>{'chatDoc': chat},
-      );
+      setState(() {
+        _model.groupInfoChat = chat;
+        _model.showGroupInfoPanel = true;
+      });
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(

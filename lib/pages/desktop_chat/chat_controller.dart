@@ -2,6 +2,7 @@ import '/auth/firebase_auth/auth_util.dart';
 import '/backend/backend.dart';
 import '/custom_code/services/web_notification_service.dart';
 import 'package:get/get.dart';
+import 'dart:async';
 
 enum ChatState { loading, success, error }
 
@@ -38,9 +39,20 @@ class ChatController extends GetxController {
     });
   }
 
+  StreamSubscription? _chatsSubscription;
+
+  @override
+  void onClose() {
+    _chatsSubscription?.cancel();
+    super.onClose();
+  }
+
   // Load chats from Firestore with real-time updates
   Future<void> loadChats() async {
     try {
+      // Cancel existing subscription if any
+      await _chatsSubscription?.cancel();
+
       chatState.value = ChatState.loading;
 
       // Check if user is logged in
@@ -51,7 +63,6 @@ class ChatController extends GetxController {
       }
 
       // Get current user's workspace using UsersRecord
-      if (currentUserReference == null) return;
       final currentUserDoc =
           await UsersRecord.getDocumentOnce(currentUserReference!);
       final userWorkspaceRef = currentUserDoc.currentWorkspaceRef;
@@ -59,35 +70,34 @@ class ChatController extends GetxController {
       print('🔍 DEBUG: Current workspace ref: $userWorkspaceRef');
       print('🔍 DEBUG: Current workspace path: ${userWorkspaceRef?.path}');
 
-      // Store current workspace for filtering
+      // Store current workspace for filtering (can be null)
       currentWorkspaceRef.value = userWorkspaceRef;
 
-      if (userWorkspaceRef == null) {
-        print('❌ DEBUG: No workspace selected');
-        errorMessage.value =
-            'No workspace selected. Please select a workspace.';
-        chatState.value = ChatState.error;
-        return;
-      }
-
-      // Set up real-time listener for chats (temporarily without workspace filter)
+      // Load chats even if workspace_ref is null (for backward compatibility)
       print('🔍 DEBUG: Starting chat query...');
-      ChatsRecord.collection
-          .where('members', arrayContains: currentUserReference)
-          .orderBy('last_message_at', descending: true)
-          .snapshots()
-          .listen((snapshot) {
-        print('🔍 DEBUG: Query returned ${snapshot.docs.length} chats');
-        chats.value =
-            snapshot.docs.map((doc) => ChatsRecord.fromSnapshot(doc)).toList();
-        chatState.value = ChatState.success;
-        print('✅ DEBUG: Chat state set to success');
-      }, onError: (error) {
-        print('❌ DEBUG: Query error: $error');
-        errorMessage.value = 'Error loading chats: $error';
-        chatState.value = ChatState.error;
-      });
+
+      // Use queryChatsRecord stream which handles errors better
+      final chatsStream = queryChatsRecord(
+        queryBuilder: (chatsRecord) => chatsRecord
+            .where('members', arrayContains: currentUserReference)
+            .orderBy('last_message_at', descending: true),
+      );
+
+      _chatsSubscription = chatsStream.listen(
+        (chatsList) {
+          print('🔍 DEBUG: Query returned ${chatsList.length} chats');
+          chats.value = chatsList;
+          chatState.value = ChatState.success;
+          print('✅ DEBUG: Chat state set to success');
+        },
+        onError: (error) {
+          print('❌ DEBUG: Query error: $error');
+          errorMessage.value = 'Error loading chats: $error';
+          chatState.value = ChatState.error;
+        },
+      );
     } catch (e) {
+      print('❌ DEBUG: Exception in loadChats: $e');
       errorMessage.value = 'Error loading chats: $e';
       chatState.value = ChatState.error;
     }
@@ -187,34 +197,29 @@ class ChatController extends GetxController {
     List<ChatsRecord> filteredChats = List.from(chats);
 
     // Filter by current workspace (UI-level filtering - safer approach)
-    // Only show chats that belong to the current workspace
+    // Show chats that belong to the current workspace or have no workspace_ref (for backward compatibility)
     filteredChats = filteredChats.where((chat) {
-      // Debug logging
-      print('🔍 FILTER DEBUG:');
-      print('  Chat: ${chat.title}');
-      print('  Chat workspace_ref: ${chat.workspaceRef?.path}');
-      print('  Current workspace_ref: ${currentWorkspaceRef.value?.path}');
-      print('  Chat has workspace_ref: ${chat.hasWorkspaceRef()}');
-      print(
-          '  Current workspace not null: ${currentWorkspaceRef.value != null}');
-
       // Hide chats with no messages (temporary chats only appear when selected)
       if (chat.lastMessage.isEmpty) {
-        print('  HIDDEN (no messages yet)');
         return false;
       }
 
-      // If chat has workspace_ref, only show if it matches current workspace
-      if (chat.hasWorkspaceRef() && currentWorkspaceRef.value != null) {
-        // Compare workspace references
+      // If current workspace is null, show all chats (backward compatibility)
+      if (currentWorkspaceRef.value == null) {
+        return true;
+      }
+
+      // If current workspace is set, filter by workspace
+      // Show chats that match the workspace OR have no workspace_ref (legacy chats)
+      if (chat.hasWorkspaceRef()) {
+        // Chat has workspace_ref - only show if it matches current workspace
         final matches =
             chat.workspaceRef?.path == currentWorkspaceRef.value?.path;
-        print('  MATCHES: $matches');
         return matches;
+      } else {
+        // Chat has no workspace_ref - show it (legacy chat)
+        return true;
       }
-      // Hide chats without workspace_ref (old chats)
-      print('  HIDDEN (no workspace_ref)');
-      return false;
     }).toList();
 
     // Filter by search query

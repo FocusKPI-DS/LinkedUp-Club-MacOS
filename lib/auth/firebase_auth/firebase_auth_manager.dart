@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import '../auth_manager.dart';
 import '../base_auth_user_provider.dart';
 import '../../flutter_flow/flutter_flow_util.dart';
@@ -237,8 +238,8 @@ class FirebaseAuthManager extends AuthManager
     // * Finally modify verificationCompleted below as instructed.
     await FirebaseAuth.instance.verifyPhoneNumber(
       phoneNumber: phoneNumber,
-      timeout:
-          const Duration(seconds: 0), // Skips Android's default auto-verification
+      timeout: const Duration(
+          seconds: 0), // Skips Android's default auto-verification
       verificationCompleted: (phoneAuthCredential) async {
         await FirebaseAuth.instance.signInWithCredential(phoneAuthCredential);
         phoneAuthManager.update(() {
@@ -313,6 +314,23 @@ class FirebaseAuthManager extends AuthManager
       return userCredential == null
           ? null
           : LinkedupFirebaseUser.fromUserCredential(userCredential);
+    } on PlatformException catch (e) {
+      // Handle platform-specific errors (e.g., keychain errors on macOS)
+      String errorMsg;
+      if (e.code == 'sign_in_failed' &&
+          e.message?.contains('keychain') == true) {
+        errorMsg =
+            'Sign-in failed due to keychain access issue. Please ensure the app is properly signed. If the problem persists, try signing in with email/password or Apple Sign-In.';
+      } else if (e.code == 'sign_in_failed') {
+        errorMsg = 'Sign-in failed: ${e.message ?? 'Unknown error'}';
+      } else {
+        errorMsg = 'Error: ${e.message ?? 'Unknown platform error'}';
+      }
+      ScaffoldMessenger.of(context).hideCurrentSnackBar();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(errorMsg)),
+      );
+      return null;
     } on FirebaseAuthException catch (e) {
       final errorMsg = switch (e.code) {
         'email-already-in-use' =>
@@ -324,6 +342,13 @@ class FirebaseAuthManager extends AuthManager
       ScaffoldMessenger.of(context).hideCurrentSnackBar();
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(errorMsg)),
+      );
+      return null;
+    } catch (e) {
+      // Handle any other errors
+      ScaffoldMessenger.of(context).hideCurrentSnackBar();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Sign-in error: ${e.toString()}')),
       );
       return null;
     }

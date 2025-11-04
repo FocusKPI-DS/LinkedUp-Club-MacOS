@@ -131,15 +131,15 @@ class _BlockedWidgetState extends State<BlockedWidget> {
                 ),
                 FFButtonWidget(
                   onPressed: () async {
-                    context.pushNamed(DiscoverWidget.routeName);
+                    context.pushNamed(HomeWidget.routeName);
                   },
                   text: 'Discover More',
                   options: FFButtonOptions(
                     width: double.infinity,
                     height: 48.0,
                     padding: const EdgeInsets.all(8.0),
-                    iconPadding:
-                        const EdgeInsetsDirectional.fromSTEB(0.0, 0.0, 0.0, 0.0),
+                    iconPadding: const EdgeInsetsDirectional.fromSTEB(
+                        0.0, 0.0, 0.0, 0.0),
                     color: FlutterFlowTheme.of(context).error,
                     textStyle: FlutterFlowTheme.of(context).titleSmall.override(
                           font: GoogleFonts.inter(

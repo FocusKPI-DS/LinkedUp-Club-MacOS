@@ -27,6 +27,7 @@ class MessageContentWidget extends StatelessWidget {
         maxPreviewLines: 3,
         expandText: 'Show more',
         collapseText: 'Show less',
+        onTapLink: onTapLink,
       );
     }
 

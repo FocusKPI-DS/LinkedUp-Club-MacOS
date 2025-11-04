@@ -10,11 +10,11 @@ import 'package:ff_theme/flutter_flow/flutter_flow_theme.dart';
 import 'package:flutter/material.dart';
 
 Future checkOnboarding(BuildContext context) async {
-  if (valueOrDefault<bool>(currentUserDocument?.isOnboarding, false) ==
-      false) {
+  if (valueOrDefault<bool>(currentUserDocument?.isOnboarding, false) == false) {
     context.pushNamed(OnboardingProfileWidget.routeName);
   } else {
-    context.pushNamed(DiscoverWidget.routeName);
+    // Navigate to home via root path (NavBarPage with Home tab)
+    context.go('/');
   }
 }
 

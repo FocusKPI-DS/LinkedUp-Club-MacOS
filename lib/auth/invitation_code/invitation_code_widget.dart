@@ -217,7 +217,7 @@ class _InvitationCodeWidgetState extends State<InvitationCodeWidget>
                                     ),
                               ),
                               Text(
-                                'LinkedUp is an invite-only networking platform. Please enter your invitation code to continue.',
+                                'Lona is an invite-only networking platform. Please enter your workspace invitation code to continue.',
                                 textAlign: TextAlign.center,
                                 style: FlutterFlowTheme.of(context)
                                     .bodyMedium
@@ -252,7 +252,7 @@ class _InvitationCodeWidgetState extends State<InvitationCodeWidget>
                                   padding: const EdgeInsetsDirectional.fromSTEB(
                                       0.0, 0.0, 0.0, 9.0),
                                   child: Text(
-                                    'Invitation Code',
+                                    'Workspace Invitation Code',
                                     style: FlutterFlowTheme.of(context)
                                         .bodyMedium
                                         .override(
@@ -287,7 +287,9 @@ class _InvitationCodeWidgetState extends State<InvitationCodeWidget>
                                         () => safeSetState(() {}),
                                       ),
                                       autofocus: true,
-                                      autofillHints: const [AutofillHints.email],
+                                      autofillHints: const [
+                                        AutofillHints.email
+                                      ],
                                       obscureText: false,
                                       decoration: InputDecoration(
                                         hintText: 'XXXX-XXXX-XXXX',
@@ -355,7 +357,8 @@ class _InvitationCodeWidgetState extends State<InvitationCodeWidget>
                                         filled: true,
                                         fillColor: FlutterFlowTheme.of(context)
                                             .secondaryBackground,
-                                        contentPadding: const EdgeInsets.all(24.0),
+                                        contentPadding:
+                                            const EdgeInsets.all(24.0),
                                         suffixIcon: Icon(
                                           Icons.info_rounded,
                                           color: FlutterFlowTheme.of(context)
@@ -396,10 +399,12 @@ class _InvitationCodeWidgetState extends State<InvitationCodeWidget>
                                   ),
                                 ),
                                 Align(
-                                  alignment: const AlignmentDirectional(0.0, 0.0),
+                                  alignment:
+                                      const AlignmentDirectional(0.0, 0.0),
                                   child: Padding(
-                                    padding: const EdgeInsetsDirectional.fromSTEB(
-                                        0.0, 0.0, 0.0, 24.0),
+                                    padding:
+                                        const EdgeInsetsDirectional.fromSTEB(
+                                            0.0, 0.0, 0.0, 24.0),
                                     child: FFButtonWidget(
                                       onPressed: () async {
                                         if (widget.isDeeplink == true) {
@@ -509,11 +514,10 @@ class _InvitationCodeWidgetState extends State<InvitationCodeWidget>
                                       options: FFButtonOptions(
                                         width: double.infinity,
                                         height: 50.0,
-                                        padding: const EdgeInsetsDirectional.fromSTEB(
-                                            0.0, 0.0, 0.0, 0.0),
-                                        iconPadding:
-                                            const EdgeInsetsDirectional.fromSTEB(
-                                                0.0, 0.0, 0.0, 0.0),
+                                        padding: const EdgeInsetsDirectional
+                                            .fromSTEB(0.0, 0.0, 0.0, 0.0),
+                                        iconPadding: const EdgeInsetsDirectional
+                                            .fromSTEB(0.0, 0.0, 0.0, 0.0),
                                         color: FlutterFlowTheme.of(context)
                                             .primary,
                                         textStyle: FlutterFlowTheme.of(context)
@@ -578,7 +582,8 @@ class _InvitationCodeWidgetState extends State<InvitationCodeWidget>
                                       elevation: 0,
                                       insetPadding: EdgeInsets.zero,
                                       backgroundColor: Colors.transparent,
-                                      alignment: const AlignmentDirectional(0.0, 0.0)
+                                      alignment: const AlignmentDirectional(
+                                              0.0, 0.0)
                                           .resolve(Directionality.of(context)),
                                       child: GestureDetector(
                                         onTap: () {
@@ -597,7 +602,7 @@ class _InvitationCodeWidgetState extends State<InvitationCodeWidget>
                                 mainAxisSize: MainAxisSize.max,
                                 children: [
                                   Text(
-                                    'Don\'t have an invitation code?',
+                                    'Don\'t have a workspace invitation code?',
                                     style: FlutterFlowTheme.of(context)
                                         .bodyMedium
                                         .override(
@@ -752,7 +757,8 @@ class _InvitationCodeWidgetState extends State<InvitationCodeWidget>
                                     ),
                                   ),
                                   child: Align(
-                                    alignment: const AlignmentDirectional(0.0, 0.0),
+                                    alignment:
+                                        const AlignmentDirectional(0.0, 0.0),
                                     child: FaIcon(
                                       FontAwesomeIcons.google,
                                       color: FlutterFlowTheme.of(context).error,
@@ -762,42 +768,43 @@ class _InvitationCodeWidgetState extends State<InvitationCodeWidget>
                                 ),
                               ),
                               // Sign in with Apple - now enabled for all platforms including macOS
-                                InkWell(
-                                  splashColor: Colors.transparent,
-                                  focusColor: Colors.transparent,
-                                  hoverColor: Colors.transparent,
-                                  highlightColor: Colors.transparent,
-                                  onTap: () async {
-                                    GoRouter.of(context).prepareAuthEvent();
-                                    final user = await authManager
-                                        .signInWithApple(context);
-                                    if (user == null) {
-                                      return;
-                                    }
-                                    await action_blocks.checkOnboarding(context);
-                                  },
-                                  child: Container(
-                                    width: 106.0,
-                                    height: 38.0,
-                                    decoration: BoxDecoration(
-                                      color: FlutterFlowTheme.of(context)
-                                          .secondaryBackground,
-                                      borderRadius: BorderRadius.circular(8.0),
-                                      border: Border.all(
-                                        color: const Color(0xFFD1D5DB),
-                                      ),
+                              InkWell(
+                                splashColor: Colors.transparent,
+                                focusColor: Colors.transparent,
+                                hoverColor: Colors.transparent,
+                                highlightColor: Colors.transparent,
+                                onTap: () async {
+                                  GoRouter.of(context).prepareAuthEvent();
+                                  final user = await authManager
+                                      .signInWithApple(context);
+                                  if (user == null) {
+                                    return;
+                                  }
+                                  await action_blocks.checkOnboarding(context);
+                                },
+                                child: Container(
+                                  width: 106.0,
+                                  height: 38.0,
+                                  decoration: BoxDecoration(
+                                    color: FlutterFlowTheme.of(context)
+                                        .secondaryBackground,
+                                    borderRadius: BorderRadius.circular(8.0),
+                                    border: Border.all(
+                                      color: const Color(0xFFD1D5DB),
                                     ),
-                                    child: Align(
-                                      alignment: const AlignmentDirectional(0.0, 0.0),
-                                      child: Icon(
-                                        Icons.apple_rounded,
-                                        color: FlutterFlowTheme.of(context)
-                                            .primaryText,
-                                        size: 28.0,
-                                      ),
+                                  ),
+                                  child: Align(
+                                    alignment:
+                                        const AlignmentDirectional(0.0, 0.0),
+                                    child: Icon(
+                                      Icons.apple_rounded,
+                                      color: FlutterFlowTheme.of(context)
+                                          .primaryText,
+                                      size: 28.0,
                                     ),
                                   ),
                                 ),
+                              ),
                               if (false)
                                 Container(
                                   width: 106.0,
@@ -810,7 +817,8 @@ class _InvitationCodeWidgetState extends State<InvitationCodeWidget>
                                       color: const Color(0xFFD1D5DB),
                                     ),
                                   ),
-                                  alignment: const AlignmentDirectional(0.0, 0.0),
+                                  alignment:
+                                      const AlignmentDirectional(0.0, 0.0),
                                   child: ClipRRect(
                                     borderRadius: BorderRadius.circular(8.0),
                                     child: Image.asset(

@@ -150,6 +150,42 @@ class _CreatePostWidgetState extends State<CreatePostWidget> {
                 ),
           ),
           actions: [
+            if (widget.isEdit == true)
+              IconButton(
+                tooltip: 'Delete Post',
+                icon: Icon(
+                  Icons.delete_outline,
+                  color: FlutterFlowTheme.of(context).error,
+                ),
+                onPressed: () async {
+                  final confirm = await showDialog<bool>(
+                        context: context,
+                        builder: (ctx) => AlertDialog(
+                          title: const Text('Delete post?'),
+                          content: const Text('This action cannot be undone.'),
+                          actions: [
+                            TextButton(
+                              onPressed: () => Navigator.pop(ctx, false),
+                              child: const Text('Cancel'),
+                            ),
+                            TextButton(
+                              onPressed: () => Navigator.pop(ctx, true),
+                              child: const Text('Delete'),
+                            ),
+                          ],
+                        ),
+                      ) ??
+                      false;
+                  if (!confirm) return;
+
+                  try {
+                    await widget.postDoc?.delete();
+                    context.goNamed(FeedWidget.routeName);
+                  } catch (e) {
+                    // no-op
+                  }
+                },
+              ),
             Align(
               alignment: const AlignmentDirectional(0.0, 0.0),
               child: Builder(

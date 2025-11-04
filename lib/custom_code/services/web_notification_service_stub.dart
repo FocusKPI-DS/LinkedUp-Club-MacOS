@@ -27,6 +27,7 @@ class WebNotificationService {
     required String body,
     String? senderName,
     String? chatName,
+    bool forceShow = false,
   }) {
     print('🔔 Web notifications not available on this platform');
   }

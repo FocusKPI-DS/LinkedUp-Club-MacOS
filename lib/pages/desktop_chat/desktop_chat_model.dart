@@ -45,6 +45,16 @@ class DesktopChatModel extends FlutterFlowModel {
   String? groupImageUrl;
   bool isUploadingImage = false;
 
+  // Inline group info panel
+  bool showGroupInfoPanel = false;
+  ChatsRecord? groupInfoChat;
+
+  // Action items stats expansion state
+  bool isActionItemsExpanded = false;
+
+  // Inline tasks panel
+  bool showTasksPanel = false;
+
   @override
   void initState(BuildContext context) {
     searchFocusNode = FocusNode();

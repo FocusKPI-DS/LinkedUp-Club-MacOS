@@ -180,21 +180,79 @@ class _ChatWidgetState extends State<ChatWidget> with TickerProviderStateMixin {
 
   @override
   Widget build(BuildContext context) {
+    final workspaceRef = currentUserDocument?.currentWorkspaceRef;
+
     return StreamBuilder<List<ChatsRecord>>(
       stream: queryChatsRecord(
-        queryBuilder: (chatsRecord) => chatsRecord
-            .where(
-              'members',
-              arrayContains: currentUserReference,
-            )
-            .where(
-              'workspace_ref',
-              isEqualTo: currentUserDocument?.currentWorkspaceRef,
-            )
-            .orderBy('last_message_at', descending: true),
+        queryBuilder: (chatsRecord) {
+          var query = chatsRecord.where(
+            'members',
+            arrayContains: currentUserReference,
+          );
+
+          // Only filter by workspace_ref if it's not null
+          // This allows legacy chats without workspace_ref to still appear
+          if (workspaceRef != null) {
+            // Use a composite query or client-side filtering
+            // For now, query all chats and filter client-side to handle both cases
+            query = query.orderBy('last_message_at', descending: true);
+          } else {
+            query = query.orderBy('last_message_at', descending: true);
+          }
+
+          return query;
+        },
       ),
       builder: (context, snapshot) {
-        // Customize what your widget looks like when it's loading.
+        // Show loading state
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return Scaffold(
+            backgroundColor: const Color(0xFFF9FAFB),
+            body: Center(
+              child: SizedBox(
+                width: 50.0,
+                height: 50.0,
+                child: CircularProgressIndicator(
+                  valueColor: AlwaysStoppedAnimation<Color>(
+                    FlutterFlowTheme.of(context).primary,
+                  ),
+                ),
+              ),
+            ),
+          );
+        }
+
+        // Show error state
+        if (snapshot.hasError) {
+          print('Error loading chats: ${snapshot.error}');
+          return Scaffold(
+            backgroundColor: const Color(0xFFF9FAFB),
+            body: Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(
+                    Icons.error_outline,
+                    size: 48,
+                    color: FlutterFlowTheme.of(context).error,
+                  ),
+                  const SizedBox(height: 16),
+                  Text(
+                    'Error loading chats',
+                    style: FlutterFlowTheme.of(context).titleMedium,
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Please check your connection',
+                    style: FlutterFlowTheme.of(context).bodySmall,
+                  ),
+                ],
+              ),
+            ),
+          );
+        }
+
+        // Handle no data
         if (!snapshot.hasData) {
           return Scaffold(
             backgroundColor: const Color(0xFFF9FAFB),
@@ -211,7 +269,21 @@ class _ChatWidgetState extends State<ChatWidget> with TickerProviderStateMixin {
             ),
           );
         }
-        List<ChatsRecord> chatChatsRecordList = snapshot.data!;
+
+        // Filter chats by workspace on client-side to handle both workspace_ref and legacy chats
+        List<ChatsRecord> allChats = snapshot.data!;
+        List<ChatsRecord> chatChatsRecordList = allChats.where((chat) {
+          // If workspace_ref is null, show all chats (backward compatibility)
+          if (workspaceRef == null) {
+            return true;
+          }
+          // If chat has workspace_ref, only show if it matches
+          if (chat.workspaceRef != null) {
+            return chat.workspaceRef?.path == workspaceRef.path;
+          }
+          // Show legacy chats without workspace_ref
+          return true;
+        }).toList();
 
         return GestureDetector(
           onTap: () {

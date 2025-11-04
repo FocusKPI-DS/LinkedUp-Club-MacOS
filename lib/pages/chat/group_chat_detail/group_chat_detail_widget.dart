@@ -8,21 +8,18 @@ import '/flutter_flow/flutter_flow_util.dart';
 import '/flutter_flow/flutter_flow_widgets.dart';
 import '/pages/chat/chat_component/add_user/add_user_widget.dart';
 import '/pages/chat/chat_component/reminder_time/reminder_time_widget.dart';
-import '/pages/event/event_component/event_component_widget.dart';
 import '/pages/event/gallary/gallary_widget.dart';
 import 'dart:ui';
 import '/custom_code/widgets/index.dart' as custom_widgets;
 import '/index.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:collection/collection.dart';
 import 'package:ff_theme/flutter_flow/flutter_flow_theme.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:page_transition/page_transition.dart';
-import 'package:provider/provider.dart';
 import 'group_chat_detail_model.dart';
 export 'group_chat_detail_model.dart';
 
@@ -126,25 +123,29 @@ class _GroupChatDetailWidgetState extends State<GroupChatDetailWidget> {
               context.safePop();
             },
           ),
-          title: Text(
-            'Group Info',
-            style: FlutterFlowTheme.of(context).headlineMedium.override(
-                  font: GoogleFonts.inter(
+          title: Padding(
+            padding: EdgeInsetsDirectional.only(start: 16.0),
+            child: Text(
+              'Group Info',
+              style: FlutterFlowTheme.of(context).headlineMedium.override(
+                    font: GoogleFonts.inter(
+                      fontWeight: FontWeight.w600,
+                      fontStyle:
+                          FlutterFlowTheme.of(context).headlineMedium.fontStyle,
+                    ),
+                    color: FlutterFlowTheme.of(context).primaryText,
+                    fontSize: 20.0,
+                    letterSpacing: 0.0,
                     fontWeight: FontWeight.w600,
                     fontStyle:
                         FlutterFlowTheme.of(context).headlineMedium.fontStyle,
                   ),
-                  color: FlutterFlowTheme.of(context).primaryText,
-                  fontSize: 20.0,
-                  letterSpacing: 0.0,
-                  fontWeight: FontWeight.w600,
-                  fontStyle:
-                      FlutterFlowTheme.of(context).headlineMedium.fontStyle,
-                ),
+            ),
           ),
           actions: const [],
           centerTitle: false,
           elevation: 0.0,
+          titleSpacing: 0.0,
         ),
         body: SafeArea(
           top: true,
@@ -352,8 +353,9 @@ class _GroupChatDetailWidgetState extends State<GroupChatDetailWidget> {
                                                 shape: BoxShape.circle,
                                               ),
                                               child: Align(
-                                                alignment: const AlignmentDirectional(
-                                                    0.0, 0.0),
+                                                alignment:
+                                                    const AlignmentDirectional(
+                                                        0.0, 0.0),
                                                 child: Icon(
                                                   Icons.edit,
                                                   color: FlutterFlowTheme.of(
@@ -506,7 +508,8 @@ class _GroupChatDetailWidgetState extends State<GroupChatDetailWidget> {
                                                               .fontStyle,
                                                     ),
                                               ),
-                                            ].divide(const SizedBox(height: 8.0)),
+                                            ].divide(
+                                                const SizedBox(height: 8.0)),
                                           ),
                                         ),
                                       ),
@@ -516,203 +519,255 @@ class _GroupChatDetailWidgetState extends State<GroupChatDetailWidget> {
                             ),
                           ),
                         ),
-                        Container(
-                          decoration: BoxDecoration(
-                            color: FlutterFlowTheme.of(context)
-                                .secondaryBackground,
-                          ),
-                          child: Padding(
-                            padding: const EdgeInsets.all(16.0),
-                            child: Column(
-                              mainAxisSize: MainAxisSize.max,
-                              crossAxisAlignment: CrossAxisAlignment.stretch,
-                              children: [
-                                Text(
-                                  'Connected Event',
-                                  style: FlutterFlowTheme.of(context)
-                                      .titleMedium
-                                      .override(
-                                        font: GoogleFonts.inter(
-                                          fontWeight: FontWeight.w600,
-                                          fontStyle:
-                                              FlutterFlowTheme.of(context)
-                                                  .titleMedium
-                                                  .fontStyle,
-                                        ),
-                                        color: const Color(0xFF111827),
-                                        fontSize: 16.0,
-                                        letterSpacing: 0.0,
-                                        fontWeight: FontWeight.w600,
-                                        fontStyle: FlutterFlowTheme.of(context)
-                                            .titleMedium
-                                            .fontStyle,
-                                      ),
+                        // Action Items Stats Section
+                        if (widget.chatDoc != null)
+                          Container(
+                            margin:
+                                EdgeInsetsDirectional.fromSTEB(16, 0, 16, 16),
+                            decoration: BoxDecoration(
+                              color: FlutterFlowTheme.of(context)
+                                  .secondaryBackground,
+                              borderRadius: BorderRadius.circular(12.0),
+                              border: Border.all(
+                                color: FlutterFlowTheme.of(context).alternate,
+                                width: 1.0,
+                              ),
+                            ),
+                            child: StreamBuilder<List<ActionItemsRecord>>(
+                              stream: queryActionItemsRecord(
+                                queryBuilder: (actionItemsRecord) =>
+                                    actionItemsRecord.where(
+                                  'chat_ref',
+                                  isEqualTo: widget.chatDoc?.reference,
                                 ),
-                                if (widget.chatDoc?.eventRef != null)
-                                  FutureBuilder<EventsRecord>(
-                                    future: EventsRecord.getDocumentOnce(
-                                        widget.chatDoc!.eventRef!),
-                                    builder: (context, snapshot) {
-                                      // Customize what your widget looks like when it's loading.
-                                      if (!snapshot.hasData) {
-                                        return Center(
-                                          child: SizedBox(
-                                            width: 50.0,
-                                            height: 50.0,
-                                            child: CircularProgressIndicator(
-                                              valueColor:
-                                                  AlwaysStoppedAnimation<Color>(
-                                                FlutterFlowTheme.of(context)
-                                                    .primary,
+                              ),
+                              builder: (context, snapshot) {
+                                if (!snapshot.hasData) {
+                                  return SizedBox.shrink();
+                                }
+
+                                final allActionItems = snapshot.data ?? [];
+                                final pendingItems = allActionItems
+                                    .where((item) =>
+                                        item.status.toLowerCase() ==
+                                            'pending' ||
+                                        item.status.toLowerCase() ==
+                                            'in progress')
+                                    .toList();
+
+                                final highPriority = pendingItems
+                                    .where((item) =>
+                                        item.priority.toLowerCase() == 'high')
+                                    .length;
+                                final mediumPriority = pendingItems
+                                    .where((item) =>
+                                        item.priority.toLowerCase() == 'medium')
+                                    .length;
+                                final lowPriority = pendingItems
+                                    .where((item) =>
+                                        item.priority.toLowerCase() == 'low')
+                                    .length;
+                                final noPriority = pendingItems
+                                    .where((item) =>
+                                        item.priority.isEmpty ||
+                                        (item.priority.toLowerCase() !=
+                                                'high' &&
+                                            item.priority.toLowerCase() !=
+                                                'medium' &&
+                                            item.priority.toLowerCase() !=
+                                                'low'))
+                                    .length;
+
+                                if (pendingItems.isEmpty) {
+                                  return SizedBox.shrink();
+                                }
+
+                                return Padding(
+                                  padding: EdgeInsetsDirectional.fromSTEB(
+                                      16, 16, 16, 16),
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Row(
+                                        mainAxisAlignment:
+                                            MainAxisAlignment.spaceBetween,
+                                        children: [
+                                          Text(
+                                            'Action Items',
+                                            style: FlutterFlowTheme.of(context)
+                                                .titleMedium
+                                                .override(
+                                                  font: GoogleFonts.inter(
+                                                    fontWeight: FontWeight.w600,
+                                                  ),
+                                                  color:
+                                                      const Color(0xFF111827),
+                                                  fontSize: 16.0,
+                                                  letterSpacing: 0.0,
+                                                ),
+                                          ),
+                                          Text(
+                                            '${pendingItems.length} pending',
+                                            style: FlutterFlowTheme.of(context)
+                                                .bodyMedium
+                                                .override(
+                                                  font: GoogleFonts.inter(
+                                                    fontWeight: FontWeight.w500,
+                                                  ),
+                                                  color:
+                                                      const Color(0xFF6B7280),
+                                                  fontSize: 14.0,
+                                                  letterSpacing: 0.0,
+                                                ),
+                                          ),
+                                        ],
+                                      ),
+                                      SizedBox(height: 12),
+                                      Wrap(
+                                        spacing: 12,
+                                        runSpacing: 8,
+                                        children: [
+                                          if (highPriority > 0)
+                                            Container(
+                                              padding: EdgeInsetsDirectional
+                                                  .fromSTEB(12, 8, 12, 8),
+                                              decoration: BoxDecoration(
+                                                color: const Color(0xFFFEE2E2),
+                                                borderRadius:
+                                                    BorderRadius.circular(8),
+                                              ),
+                                              child: Row(
+                                                mainAxisSize: MainAxisSize.min,
+                                                children: [
+                                                  Icon(
+                                                    Icons.flag,
+                                                    size: 14,
+                                                    color:
+                                                        const Color(0xFFDC2626),
+                                                  ),
+                                                  SizedBox(width: 6),
+                                                  Text(
+                                                    '$highPriority High',
+                                                    style: TextStyle(
+                                                      fontFamily: 'Inter',
+                                                      fontSize: 13,
+                                                      fontWeight:
+                                                          FontWeight.w500,
+                                                      color: const Color(
+                                                          0xFFDC2626),
+                                                    ),
+                                                  ),
+                                                ],
                                               ),
                                             ),
-                                          ),
-                                        );
-                                      }
-
-                                      final eventComponentEventsRecord =
-                                          snapshot.data!;
-
-                                      return wrapWithModel(
-                                        model: _model.eventComponentModel,
-                                        updateCallback: () =>
-                                            safeSetState(() {}),
-                                        child: EventComponentWidget(
-                                          imageCover: eventComponentEventsRecord
-                                              .coverImageUrl,
-                                          category: eventComponentEventsRecord
-                                              .category.firstOrNull,
-                                          nameEvent:
-                                              eventComponentEventsRecord.title,
-                                          date: dateTimeFormat(
-                                              "yMMMd",
-                                              eventComponentEventsRecord
-                                                  .startDate!),
-                                          time: dateTimeFormat(
-                                              "jm",
-                                              eventComponentEventsRecord
-                                                  .startDate!),
-                                          location: eventComponentEventsRecord
-                                              .location,
-                                          participant:
-                                              eventComponentEventsRecord
-                                                  .participants.length,
-                                          speakers: eventComponentEventsRecord
-                                              .speakers,
-                                          eventRef: eventComponentEventsRecord
-                                              .reference,
-                                          action: () async {
-                                            context.pushNamed(
-                                              EventDetailWidget.routeName,
-                                              pathParameters: {
-                                                'eventId': serializeParam(
-                                                  eventComponentEventsRecord
-                                                      .eventRef?.id,
-                                                  ParamType.String,
-                                                ),
-                                              }.withoutNulls,
-                                            );
-                                          },
-                                        ),
-                                      );
-                                    },
-                                  ),
-                                if (widget.chatDoc?.createdBy ==
-                                    currentUserReference)
-                                  FFButtonWidget(
-                                    onPressed: () async {
-                                      if (widget.chatDoc?.eventRef != null) {
-                                        await widget.chatDoc!.reference
-                                            .update({
-                                          ...mapToFirestore(
-                                            {
-                                              'event_ref': FieldValue.delete(),
-                                            },
-                                          ),
-                                        });
-
-                                        context.pushNamed(
-                                          ChatDetailWidget.routeName,
-                                          queryParameters: {
-                                            'chatDoc': serializeParam(
-                                              widget.chatDoc,
-                                              ParamType.Document,
+                                          if (mediumPriority > 0)
+                                            Container(
+                                              padding: EdgeInsetsDirectional
+                                                  .fromSTEB(12, 8, 12, 8),
+                                              decoration: BoxDecoration(
+                                                color: const Color(0xFFFEF3C7),
+                                                borderRadius:
+                                                    BorderRadius.circular(8),
+                                              ),
+                                              child: Row(
+                                                mainAxisSize: MainAxisSize.min,
+                                                children: [
+                                                  Icon(
+                                                    Icons.flag,
+                                                    size: 14,
+                                                    color:
+                                                        const Color(0xFFD97706),
+                                                  ),
+                                                  SizedBox(width: 6),
+                                                  Text(
+                                                    '$mediumPriority Medium',
+                                                    style: TextStyle(
+                                                      fontFamily: 'Inter',
+                                                      fontSize: 13,
+                                                      fontWeight:
+                                                          FontWeight.w500,
+                                                      color: const Color(
+                                                          0xFFD97706),
+                                                    ),
+                                                  ),
+                                                ],
+                                              ),
                                             ),
-                                          }.withoutNulls,
-                                          extra: <String, dynamic>{
-                                            'chatDoc': widget.chatDoc,
-                                          },
-                                        );
-                                      } else {
-                                        context.pushNamed(
-                                          ChatGroupCreationWidget.routeName,
-                                          queryParameters: {
-                                            'isEdit': serializeParam(
-                                              true,
-                                              ParamType.bool,
+                                          if (lowPriority > 0)
+                                            Container(
+                                              padding: EdgeInsetsDirectional
+                                                  .fromSTEB(12, 8, 12, 8),
+                                              decoration: BoxDecoration(
+                                                color: const Color(0xFFE0E7FF),
+                                                borderRadius:
+                                                    BorderRadius.circular(8),
+                                              ),
+                                              child: Row(
+                                                mainAxisSize: MainAxisSize.min,
+                                                children: [
+                                                  Icon(
+                                                    Icons.flag,
+                                                    size: 14,
+                                                    color:
+                                                        const Color(0xFF4F46E5),
+                                                  ),
+                                                  SizedBox(width: 6),
+                                                  Text(
+                                                    '$lowPriority Low',
+                                                    style: TextStyle(
+                                                      fontFamily: 'Inter',
+                                                      fontSize: 13,
+                                                      fontWeight:
+                                                          FontWeight.w500,
+                                                      color: const Color(
+                                                          0xFF4F46E5),
+                                                    ),
+                                                  ),
+                                                ],
+                                              ),
                                             ),
-                                            'chatDoc': serializeParam(
-                                              widget.chatDoc,
-                                              ParamType.Document,
+                                          if (noPriority > 0)
+                                            Container(
+                                              padding: EdgeInsetsDirectional
+                                                  .fromSTEB(12, 8, 12, 8),
+                                              decoration: BoxDecoration(
+                                                color: const Color(0xFFF3F4F6),
+                                                borderRadius:
+                                                    BorderRadius.circular(8),
+                                              ),
+                                              child: Row(
+                                                mainAxisSize: MainAxisSize.min,
+                                                children: [
+                                                  Icon(
+                                                    Icons.flag_outlined,
+                                                    size: 14,
+                                                    color:
+                                                        const Color(0xFF6B7280),
+                                                  ),
+                                                  SizedBox(width: 6),
+                                                  Text(
+                                                    '$noPriority Other',
+                                                    style: TextStyle(
+                                                      fontFamily: 'Inter',
+                                                      fontSize: 13,
+                                                      fontWeight:
+                                                          FontWeight.w500,
+                                                      color: const Color(
+                                                          0xFF6B7280),
+                                                    ),
+                                                  ),
+                                                ],
+                                              ),
                                             ),
-                                          }.withoutNulls,
-                                          extra: <String, dynamic>{
-                                            'chatDoc': widget.chatDoc,
-                                          },
-                                        );
-                                      }
-                                    },
-                                    text: widget.chatDoc?.eventRef != null
-                                        ? 'Disconnect'
-                                        : 'Connect',
-                                    options: FFButtonOptions(
-                                      width: double.infinity,
-                                      height: 50.0,
-                                      padding: const EdgeInsetsDirectional.fromSTEB(
-                                          16.0, 0.0, 16.0, 0.0),
-                                      iconPadding:
-                                          const EdgeInsetsDirectional.fromSTEB(
-                                              0.0, 0.0, 0.0, 0.0),
-                                      color: FlutterFlowTheme.of(context)
-                                          .secondaryBackground,
-                                      textStyle: FlutterFlowTheme.of(context)
-                                          .titleMedium
-                                          .override(
-                                            font: GoogleFonts.inter(
-                                              fontWeight: FontWeight.w500,
-                                              fontStyle:
-                                                  FlutterFlowTheme.of(context)
-                                                      .titleMedium
-                                                      .fontStyle,
-                                            ),
-                                            color: widget.chatDoc?.eventRef !=
-                                                    null
-                                                ? const Color(0xFFEF4444)
-                                                : FlutterFlowTheme.of(context)
-                                                    .primary,
-                                            fontSize: 16.0,
-                                            letterSpacing: 0.0,
-                                            fontWeight: FontWeight.w500,
-                                            fontStyle:
-                                                FlutterFlowTheme.of(context)
-                                                    .titleMedium
-                                                    .fontStyle,
-                                          ),
-                                      elevation: 0.0,
-                                      borderSide: BorderSide(
-                                        color: widget.chatDoc?.eventRef != null
-                                            ? const Color(0xFFEF4444)
-                                            : FlutterFlowTheme.of(context)
-                                                .primary,
-                                        width: 1.0,
+                                        ],
                                       ),
-                                      borderRadius: BorderRadius.circular(8.0),
-                                    ),
+                                    ],
                                   ),
-                              ].divide(const SizedBox(height: 16.0)),
+                                );
+                              },
                             ),
                           ),
-                        ),
                         Container(
                           decoration: BoxDecoration(
                             color: FlutterFlowTheme.of(context)
@@ -854,8 +909,8 @@ class _GroupChatDetailWidgetState extends State<GroupChatDetailWidget> {
                                                             ),
                                                           ),
                                                         );
-                                                      }).divide(
-                                                          const SizedBox(width: 8.0)),
+                                                      }).divide(const SizedBox(
+                                                          width: 8.0)),
                                                     );
                                                   },
                                                 ),
@@ -864,7 +919,8 @@ class _GroupChatDetailWidgetState extends State<GroupChatDetailWidget> {
                                                   width: 64.0,
                                                   height: 64.0,
                                                   decoration: BoxDecoration(
-                                                    color: const Color(0xFFE5E7EB),
+                                                    color:
+                                                        const Color(0xFFE5E7EB),
                                                     borderRadius:
                                                         BorderRadius.circular(
                                                             10.0),
@@ -910,8 +966,7 @@ class _GroupChatDetailWidgetState extends State<GroupChatDetailWidget> {
                                             ],
                                           ),
                                           if (_model.message
-                                                  .where((e) =>
-                                                      e.image != '')
+                                                  .where((e) => e.image != '')
                                                   .toList()
                                                   .length >
                                               4)
@@ -956,7 +1011,8 @@ class _GroupChatDetailWidgetState extends State<GroupChatDetailWidget> {
                                                 width: 64.0,
                                                 height: 64.0,
                                                 decoration: BoxDecoration(
-                                                  color: const Color(0xFFE5E7EB),
+                                                  color:
+                                                      const Color(0xFFE5E7EB),
                                                   borderRadius:
                                                       BorderRadius.circular(
                                                           8.0),
@@ -967,7 +1023,8 @@ class _GroupChatDetailWidgetState extends State<GroupChatDetailWidget> {
                                                           0.0, 0.0),
                                                   child: Padding(
                                                     padding:
-                                                        const EdgeInsets.all(8.0),
+                                                        const EdgeInsets.all(
+                                                            8.0),
                                                     child: RichText(
                                                       textScaler:
                                                           MediaQuery.of(context)
@@ -985,7 +1042,7 @@ class _GroupChatDetailWidgetState extends State<GroupChatDetailWidget> {
                                                               _model.message
                                                                   .where((e) =>
                                                                       e.image !=
-                                                                          '')
+                                                                      '')
                                                                   .toList()
                                                                   .length
                                                                   .toString(),
@@ -1061,6 +1118,167 @@ class _GroupChatDetailWidgetState extends State<GroupChatDetailWidget> {
                                     ),
                                   ].divide(const SizedBox(height: 16.0)),
                                 ),
+                              ],
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        Container(
+                          decoration: BoxDecoration(
+                            color: FlutterFlowTheme.of(context)
+                                .secondaryBackground,
+                          ),
+                          child: Padding(
+                            padding: const EdgeInsets.all(16.0),
+                            child: Column(
+                              mainAxisSize: MainAxisSize.max,
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'Group\'s Action Tasks',
+                                  style: FlutterFlowTheme.of(context)
+                                      .titleMedium
+                                      .override(
+                                        font: GoogleFonts.inter(
+                                          fontWeight: FontWeight.w600,
+                                          fontStyle:
+                                              FlutterFlowTheme.of(context)
+                                                  .titleMedium
+                                                  .fontStyle,
+                                        ),
+                                        color: const Color(0xFF111827),
+                                        fontSize: 16.0,
+                                        letterSpacing: 0.0,
+                                        fontWeight: FontWeight.w600,
+                                        fontStyle: FlutterFlowTheme.of(context)
+                                            .titleMedium
+                                            .fontStyle,
+                                      ),
+                                ),
+                                const SizedBox(height: 16),
+                                InkWell(
+                                  splashColor: Colors.transparent,
+                                  focusColor: Colors.transparent,
+                                  hoverColor: Colors.transparent,
+                                  highlightColor: Colors.transparent,
+                                  onTap: () async {
+                                    context.pushNamed(
+                                      'GroupActionTasks',
+                                      queryParameters: {
+                                        'chatDoc': serializeParam(
+                                          widget.chatDoc,
+                                          ParamType.Document,
+                                        ),
+                                      }.withoutNulls,
+                                    );
+                                  },
+                                  child: Container(
+                                    width: double.infinity,
+                                    padding: const EdgeInsets.all(16.0),
+                                    decoration: BoxDecoration(
+                                      color: const Color(0xFFF3F4F6),
+                                      borderRadius: BorderRadius.circular(12.0),
+                                      border: Border.all(
+                                        color: const Color(0xFFE5E7EB),
+                                        width: 1,
+                                      ),
+                                    ),
+                                    child: Row(
+                                      mainAxisAlignment:
+                                          MainAxisAlignment.spaceBetween,
+                                      children: [
+                                        Row(
+                                          children: [
+                                            Container(
+                                              padding:
+                                                  const EdgeInsets.all(12.0),
+                                              decoration: BoxDecoration(
+                                                color: const Color(0xFF3B82F6)
+                                                    .withOpacity(0.1),
+                                                borderRadius:
+                                                    BorderRadius.circular(8.0),
+                                              ),
+                                              child: const Icon(
+                                                Icons.task_alt_outlined,
+                                                size: 24,
+                                                color: Color(0xFF3B82F6),
+                                              ),
+                                            ),
+                                            const SizedBox(width: 12),
+                                            Column(
+                                              crossAxisAlignment:
+                                                  CrossAxisAlignment.start,
+                                              children: [
+                                                Text(
+                                                  'View Action Tasks',
+                                                  style: FlutterFlowTheme.of(
+                                                          context)
+                                                      .titleMedium
+                                                      .override(
+                                                        font: GoogleFonts.inter(
+                                                          fontWeight:
+                                                              FontWeight.w600,
+                                                          fontStyle:
+                                                              FlutterFlowTheme.of(
+                                                                      context)
+                                                                  .titleMedium
+                                                                  .fontStyle,
+                                                        ),
+                                                        color: const Color(
+                                                            0xFF111827),
+                                                        fontSize: 16.0,
+                                                        letterSpacing: 0.0,
+                                                        fontWeight:
+                                                            FontWeight.w600,
+                                                        fontStyle:
+                                                            FlutterFlowTheme.of(
+                                                                    context)
+                                                                .titleMedium
+                                                                .fontStyle,
+                                                      ),
+                                                ),
+                                                Text(
+                                                  'Tasks from group conversations',
+                                                  style: FlutterFlowTheme.of(
+                                                          context)
+                                                      .bodyMedium
+                                                      .override(
+                                                        font:
+                                                            GoogleFonts.inter(),
+                                                        color: const Color(
+                                                            0xFF6B7280),
+                                                        fontSize: 14.0,
+                                                        letterSpacing: 0.0,
+                                                      ),
+                                                ),
+                                              ],
+                                            ),
+                                          ],
+                                        ),
+                                        const Icon(
+                                          Icons.chevron_right,
+                                          color: Color(0xFF9CA3AF),
+                                          size: 24,
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        Container(
+                          decoration: BoxDecoration(
+                            color: FlutterFlowTheme.of(context)
+                                .secondaryBackground,
+                          ),
+                          child: Padding(
+                            padding: const EdgeInsets.all(16.0),
+                            child: Column(
+                              mainAxisSize: MainAxisSize.max,
+                              children: [
                                 StreamBuilder<ChatsRecord>(
                                   stream: ChatsRecord.getDocument(
                                       widget.chatDoc!.reference),
@@ -1115,8 +1333,8 @@ class _GroupChatDetailWidgetState extends State<GroupChatDetailWidget> {
                                                                     .titleMedium
                                                                     .fontStyle,
                                                           ),
-                                                          color:
-                                                              const Color(0xFF111827),
+                                                          color: const Color(
+                                                              0xFF111827),
                                                           fontSize: 16.0,
                                                           letterSpacing: 0.0,
                                                           fontWeight:
@@ -1146,8 +1364,8 @@ class _GroupChatDetailWidgetState extends State<GroupChatDetailWidget> {
                                                                     .titleMedium
                                                                     .fontStyle,
                                                           ),
-                                                          color:
-                                                              const Color(0xFF111827),
+                                                          color: const Color(
+                                                              0xFF111827),
                                                           fontSize: 16.0,
                                                           letterSpacing: 0.0,
                                                           fontWeight:
@@ -1172,118 +1390,11 @@ class _GroupChatDetailWidgetState extends State<GroupChatDetailWidget> {
                                                   highlightColor:
                                                       Colors.transparent,
                                                   onTap: () async {
-                                                    if (containerChatsRecord
-                                                            .members.length !=
-                                                        widget.chatDoc?.members
-                                                            .length) {
-                                                      await showDialog(
-                                                        context: context,
-                                                        builder:
-                                                            (dialogContext) {
-                                                          return Dialog(
-                                                            elevation: 0,
-                                                            insetPadding:
-                                                                EdgeInsets.zero,
-                                                            backgroundColor:
-                                                                Colors
-                                                                    .transparent,
-                                                            alignment: const AlignmentDirectional(
-                                                                    0.0, 0.0)
-                                                                .resolve(
-                                                                    Directionality.of(
-                                                                        context)),
-                                                            child:
-                                                                GestureDetector(
-                                                              onTap: () {
-                                                                FocusScope.of(
-                                                                        dialogContext)
-                                                                    .unfocus();
-                                                                FocusManager
-                                                                    .instance
-                                                                    .primaryFocus
-                                                                    ?.unfocus();
-                                                              },
-                                                              child:
-                                                                  AddUserWidget(
-                                                                userRefs:
-                                                                    containerChatsRecord
-                                                                        .members,
-                                                                actionOutput:
-                                                                    (listUsers) async {
-                                                                  await widget
-                                                                      .chatDoc!
-                                                                      .reference
-                                                                      .update({
-                                                                    ...mapToFirestore(
-                                                                      {
-                                                                        'members':
-                                                                            listUsers,
-                                                                      },
-                                                                    ),
-                                                                  });
-                                                                  Navigator.pop(
-                                                                      context);
-                                                                },
-                                                              ),
-                                                            ),
-                                                          );
-                                                        },
-                                                      );
-                                                    } else {
-                                                      await showDialog(
-                                                        context: context,
-                                                        builder:
-                                                            (dialogContext) {
-                                                          return Dialog(
-                                                            elevation: 0,
-                                                            insetPadding:
-                                                                EdgeInsets.zero,
-                                                            backgroundColor:
-                                                                Colors
-                                                                    .transparent,
-                                                            alignment: const AlignmentDirectional(
-                                                                    0.0, 0.0)
-                                                                .resolve(
-                                                                    Directionality.of(
-                                                                        context)),
-                                                            child:
-                                                                GestureDetector(
-                                                              onTap: () {
-                                                                FocusScope.of(
-                                                                        dialogContext)
-                                                                    .unfocus();
-                                                                FocusManager
-                                                                    .instance
-                                                                    .primaryFocus
-                                                                    ?.unfocus();
-                                                              },
-                                                              child:
-                                                                  AddUserWidget(
-                                                                userRefs: widget
-                                                                    .chatDoc!
-                                                                    .members,
-                                                                actionOutput:
-                                                                    (listUsers) async {
-                                                                  await widget
-                                                                      .chatDoc!
-                                                                      .reference
-                                                                      .update({
-                                                                    ...mapToFirestore(
-                                                                      {
-                                                                        'members':
-                                                                            listUsers,
-                                                                      },
-                                                                    ),
-                                                                  });
-                                                                  Navigator.pop(
-                                                                      context);
-                                                                },
-                                                              ),
-                                                            ),
-                                                          );
-                                                        },
-                                                      );
-                                                    }
+                                                    setState(() {
+                                                      _model.showAddUserPanel =
+                                                          !_model
+                                                              .showAddUserPanel;
+                                                    });
                                                   },
                                                   child: Row(
                                                     mainAxisSize:
@@ -1326,8 +1437,8 @@ class _GroupChatDetailWidgetState extends State<GroupChatDetailWidget> {
                                                                       .fontStyle,
                                                             ),
                                                       ),
-                                                    ].divide(
-                                                        const SizedBox(width: 4.0)),
+                                                    ].divide(const SizedBox(
+                                                        width: 4.0)),
                                                   ),
                                                 ),
                                               ),
@@ -1492,8 +1603,10 @@ class _GroupChatDetailWidgetState extends State<GroupChatDetailWidget> {
                                                                     ),
                                                                   ],
                                                                 ),
-                                                              ].divide(const SizedBox(
-                                                                  width: 12.0)),
+                                                              ].divide(
+                                                                  const SizedBox(
+                                                                      width:
+                                                                          12.0)),
                                                             ),
                                                             const Icon(
                                                               Icons.more_vert,
@@ -1506,229 +1619,362 @@ class _GroupChatDetailWidgetState extends State<GroupChatDetailWidget> {
                                                       },
                                                     ),
                                                 ]
-                                                    .divide(
-                                                        const SizedBox(height: 12.0))
-                                                    .addToStart(
-                                                        const SizedBox(height: 12.0))
-                                                    .addToEnd(
-                                                        const SizedBox(height: 12.0)),
+                                                    .divide(const SizedBox(
+                                                        height: 12.0))
+                                                    .addToStart(const SizedBox(
+                                                        height: 12.0))
+                                                    .addToEnd(const SizedBox(
+                                                        height: 12.0)),
                                               ),
-                                              Container(
-                                                constraints: const BoxConstraints(
-                                                  maxHeight: 400.0,
-                                                ),
-                                                decoration: const BoxDecoration(),
-                                                child: Builder(
-                                                  builder: (context) {
-                                                    final members =
-                                                        containerChatsRecord
-                                                            .members
-                                                            .where((e) =>
-                                                                e.id !=
-                                                                currentUserReference
-                                                                    ?.id)
-                                                            .toList();
+                                              Stack(
+                                                children: [
+                                                  Container(
+                                                    constraints:
+                                                        const BoxConstraints(
+                                                      maxHeight: 400.0,
+                                                    ),
+                                                    decoration:
+                                                        const BoxDecoration(),
+                                                    child: Builder(
+                                                      builder: (context) {
+                                                        final members =
+                                                            containerChatsRecord
+                                                                .members
+                                                                .where((e) =>
+                                                                    e.id !=
+                                                                    currentUserReference
+                                                                        ?.id)
+                                                                .toList();
 
-                                                    return SingleChildScrollView(
-                                                      child: Column(
-                                                        mainAxisSize:
-                                                            MainAxisSize.min,
-                                                        children: List.generate(
-                                                            members.length,
-                                                            (membersIndex) {
-                                                          final membersItem =
-                                                              members[
-                                                                  membersIndex];
-                                                          return StreamBuilder<
-                                                              UsersRecord>(
-                                                            stream: UsersRecord
-                                                                .getDocument(
-                                                                    membersItem),
-                                                            builder: (context,
-                                                                snapshot) {
-                                                              // Customize what your widget looks like when it's loading.
-                                                              if (!snapshot
-                                                                  .hasData) {
-                                                                return Center(
-                                                                  child:
-                                                                      SizedBox(
-                                                                    width: 50.0,
-                                                                    height:
-                                                                        50.0,
-                                                                    child:
-                                                                        CircularProgressIndicator(
-                                                                      valueColor:
-                                                                          AlwaysStoppedAnimation<
-                                                                              Color>(
-                                                                        FlutterFlowTheme.of(context)
-                                                                            .primary,
+                                                        return SingleChildScrollView(
+                                                          child: Column(
+                                                            mainAxisSize:
+                                                                MainAxisSize
+                                                                    .min,
+                                                            children: List.generate(
+                                                                members.length,
+                                                                (membersIndex) {
+                                                              final membersItem =
+                                                                  members[
+                                                                      membersIndex];
+                                                              return StreamBuilder<
+                                                                  UsersRecord>(
+                                                                stream: UsersRecord
+                                                                    .getDocument(
+                                                                        membersItem),
+                                                                builder: (context,
+                                                                    snapshot) {
+                                                                  // Customize what your widget looks like when it's loading.
+                                                                  if (!snapshot
+                                                                      .hasData) {
+                                                                    return Center(
+                                                                      child:
+                                                                          SizedBox(
+                                                                        width:
+                                                                            50.0,
+                                                                        height:
+                                                                            50.0,
+                                                                        child:
+                                                                            CircularProgressIndicator(
+                                                                          valueColor:
+                                                                              AlwaysStoppedAnimation<Color>(
+                                                                            FlutterFlowTheme.of(context).primary,
+                                                                          ),
+                                                                        ),
                                                                       ),
-                                                                    ),
-                                                                  ),
-                                                                );
-                                                              }
+                                                                    );
+                                                                  }
 
-                                                              final rowUsersRecord =
-                                                                  snapshot
-                                                                      .data!;
+                                                                  final rowUsersRecord =
+                                                                      snapshot
+                                                                          .data!;
 
-                                                              return InkWell(
-                                                                splashColor: Colors
-                                                                    .transparent,
-                                                                focusColor: Colors
-                                                                    .transparent,
-                                                                hoverColor: Colors
-                                                                    .transparent,
-                                                                highlightColor:
-                                                                    Colors
-                                                                        .transparent,
-                                                                onTap:
-                                                                    () async {
-                                                                  context
-                                                                      .pushNamed(
-                                                                    UserProfileDetailWidget
-                                                                        .routeName,
-                                                                    queryParameters:
-                                                                        {
-                                                                      'user':
-                                                                          serializeParam(
-                                                                        rowUsersRecord,
-                                                                        ParamType
-                                                                            .Document,
-                                                                      ),
-                                                                    }.withoutNulls,
-                                                                    extra: <String,
-                                                                        dynamic>{
-                                                                      'user':
-                                                                          rowUsersRecord,
+                                                                  return InkWell(
+                                                                    splashColor:
+                                                                        Colors
+                                                                            .transparent,
+                                                                    focusColor:
+                                                                        Colors
+                                                                            .transparent,
+                                                                    hoverColor:
+                                                                        Colors
+                                                                            .transparent,
+                                                                    highlightColor:
+                                                                        Colors
+                                                                            .transparent,
+                                                                    onTap:
+                                                                        () async {
+                                                                      context
+                                                                          .pushNamed(
+                                                                        UserProfileDetailWidget
+                                                                            .routeName,
+                                                                        queryParameters:
+                                                                            {
+                                                                          'user':
+                                                                              serializeParam(
+                                                                            rowUsersRecord,
+                                                                            ParamType.Document,
+                                                                          ),
+                                                                        }.withoutNulls,
+                                                                        extra: <String,
+                                                                            dynamic>{
+                                                                          'user':
+                                                                              rowUsersRecord,
+                                                                        },
+                                                                      );
                                                                     },
-                                                                  );
-                                                                },
-                                                                child: Row(
-                                                                  mainAxisSize:
-                                                                      MainAxisSize
-                                                                          .max,
-                                                                  mainAxisAlignment:
-                                                                      MainAxisAlignment
-                                                                          .spaceBetween,
-                                                                  crossAxisAlignment:
-                                                                      CrossAxisAlignment
-                                                                          .center,
-                                                                  children: [
-                                                                    Row(
+                                                                    child: Row(
                                                                       mainAxisSize:
                                                                           MainAxisSize
                                                                               .max,
-                                                                      children:
-                                                                          [
-                                                                        ClipRRect(
-                                                                          borderRadius:
-                                                                              BorderRadius.circular(20.0),
-                                                                          child:
-                                                                              Image.network(
-                                                                            valueOrDefault<String>(
-                                                                              rowUsersRecord.photoUrl,
-                                                                              'https://firebasestorage.googleapis.com/v0/b/linkedup-c3e29.firebasestorage.app/o/asset%2Fdiv.png?alt=media&token=85d5445a-3d2d-4dd5-879e-c4000b1fefd5',
-                                                                            ),
-                                                                            width:
-                                                                                40.0,
-                                                                            height:
-                                                                                40.0,
-                                                                            fit:
-                                                                                BoxFit.cover,
-                                                                          ),
-                                                                        ),
-                                                                        Column(
+                                                                      mainAxisAlignment:
+                                                                          MainAxisAlignment
+                                                                              .spaceBetween,
+                                                                      crossAxisAlignment:
+                                                                          CrossAxisAlignment
+                                                                              .center,
+                                                                      children: [
+                                                                        Row(
                                                                           mainAxisSize:
                                                                               MainAxisSize.max,
-                                                                          crossAxisAlignment:
-                                                                              CrossAxisAlignment.start,
-                                                                          children: [
-                                                                            Text(
-                                                                              rowUsersRecord.displayName,
-                                                                              style: FlutterFlowTheme.of(context).bodyMedium.override(
-                                                                                    font: GoogleFonts.inter(
-                                                                                      fontWeight: FontWeight.w500,
-                                                                                      fontStyle: FlutterFlowTheme.of(context).bodyMedium.fontStyle,
-                                                                                    ),
-                                                                                    color: const Color(0xFF111827),
-                                                                                    fontSize: 14.0,
-                                                                                    letterSpacing: 0.0,
-                                                                                    fontWeight: FontWeight.w500,
-                                                                                    fontStyle: FlutterFlowTheme.of(context).bodyMedium.fontStyle,
-                                                                                  ),
+                                                                          children:
+                                                                              [
+                                                                            ClipRRect(
+                                                                              borderRadius: BorderRadius.circular(20.0),
+                                                                              child: Image.network(
+                                                                                valueOrDefault<String>(
+                                                                                  rowUsersRecord.photoUrl,
+                                                                                  'https://firebasestorage.googleapis.com/v0/b/linkedup-c3e29.firebasestorage.app/o/asset%2Fdiv.png?alt=media&token=85d5445a-3d2d-4dd5-879e-c4000b1fefd5',
+                                                                                ),
+                                                                                width: 40.0,
+                                                                                height: 40.0,
+                                                                                fit: BoxFit.cover,
+                                                                              ),
                                                                             ),
-                                                                            Row(
+                                                                            Column(
                                                                               mainAxisSize: MainAxisSize.max,
+                                                                              crossAxisAlignment: CrossAxisAlignment.start,
                                                                               children: [
                                                                                 Text(
-                                                                                  'Chat',
-                                                                                  style: FlutterFlowTheme.of(context).bodySmall.override(
+                                                                                  rowUsersRecord.displayName,
+                                                                                  style: FlutterFlowTheme.of(context).bodyMedium.override(
                                                                                         font: GoogleFonts.inter(
                                                                                           fontWeight: FontWeight.w500,
-                                                                                          fontStyle: FlutterFlowTheme.of(context).bodySmall.fontStyle,
+                                                                                          fontStyle: FlutterFlowTheme.of(context).bodyMedium.fontStyle,
                                                                                         ),
-                                                                                        color: FlutterFlowTheme.of(context).primaryText,
-                                                                                        fontSize: 12.0,
+                                                                                        color: const Color(0xFF111827),
+                                                                                        fontSize: 14.0,
                                                                                         letterSpacing: 0.0,
                                                                                         fontWeight: FontWeight.w500,
-                                                                                        fontStyle: FlutterFlowTheme.of(context).bodySmall.fontStyle,
+                                                                                        fontStyle: FlutterFlowTheme.of(context).bodyMedium.fontStyle,
                                                                                       ),
                                                                                 ),
-                                                                                Text(
-                                                                                  '•',
-                                                                                  style: FlutterFlowTheme.of(context).bodySmall.override(
-                                                                                        font: GoogleFonts.inter(
-                                                                                          fontWeight: FontWeight.normal,
-                                                                                          fontStyle: FlutterFlowTheme.of(context).bodySmall.fontStyle,
-                                                                                        ),
-                                                                                        color: const Color(0xFFD1D5DB),
-                                                                                        fontSize: 16.0,
-                                                                                        letterSpacing: 0.0,
-                                                                                        fontWeight: FontWeight.normal,
-                                                                                        fontStyle: FlutterFlowTheme.of(context).bodySmall.fontStyle,
-                                                                                      ),
+                                                                                Row(
+                                                                                  mainAxisSize: MainAxisSize.max,
+                                                                                  children: [
+                                                                                    Text(
+                                                                                      'Chat',
+                                                                                      style: FlutterFlowTheme.of(context).bodySmall.override(
+                                                                                            font: GoogleFonts.inter(
+                                                                                              fontWeight: FontWeight.w500,
+                                                                                              fontStyle: FlutterFlowTheme.of(context).bodySmall.fontStyle,
+                                                                                            ),
+                                                                                            color: FlutterFlowTheme.of(context).primaryText,
+                                                                                            fontSize: 12.0,
+                                                                                            letterSpacing: 0.0,
+                                                                                            fontWeight: FontWeight.w500,
+                                                                                            fontStyle: FlutterFlowTheme.of(context).bodySmall.fontStyle,
+                                                                                          ),
+                                                                                    ),
+                                                                                    Text(
+                                                                                      '•',
+                                                                                      style: FlutterFlowTheme.of(context).bodySmall.override(
+                                                                                            font: GoogleFonts.inter(
+                                                                                              fontWeight: FontWeight.normal,
+                                                                                              fontStyle: FlutterFlowTheme.of(context).bodySmall.fontStyle,
+                                                                                            ),
+                                                                                            color: const Color(0xFFD1D5DB),
+                                                                                            fontSize: 16.0,
+                                                                                            letterSpacing: 0.0,
+                                                                                            fontWeight: FontWeight.normal,
+                                                                                            fontStyle: FlutterFlowTheme.of(context).bodySmall.fontStyle,
+                                                                                          ),
+                                                                                    ),
+                                                                                    Text(
+                                                                                      rowUsersRecord.email,
+                                                                                      style: FlutterFlowTheme.of(context).bodySmall.override(
+                                                                                            font: GoogleFonts.inter(
+                                                                                              fontWeight: FontWeight.normal,
+                                                                                              fontStyle: FlutterFlowTheme.of(context).bodySmall.fontStyle,
+                                                                                            ),
+                                                                                            color: const Color(0xFF6B7280),
+                                                                                            fontSize: 12.0,
+                                                                                            letterSpacing: 0.0,
+                                                                                            fontWeight: FontWeight.normal,
+                                                                                            fontStyle: FlutterFlowTheme.of(context).bodySmall.fontStyle,
+                                                                                          ),
+                                                                                    ),
+                                                                                  ].divide(const SizedBox(width: 4.0)),
                                                                                 ),
-                                                                                Text(
-                                                                                  rowUsersRecord.email,
-                                                                                  style: FlutterFlowTheme.of(context).bodySmall.override(
-                                                                                        font: GoogleFonts.inter(
-                                                                                          fontWeight: FontWeight.normal,
-                                                                                          fontStyle: FlutterFlowTheme.of(context).bodySmall.fontStyle,
-                                                                                        ),
-                                                                                        color: const Color(0xFF6B7280),
-                                                                                        fontSize: 12.0,
-                                                                                        letterSpacing: 0.0,
-                                                                                        fontWeight: FontWeight.normal,
-                                                                                        fontStyle: FlutterFlowTheme.of(context).bodySmall.fontStyle,
-                                                                                      ),
-                                                                                ),
-                                                                              ].divide(const SizedBox(width: 4.0)),
+                                                                              ],
                                                                             ),
-                                                                          ],
+                                                                          ].divide(const SizedBox(width: 12.0)),
                                                                         ),
-                                                                      ].divide(const SizedBox(
-                                                                              width: 12.0)),
+                                                                        const Icon(
+                                                                          Icons
+                                                                              .more_vert,
+                                                                          color:
+                                                                              Color(0xFF9CA3AF),
+                                                                          size:
+                                                                              16.0,
+                                                                        ),
+                                                                      ],
                                                                     ),
-                                                                    const Icon(
-                                                                      Icons
-                                                                          .more_vert,
-                                                                      color: Color(
-                                                                          0xFF9CA3AF),
-                                                                      size:
-                                                                          16.0,
-                                                                    ),
-                                                                  ],
-                                                                ),
+                                                                  );
+                                                                },
                                                               );
-                                                            },
-                                                          );
-                                                        }).divide(const SizedBox(
-                                                            height: 12.0)),
+                                                            }).divide(
+                                                                const SizedBox(
+                                                                    height:
+                                                                        12.0)),
+                                                          ),
+                                                        );
+                                                      },
+                                                    ),
+                                                  ),
+                                                  // Overlay Add User Panel
+                                                  if (_model.showAddUserPanel)
+                                                    Positioned.fill(
+                                                      child: Container(
+                                                        decoration:
+                                                            BoxDecoration(
+                                                          color: Colors.white,
+                                                          borderRadius:
+                                                              BorderRadius
+                                                                  .circular(
+                                                                      12.0),
+                                                          border: Border.all(
+                                                            color: FlutterFlowTheme
+                                                                    .of(context)
+                                                                .alternate,
+                                                            width: 1.0,
+                                                          ),
+                                                          boxShadow: [
+                                                            BoxShadow(
+                                                              color: Color(
+                                                                  0x33000000),
+                                                              blurRadius: 8.0,
+                                                              offset: Offset(
+                                                                  0.0, 2.0),
+                                                              spreadRadius: 0.0,
+                                                            ),
+                                                          ],
+                                                        ),
+                                                        child: Column(
+                                                          mainAxisSize:
+                                                              MainAxisSize.min,
+                                                          children: [
+                                                            // Header with close button
+                                                            Padding(
+                                                              padding:
+                                                                  EdgeInsetsDirectional
+                                                                      .fromSTEB(
+                                                                          16,
+                                                                          12,
+                                                                          12,
+                                                                          12),
+                                                              child: Row(
+                                                                mainAxisAlignment:
+                                                                    MainAxisAlignment
+                                                                        .spaceBetween,
+                                                                children: [
+                                                                  Text(
+                                                                    'Add Members',
+                                                                    style: FlutterFlowTheme.of(
+                                                                            context)
+                                                                        .titleMedium
+                                                                        .override(
+                                                                          font:
+                                                                              GoogleFonts.inter(
+                                                                            fontWeight:
+                                                                                FontWeight.w600,
+                                                                          ),
+                                                                          color:
+                                                                              const Color(0xFF111827),
+                                                                          fontSize:
+                                                                              16.0,
+                                                                          letterSpacing:
+                                                                              0.0,
+                                                                        ),
+                                                                  ),
+                                                                  InkWell(
+                                                                    onTap: () {
+                                                                      setState(
+                                                                          () {
+                                                                        _model.showAddUserPanel =
+                                                                            false;
+                                                                      });
+                                                                    },
+                                                                    child: Icon(
+                                                                      Icons
+                                                                          .close,
+                                                                      color: Color(
+                                                                          0xFF6B7280),
+                                                                      size: 20,
+                                                                    ),
+                                                                  ),
+                                                                ],
+                                                              ),
+                                                            ),
+                                                            Divider(
+                                                              height: 1,
+                                                              thickness: 1,
+                                                              color: FlutterFlowTheme
+                                                                      .of(context)
+                                                                  .alternate,
+                                                            ),
+                                                            // AddUserWidget inline
+                                                            Expanded(
+                                                              child: Padding(
+                                                                padding:
+                                                                    EdgeInsetsDirectional
+                                                                        .fromSTEB(
+                                                                            16,
+                                                                            16,
+                                                                            16,
+                                                                            16),
+                                                                child:
+                                                                    AddUserWidget(
+                                                                  userRefs: widget
+                                                                      .chatDoc!
+                                                                      .members,
+                                                                  actionOutput:
+                                                                      (listUsers) async {
+                                                                    await widget
+                                                                        .chatDoc!
+                                                                        .reference
+                                                                        .update({
+                                                                      ...mapToFirestore(
+                                                                        {
+                                                                          'members':
+                                                                              listUsers,
+                                                                        },
+                                                                      ),
+                                                                    });
+                                                                    setState(
+                                                                        () {
+                                                                      _model.showAddUserPanel =
+                                                                          false;
+                                                                    });
+                                                                  },
+                                                                ),
+                                                              ),
+                                                            ),
+                                                          ],
+                                                        ),
                                                       ),
-                                                    );
-                                                  },
-                                                ),
+                                                    ),
+                                                ],
                                               ),
                                             ],
                                           ),
@@ -1741,38 +1987,41 @@ class _GroupChatDetailWidgetState extends State<GroupChatDetailWidget> {
                                               options: FFButtonOptions(
                                                 width: double.infinity,
                                                 height: 36.0,
-                                                padding: const EdgeInsetsDirectional
-                                                    .fromSTEB(
+                                                padding:
+                                                    const EdgeInsetsDirectional
+                                                        .fromSTEB(
                                                         16.0, 0.0, 16.0, 0.0),
                                                 iconPadding:
                                                     const EdgeInsetsDirectional
                                                         .fromSTEB(
-                                                            0.0, 0.0, 0.0, 0.0),
+                                                        0.0, 0.0, 0.0, 0.0),
                                                 color: Colors.transparent,
-                                                textStyle: FlutterFlowTheme.of(
-                                                        context)
-                                                    .bodyMedium
-                                                    .override(
-                                                      font: GoogleFonts.inter(
-                                                        fontWeight:
-                                                            FontWeight.w500,
-                                                        fontStyle:
-                                                            FlutterFlowTheme.of(
-                                                                    context)
-                                                                .bodyMedium
-                                                                .fontStyle,
-                                                      ),
-                                                      color: const Color(0xFF4F46E5),
-                                                      fontSize: 14.0,
-                                                      letterSpacing: 0.0,
-                                                      fontWeight:
-                                                          FontWeight.w500,
-                                                      fontStyle:
-                                                          FlutterFlowTheme.of(
-                                                                  context)
-                                                              .bodyMedium
-                                                              .fontStyle,
-                                                    ),
+                                                textStyle:
+                                                    FlutterFlowTheme.of(context)
+                                                        .bodyMedium
+                                                        .override(
+                                                          font:
+                                                              GoogleFonts.inter(
+                                                            fontWeight:
+                                                                FontWeight.w500,
+                                                            fontStyle:
+                                                                FlutterFlowTheme.of(
+                                                                        context)
+                                                                    .bodyMedium
+                                                                    .fontStyle,
+                                                          ),
+                                                          color: const Color(
+                                                              0xFF4F46E5),
+                                                          fontSize: 14.0,
+                                                          letterSpacing: 0.0,
+                                                          fontWeight:
+                                                              FontWeight.w500,
+                                                          fontStyle:
+                                                              FlutterFlowTheme.of(
+                                                                      context)
+                                                                  .bodyMedium
+                                                                  .fontStyle,
+                                                        ),
                                                 elevation: 0.0,
                                                 borderRadius:
                                                     BorderRadius.circular(8.0),
@@ -1882,8 +2131,8 @@ class _GroupChatDetailWidgetState extends State<GroupChatDetailWidget> {
                                                         children: [
                                                           Padding(
                                                             padding:
-                                                                const EdgeInsets.all(
-                                                                    5.0),
+                                                                const EdgeInsets
+                                                                    .all(5.0),
                                                             child: Container(
                                                               decoration:
                                                                   BoxDecoration(
@@ -1912,7 +2161,7 @@ class _GroupChatDetailWidgetState extends State<GroupChatDetailWidget> {
                                                                 padding:
                                                                     const EdgeInsets
                                                                         .all(
-                                                                            16.0),
+                                                                        16.0),
                                                                 child: StreamBuilder<
                                                                     UsersRecord>(
                                                                   stream: UsersRecord
@@ -2029,7 +2278,8 @@ class _GroupChatDetailWidgetState extends State<GroupChatDetailWidget> {
                                                                           ),
                                                                         ),
                                                                         Padding(
-                                                                          padding: const EdgeInsetsDirectional.fromSTEB(
+                                                                          padding: const EdgeInsetsDirectional
+                                                                              .fromSTEB(
                                                                               16.0,
                                                                               0.0,
                                                                               16.0,
@@ -2154,10 +2404,10 @@ class _GroupChatDetailWidgetState extends State<GroupChatDetailWidget> {
                                                               padding:
                                                                   const EdgeInsetsDirectional
                                                                       .fromSTEB(
-                                                                          0.0,
-                                                                          16.0,
-                                                                          16.0,
-                                                                          0.0),
+                                                                      0.0,
+                                                                      16.0,
+                                                                      16.0,
+                                                                      0.0),
                                                               child: InkWell(
                                                                 splashColor: Colors
                                                                     .transparent,
@@ -2187,8 +2437,8 @@ class _GroupChatDetailWidgetState extends State<GroupChatDetailWidget> {
                                                           ),
                                                         ],
                                                       );
-                                                    }).divide(
-                                                        const SizedBox(height: 12.0)),
+                                                    }).divide(const SizedBox(
+                                                        height: 12.0)),
                                                   ),
                                                 );
                                               },
@@ -2205,11 +2455,11 @@ class _GroupChatDetailWidgetState extends State<GroupChatDetailWidget> {
                                           options: FFButtonOptions(
                                             width: double.infinity,
                                             height: 36.0,
-                                            padding:
-                                                const EdgeInsetsDirectional.fromSTEB(
-                                                    16.0, 0.0, 16.0, 0.0),
+                                            padding: const EdgeInsetsDirectional
+                                                .fromSTEB(16.0, 0.0, 16.0, 0.0),
                                             iconPadding:
-                                                const EdgeInsetsDirectional.fromSTEB(
+                                                const EdgeInsetsDirectional
+                                                    .fromSTEB(
                                                     0.0, 0.0, 0.0, 0.0),
                                             color: Colors.transparent,
                                             textStyle: FlutterFlowTheme.of(
@@ -2224,7 +2474,8 @@ class _GroupChatDetailWidgetState extends State<GroupChatDetailWidget> {
                                                             .bodyMedium
                                                             .fontStyle,
                                                   ),
-                                                  color: const Color(0xFF4F46E5),
+                                                  color:
+                                                      const Color(0xFF4F46E5),
                                                   fontSize: 14.0,
                                                   letterSpacing: 0.0,
                                                   fontWeight: FontWeight.w500,
@@ -2241,7 +2492,8 @@ class _GroupChatDetailWidgetState extends State<GroupChatDetailWidget> {
                                         ),
                                     ]
                                         .divide(const SizedBox(height: 16.0))
-                                        .addToStart(const SizedBox(height: 16.0))
+                                        .addToStart(
+                                            const SizedBox(height: 16.0))
                                         .addToEnd(const SizedBox(height: 16.0)),
                                   ),
                               ].divide(const SizedBox(height: 24.0)),
@@ -2323,7 +2575,8 @@ class _GroupChatDetailWidgetState extends State<GroupChatDetailWidget> {
                                                             .bodyMedium
                                                             .fontStyle,
                                                   ),
-                                                  color: const Color(0xFF111827),
+                                                  color:
+                                                      const Color(0xFF111827),
                                                   fontSize: 14.0,
                                                   letterSpacing: 0.0,
                                                   fontWeight: FontWeight.normal,
@@ -2386,10 +2639,11 @@ class _GroupChatDetailWidgetState extends State<GroupChatDetailWidget> {
                                             elevation: 0,
                                             insetPadding: EdgeInsets.zero,
                                             backgroundColor: Colors.transparent,
-                                            alignment: const AlignmentDirectional(
-                                                    0.0, 0.0)
-                                                .resolve(
-                                                    Directionality.of(context)),
+                                            alignment:
+                                                const AlignmentDirectional(
+                                                        0.0, 0.0)
+                                                    .resolve(Directionality.of(
+                                                        context)),
                                             child: GestureDetector(
                                               onTap: () {
                                                 FocusScope.of(dialogContext)
@@ -2426,10 +2680,12 @@ class _GroupChatDetailWidgetState extends State<GroupChatDetailWidget> {
                                   options: FFButtonOptions(
                                     width: double.infinity,
                                     height: 50.0,
-                                    padding: const EdgeInsetsDirectional.fromSTEB(
-                                        16.0, 0.0, 16.0, 0.0),
-                                    iconPadding: const EdgeInsetsDirectional.fromSTEB(
-                                        0.0, 0.0, 0.0, 0.0),
+                                    padding:
+                                        const EdgeInsetsDirectional.fromSTEB(
+                                            16.0, 0.0, 16.0, 0.0),
+                                    iconPadding:
+                                        const EdgeInsetsDirectional.fromSTEB(
+                                            0.0, 0.0, 0.0, 0.0),
                                     color: FlutterFlowTheme.of(context)
                                         .secondaryBackground,
                                     textStyle: FlutterFlowTheme.of(context)

@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
-import 'package:ff_theme/flutter_flow/flutter_flow_theme.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 class ExpandableSummaryBubble extends StatefulWidget {
@@ -10,12 +9,14 @@ class ExpandableSummaryBubble extends StatefulWidget {
     this.maxPreviewLines = 3,
     this.expandText = 'Show more',
     this.collapseText = 'Show less',
+    this.onTapLink,
   });
 
   final String content;
   final int maxPreviewLines;
   final String expandText;
   final String collapseText;
+  final void Function(String, String?, String?)? onTapLink;
 
   @override
   State<ExpandableSummaryBubble> createState() =>
@@ -122,6 +123,7 @@ class _ExpandableSummaryBubbleState extends State<ExpandableSummaryBubble>
                     MarkdownBody(
                       data: _isExpanded ? widget.content : previewText,
                       selectable: true,
+                      onTapLink: widget.onTapLink,
                       styleSheet: MarkdownStyleSheet(
                         p: const TextStyle(
                           fontFamily: 'Inter',

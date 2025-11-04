@@ -147,7 +147,44 @@ void main() async {
 
 /// Initialize push notifications asynchronously to avoid blocking app startup
 void _initializePushNotificationsAsync() async {
-  if (!kIsWeb && (Platform.isMacOS || Platform.isIOS)) {
+  // Handle web platform FCM notifications
+  if (kIsWeb) {
+    try {
+      // Listen for foreground FCM messages (when tab is open)
+      FirebaseMessaging.onMessage.listen((RemoteMessage message) {
+        print('🔔 [WEB] FOREGROUND FCM NOTIFICATION RECEIVED!');
+        print('   Title: ${message.notification?.title}');
+        print('   Body: ${message.notification?.body}');
+        print('   Data: ${message.data}');
+
+        // Show browser notification for foreground messages (force show for FCM)
+        WebNotificationService.instance.showMessageNotification(
+          title: message.notification?.title ?? 'New Notification',
+          body: message.notification?.body ?? 'You have a new notification',
+          forceShow: true, // Always show FCM notifications
+        );
+      });
+
+      // Listen for notification taps
+      FirebaseMessaging.onMessageOpenedApp.listen((RemoteMessage message) {
+        print('🔔 [WEB] FCM notification tapped!');
+        print('   Title: ${message.notification?.title}');
+        print('   Data: ${message.data}');
+      });
+
+      // Listen for token refresh
+      FirebaseMessaging.instance.onTokenRefresh.listen((newToken) {
+        print('🔄 [WEB] FCM token refreshed: ${newToken.substring(0, 10)}...');
+      });
+
+      print('✅ Web FCM notification handlers initialized');
+    } catch (e) {
+      print('❌ Web FCM notification setup failed: $e');
+      print('   Stack trace: ${StackTrace.current}');
+    }
+  }
+  // Handle macOS/iOS platforms
+  else if (Platform.isMacOS || Platform.isIOS) {
     try {
       final messaging = FirebaseMessaging.instance;
 
@@ -451,6 +488,14 @@ class _NavBarPageState extends State<NavBarPage> {
     // Ensure the page name exists in tabs, fallback to 'Home' if not
     if (tabs.containsKey(pageName)) {
       _currentPageName = pageName;
+      // Clear news indicator when Announcements page is opened
+      if (pageName == 'Announcements') {
+        FFAppState().newsPageLastOpened = DateTime.now();
+      }
+      // Clear chat indicator when Chat page is opened
+      if (pageName == 'DesktopChat' || pageName == 'MobileChat') {
+        FFAppState().chatPageLastOpened = DateTime.now();
+      }
     } else {
       _currentPageName = 'Home';
     }
@@ -523,6 +568,136 @@ class _NavBarPageState extends State<NavBarPage> {
     }
   }
 
+  Widget _buildNewsUnreadIndicator() {
+    return StreamBuilder<List<PostsRecord>>(
+      stream: queryPostsRecord(
+        queryBuilder: (posts) => posts
+            .where('post_type', isEqualTo: 'News')
+            .orderBy('created_at', descending: true)
+            .limit(1),
+      ),
+      builder: (context, snapshot) {
+        if (!snapshot.hasData) {
+          return SizedBox.shrink();
+        }
+
+        final newsPosts = snapshot.data!;
+        if (newsPosts.isEmpty) {
+          return SizedBox.shrink();
+        }
+
+        final latestNews = newsPosts.first;
+        final newsCreatedAt = latestNews.createdAt;
+        if (newsCreatedAt == null) {
+          return SizedBox.shrink();
+        }
+
+        // Check if there's new news within 48 hours
+        final cutoff = DateTime.now().subtract(const Duration(hours: 48));
+        if (newsCreatedAt.isBefore(cutoff)) {
+          return SizedBox.shrink();
+        }
+
+        // Check if News page was opened after the latest news was posted
+        final lastOpened = FFAppState().newsPageLastOpened;
+        if (lastOpened != null && lastOpened.isAfter(newsCreatedAt)) {
+          return SizedBox.shrink();
+        }
+
+        // Show red dot indicator
+        return Positioned(
+          right: -4,
+          top: -2,
+          child: Container(
+            width: 8,
+            height: 8,
+            decoration: BoxDecoration(
+              color: Colors.red,
+              shape: BoxShape.circle,
+              border: Border.all(
+                color: Color(0xFF2D3142), // Background color of navbar
+                width: 1.5,
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildChatUnreadIndicator() {
+    if (currentUserReference == null) {
+      return SizedBox.shrink();
+    }
+
+    return StreamBuilder<List<ChatsRecord>>(
+      stream: queryChatsRecord(
+        queryBuilder: (chats) => chats
+            .where('members', arrayContains: currentUserReference)
+            .orderBy('last_message_at', descending: true),
+      ),
+      builder: (context, snapshot) {
+        if (!snapshot.hasData) {
+          return SizedBox.shrink();
+        }
+
+        final chats = snapshot.data!;
+        if (chats.isEmpty) {
+          return SizedBox.shrink();
+        }
+
+        // Check if there's any unread message in any chat
+        bool hasUnread = false;
+        DateTime? latestUnreadTime;
+
+        for (final chat in chats) {
+          // Check if current user has unread messages in this chat
+          if (chat.lastMessage.isNotEmpty &&
+              chat.lastMessageSent != currentUserReference &&
+              !chat.lastMessageSeen.contains(currentUserReference)) {
+            hasUnread = true;
+            if (chat.lastMessageAt != null) {
+              if (latestUnreadTime == null ||
+                  chat.lastMessageAt!.isAfter(latestUnreadTime)) {
+                latestUnreadTime = chat.lastMessageAt;
+              }
+            }
+          }
+        }
+
+        if (!hasUnread) {
+          return SizedBox.shrink();
+        }
+
+        // Check if Chat page was opened after the latest unread message
+        final lastOpened = FFAppState().chatPageLastOpened;
+        if (lastOpened != null &&
+            latestUnreadTime != null &&
+            lastOpened.isAfter(latestUnreadTime)) {
+          return SizedBox.shrink();
+        }
+
+        // Show red dot indicator
+        return Positioned(
+          right: -4,
+          top: -2,
+          child: Container(
+            width: 8,
+            height: 8,
+            decoration: BoxDecoration(
+              color: Colors.red,
+              shape: BoxShape.circle,
+              border: Border.all(
+                color: Color(0xFF2D3142), // Background color of navbar
+                width: 1.5,
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
   Widget _buildVerticalNavBar(Map<String, Widget> tabs, int currentIndex,
       Map<String, int> navItemToIndex) {
     final navItems = [
@@ -554,7 +729,7 @@ class _NavBarPageState extends State<NavBarPage> {
       {
         'icon': Icons.settings_outlined,
         'label': 'Settings',
-        'page': 'MobileSettings',
+        'page': 'ProfileSettings', // Desktop settings for macOS/web
       },
     ];
 
@@ -985,33 +1160,44 @@ class _NavBarPageState extends State<NavBarPage> {
                         child: Column(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
-                            // Icon
-                            item['icon'] is String
-                                ? Container(
-                                    width: 24,
-                                    height: 24,
-                                    child: Image.asset(
-                                      item['icon'] as String,
-                                      width: 24,
-                                      height: 24,
-                                      fit: BoxFit.contain,
-                                    ),
-                                  )
-                                : item['icon'] is IconData
-                                    ? Icon(
-                                        item['icon'] as IconData,
-                                        color: isSelected
-                                            ? Colors.white
-                                            : Color(0xFFD1D5DB),
-                                        size: 24,
+                            // Icon with unread indicator
+                            Stack(
+                              clipBehavior: Clip.none,
+                              children: [
+                                item['icon'] is String
+                                    ? Container(
+                                        width: 24,
+                                        height: 24,
+                                        child: Image.asset(
+                                          item['icon'] as String,
+                                          width: 24,
+                                          height: 24,
+                                          fit: BoxFit.contain,
+                                        ),
                                       )
-                                    : FaIcon(
-                                        item['icon'] as IconData,
-                                        color: isSelected
-                                            ? Colors.white
-                                            : Color(0xFFD1D5DB),
-                                        size: 20,
-                                      ),
+                                    : item['icon'] is IconData
+                                        ? Icon(
+                                            item['icon'] as IconData,
+                                            color: isSelected
+                                                ? Colors.white
+                                                : Color(0xFFD1D5DB),
+                                            size: 24,
+                                          )
+                                        : FaIcon(
+                                            item['icon'] as IconData,
+                                            color: isSelected
+                                                ? Colors.white
+                                                : Color(0xFFD1D5DB),
+                                            size: 20,
+                                          ),
+                                // Red dot indicator for News button
+                                if (item['page'] == 'Announcements')
+                                  _buildNewsUnreadIndicator(),
+                                // Red dot indicator for Chat button
+                                if (item['page'] == 'DesktopChat')
+                                  _buildChatUnreadIndicator(),
+                              ],
+                            ),
                             SizedBox(height: 4),
                             // Label
                             Text(
@@ -1168,33 +1354,44 @@ class _NavBarPageState extends State<NavBarPage> {
                       child: Column(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          // Icon
-                          item['icon'] is String
-                              ? Container(
-                                  width: 24,
-                                  height: 24,
-                                  child: Image.asset(
-                                    item['icon'] as String,
-                                    width: 24,
-                                    height: 24,
-                                    fit: BoxFit.contain,
-                                  ),
-                                )
-                              : item['icon'] is IconData
-                                  ? Icon(
-                                      item['icon'] as IconData,
-                                      color: isSelected
-                                          ? Colors.white
-                                          : Color(0xFFD1D5DB),
-                                      size: 24,
+                          // Icon with unread indicator
+                          Stack(
+                            clipBehavior: Clip.none,
+                            children: [
+                              item['icon'] is String
+                                  ? Container(
+                                      width: 24,
+                                      height: 24,
+                                      child: Image.asset(
+                                        item['icon'] as String,
+                                        width: 24,
+                                        height: 24,
+                                        fit: BoxFit.contain,
+                                      ),
                                     )
-                                  : FaIcon(
-                                      item['icon'] as IconData,
-                                      color: isSelected
-                                          ? Colors.white
-                                          : Color(0xFFD1D5DB),
-                                      size: 22,
-                                    ),
+                                  : item['icon'] is IconData
+                                      ? Icon(
+                                          item['icon'] as IconData,
+                                          color: isSelected
+                                              ? Colors.white
+                                              : Color(0xFFD1D5DB),
+                                          size: 24,
+                                        )
+                                      : FaIcon(
+                                          item['icon'] as IconData,
+                                          color: isSelected
+                                              ? Colors.white
+                                              : Color(0xFFD1D5DB),
+                                          size: 22,
+                                        ),
+                              // Red dot indicator for News button
+                              if (item['page'] == 'Announcements')
+                                _buildNewsUnreadIndicator(),
+                              // Red dot indicator for Chat button
+                              if (item['page'] == 'MobileChat')
+                                _buildChatUnreadIndicator(),
+                            ],
+                          ),
                           SizedBox(height: 4),
                           // Label
                           Text(

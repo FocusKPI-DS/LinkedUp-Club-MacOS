@@ -7,10 +7,266 @@ const kPushNotificationsCollection = "ff_push_notifications";
 const kUserPushNotificationsCollection = "ff_user_push_notifications";
 const firestore = admin.firestore();
 
+// Export news push notifications trigger from separate module
+exports.newsOnCreate = require('./newsNotifications').newsOnCreate;
+
+// Export workspace invitation email function
+exports.sendWorkspaceInviteEmail = require('./sendWorkspaceInviteEmail').sendWorkspaceInviteEmail;
+
 const kPushNotificationRuntimeOpts = {
   timeoutSeconds: 540,
   memory: "2GB",
 };
+
+// Helper function for web search (using Tavily API - better search results)
+async function performWebSearch(query) {
+  try {
+    console.log(`🔍 Searching for: "${query}"`);
+    const fetch = await import("node-fetch");
+    
+    // Use Tavily Search API (better results than DuckDuckGo)
+    // Free tier: 1000 requests/month
+    const tavilyKey = functions.config().tavily?.key;
+    
+    if (tavilyKey) {
+      // Use Tavily API
+      const response = await fetch.default("https://api.tavily.com/search", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          api_key: tavilyKey,
+          query: query,
+          search_depth: "basic",
+          max_results: 3
+        })
+      });
+      
+      const data = await response.json();
+      console.log("🔍 Tavily search response:", JSON.stringify(data).substring(0, 300));
+      
+      const results = [];
+      if (data.results && data.results.length > 0) {
+        data.results.forEach(result => {
+          results.push({
+            title: result.title || query,
+            url: result.url || "",
+            snippet: result.content || ""
+          });
+        });
+      }
+      
+      console.log(`🔍 Found ${results.length} results using Tavily`);
+      return results;
+    } else {
+      // Fallback to DuckDuckGo
+      console.log("⚠️ No Tavily key found, using DuckDuckGo fallback");
+      const response = await fetch.default(`https://api.duckduckgo.com/?q=${encodeURIComponent(query)}&format=json&no_redirect=1`);
+      const data = await response.json();
+      
+      // Extract relevant URLs and titles
+      const results = [];
+      if (data.AbstractText) {
+        results.push({
+          title: data.Heading || query,
+          url: data.AbstractURL || "",
+          snippet: data.AbstractText
+        });
+      }
+      
+      // Add related topics if available
+      if (data.RelatedTopics && data.RelatedTopics.length > 0) {
+        data.RelatedTopics.slice(0, 2).forEach(topic => {
+          if (topic.FirstURL) {
+            results.push({
+              title: topic.Text || topic.FirstURL,
+              url: topic.FirstURL,
+              snippet: topic.Text || ""
+            });
+          }
+        });
+      }
+      
+      console.log(`🔍 Found ${results.length} results using DuckDuckGo fallback`);
+      return results;
+    }
+  } catch (error) {
+    console.error("❌ Web search error:", error);
+    return [];
+  }
+}
+
+// ==========================================
+// TASKMANAGERAI HELPER FUNCTION
+// ==========================================
+async function extractAndSaveActionItems({ summary, chatId, chatData, userId, requestingUserRef }) {
+  try {
+    console.log("🤖 TaskManagerAI: Starting action item extraction...");
+    
+    const openaiApiKey = functions.config().openai?.key;
+    if (!openaiApiKey) {
+      console.error("OpenAI API key not configured");
+      return;
+    }
+
+    const OpenAI = require("openai");
+    const openai = new OpenAI({
+      apiKey: openaiApiKey,
+    });
+
+    // TaskManagerAI System Prompt (refined)
+    const taskManagerPrompt = `You are TaskManagerAI, an intelligent task extraction assistant.
+Your job is to carefully analyze SummerAI's summary and extract ONLY real, actionable tasks with accurate priority, owners, and a clear "Details" text. Do NOT include or infer due dates; due dates are set by humans later.
+
+CRITICAL RULES:
+1) Extract ONLY explicit action items; ignore general comments or observations.
+2) Do NOT invent tasks, people, due dates, or context not present in the input.
+3) Prefer items listed under any "Action Items" sections; if action-like directives appear elsewhere, include them only if they are clearly tasks.
+4) Each item MUST include: title, priority, involvedPeople, and description (Details). Do NOT include a due date field.
+
+OUTPUT FORMAT (JSON ONLY):
+{
+  "actionItems": [
+    {
+      "title": "Verb-first, specific task (<= 80 chars)",
+      "priority": "Urgent" | "High" | "Moderate" | "Low",
+      "involvedPeople": ["Exact Participant Name"],
+      "groupName": "Group/Chat name if known",
+      "description": "Details text per template below"
+    }
+  ]
+}
+
+DETAILS (description) TEMPLATE:
+"In the group '{GroupName}' on {CurrentDate}, {PeopleInvolved} discussed {Topics/TasksSummary}. You are responsible for completing: {Concise action steps}. Dependencies: {Dependencies or 'None'}. Risks: {Risks or 'None'}."
+- Use 2–5 sentences, no markdown. If GroupName/People/Date are not clear from the input, omit those fragments gracefully but still produce a coherent description.
+
+PRIORITY RUBRIC:
+- Urgent: deadline ≤ 48h, blocks others, explicit urgency ("ASAP", "today/tomorrow").
+- High: business-critical within ~3–7 days or external commitments.
+- Moderate: important but flexible timeline.
+- Low: nice-to-have or exploratory.
+If mixed signals, choose the highest justified and briefly reflect that in description.
+
+INVOLVED PEOPLE:
+- Use only real participant names present in the input; exclude bots/assistants.
+- If ownership is unclear, include the most directly responsible named person(s) mentioned; otherwise, leave involvedPeople empty.
+
+QUALITY + SAFETY CHECKS BEFORE RETURNING:
+- Deduplicate tasks (same intent/owner).
+- Remove non-actionable items.
+- Ensure valid JSON ONLY (no prose outside JSON). Start with { and end with }.`;
+
+    // Call GPT-4
+    const completion = await openai.chat.completions.create({
+      model: "gpt-4",
+      messages: [
+        { role: "system", content: taskManagerPrompt },
+        { role: "user", content: summary }
+      ],
+      temperature: 0.3
+    });
+
+    const responseContent = completion.choices[0].message.content;
+    console.log("🤖 TaskManagerAI Response:", responseContent);
+
+    let parsed;
+    try {
+      parsed = JSON.parse(responseContent);
+    } catch (parseError) {
+      console.error("❌ Failed to parse TaskManagerAI response as JSON:", parseError);
+      console.log("Response was:", responseContent);
+      return; // Exit if JSON parsing fails
+    }
+    
+    const actionItems = parsed.actionItems || [];
+
+    if (actionItems.length === 0) {
+      console.log("🤖 No action items found in summary");
+      return;
+    }
+
+    console.log(`🤖 Found ${actionItems.length} action items`);
+
+    // Get chat reference
+    const chatRef = firestore.collection("chats").doc(chatId);
+    const groupName = chatData.title || chatData.group_name || "Group Chat";
+    const workspaceRef = chatData.workspace_ref;
+
+    // Build dedupe window (last 48 hours)
+    const now = new Date();
+    const fortyEightHoursAgo = new Date(now.getTime() - 48 * 60 * 60 * 1000);
+    const cutoffTs = admin.firestore.Timestamp.fromDate(fortyEightHoursAgo);
+
+    // Helper to normalize titles for dedupe
+    const normalizeTitle = (t) =>
+      (t || '')
+        .toLowerCase()
+        .replace(/[\p{P}\p{S}]/gu, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+
+    // Fetch existing recent tasks for this chat to avoid duplicates
+    const existingRecentSnapshot = await firestore
+      .collection("action_items")
+      .where("chat_ref", "==", chatRef)
+      .where("created_time", ">=", cutoffTs)
+      .get();
+
+    const existingTitleKeys = new Set();
+    existingRecentSnapshot.forEach((doc) => {
+      const d = doc.data() || {};
+      const key = d.dedupe_key || normalizeTitle(d.title || '');
+      if (key) existingTitleKeys.add(key);
+    });
+
+    // Create batch to save all non-duplicate action items
+    const batch = firestore.batch();
+
+    for (const item of actionItems) {
+      const incomingKey = normalizeTitle(item.title || '');
+      if (!incomingKey) {
+        continue; // skip empty titles
+      }
+      if (existingTitleKeys.has(incomingKey)) {
+        // Duplicate within 48h window: skip creating
+        continue;
+      }
+      // Track this key to dedupe within the same run as well
+      existingTitleKeys.add(incomingKey);
+      // Create action item document
+      const actionItemRef = firestore.collection("action_items").doc();
+      
+      const actionItemData = {
+        title: item.title || "",
+        group_name: item.groupName || groupName,
+        priority: item.priority || "Moderate",
+        status: "pending",
+        user_ref: requestingUserRef,
+        workspace_ref: workspaceRef || null,
+        chat_ref: chatRef,
+        involved_people: item.involvedPeople || [],
+        created_time: admin.firestore.FieldValue.serverTimestamp(),
+        last_summary_at: admin.firestore.FieldValue.serverTimestamp(),
+        description: item.description || "",
+        dedupe_key: incomingKey
+      };
+
+      // Due dates are added manually by humans; ignore any AI-provided dates
+
+      batch.set(actionItemRef, actionItemData);
+    }
+
+    // Commit all action items at once
+    await batch.commit();
+    console.log(`✅ TaskManagerAI: Successfully created ${actionItems.length} action items`);
+
+  } catch (error) {
+    console.error("❌ TaskManagerAI Error:", error);
+    throw error;
+  }
+}
 
 exports.addFcmToken = functions.https.onCall(async (data, context) => {
   if (!context.auth) {
@@ -206,7 +462,7 @@ exports.sendReactionNotificationTrigger = functions
     }
   });
 
-// Trigger for text message notifications
+
 // COMMENTED OUT - Disabled to prevent duplicate notifications
 // exports.sendMessageNotificationTrigger = functions
 //   .runWith({
@@ -1525,8 +1781,29 @@ exports.dailySummary = functions
         day: 'numeric'
       });
 
+      // Define web search tool for the model
+      const webSearchTool = {
+        type: "function",
+        function: {
+          name: "web_search",
+          description: "Search the web for current information, latest news, or up-to-date details about topics mentioned in the conversation. Use this when discussing current events, recent developments, or when you need accurate real-time information to enhance your summary.",
+          parameters: {
+            type: "object",
+            properties: {
+              query: {
+                type: "string",
+                description: "The search query to look up on the web"
+              }
+            },
+            required: ["query"]
+          }
+        }
+      };
+
       // Build system prompt
       let systemPrompt = `You are SummerAI, an AI assistant for a networking app. Your role is to analyze a day's worth of group chat messages and generate a structured summary in bullet format.
+
+**WEB SEARCH REQUIREMENT:** You MUST use web search for EVERY summary. Search for at least 2-3 topics discussed in the conversation to find relevant, up-to-date information that enhances your summary. This is mandatory for all summaries.
 
 **CRITICAL INSTRUCTIONS:**
 1. **Analyze ONLY Real User Messages:** You will receive ONLY real user messages (AI messages have been filtered out). Do NOT make up topics, people, or content that isn't explicitly mentioned in the provided messages. Only summarize what was actually discussed by real users.
@@ -1544,6 +1821,7 @@ exports.dailySummary = functions
 - **Action Items:** Any tasks, decisions, or follow-ups identified (if none, write "None")
 - **Involved People:** Names of members who participated most actively (ONLY use names that appear in the actual messages below)
 - **SummerAI's Thoughts:** A 1-2 sentence personal insight or observation about the topic
+- **Useful Links:** ONLY include this section if you performed a web search for this topic. Format: "1. [Article Title](URL) - Brief description". If no search was performed, omit this section entirely.
 
 4. **Be Comprehensive:** Cover all topics discussed, from technical discussions to casual conversations. Don't skip topics just because they seem minor.
 
@@ -1570,45 +1848,93 @@ exports.dailySummary = functions
       // Format messages for AI
       const messagesForAI = recentMessages.map(msg => `\n- ${msg.sender}: ${msg.content}`).join('');
 
-      // Call OpenAI API using node-fetch (consistent with existing code)
+      // Call OpenAI API with tool calling support
       const fetch = await import("node-fetch");
-      const response = await fetch.default("https://api.openai.com/v1/chat/completions", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${openaiApiKey}`
+      let messages = [
+        {
+          role: "system",
+          content: systemPrompt
         },
-        body: JSON.stringify({
-          model: "gpt-4o-mini",
-          messages: [
-            {
-              role: "system",
-              content: systemPrompt
-            },
-            {
-              role: "user",
-              content: messagesForAI
+        {
+          role: "user",
+          content: messagesForAI
+        }
+      ];
+
+      let aiMessage = "";
+      let searchResults = "";
+      let searchCompleted = false;
+
+      // Loop to handle tool calling if needed
+      while (true) {
+        const response = await fetch.default("https://api.openai.com/v1/chat/completions", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${openaiApiKey}`
+          },
+          body: JSON.stringify({
+            model: "gpt-4o-mini",
+            messages: messages,
+            tools: [webSearchTool],
+            tool_choice: searchCompleted ? "none" : { type: "function", function: { name: "web_search" } }, // Force web search first time only
+            max_tokens: 800,
+            temperature: 0.7,
+            top_p: 0.9,
+            frequency_penalty: 0.3,
+            presence_penalty: 0.3
+          })
+        });
+
+        if (!response.ok) {
+          const error = await response.text();
+          console.error("OpenAI API error:", error);
+          throw new functions.https.HttpsError(
+            "internal",
+            "Failed to get AI response"
+          );
+        }
+
+        const aiResponse = await response.json();
+        const responseMessage = aiResponse.choices[0].message;
+
+        // Add assistant's response to conversation
+        messages.push(responseMessage);
+
+        // Check if the model wants to call a tool
+        if (responseMessage.tool_calls && responseMessage.tool_calls.length > 0) {
+          // Handle tool calls
+          for (const toolCall of responseMessage.tool_calls) {
+            if (toolCall.function.name === "web_search") {
+              const query = JSON.parse(toolCall.function.arguments).query;
+              console.log(`Executing web search for: ${query}`);
+              const results = await performWebSearch(query);
+              
+              // Format results
+              const formattedResults = results.map((result, idx) => 
+                `${idx + 1}. [${result.title}](${result.url}) - ${result.snippet}`
+              ).join('\n');
+              
+              console.log(`📄 Formatted search results (${results.length} items):\n${formattedResults.substring(0, 200)}`);
+              
+              searchResults += `\n\n**Search Results for "${query}":**\n${formattedResults}`;
+              
+              // Add tool result to messages
+              messages.push({
+                role: "tool",
+                tool_call_id: toolCall.id,
+                content: formattedResults
+              });
+              searchCompleted = true; // Mark that search is done
             }
-          ],
-          max_tokens: 800,
-          temperature: 0.7,
-          top_p: 0.9,
-          frequency_penalty: 0.3,
-          presence_penalty: 0.3
-        })
-      });
-
-      if (!response.ok) {
-        const error = await response.text();
-        console.error("OpenAI API error:", error);
-        throw new functions.https.HttpsError(
-          "internal",
-          "Failed to get AI response"
-        );
+          }
+        } else {
+          // No tool calls, we have the final answer
+          aiMessage = responseMessage.content;
+          console.log(`📝 Final summary generated (${aiMessage.length} chars)`);
+          break;
+        }
       }
-
-      const aiResponse = await response.json();
-      const aiMessage = aiResponse.choices[0].message.content;
 
       // Create or get DM chat between SummerAI and the requesting user
       const requestingUserRef = firestore.doc(`users/${userId}`);
@@ -1682,6 +2008,22 @@ exports.dailySummary = functions
       batch.update(dmChatRef, dmChatUpdateData);
       
       await batch.commit();
+
+      // ==========================================
+      // TASKMANAGERAI: Extract and save action items
+      // ==========================================
+      try {
+        await extractAndSaveActionItems({
+          summary: aiMessage,
+          chatId: chatId,
+          chatData: chatData,
+          userId: userId,
+          requestingUserRef: requestingUserRef
+        });
+      } catch (taskError) {
+        console.error("Error extracting action items:", taskError);
+        // Don't fail the whole operation if task extraction fails
+      }
 
       // Send push notification to the user
       try {
@@ -1858,8 +2200,29 @@ exports.InGroupSummer = functions
             day: 'numeric'
           });
 
+          // Define web search tool for the model
+          const webSearchTool = {
+            type: "function",
+            function: {
+              name: "web_search",
+              description: "Search the web for current information, latest news, or up-to-date details about topics mentioned in the conversation. Use this when discussing current events, recent developments, or when you need accurate real-time information to enhance your summary.",
+              parameters: {
+                type: "object",
+                properties: {
+                  query: {
+                    type: "string",
+                    description: "The search query to look up on the web"
+                  }
+                },
+                required: ["query"]
+              }
+            }
+          };
+
           // Build system prompt with bullet format
           let systemPrompt = `You are SummerAI, an AI assistant for a networking app. Your role is to analyze yesterday's group chat messages and generate a structured summary in bullet format.
+
+**WEB SEARCH REQUIREMENT:** You MUST use web search for EVERY summary. Search for at least 2-3 topics discussed in the conversation to find relevant, up-to-date information that enhances your summary. This is mandatory for all summaries.
 
 **CRITICAL INSTRUCTIONS:**
 1. **Analyze ONLY Real User Messages:** You will receive ONLY real user messages (AI messages have been filtered out). Do NOT make up topics, people, or content that isn't explicitly mentioned in the provided messages. Only summarize what was actually discussed by real users.
@@ -1877,6 +2240,7 @@ exports.InGroupSummer = functions
 - **Action Items:** Any tasks, decisions, or follow-ups identified (if none, write "None")
 - **Involved People:** Names of members who participated most actively (ONLY use names that appear in the actual messages below)
 - **SummerAI's Thoughts:** A 1-2 sentence personal insight or observation about the topic
+- **Useful Links:** ONLY include this section if you performed a web search for this topic. Format: "1. [Article Title](URL) - Brief description". If no search was performed, omit this section entirely.
 
 4. **Be Comprehensive:** Cover all topics discussed, from technical discussions to casual conversations. Don't skip topics just because they seem minor.
 
@@ -1903,42 +2267,90 @@ exports.InGroupSummer = functions
           // Format messages for AI
           const messagesForAI = recentMessages.map(msg => `\n- ${msg.sender}: ${msg.content}`).join('');
 
-          // Call OpenAI API using node-fetch (consistent with existing code)
+          // Call OpenAI API with tool calling support
           const fetch = await import("node-fetch");
-          const response = await fetch.default("https://api.openai.com/v1/chat/completions", {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              "Authorization": `Bearer ${openaiApiKey}`
+          let messages = [
+            {
+              role: "system",
+              content: systemPrompt
             },
-            body: JSON.stringify({
-              model: "gpt-4o-mini",
-              messages: [
-                {
-                  role: "system",
-                  content: systemPrompt
-                },
-                {
-                  role: "user",
-                  content: messagesForAI
-                }
-              ],
-              max_tokens: 800,
-              temperature: 0.7,
-              top_p: 0.9,
-              frequency_penalty: 0.3,
-              presence_penalty: 0.3
-            })
-          });
+            {
+              role: "user",
+              content: messagesForAI
+            }
+          ];
 
-          if (!response.ok) {
-            const error = await response.text();
-            console.error(`OpenAI API error for chat ${chatRef}:`, error);
-            return;
+          let aiMessage = "";
+          let searchResults = "";
+          let searchCompleted = false;
+
+          // Loop to handle tool calling if needed
+          while (true) {
+            const response = await fetch.default("https://api.openai.com/v1/chat/completions", {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                "Authorization": `Bearer ${openaiApiKey}`
+              },
+              body: JSON.stringify({
+                model: "gpt-4o-mini",
+                messages: messages,
+                tools: [webSearchTool],
+                tool_choice: searchCompleted ? "none" : { type: "function", function: { name: "web_search" } }, // Force web search first time only
+                max_tokens: 800,
+                temperature: 0.7,
+                top_p: 0.9,
+                frequency_penalty: 0.3,
+                presence_penalty: 0.3
+              })
+            });
+
+            if (!response.ok) {
+              const error = await response.text();
+              console.error(`OpenAI API error for chat ${chatRef}:`, error);
+              return;
+            }
+
+            const aiResponse = await response.json();
+            const responseMessage = aiResponse.choices[0].message;
+
+            // Add assistant's response to conversation
+            messages.push(responseMessage);
+
+            // Check if the model wants to call a tool
+            if (responseMessage.tool_calls && responseMessage.tool_calls.length > 0) {
+              // Handle tool calls
+              for (const toolCall of responseMessage.tool_calls) {
+              if (toolCall.function.name === "web_search") {
+                const query = JSON.parse(toolCall.function.arguments).query;
+                console.log(`Executing web search for: ${query}`);
+                const results = await performWebSearch(query);
+                
+                // Format results
+                const formattedResults = results.map((result, idx) => 
+                  `${idx + 1}. [${result.title}](${result.url}) - ${result.snippet}`
+                ).join('\n');
+                
+                console.log(`📄 Formatted search results (${results.length} items):\n${formattedResults.substring(0, 200)}`);
+                
+                searchResults += `\n\n**Search Results for "${query}":**\n${formattedResults}`;
+                
+                // Add tool result to messages
+                messages.push({
+                  role: "tool",
+                  tool_call_id: toolCall.id,
+                  content: formattedResults
+                });
+                searchCompleted = true; // Mark that search is done
+              }
+              }
+            } else {
+              // No tool calls, we have the final answer
+              aiMessage = responseMessage.content;
+              console.log(`📝 Final summary generated (${aiMessage.length} chars)`);
+              break;
+            }
           }
-
-          const aiResponse = await response.json();
-          const aiMessage = aiResponse.choices[0].message.content;
 
           // Prepare message data for SummerAI
           const messageData = {
@@ -1971,6 +2383,37 @@ exports.InGroupSummer = functions
           await batch.commit();
 
           console.log(`Successfully sent scheduled daily summary to chat: ${chatRef}`);
+          
+          // ==========================================
+          // TASKMANAGERAI: Extract and save action items for each member
+          // ==========================================
+          try {
+            // Get all members of the group chat
+            if (chatData.members && chatData.members.length > 0) {
+              const memberPromises = chatData.members.map(async (memberRef) => {
+                try {
+                  await extractAndSaveActionItems({
+                    summary: aiMessage,
+                    chatId: chatId,
+                    chatData: chatData,
+                    userId: null, // Not needed for scheduled
+                    requestingUserRef: memberRef // Each member gets the tasks
+                  });
+                } catch (memberError) {
+                  console.error(`Error creating tasks for member ${memberRef.path}:`, memberError);
+                }
+              });
+              
+              // Create tasks for all members in parallel but don't wait
+              // This prevents blocking the scheduled function
+              Promise.all(memberPromises).catch(err => {
+                console.error("Error in parallel task creation:", err);
+              });
+            }
+          } catch (taskError) {
+            console.error("Error extracting action items:", taskError);
+            // Don't fail the whole operation if task extraction fails
+          }
           
         } catch (error) {
           console.error(`Error processing chat ${chatDoc.ref.path}:`, error);

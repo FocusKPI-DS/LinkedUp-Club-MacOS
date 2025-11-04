@@ -4,10 +4,9 @@ import '/backend/backend.dart';
 import '/backend/schema/structs/index.dart';
 import '/flutter_flow/flutter_flow_animations.dart';
 import '/flutter_flow/flutter_flow_util.dart';
-import '/flutter_flow/flutter_flow_widgets.dart';
-import '/pages/event/event_component/event_component_widget.dart';
-import '/custom_code/widgets/ai_announcements_summary.dart';
 import '/custom_code/widgets/paginated_notifications.dart';
+import '/custom_code/widgets/summerai_todos.dart';
+import '/custom_code/widgets/recent_news_announcements.dart';
 import 'dart:async';
 import 'dart:ui';
 import '/actions/actions.dart' as action_blocks;
@@ -170,14 +169,11 @@ class _HomeWidgetState extends State<HomeWidget> with TickerProviderStateMixin {
                 // Hero Section
                 _buildHeroSection(context),
 
-                // AI Announcements Summary Section
-                _buildAISummarySection(context),
+                // SummerAI Tasks Section
+                _buildSummerAITasksSection(context),
 
                 // Recent Activity Section
                 _buildRecentActivitySection(context),
-
-                // Recent Events Section
-                _buildRecentEventsSection(context),
 
                 // Recent Announcements Section
                 _buildRecentAnnouncementsSection(context),
@@ -199,13 +195,13 @@ class _HomeWidgetState extends State<HomeWidget> with TickerProviderStateMixin {
       decoration: BoxDecoration(
         gradient: LinearGradient(
           colors: [
-            const Color(0xFFF8FAFC), // Very light grey-white
-            const Color(0xFFE2E8F0), // Light grey
-            const Color(0xFFCBD5E1), // Medium grey-blue
+            const Color(0xFFEFF6FF), // Blue-50
+            Colors.white,
+            const Color(0xFFF8FAFC), // Slate-50
           ],
           stops: const [0.0, 0.5, 1.0],
-          begin: const AlignmentDirectional(0.0, -1.0),
-          end: const AlignmentDirectional(0, 1.0),
+          begin: AlignmentDirectional.topStart,
+          end: AlignmentDirectional.bottomEnd,
         ),
         borderRadius: const BorderRadius.only(
           bottomLeft: Radius.circular(24),
@@ -267,7 +263,7 @@ class _HomeWidgetState extends State<HomeWidget> with TickerProviderStateMixin {
                                                   600
                                               ? 20.0
                                               : 24.0,
-                                      fontWeight: FontWeight.w300,
+                                      fontWeight: FontWeight.w700,
                                     ),
                                 overflow: TextOverflow.ellipsis,
                                 maxLines: 1,
@@ -278,7 +274,8 @@ class _HomeWidgetState extends State<HomeWidget> with TickerProviderStateMixin {
                                     .headlineMedium
                                     .override(
                                       fontFamily: 'Inter',
-                                      color: const Color(0xFF0F172A),
+                                      color:
+                                          const Color(0xFF2563EB), // Blue-600
                                       fontSize: MediaQuery.of(context)
                                                   .size
                                                   .width <
@@ -774,14 +771,11 @@ class _HomeWidgetState extends State<HomeWidget> with TickerProviderStateMixin {
     ).animateOnPageLoad(animationsMap['heroOnPageLoadAnimation']!);
   }
 
-  Widget _buildAISummarySection(BuildContext context) {
+  Widget _buildSummerAITasksSection(BuildContext context) {
     return Container(
       width: double.infinity,
       padding: const EdgeInsetsDirectional.fromSTEB(24.0, 24.0, 24.0, 0.0),
-      child: AIAnnouncementsSummary(
-        width: double.infinity,
-        height: 320.0,
-      ),
+      child: const SummerAITodos(),
     ).animateOnPageLoad(animationsMap['aiSummaryOnPageLoadAnimation']!);
   }
 
@@ -832,157 +826,6 @@ class _HomeWidgetState extends State<HomeWidget> with TickerProviderStateMixin {
     );
   }
 
-  Widget _buildRecentEventsSection(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsetsDirectional.fromSTEB(24.0, 24.0, 24.0, 0.0),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                'Recent Events',
-                style: FlutterFlowTheme.of(context).headlineSmall.override(
-                      fontFamily: 'Inter',
-                      fontSize:
-                          MediaQuery.of(context).size.width < 600 ? 20.0 : 24.0,
-                      fontWeight: FontWeight.w600,
-                    ),
-              ),
-              FFButtonWidget(
-                onPressed: () {
-                  context.pushNamed('Search');
-                },
-                text: 'View All',
-                options: FFButtonOptions(
-                  height: 32,
-                  padding: const EdgeInsetsDirectional.fromSTEB(12, 0, 12, 0),
-                  iconPadding: const EdgeInsetsDirectional.fromSTEB(0, 0, 0, 0),
-                  color: FlutterFlowTheme.of(context).primary,
-                  textStyle: FlutterFlowTheme.of(context).bodySmall.override(
-                        fontFamily: 'Inter',
-                        color: Colors.white,
-                        fontWeight: FontWeight.w600,
-                      ),
-                  elevation: 0,
-                  borderSide: const BorderSide(
-                    color: Colors.transparent,
-                    width: 1,
-                  ),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 16),
-          StreamBuilder<List<EventsRecord>>(
-            stream: queryEventsRecord(
-              queryBuilder: (eventsRecord) => eventsRecord
-                  .orderBy('created_time', descending: true)
-                  .limit(3),
-            ),
-            builder: (context, snapshot) {
-              if (!snapshot.hasData) {
-                return Container(
-                  height: 200,
-                  child: Center(
-                    child: CircularProgressIndicator(
-                      valueColor: AlwaysStoppedAnimation<Color>(
-                        FlutterFlowTheme.of(context).primary,
-                      ),
-                    ),
-                  ),
-                );
-              }
-
-              final events = snapshot.data!;
-              if (events.isEmpty) {
-                return Container(
-                  height: 200,
-                  decoration: BoxDecoration(
-                    color: FlutterFlowTheme.of(context).secondaryBackground,
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(
-                      color: FlutterFlowTheme.of(context).alternate,
-                    ),
-                  ),
-                  child: Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(
-                          Icons.event_available,
-                          size: 48,
-                          color: FlutterFlowTheme.of(context).secondaryText,
-                        ),
-                        const SizedBox(height: 16),
-                        Text(
-                          'No events yet',
-                          style: FlutterFlowTheme.of(context)
-                              .titleMedium
-                              .override(
-                                fontFamily: 'Inter',
-                                color:
-                                    FlutterFlowTheme.of(context).secondaryText,
-                              ),
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          'Create your first event to get started',
-                          style: FlutterFlowTheme.of(context)
-                              .bodySmall
-                              .override(
-                                fontFamily: 'Inter',
-                                color:
-                                    FlutterFlowTheme.of(context).secondaryText,
-                              ),
-                        ),
-                      ],
-                    ),
-                  ),
-                );
-              }
-
-              return Column(
-                children: events.map((event) {
-                  return Container(
-                    margin: const EdgeInsets.only(bottom: 12),
-                    child: EventComponentWidget(
-                      imageCover: event.coverImageUrl,
-                      category:
-                          event.category.isNotEmpty ? event.category.first : '',
-                      nameEvent: event.title,
-                      date: event.startDate != null
-                          ? DateFormat('MMM d, y').format(event.startDate!)
-                          : '',
-                      time: event.startDate != null
-                          ? DateFormat('h:mm a').format(event.startDate!)
-                          : '',
-                      location: event.location,
-                      speakers: event.speakers,
-                      participant: event.participants.length,
-                      eventRef: event.reference,
-                      action: () async {
-                        context.pushNamed(
-                          'EventDetail',
-                          pathParameters: {
-                            'eventId': event.reference.id,
-                          },
-                        );
-                      },
-                    ),
-                  );
-                }).toList(),
-              );
-            },
-          ),
-        ],
-      ),
-    ).animateOnPageLoad(animationsMap['recentEventsOnPageLoadAnimation']!);
-  }
-
   Widget _buildRecentAnnouncementsSection(BuildContext context) {
     return Container(
       width: double.infinity,
@@ -1002,186 +845,11 @@ class _HomeWidgetState extends State<HomeWidget> with TickerProviderStateMixin {
                       fontWeight: FontWeight.w600,
                     ),
               ),
-              FFButtonWidget(
-                onPressed: () {
-                  // Navigate to announcements
-                },
-                text: 'View All',
-                options: FFButtonOptions(
-                  height: 32,
-                  padding: const EdgeInsetsDirectional.fromSTEB(12, 0, 12, 0),
-                  iconPadding: const EdgeInsetsDirectional.fromSTEB(0, 0, 0, 0),
-                  color: FlutterFlowTheme.of(context).primary,
-                  textStyle: FlutterFlowTheme.of(context).bodySmall.override(
-                        fontFamily: 'Inter',
-                        color: Colors.white,
-                        fontWeight: FontWeight.w600,
-                      ),
-                  elevation: 0,
-                  borderSide: const BorderSide(
-                    color: Colors.transparent,
-                    width: 1,
-                  ),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-              ),
+              const SizedBox.shrink(),
             ],
           ),
           const SizedBox(height: 16),
-          StreamBuilder<List<PostsRecord>>(
-            stream: queryPostsRecord(
-              queryBuilder: (postsRecord) => postsRecord
-                  .orderBy('created_time', descending: true)
-                  .limit(3),
-            ),
-            builder: (context, snapshot) {
-              if (!snapshot.hasData) {
-                return Container(
-                  height: 200,
-                  child: Center(
-                    child: CircularProgressIndicator(
-                      valueColor: AlwaysStoppedAnimation<Color>(
-                        FlutterFlowTheme.of(context).primary,
-                      ),
-                    ),
-                  ),
-                );
-              }
-
-              final posts = snapshot.data!;
-              if (posts.isEmpty) {
-                return Container(
-                  height: 200,
-                  decoration: BoxDecoration(
-                    color: FlutterFlowTheme.of(context).secondaryBackground,
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(
-                      color: FlutterFlowTheme.of(context).alternate,
-                    ),
-                  ),
-                  child: Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(
-                          Icons.campaign,
-                          size: 48,
-                          color: FlutterFlowTheme.of(context).secondaryText,
-                        ),
-                        const SizedBox(height: 16),
-                        Text(
-                          'No announcements yet',
-                          style: FlutterFlowTheme.of(context)
-                              .titleMedium
-                              .override(
-                                fontFamily: 'Inter',
-                                color:
-                                    FlutterFlowTheme.of(context).secondaryText,
-                              ),
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          'Check back later for updates',
-                          style: FlutterFlowTheme.of(context)
-                              .bodySmall
-                              .override(
-                                fontFamily: 'Inter',
-                                color:
-                                    FlutterFlowTheme.of(context).secondaryText,
-                              ),
-                        ),
-                      ],
-                    ),
-                  ),
-                );
-              }
-
-              return Column(
-                children: posts.map((post) {
-                  return Container(
-                    margin: const EdgeInsets.only(bottom: 12),
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: FlutterFlowTheme.of(context).secondaryBackground,
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(
-                        color: FlutterFlowTheme.of(context).alternate,
-                      ),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          children: [
-                            Container(
-                              width: 40,
-                              height: 40,
-                              decoration: BoxDecoration(
-                                color: FlutterFlowTheme.of(context)
-                                    .primary
-                                    .withOpacity(0.1),
-                                borderRadius: BorderRadius.circular(8),
-                              ),
-                              child: Icon(
-                                Icons.campaign,
-                                color: FlutterFlowTheme.of(context).primary,
-                                size: 20,
-                              ),
-                            ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    post.postType.isNotEmpty
-                                        ? post.postType
-                                        : 'Announcement',
-                                    style: FlutterFlowTheme.of(context)
-                                        .titleSmall
-                                        .override(
-                                          fontFamily: 'Inter',
-                                          fontWeight: FontWeight.w600,
-                                        ),
-                                  ),
-                                  Text(
-                                    post.createdAt != null
-                                        ? DateFormat('MMM d, y • h:mm a')
-                                            .format(post.createdAt!)
-                                        : 'Recently',
-                                    style: FlutterFlowTheme.of(context)
-                                        .bodySmall
-                                        .override(
-                                          fontFamily: 'Inter',
-                                          color: FlutterFlowTheme.of(context)
-                                              .secondaryText,
-                                        ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ],
-                        ),
-                        if (post.text.isNotEmpty) ...[
-                          const SizedBox(height: 12),
-                          Text(
-                            post.text,
-                            style: FlutterFlowTheme.of(context)
-                                .bodyMedium
-                                .override(
-                                  fontFamily: 'Inter',
-                                ),
-                            maxLines: 3,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ],
-                      ],
-                    ),
-                  );
-                }).toList(),
-              );
-            },
-          ),
+          const RecentNewsAnnouncements(),
         ],
       ),
     );

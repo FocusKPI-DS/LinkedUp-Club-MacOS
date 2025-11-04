@@ -3,13 +3,13 @@ import '/backend/backend.dart';
 import '/flutter_flow/flutter_flow_util.dart';
 import '/flutter_flow/flutter_flow_widgets.dart';
 import 'dart:ui';
-import '/flutter_flow/custom_functions.dart' as functions;
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:ff_theme/flutter_flow/flutter_flow_theme.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:provider/provider.dart';
+
 import 'add_user_model.dart';
 export 'add_user_model.dart';
 
@@ -117,10 +117,10 @@ class _AddUserWidgetState extends State<AddUserWidget> {
                   text: 'Add',
                   options: FFButtonOptions(
                     height: 35.0,
-                    padding:
-                        const EdgeInsetsDirectional.fromSTEB(16.0, 0.0, 16.0, 0.0),
-                    iconPadding:
-                        const EdgeInsetsDirectional.fromSTEB(0.0, 0.0, 0.0, 0.0),
+                    padding: const EdgeInsetsDirectional.fromSTEB(
+                        16.0, 0.0, 16.0, 0.0),
+                    iconPadding: const EdgeInsetsDirectional.fromSTEB(
+                        0.0, 0.0, 0.0, 0.0),
                     color: FlutterFlowTheme.of(context).primary,
                     textStyle: FlutterFlowTheme.of(context).titleSmall.override(
                           font: GoogleFonts.inter(
@@ -144,39 +144,68 @@ class _AddUserWidgetState extends State<AddUserWidget> {
             ),
             Expanded(
               child: AuthUserStreamWidget(
-                builder: (context) => Builder(
-                  builder: (context) {
-                    final friend = functions
-                        .getFriends(
-                            widget.userRefs!.toList(),
-                            (currentUserDocument?.friends.toList() ?? [])
-                                .toList())
+                builder: (context) =>
+                    StreamBuilder<List<WorkspaceMembersRecord>>(
+                  stream: queryWorkspaceMembersRecord(
+                    queryBuilder: (workspaceMembersRecord) =>
+                        workspaceMembersRecord.where(
+                      'workspace_ref',
+                      isEqualTo: currentUserDocument?.currentWorkspaceRef,
+                    ),
+                  ),
+                  builder: (context, membersSnapshot) {
+                    if (!membersSnapshot.hasData) {
+                      return Center(
+                        child: SizedBox(
+                          width: 50.0,
+                          height: 50.0,
+                          child: CircularProgressIndicator(
+                            valueColor: AlwaysStoppedAnimation<Color>(
+                              FlutterFlowTheme.of(context).primary,
+                            ),
+                          ),
+                        ),
+                      );
+                    }
+
+                    final members = membersSnapshot.data ?? [];
+                    final existingMembers = widget.userRefs?.toList() ?? [];
+                    final candidateUserRefs = members
+                        .map((m) => m.userRef)
+                        .where((ref) => ref != null)
+                        .cast<DocumentReference>()
+                        .where((ref) =>
+                            !existingMembers.contains(ref) &&
+                            ref.path != currentUserReference?.path)
                         .toList();
 
                     return SingleChildScrollView(
                       child: Column(
                         mainAxisSize: MainAxisSize.min,
-                        children: List.generate(friend.length, (friendIndex) {
-                          final friendItem = friend[friendIndex];
+                        children:
+                            List.generate(candidateUserRefs.length, (index) {
+                          final userRef = candidateUserRefs[index];
                           return FutureBuilder<UsersRecord>(
-                            future: UsersRecord.getDocumentOnce(friendItem),
+                            future: UsersRecord.getDocumentOnce(userRef),
                             builder: (context, snapshot) {
-                              // Customize what your widget looks like when it's loading.
                               if (!snapshot.hasData) {
-                                return Center(
-                                  child: SizedBox(
-                                    width: 50.0,
-                                    height: 50.0,
-                                    child: CircularProgressIndicator(
-                                      valueColor: AlwaysStoppedAnimation<Color>(
-                                        FlutterFlowTheme.of(context).primary,
-                                      ),
-                                    ),
-                                  ),
-                                );
+                                return SizedBox.shrink();
                               }
 
                               final containerUsersRecord = snapshot.data!;
+                              final memberRecord = members.firstWhere(
+                                (m) => m.userRef?.path == userRef.path,
+                                orElse: () =>
+                                    WorkspaceMembersRecord.getDocumentFromData(
+                                  {},
+                                  userRef,
+                                ),
+                              );
+                              final roleText = (memberRecord.role.isNotEmpty
+                                      ? memberRecord.role
+                                      : 'member')
+                                  .toUpperCase();
+                              final bool isModerator = roleText == 'MODERATOR';
 
                               return Container(
                                 width: double.infinity,
@@ -205,16 +234,43 @@ class _AddUserWidgetState extends State<AddUserWidget> {
                                           shape: BoxShape.circle,
                                         ),
                                         child: Padding(
-                                          padding:
-                                              const EdgeInsetsDirectional.fromSTEB(
-                                                  2.0, 2.0, 2.0, 2.0),
+                                          padding: const EdgeInsetsDirectional
+                                              .fromSTEB(2.0, 2.0, 2.0, 2.0),
                                           child: ClipRRect(
                                             borderRadius:
                                                 BorderRadius.circular(20.0),
-                                            child: Image.network(
-                                              containerUsersRecord.photoUrl,
-                                              fit: BoxFit.cover,
-                                            ),
+                                            child: containerUsersRecord
+                                                    .photoUrl.isNotEmpty
+                                                ? Image.network(
+                                                    containerUsersRecord
+                                                        .photoUrl,
+                                                    fit: BoxFit.cover,
+                                                    errorBuilder: (
+                                                      context,
+                                                      error,
+                                                      stackTrace,
+                                                    ) {
+                                                      return Center(
+                                                        child: Icon(
+                                                          Icons.person,
+                                                          size: 22.0,
+                                                          color: FlutterFlowTheme
+                                                                  .of(context)
+                                                              .secondaryText,
+                                                        ),
+                                                      );
+                                                    },
+                                                  )
+                                                : Center(
+                                                    child: Icon(
+                                                      Icons.person,
+                                                      size: 22.0,
+                                                      color:
+                                                          FlutterFlowTheme.of(
+                                                                  context)
+                                                              .secondaryText,
+                                                    ),
+                                                  ),
                                           ),
                                         ),
                                       ),
@@ -295,9 +351,42 @@ class _AddUserWidgetState extends State<AddUserWidget> {
                                           ],
                                         ),
                                       ),
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(
+                                            horizontal: 10.0, vertical: 6.0),
+                                        decoration: BoxDecoration(
+                                          color: isModerator
+                                              ? const Color(0xFF10B981)
+                                              : const Color(0xFFE5E7EB),
+                                          borderRadius:
+                                              BorderRadius.circular(999),
+                                        ),
+                                        child: Text(
+                                          roleText,
+                                          style: FlutterFlowTheme.of(context)
+                                              .labelSmall
+                                              .override(
+                                                font: GoogleFonts.inter(
+                                                  fontWeight: FontWeight.w600,
+                                                  fontStyle:
+                                                      FlutterFlowTheme.of(
+                                                              context)
+                                                          .labelSmall
+                                                          .fontStyle,
+                                                ),
+                                                color: isModerator
+                                                    ? Colors.white
+                                                    : FlutterFlowTheme.of(
+                                                            context)
+                                                        .secondaryText,
+                                                letterSpacing: 0.5,
+                                              ),
+                                        ),
+                                      ),
                                       Theme(
                                         data: ThemeData(
-                                          checkboxTheme: const CheckboxThemeData(
+                                          checkboxTheme:
+                                              const CheckboxThemeData(
                                             visualDensity:
                                                 VisualDensity.compact,
                                             materialTapTargetSize:
@@ -310,29 +399,34 @@ class _AddUserWidgetState extends State<AddUserWidget> {
                                                   .alternate,
                                         ),
                                         child: Checkbox(
-                                          value: _model.checkboxValueMap[
-                                              friendItem] ??= false,
+                                          value: _model
+                                                  .checkboxValueMap[userRef] ??=
+                                              false,
                                           onChanged: (newValue) async {
-                                            safeSetState(() =>
-                                                _model.checkboxValueMap[
-                                                    friendItem] = newValue!);
-                                            if (newValue!) {
-                                              _model.addToUserRef(
+                                            final checked = newValue ?? false;
+                                            safeSetState(() => _model
+                                                    .checkboxValueMap[userRef] =
+                                                checked);
+                                            if (checked) {
+                                              if (!_model.userRef.contains(
+                                                  containerUsersRecord
+                                                      .reference)) {
+                                                _model.addToUserRef(
+                                                    containerUsersRecord
+                                                        .reference);
+                                              }
+                                            } else {
+                                              _model.removeFromUserRef(
                                                   containerUsersRecord
                                                       .reference);
-                                              safeSetState(() {});
                                             }
+                                            safeSetState(() {});
                                           },
-                                          side: (FlutterFlowTheme.of(context)
-                                                      .alternate !=
-                                                  null)
-                                              ? BorderSide(
-                                                  width: 2,
-                                                  color: FlutterFlowTheme.of(
-                                                          context)
-                                                      .alternate,
-                                                )
-                                              : null,
+                                          side: BorderSide(
+                                            width: 2,
+                                            color: FlutterFlowTheme.of(context)
+                                                .alternate,
+                                          ),
                                           activeColor:
                                               FlutterFlowTheme.of(context)
                                                   .primary,

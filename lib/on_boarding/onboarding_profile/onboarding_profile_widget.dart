@@ -8,6 +8,7 @@ import '/flutter_flow/flutter_flow_place_picker.dart';
 import '/flutter_flow/flutter_flow_util.dart';
 import '/flutter_flow/flutter_flow_widgets.dart';
 import '/flutter_flow/upload_data.dart';
+import '/flutter_flow/nav/nav.dart' show appNavigatorKey;
 import 'dart:io';
 import 'dart:math';
 import 'dart:ui';
@@ -291,8 +292,8 @@ class _OnboardingProfileWidgetState extends State<OnboardingProfileWidget>
                                                                     .displaySmall
                                                                     .fontStyle,
                                                           ),
-                                                          color:
-                                                              const Color(0xFF6B7280),
+                                                          color: const Color(
+                                                              0xFF6B7280),
                                                           fontSize: 14.0,
                                                           letterSpacing: 0.0,
                                                           fontWeight:
@@ -305,8 +306,8 @@ class _OnboardingProfileWidgetState extends State<OnboardingProfileWidget>
                                                         ),
                                                   ).animateOnPageLoad(animationsMap[
                                                       'textOnPageLoadAnimation2']!),
-                                                ].divide(
-                                                    const SizedBox(height: 10.0)),
+                                                ].divide(const SizedBox(
+                                                    height: 10.0)),
                                               ),
                                               Column(
                                                 mainAxisSize: MainAxisSize.max,
@@ -499,9 +500,8 @@ class _OnboardingProfileWidgetState extends State<OnboardingProfileWidget>
                                                                 padding:
                                                                     const EdgeInsets
                                                                         .all(
-                                                                            15.0),
-                                                                child:
-                                                                    SizedBox(
+                                                                        15.0),
+                                                                child: SizedBox(
                                                                   width: double
                                                                       .infinity,
                                                                   height: double
@@ -586,7 +586,8 @@ class _OnboardingProfileWidgetState extends State<OnboardingProfileWidget>
                                                                   .fontStyle,
                                                         ),
                                                   ),
-                                                ].divide(const SizedBox(height: 5.0)),
+                                                ].divide(const SizedBox(
+                                                    height: 5.0)),
                                               ),
                                               Column(
                                                 mainAxisSize: MainAxisSize.max,
@@ -820,7 +821,7 @@ class _OnboardingProfileWidgetState extends State<OnboardingProfileWidget>
                                                                 contentPadding:
                                                                     const EdgeInsets
                                                                         .all(
-                                                                            12.0),
+                                                                        12.0),
                                                               ),
                                                               style: FlutterFlowTheme
                                                                       .of(context)
@@ -864,8 +865,8 @@ class _OnboardingProfileWidgetState extends State<OnboardingProfileWidget>
                                                           ),
                                                         ],
                                                       ),
-                                                    ].divide(
-                                                        const SizedBox(height: 15.0)),
+                                                    ].divide(const SizedBox(
+                                                        height: 15.0)),
                                                   ),
                                                 ],
                                               ),
@@ -942,10 +943,10 @@ class _OnboardingProfileWidgetState extends State<OnboardingProfileWidget>
                                                                 padding:
                                                                     const EdgeInsetsDirectional
                                                                         .fromSTEB(
-                                                                            16.0,
-                                                                            0.0,
-                                                                            0.0,
-                                                                            0.0),
+                                                                        16.0,
+                                                                        0.0,
+                                                                        0.0,
+                                                                        0.0),
                                                                 child: FaIcon(
                                                                   FontAwesomeIcons
                                                                       .mapMarkerAlt,
@@ -989,8 +990,10 @@ class _OnboardingProfileWidgetState extends State<OnboardingProfileWidget>
                                                                       ),
                                                                 ),
                                                               ),
-                                                            ].divide(const SizedBox(
-                                                                width: 15.0)),
+                                                            ].divide(
+                                                                const SizedBox(
+                                                                    width:
+                                                                        15.0)),
                                                           ),
                                                         ),
                                                         FlutterFlowPlacePicker(
@@ -1060,10 +1063,11 @@ class _OnboardingProfileWidgetState extends State<OnboardingProfileWidget>
                                                       ],
                                                     ),
                                                   ),
-                                                ].divide(
-                                                    const SizedBox(height: 15.0)),
+                                                ].divide(const SizedBox(
+                                                    height: 15.0)),
                                               ),
-                                            ].divide(const SizedBox(height: 25.0)),
+                                            ].divide(
+                                                const SizedBox(height: 25.0)),
                                           ),
                                         ),
                                       ),
@@ -1076,9 +1080,8 @@ class _OnboardingProfileWidgetState extends State<OnboardingProfileWidget>
                                             MainAxisAlignment.start,
                                         children: [
                                           Padding(
-                                            padding:
-                                                const EdgeInsetsDirectional.fromSTEB(
-                                                    0.0, 0.0, 0.0, 20.0),
+                                            padding: const EdgeInsetsDirectional
+                                                .fromSTEB(0.0, 0.0, 0.0, 20.0),
                                             child: Column(
                                               mainAxisSize: MainAxisSize.max,
                                               crossAxisAlignment:
@@ -1100,8 +1103,8 @@ class _OnboardingProfileWidgetState extends State<OnboardingProfileWidget>
                                                                   .headlineMedium
                                                                   .fontStyle,
                                                         ),
-                                                        color:
-                                                            const Color(0xFF111827),
+                                                        color: const Color(
+                                                            0xFF111827),
                                                         fontSize: 18.0,
                                                         letterSpacing: 0.0,
                                                         fontWeight:
@@ -1129,8 +1132,8 @@ class _OnboardingProfileWidgetState extends State<OnboardingProfileWidget>
                                                                   .bodyMedium
                                                                   .fontStyle,
                                                         ),
-                                                        color:
-                                                            const Color(0xFF6B7280),
+                                                        color: const Color(
+                                                            0xFF6B7280),
                                                         fontSize: 14.0,
                                                         letterSpacing: 0.0,
                                                         fontWeight:
@@ -1142,7 +1145,8 @@ class _OnboardingProfileWidgetState extends State<OnboardingProfileWidget>
                                                                 .fontStyle,
                                                       ),
                                                 ),
-                                              ].divide(const SizedBox(height: 9.0)),
+                                              ].divide(
+                                                  const SizedBox(height: 9.0)),
                                             ),
                                           ),
                                           Expanded(
@@ -1156,11 +1160,8 @@ class _OnboardingProfileWidgetState extends State<OnboardingProfileWidget>
                                                     Padding(
                                                       padding:
                                                           const EdgeInsetsDirectional
-                                                              .fromSTEB(
-                                                                  0.0,
-                                                                  5.0,
-                                                                  0.0,
-                                                                  5.0),
+                                                              .fromSTEB(0.0,
+                                                              5.0, 0.0, 5.0),
                                                       child: Wrap(
                                                         spacing: 12.0,
                                                         runSpacing: 12.0,
@@ -1250,7 +1251,7 @@ class _OnboardingProfileWidgetState extends State<OnboardingProfileWidget>
                                                                 padding:
                                                                     const EdgeInsets
                                                                         .all(
-                                                                            18.0),
+                                                                        18.0),
                                                                 child: Column(
                                                                   mainAxisSize:
                                                                       MainAxisSize
@@ -1396,7 +1397,7 @@ class _OnboardingProfileWidgetState extends State<OnboardingProfileWidget>
                                                                 padding:
                                                                     const EdgeInsets
                                                                         .all(
-                                                                            18.0),
+                                                                        18.0),
                                                                 child: Column(
                                                                   mainAxisSize:
                                                                       MainAxisSize
@@ -1541,7 +1542,7 @@ class _OnboardingProfileWidgetState extends State<OnboardingProfileWidget>
                                                                 padding:
                                                                     const EdgeInsets
                                                                         .all(
-                                                                            18.0),
+                                                                        18.0),
                                                                 child: Column(
                                                                   mainAxisSize:
                                                                       MainAxisSize
@@ -1687,7 +1688,7 @@ class _OnboardingProfileWidgetState extends State<OnboardingProfileWidget>
                                                                 padding:
                                                                     const EdgeInsets
                                                                         .all(
-                                                                            18.0),
+                                                                        18.0),
                                                                 child: Column(
                                                                   mainAxisSize:
                                                                       MainAxisSize
@@ -1839,7 +1840,7 @@ class _OnboardingProfileWidgetState extends State<OnboardingProfileWidget>
                                                                 padding:
                                                                     const EdgeInsets
                                                                         .all(
-                                                                            18.0),
+                                                                        18.0),
                                                                 child: Column(
                                                                   mainAxisSize:
                                                                       MainAxisSize
@@ -1990,7 +1991,7 @@ class _OnboardingProfileWidgetState extends State<OnboardingProfileWidget>
                                                                 padding:
                                                                     const EdgeInsets
                                                                         .all(
-                                                                            18.0),
+                                                                        18.0),
                                                                 child: Column(
                                                                   mainAxisSize:
                                                                       MainAxisSize
@@ -2142,7 +2143,7 @@ class _OnboardingProfileWidgetState extends State<OnboardingProfileWidget>
                                                                 padding:
                                                                     const EdgeInsets
                                                                         .all(
-                                                                            18.0),
+                                                                        18.0),
                                                                 child: Column(
                                                                   mainAxisSize:
                                                                       MainAxisSize
@@ -2294,7 +2295,7 @@ class _OnboardingProfileWidgetState extends State<OnboardingProfileWidget>
                                                                 padding:
                                                                     const EdgeInsets
                                                                         .all(
-                                                                            18.0),
+                                                                        18.0),
                                                                 child: Column(
                                                                   mainAxisSize:
                                                                       MainAxisSize
@@ -2388,9 +2389,8 @@ class _OnboardingProfileWidgetState extends State<OnboardingProfileWidget>
                                         mainAxisSize: MainAxisSize.max,
                                         children: [
                                           Padding(
-                                            padding:
-                                                const EdgeInsetsDirectional.fromSTEB(
-                                                    0.0, 0.0, 0.0, 20.0),
+                                            padding: const EdgeInsetsDirectional
+                                                .fromSTEB(0.0, 0.0, 0.0, 20.0),
                                             child: Column(
                                               mainAxisSize: MainAxisSize.max,
                                               crossAxisAlignment:
@@ -2412,8 +2412,8 @@ class _OnboardingProfileWidgetState extends State<OnboardingProfileWidget>
                                                                   .headlineMedium
                                                                   .fontStyle,
                                                         ),
-                                                        color:
-                                                            const Color(0xFF111827),
+                                                        color: const Color(
+                                                            0xFF111827),
                                                         fontSize: 18.0,
                                                         letterSpacing: 0.0,
                                                         fontWeight:
@@ -2441,8 +2441,8 @@ class _OnboardingProfileWidgetState extends State<OnboardingProfileWidget>
                                                                   .bodyMedium
                                                                   .fontStyle,
                                                         ),
-                                                        color:
-                                                            const Color(0xFF6B7280),
+                                                        color: const Color(
+                                                            0xFF6B7280),
                                                         fontSize: 14.0,
                                                         letterSpacing: 0.0,
                                                         fontWeight:
@@ -2454,7 +2454,8 @@ class _OnboardingProfileWidgetState extends State<OnboardingProfileWidget>
                                                                 .fontStyle,
                                                       ),
                                                 ),
-                                              ].divide(const SizedBox(height: 9.0)),
+                                              ].divide(
+                                                  const SizedBox(height: 9.0)),
                                             ),
                                           ),
                                           Column(
@@ -2463,13 +2464,15 @@ class _OnboardingProfileWidgetState extends State<OnboardingProfileWidget>
                                               Container(
                                                 width: double.infinity,
                                                 decoration: BoxDecoration(
-                                                  color: const Color(0xFFF9FAFB),
+                                                  color:
+                                                      const Color(0xFFF9FAFB),
                                                   borderRadius:
                                                       BorderRadius.circular(
                                                           12.0),
                                                 ),
                                                 child: Padding(
-                                                  padding: const EdgeInsets.all(16.0),
+                                                  padding: const EdgeInsets.all(
+                                                      16.0),
                                                   child: Row(
                                                     mainAxisSize:
                                                         MainAxisSize.max,
@@ -2570,13 +2573,15 @@ class _OnboardingProfileWidgetState extends State<OnboardingProfileWidget>
                                                                           ),
                                                                     ),
                                                                   ),
-                                                                ].divide(const SizedBox(
-                                                                    height:
-                                                                        4.0)),
+                                                                ].divide(
+                                                                    const SizedBox(
+                                                                        height:
+                                                                            4.0)),
                                                               ),
                                                             ),
-                                                          ].divide(const SizedBox(
-                                                              width: 12.0)),
+                                                          ].divide(
+                                                              const SizedBox(
+                                                                  width: 12.0)),
                                                         ),
                                                       ),
                                                       Switch.adaptive(
@@ -2612,13 +2617,15 @@ class _OnboardingProfileWidgetState extends State<OnboardingProfileWidget>
                                               Container(
                                                 width: double.infinity,
                                                 decoration: BoxDecoration(
-                                                  color: const Color(0xFFF9FAFB),
+                                                  color:
+                                                      const Color(0xFFF9FAFB),
                                                   borderRadius:
                                                       BorderRadius.circular(
                                                           12.0),
                                                 ),
                                                 child: Padding(
-                                                  padding: const EdgeInsets.all(16.0),
+                                                  padding: const EdgeInsets.all(
+                                                      16.0),
                                                   child: Row(
                                                     mainAxisSize:
                                                         MainAxisSize.max,
@@ -2716,13 +2723,15 @@ class _OnboardingProfileWidgetState extends State<OnboardingProfileWidget>
                                                                           ),
                                                                     ),
                                                                   ),
-                                                                ].divide(const SizedBox(
-                                                                    height:
-                                                                        4.0)),
+                                                                ].divide(
+                                                                    const SizedBox(
+                                                                        height:
+                                                                            4.0)),
                                                               ),
                                                             ),
-                                                          ].divide(const SizedBox(
-                                                              width: 12.0)),
+                                                          ].divide(
+                                                              const SizedBox(
+                                                                  width: 12.0)),
                                                         ),
                                                       ),
                                                       Switch.adaptive(
@@ -2758,13 +2767,15 @@ class _OnboardingProfileWidgetState extends State<OnboardingProfileWidget>
                                               Container(
                                                 width: double.infinity,
                                                 decoration: BoxDecoration(
-                                                  color: const Color(0xFFF9FAFB),
+                                                  color:
+                                                      const Color(0xFFF9FAFB),
                                                   borderRadius:
                                                       BorderRadius.circular(
                                                           12.0),
                                                 ),
                                                 child: Padding(
-                                                  padding: const EdgeInsets.all(16.0),
+                                                  padding: const EdgeInsets.all(
+                                                      16.0),
                                                   child: Row(
                                                     mainAxisSize:
                                                         MainAxisSize.max,
@@ -2862,13 +2873,15 @@ class _OnboardingProfileWidgetState extends State<OnboardingProfileWidget>
                                                                           ),
                                                                     ),
                                                                   ),
-                                                                ].divide(const SizedBox(
-                                                                    height:
-                                                                        4.0)),
+                                                                ].divide(
+                                                                    const SizedBox(
+                                                                        height:
+                                                                            4.0)),
                                                               ),
                                                             ),
-                                                          ].divide(const SizedBox(
-                                                              width: 12.0)),
+                                                          ].divide(
+                                                              const SizedBox(
+                                                                  width: 12.0)),
                                                         ),
                                                       ),
                                                       Switch.adaptive(
@@ -2901,7 +2914,8 @@ class _OnboardingProfileWidgetState extends State<OnboardingProfileWidget>
                                                   ),
                                                 ),
                                               ),
-                                            ].divide(const SizedBox(height: 16.0)),
+                                            ].divide(
+                                                const SizedBox(height: 16.0)),
                                           ),
                                         ],
                                       ),
@@ -2924,7 +2938,8 @@ class _OnboardingProfileWidgetState extends State<OnboardingProfileWidget>
                                       await _model.pageViewController!
                                           .animateToPage(
                                         i,
-                                        duration: const Duration(milliseconds: 500),
+                                        duration:
+                                            const Duration(milliseconds: 500),
                                         curve: Curves.ease,
                                       );
                                       safeSetState(() {});
@@ -2954,60 +2969,62 @@ class _OnboardingProfileWidgetState extends State<OnboardingProfileWidget>
                             16.0, 32.0, 16.0, 27.0),
                         child: FFButtonWidget(
                           onPressed: () async {
-                                  if (_model.pageViewCurrentIndex <= 1) {
-                                    await _model.pageViewController?.nextPage(
-                                      duration: const Duration(milliseconds: 300),
-                                      curve: Curves.ease,
-                                    );
-                                  } else {
-                                    await currentUserReference!.update({
-                                      ...createUsersRecordData(
-                                        photoUrl: _model.userProfile,
-                                        uid: currentUserReference?.id,
-                                        location:
-                                            _model.placePickerValue.address,
-                                        notificationsEnabled:
-                                            _model.eventUpdateValue,
-                                        bio: _model.bioTextController.text,
-                                        isOnboarding: true,
-                                        newMessageEnabled:
-                                            _model.newMessageValue,
-                                        connectionRequestsEnabled:
-                                            _model.connectionRequestsValue,
-                                        locationLatlng:
-                                            _model.placePickerValue.latLng,
+                            if (_model.pageViewCurrentIndex <= 1) {
+                              await _model.pageViewController?.nextPage(
+                                duration: const Duration(milliseconds: 300),
+                                curve: Curves.ease,
+                              );
+                            } else {
+                              await currentUserReference!.update({
+                                ...createUsersRecordData(
+                                  photoUrl: _model.userProfile,
+                                  uid: currentUserReference?.id,
+                                  location: _model.placePickerValue.address,
+                                  notificationsEnabled: _model.eventUpdateValue,
+                                  bio: _model.bioTextController.text,
+                                  isOnboarding: true,
+                                  newMessageEnabled: _model.newMessageValue,
+                                  connectionRequestsEnabled:
+                                      _model.connectionRequestsValue,
+                                  locationLatlng:
+                                      _model.placePickerValue.latLng,
+                                ),
+                                ...mapToFirestore(
+                                  {
+                                    'interests': _model.iterested,
+                                  },
+                                ),
+                              });
+
+                              // Ensure navigation works across all platforms (web, iOS, Android, macOS)
+                              // Small delay to ensure Firestore update is processed
+                              await Future.delayed(
+                                  const Duration(milliseconds: 300));
+
+                              // Navigate based on context - works across all platforms
+                              if (mounted) {
+                                if ((widget.deeplink == true) &&
+                                    (FFAppState().DeeplinkInfo.inviteType ==
+                                        'Event')) {
+                                  context.goNamed(
+                                    EventDetailWidget.routeName,
+                                    pathParameters: {
+                                      'eventId': serializeParam(
+                                        FFAppState().DeeplinkInfo.eventId,
+                                        ParamType.String,
                                       ),
-                                      ...mapToFirestore(
-                                        {
-                                          'interests': _model.iterested,
-                                        },
-                                      ),
-                                    });
-                                    if ((widget.deeplink == true) &&
-                                        (FFAppState().DeeplinkInfo.inviteType ==
-                                            'Event')) {
-                                      context.goNamed(
-                                        EventDetailWidget.routeName,
-                                        pathParameters: {
-                                          'eventId': serializeParam(
-                                            FFAppState().DeeplinkInfo.eventId,
-                                            ParamType.String,
-                                          ),
-                                        }.withoutNulls,
-                                      );
-                                    } else {
-                                      context.goNamed(
-                                        DiscoverWidget.routeName,
-                                        queryParameters: {
-                                          'isDeeplink': serializeParam(
-                                            false,
-                                            ParamType.bool,
-                                          ),
-                                        }.withoutNulls,
-                                      );
-                                    }
-                                  }
-                                },
+                                    }.withoutNulls,
+                                  );
+                                } else {
+                                  // Navigate to Home page via root path - works across all platforms
+                                  context.go('/');
+                                }
+                              } else {
+                                // Fallback: use global navigator if context is not mounted
+                                appNavigatorKey.currentContext?.go('/');
+                              }
+                            }
+                          },
                           text: _model.pageViewCurrentIndex == 2
                               ? 'Get Started'
                               : 'Next',

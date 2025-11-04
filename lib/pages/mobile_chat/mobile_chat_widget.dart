@@ -23,12 +23,14 @@ class MobileChatWidget extends StatefulWidget {
   const MobileChatWidget({
     Key? key,
     this.onChatStateChanged,
+    this.initialChat,
   }) : super(key: key);
 
   static String routeName = 'MobileChat';
   static String routePath = '/mobile-chat';
 
   final Function(bool isChatOpen)? onChatStateChanged;
+  final ChatsRecord? initialChat;
 
   @override
   _MobileChatWidgetState createState() => _MobileChatWidgetState();
@@ -74,6 +76,20 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
         ],
       ),
     });
+
+    // Handle initial chat if provided (e.g., from notification tap)
+    if (widget.initialChat != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted && widget.initialChat != null) {
+          setState(() {
+            _model.selectedChat = widget.initialChat;
+          });
+          chatController.selectChat(widget.initialChat!);
+          // Notify parent that chat is opened
+          widget.onChatStateChanged?.call(true);
+        }
+      });
+    }
   }
 
   Future<void> _initializeWorkspace() async {

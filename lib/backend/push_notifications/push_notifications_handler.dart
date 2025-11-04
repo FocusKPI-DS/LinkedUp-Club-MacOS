@@ -153,11 +153,7 @@ final parametersBuilderMap =
           'deeplink': getParameter<bool>(data, 'deeplink'),
         },
       ),
-  'Discover': (data) async => ParameterData(
-        allParams: {
-          'isDeeplink': getParameter<bool>(data, 'isDeeplink'),
-        },
-      ),
+  'Home': ParameterData.none(),
   'Settings': ParameterData.none(),
   'CreateEvent': (data) async => ParameterData(
         allParams: {
@@ -203,6 +199,12 @@ final parametersBuilderMap =
       ),
   'ContactsList': ParameterData.none(),
   'ChatDetail': (data) async => ParameterData(
+        allParams: {
+          'chatDoc': await getDocumentParameter<ChatsRecord>(
+              data, 'chatDoc', ChatsRecord.fromSnapshot),
+        },
+      ),
+  'MobileChat': (data) async => ParameterData(
         allParams: {
           'chatDoc': await getDocumentParameter<ChatsRecord>(
               data, 'chatDoc', ChatsRecord.fromSnapshot),

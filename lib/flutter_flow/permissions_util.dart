@@ -19,8 +19,11 @@ const microphonePermission = Permission.microphone;
 const locationPermission = Permission.location;
 
 Future<bool> getPermissionStatus(Permission setting) async {
-  // Skip permission checks on macOS to avoid plugin errors
-  if (Platform.isMacOS) {
+  // Skip permission checks on web and macOS to avoid plugin errors
+  if (kIsWeb) {
+    return true; // Assume permissions are granted on web (handled by browser)
+  }
+  if (!kIsWeb && Platform.isMacOS) {
     return true; // Assume permissions are granted on macOS
   }
 
@@ -34,8 +37,11 @@ Future<bool> getPermissionStatus(Permission setting) async {
 }
 
 Future<void> requestPermission(Permission setting) async {
-  // Skip permission requests on macOS to avoid plugin errors
-  if (Platform.isMacOS) {
+  // Skip permission requests on web and macOS to avoid plugin errors
+  if (kIsWeb) {
+    return; // No-op on web (handled by browser)
+  }
+  if (!kIsWeb && Platform.isMacOS) {
     return; // No-op on macOS
   }
 

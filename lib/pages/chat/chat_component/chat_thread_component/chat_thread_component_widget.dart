@@ -12,7 +12,9 @@ import '/flutter_flow/flutter_flow_video_player.dart';
 import '/flutter_flow/upload_data.dart';
 import '/pages/chat/chat_component/chat_thread/chat_thread_widget.dart';
 import 'dart:async';
+import 'dart:io' show Platform;
 import 'dart:ui';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import '/custom_code/actions/index.dart' as actions;
 import '/custom_code/widgets/index.dart' as custom_widgets;
 import '/flutter_flow/custom_functions.dart' as functions;
@@ -1758,8 +1760,10 @@ class _ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget>
                                                                             e !=
                                                                             currentUserReference)
                                                                         .toList(),
-                                                                    initialPageName:
-                                                                        'ChatDetail',
+                                                                    initialPageName: (!kIsWeb &&
+                                                                            Platform.isIOS)
+                                                                        ? 'MobileChat'
+                                                                        : 'ChatDetail',
                                                                     parameterData: {
                                                                       'chatDoc':
                                                                           widget

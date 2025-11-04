@@ -256,7 +256,9 @@ class _LoginWidgetState extends State<LoginWidget>
                                           _model.emailAddressTextController,
                                       focusNode: _model.emailAddressFocusNode,
                                       autofocus: false,
-                                      autofillHints: const [AutofillHints.email],
+                                      autofillHints: const [
+                                        AutofillHints.email
+                                      ],
                                       obscureText: false,
                                       decoration: InputDecoration(
                                         hintText: 'youremail@example.com',
@@ -325,7 +327,8 @@ class _LoginWidgetState extends State<LoginWidget>
                                         filled: true,
                                         fillColor: FlutterFlowTheme.of(context)
                                             .secondaryBackground,
-                                        contentPadding: const EdgeInsets.all(24.0),
+                                        contentPadding:
+                                            const EdgeInsets.all(24.0),
                                       ),
                                       style: FlutterFlowTheme.of(context)
                                           .bodyMedium
@@ -392,7 +395,9 @@ class _LoginWidgetState extends State<LoginWidget>
                                       controller: _model.passwordTextController,
                                       focusNode: _model.passwordFocusNode,
                                       autofocus: false,
-                                      autofillHints: const [AutofillHints.password],
+                                      autofillHints: const [
+                                        AutofillHints.password
+                                      ],
                                       obscureText: !_model.passwordVisibility,
                                       decoration: InputDecoration(
                                         labelStyle: FlutterFlowTheme.of(context)
@@ -484,7 +489,8 @@ class _LoginWidgetState extends State<LoginWidget>
                                         filled: true,
                                         fillColor: FlutterFlowTheme.of(context)
                                             .secondaryBackground,
-                                        contentPadding: const EdgeInsets.all(24.0),
+                                        contentPadding:
+                                            const EdgeInsets.all(24.0),
                                         suffixIcon: InkWell(
                                           onTap: () => safeSetState(
                                             () => _model.passwordVisibility =
@@ -635,11 +641,14 @@ class _LoginWidgetState extends State<LoginWidget>
                                             text: 'Forgot Password?',
                                             options: FFButtonOptions(
                                               height: 40.0,
-                                              padding: const EdgeInsetsDirectional
-                                                  .fromSTEB(
+                                              padding:
+                                                  const EdgeInsetsDirectional
+                                                      .fromSTEB(
                                                       16.0, 0.0, 16.0, 0.0),
-                                              iconPadding: const EdgeInsetsDirectional
-                                                  .fromSTEB(0.0, 0.0, 0.0, 0.0),
+                                              iconPadding:
+                                                  const EdgeInsetsDirectional
+                                                      .fromSTEB(
+                                                      0.0, 0.0, 0.0, 0.0),
                                               color: const Color(0x003B82F6),
                                               textStyle:
                                                   FlutterFlowTheme.of(context)
@@ -679,10 +688,12 @@ class _LoginWidgetState extends State<LoginWidget>
                                   ),
                                 ),
                                 Align(
-                                  alignment: const AlignmentDirectional(0.0, 0.0),
+                                  alignment:
+                                      const AlignmentDirectional(0.0, 0.0),
                                   child: Padding(
-                                    padding: const EdgeInsetsDirectional.fromSTEB(
-                                        0.0, 0.0, 0.0, 16.0),
+                                    padding:
+                                        const EdgeInsetsDirectional.fromSTEB(
+                                            0.0, 0.0, 0.0, 16.0),
                                     child: FFButtonWidget(
                                       onPressed: () async {
                                         GoRouter.of(context).prepareAuthEvent();
@@ -704,18 +715,17 @@ class _LoginWidgetState extends State<LoginWidget>
                                         await actions.closekeyboard();
 
                                         context.goNamedAuth(
-                                            DiscoverWidget.routeName,
+                                            HomeWidget.routeName,
                                             context.mounted);
                                       },
                                       text: 'Sign In',
                                       options: FFButtonOptions(
                                         width: double.infinity,
                                         height: 52.0,
-                                        padding: const EdgeInsetsDirectional.fromSTEB(
-                                            0.0, 0.0, 0.0, 0.0),
-                                        iconPadding:
-                                            const EdgeInsetsDirectional.fromSTEB(
-                                                0.0, 0.0, 0.0, 0.0),
+                                        padding: const EdgeInsetsDirectional
+                                            .fromSTEB(0.0, 0.0, 0.0, 0.0),
+                                        iconPadding: const EdgeInsetsDirectional
+                                            .fromSTEB(0.0, 0.0, 0.0, 0.0),
                                         color: FlutterFlowTheme.of(context)
                                             .primary,
                                         textStyle: FlutterFlowTheme.of(context)
@@ -755,10 +765,11 @@ class _LoginWidgetState extends State<LoginWidget>
                                   mainAxisSize: MainAxisSize.max,
                                   children: [
                                     Align(
-                                      alignment: const AlignmentDirectional(0.0, 0.0),
+                                      alignment:
+                                          const AlignmentDirectional(0.0, 0.0),
                                       child: Padding(
-                                        padding: const EdgeInsetsDirectional.fromSTEB(
-                                            16.0, 24.0, 16.0, 24.0),
+                                        padding: const EdgeInsetsDirectional
+                                            .fromSTEB(16.0, 24.0, 16.0, 24.0),
                                         child: Text(
                                           'Or Continue with',
                                           textAlign: TextAlign.center,
@@ -792,12 +803,11 @@ class _LoginWidgetState extends State<LoginWidget>
                                     ),
                                     if (false)
                                       Align(
-                                        alignment:
-                                            const AlignmentDirectional(0.0, 0.0),
+                                        alignment: const AlignmentDirectional(
+                                            0.0, 0.0),
                                         child: Padding(
-                                          padding:
-                                              const EdgeInsetsDirectional.fromSTEB(
-                                                  0.0, 0.0, 0.0, 16.0),
+                                          padding: const EdgeInsetsDirectional
+                                              .fromSTEB(0.0, 0.0, 0.0, 16.0),
                                           child: Wrap(
                                             spacing: 16.0,
                                             runSpacing: 0.0,
@@ -811,8 +821,9 @@ class _LoginWidgetState extends State<LoginWidget>
                                             clipBehavior: Clip.none,
                                             children: [
                                               Padding(
-                                                padding: const EdgeInsetsDirectional
-                                                    .fromSTEB(
+                                                padding:
+                                                    const EdgeInsetsDirectional
+                                                        .fromSTEB(
                                                         0.0, 0.0, 0.0, 16.0),
                                                 child: FFButtonWidget(
                                                   onPressed: () async {
@@ -827,8 +838,7 @@ class _LoginWidgetState extends State<LoginWidget>
                                                     }
 
                                                     context.goNamedAuth(
-                                                        DiscoverWidget
-                                                            .routeName,
+                                                        HomeWidget.routeName,
                                                         context.mounted);
                                                   },
                                                   text: 'Continue with Google',
@@ -841,12 +851,12 @@ class _LoginWidgetState extends State<LoginWidget>
                                                     height: 44.0,
                                                     padding:
                                                         const EdgeInsetsDirectional
-                                                            .fromSTEB(0.0, 0.0,
-                                                                0.0, 0.0),
+                                                            .fromSTEB(
+                                                            0.0, 0.0, 0.0, 0.0),
                                                     iconPadding:
                                                         const EdgeInsetsDirectional
-                                                            .fromSTEB(0.0, 0.0,
-                                                                0.0, 0.0),
+                                                            .fromSTEB(
+                                                            0.0, 0.0, 0.0, 0.0),
                                                     color: FlutterFlowTheme.of(
                                                             context)
                                                         .secondaryBackground,
@@ -896,11 +906,8 @@ class _LoginWidgetState extends State<LoginWidget>
                                                   : Padding(
                                                       padding:
                                                           const EdgeInsetsDirectional
-                                                              .fromSTEB(
-                                                                  0.0,
-                                                                  0.0,
-                                                                  0.0,
-                                                                  16.0),
+                                                              .fromSTEB(0.0,
+                                                              0.0, 0.0, 16.0),
                                                       // Sign in with Apple - now enabled for all platforms including macOS
                                                       child: FFButtonWidget(
                                                         onPressed: () async {
@@ -915,7 +922,7 @@ class _LoginWidgetState extends State<LoginWidget>
                                                           }
 
                                                           context.goNamedAuth(
-                                                              DiscoverWidget
+                                                              HomeWidget
                                                                   .routeName,
                                                               context.mounted);
                                                         },
@@ -933,17 +940,17 @@ class _LoginWidgetState extends State<LoginWidget>
                                                           padding:
                                                               const EdgeInsetsDirectional
                                                                   .fromSTEB(
-                                                                      0.0,
-                                                                      0.0,
-                                                                      0.0,
-                                                                      0.0),
+                                                                  0.0,
+                                                                  0.0,
+                                                                  0.0,
+                                                                  0.0),
                                                           iconPadding:
                                                               const EdgeInsetsDirectional
                                                                   .fromSTEB(
-                                                                      0.0,
-                                                                      0.0,
-                                                                      0.0,
-                                                                      0.0),
+                                                                  0.0,
+                                                                  0.0,
+                                                                  0.0,
+                                                                  0.0),
                                                           color: FlutterFlowTheme
                                                                   .of(context)
                                                               .secondaryBackground,
@@ -1030,8 +1037,9 @@ class _LoginWidgetState extends State<LoginWidget>
                                               ),
                                             ),
                                             child: Align(
-                                              alignment: const AlignmentDirectional(
-                                                  0.0, 0.0),
+                                              alignment:
+                                                  const AlignmentDirectional(
+                                                      0.0, 0.0),
                                               child: FaIcon(
                                                 FontAwesomeIcons.google,
                                                 color:
@@ -1043,48 +1051,49 @@ class _LoginWidgetState extends State<LoginWidget>
                                           ),
                                         ),
                                         // Sign in with Apple - now enabled for all platforms including macOS
-                                          InkWell(
-                                            splashColor: Colors.transparent,
-                                            focusColor: Colors.transparent,
-                                            hoverColor: Colors.transparent,
-                                            highlightColor: Colors.transparent,
-                                            onTap: () async {
-                                              GoRouter.of(context)
-                                                  .prepareAuthEvent();
-                                              final user = await authManager
-                                                  .signInWithApple(context);
-                                              if (user == null) {
-                                                return;
-                                              }
-                                              await action_blocks
-                                                  .checkOnboarding(context);
-                                            },
-                                            child: Container(
-                                              width: 106.0,
-                                              height: 38.0,
-                                              decoration: BoxDecoration(
+                                        InkWell(
+                                          splashColor: Colors.transparent,
+                                          focusColor: Colors.transparent,
+                                          hoverColor: Colors.transparent,
+                                          highlightColor: Colors.transparent,
+                                          onTap: () async {
+                                            GoRouter.of(context)
+                                                .prepareAuthEvent();
+                                            final user = await authManager
+                                                .signInWithApple(context);
+                                            if (user == null) {
+                                              return;
+                                            }
+                                            await action_blocks
+                                                .checkOnboarding(context);
+                                          },
+                                          child: Container(
+                                            width: 106.0,
+                                            height: 38.0,
+                                            decoration: BoxDecoration(
+                                              color:
+                                                  FlutterFlowTheme.of(context)
+                                                      .secondaryBackground,
+                                              borderRadius:
+                                                  BorderRadius.circular(8.0),
+                                              border: Border.all(
+                                                color: const Color(0xFFD1D5DB),
+                                              ),
+                                            ),
+                                            child: Align(
+                                              alignment:
+                                                  const AlignmentDirectional(
+                                                      0.0, 0.0),
+                                              child: Icon(
+                                                Icons.apple_rounded,
                                                 color:
                                                     FlutterFlowTheme.of(context)
-                                                        .secondaryBackground,
-                                                borderRadius:
-                                                    BorderRadius.circular(8.0),
-                                                border: Border.all(
-                                                  color: const Color(0xFFD1D5DB),
-                                                ),
-                                              ),
-                                              child: Align(
-                                                alignment: const AlignmentDirectional(
-                                                    0.0, 0.0),
-                                                child: Icon(
-                                                  Icons.apple_rounded,
-                                                  color:
-                                                      FlutterFlowTheme.of(context)
-                                                          .primaryText,
-                                                  size: 28.0,
-                                                ),
+                                                        .primaryText,
+                                                size: 28.0,
                                               ),
                                             ),
                                           ),
+                                        ),
                                         if (false)
                                           Container(
                                             width: 106.0,
@@ -1100,7 +1109,8 @@ class _LoginWidgetState extends State<LoginWidget>
                                               ),
                                             ),
                                             alignment:
-                                                const AlignmentDirectional(0.0, 0.0),
+                                                const AlignmentDirectional(
+                                                    0.0, 0.0),
                                             child: ClipRRect(
                                               borderRadius:
                                                   BorderRadius.circular(8.0),

@@ -24,6 +24,9 @@ import '/pages/workspace_management/workspace_management_widget.dart';
 import '/pages/create_workspace/create_workspace_widget.dart';
 import '/pages/mobile_chat/mobile_chat_widget.dart';
 import '/pages/mobile_settings/mobile_settings_widget.dart';
+import '/pages/profile_settings/profile_settings_widget.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
+import 'dart:io' show Platform;
 import 'package:branchio_dynamic_linking_akp5u6/index.dart'
     as $branchio_dynamic_linking_akp5u6;
 
@@ -90,7 +93,7 @@ class AppStateNotifier extends ChangeNotifier {
 GoRouter createRouter(AppStateNotifier appStateNotifier) {
   $branchio_dynamic_linking_akp5u6.initializeRoutes(
     testHomePageWidgetName: 'branchio_dynamic_linking_akp5u6.TestHomePage',
-    testHomePageWidgetPath: '/Discover',
+    testHomePageWidgetPath: '/home',
     testDashboardWidgetName: 'branchio_dynamic_linking_akp5u6.TestDashboard',
     testDashboardWidgetPath: '/dashboard',
   );
@@ -188,21 +191,6 @@ GoRouter createRouter(AppStateNotifier appStateNotifier) {
         ),
       ),
       FFRoute(
-          name: DiscoverWidget.routeName,
-          path: DiscoverWidget.routePath,
-          requireAuth: true,
-          builder: (context, params) => params.isEmpty
-              ? NavBarPage(initialPage: 'Discover')
-              : NavBarPage(
-                  initialPage: 'Discover',
-                  page: DiscoverWidget(
-                    isDeeplink: params.getParam(
-                      'isDeeplink',
-                      ParamType.bool,
-                    ),
-                  ),
-                )),
-      FFRoute(
         name: ProfileWidget.routeName,
         path: ProfileWidget.routePath,
         requireAuth: true,
@@ -214,11 +202,20 @@ GoRouter createRouter(AppStateNotifier appStateNotifier) {
         name: MobileSettingsWidget.routeName,
         path: MobileSettingsWidget.routePath,
         requireAuth: true,
-        builder: (context, params) => params.isEmpty
-            ? NavBarPage(initialPage: 'MobileSettings')
-            : MobileSettingsWidget(
-                initialSection: params.getParam('section', ParamType.String),
-              ),
+        builder: (context, params) {
+          // Redirect macOS and web to desktop settings page
+          if (kIsWeb || (!kIsWeb && Platform.isMacOS)) {
+            return params.isEmpty
+                ? NavBarPage(initialPage: 'ProfileSettings')
+                : const ProfileSettingsWidget();
+          }
+          // iOS uses mobile settings
+          return params.isEmpty
+              ? NavBarPage(initialPage: 'MobileSettings')
+              : MobileSettingsWidget(
+                  initialSection: params.getParam('section', ParamType.String),
+                );
+        },
       ),
       FFRoute(
         name: 'WorkspaceManagement',
@@ -294,6 +291,20 @@ GoRouter createRouter(AppStateNotifier appStateNotifier) {
           'chatDoc': getDoc(['chats'], ChatsRecord.fromSnapshot),
         },
         builder: (context, params) => GroupChatDetailWidget(
+          chatDoc: params.getParam(
+            'chatDoc',
+            ParamType.Document,
+          ),
+        ),
+      ),
+      FFRoute(
+        name: GroupActionTasksWidget.routeName,
+        path: GroupActionTasksWidget.routePath,
+        requireAuth: true,
+        asyncParams: {
+          'chatDoc': getDoc(['chats'], ChatsRecord.fromSnapshot),
+        },
+        builder: (context, params) => GroupActionTasksWidget(
           chatDoc: params.getParam(
             'chatDoc',
             ParamType.Document,

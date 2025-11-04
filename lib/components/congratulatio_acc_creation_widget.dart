@@ -75,7 +75,8 @@ class _CongratulatioAccCreationWidgetState
             borderRadius: BorderRadius.circular(16.0),
           ),
           child: Padding(
-            padding: const EdgeInsetsDirectional.fromSTEB(16.0, 16.0, 16.0, 16.0),
+            padding:
+                const EdgeInsetsDirectional.fromSTEB(16.0, 16.0, 16.0, 16.0),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.center,
@@ -220,13 +221,7 @@ class _CongratulatioAccCreationWidgetState
                 FFButtonWidget(
                   onPressed: () async {
                     context.pushNamed(
-                      DiscoverWidget.routeName,
-                      queryParameters: {
-                        'isDeeplink': serializeParam(
-                          false,
-                          ParamType.bool,
-                        ),
-                      }.withoutNulls,
+                      HomeWidget.routeName,
                     );
                   },
                   text: 'Get Started',
@@ -234,8 +229,8 @@ class _CongratulatioAccCreationWidgetState
                     width: double.infinity,
                     height: 48.0,
                     padding: const EdgeInsets.all(8.0),
-                    iconPadding:
-                        const EdgeInsetsDirectional.fromSTEB(0.0, 0.0, 0.0, 0.0),
+                    iconPadding: const EdgeInsetsDirectional.fromSTEB(
+                        0.0, 0.0, 0.0, 0.0),
                     color: FlutterFlowTheme.of(context).primary,
                     textStyle: FlutterFlowTheme.of(context).titleSmall.override(
                           font: GoogleFonts.inter(

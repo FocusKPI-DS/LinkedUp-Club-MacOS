@@ -10,8 +10,8 @@ export '/auth/forgot_password/forgot_password_widget.dart'
     show ForgotPasswordWidget;
 export '/on_boarding/onboarding_profile/onboarding_profile_widget.dart'
     show OnboardingProfileWidget;
-export '/main/discover/discover_widget.dart' show DiscoverWidget;
 export '/main/profile/profile_widget.dart' show ProfileWidget;
+export '/main/home/home_widget.dart' show HomeWidget;
 export '/pages/profile_settings/profile_settings_widget.dart'
     show ProfileSettingsWidget;
 export '/pages/event/create_event/create_event_widget.dart'
@@ -56,3 +56,5 @@ export '/payment_history_page/payment_history_page_widget.dart'
 export '/payment_success/payment_success_widget.dart' show PaymentSuccessWidget;
 export '/pages/desktop_chat/desktop_chat_widget.dart' show DesktopChatWidget;
 export '/pages/ai_assistant/ai_assistant_widget.dart' show AIAssistantWidget;
+export '/pages/chat/group_action_tasks/group_action_tasks_widget.dart'
+    show GroupActionTasksWidget;

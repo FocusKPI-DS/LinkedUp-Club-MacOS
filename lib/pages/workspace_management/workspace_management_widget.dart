@@ -2,8 +2,12 @@ import '/auth/firebase_auth/auth_util.dart';
 import '/backend/backend.dart';
 import '/flutter_flow/flutter_flow_util.dart';
 import '/flutter_flow/flutter_flow_widgets.dart';
+import '/custom_code/actions/index.dart' as actions;
 import 'package:ff_theme/flutter_flow/flutter_flow_theme.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:share_plus/share_plus.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'dart:math';
 import 'workspace_management_model.dart';
 
@@ -581,41 +585,417 @@ class _WorkspaceManagementWidgetState extends State<WorkspaceManagementWidget> {
 
   void _showInviteUserDialog(BuildContext context, WorkspacesRecord workspace) {
     final emailController = TextEditingController();
+    String? invitationLink;
+    bool isLoading = false;
+    bool linkGenerated = false;
 
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: Text('Invite User'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text('Enter the email address of the user you want to invite:'),
-            SizedBox(height: 16),
-            TextField(
-              controller: emailController,
-              decoration: InputDecoration(
-                labelText: 'Email Address',
-                border: OutlineInputBorder(),
+      barrierDismissible: false,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          backgroundColor: FlutterFlowTheme.of(context).primaryBackground,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+          title: Row(
+            children: [
+              Icon(
+                Icons.person_add,
+                color: FlutterFlowTheme.of(context).primary,
+                size: 24,
               ),
-              keyboardType: TextInputType.emailAddress,
+              SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  'Invite User to Workspace',
+                  style: FlutterFlowTheme.of(context).titleLarge.override(
+                        fontFamily: 'Inter',
+                        fontSize: 20,
+                        fontWeight: FontWeight.w600,
+                        letterSpacing: 0,
+                      ),
+                ),
+              ),
+            ],
+          ),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Invite someone to join "${workspace.name}" workspace',
+                  style: FlutterFlowTheme.of(context).bodyMedium.override(
+                        fontFamily: 'Inter',
+                        fontSize: 14,
+                        color: FlutterFlowTheme.of(context).secondaryText,
+                        letterSpacing: 0,
+                      ),
+                ),
+                SizedBox(height: 24),
+                TextField(
+                  controller: emailController,
+                  decoration: InputDecoration(
+                    labelText: 'Email Address',
+                    hintText: 'user@example.com',
+                    prefixIcon: Icon(
+                      Icons.email,
+                      color: FlutterFlowTheme.of(context).secondaryText,
+                    ),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(8),
+                      borderSide: BorderSide(
+                        color: FlutterFlowTheme.of(context).alternate,
+                        width: 1,
+                      ),
+                    ),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(8),
+                      borderSide: BorderSide(
+                        color: FlutterFlowTheme.of(context).alternate,
+                        width: 1,
+                      ),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(8),
+                      borderSide: BorderSide(
+                        color: FlutterFlowTheme.of(context).primary,
+                        width: 2,
+                      ),
+                    ),
+                    filled: true,
+                    fillColor: FlutterFlowTheme.of(context).secondaryBackground,
+                    contentPadding: EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 16,
+                    ),
+                    labelStyle:
+                        FlutterFlowTheme.of(context).bodyMedium.override(
+                              fontFamily: 'Inter',
+                              color: FlutterFlowTheme.of(context).secondaryText,
+                              letterSpacing: 0,
+                            ),
+                  ),
+                  keyboardType: TextInputType.emailAddress,
+                  enabled: !isLoading,
+                  style: FlutterFlowTheme.of(context).bodyMedium.override(
+                        fontFamily: 'Inter',
+                        letterSpacing: 0,
+                      ),
+                ),
+                if (linkGenerated) ...[
+                  SizedBox(height: 24),
+                  Container(
+                    padding: EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color:
+                          FlutterFlowTheme.of(context).primary.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(
+                        color: FlutterFlowTheme.of(context)
+                            .primary
+                            .withOpacity(0.3),
+                        width: 1,
+                      ),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(
+                          Icons.check_circle,
+                          color: FlutterFlowTheme.of(context).primary,
+                          size: 20,
+                        ),
+                        SizedBox(width: 12),
+                        Expanded(
+                          child: Text(
+                            'Invitation link generated!',
+                            style: FlutterFlowTheme.of(context)
+                                .bodyMedium
+                                .override(
+                                  fontFamily: 'Inter',
+                                  color: FlutterFlowTheme.of(context).primary,
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w500,
+                                  letterSpacing: 0,
+                                ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  SizedBox(height: 16),
+                  Text(
+                    'Invitation Link:',
+                    style: FlutterFlowTheme.of(context).bodyMedium.override(
+                          fontFamily: 'Inter',
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          color: FlutterFlowTheme.of(context).secondaryText,
+                          letterSpacing: 0,
+                        ),
+                  ),
+                  SizedBox(height: 8),
+                  Container(
+                    padding: EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: FlutterFlowTheme.of(context).secondaryBackground,
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(
+                        color: FlutterFlowTheme.of(context).alternate,
+                        width: 1,
+                      ),
+                    ),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: SelectableText(
+                            invitationLink ?? '',
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontFamily: 'monospace',
+                              color: FlutterFlowTheme.of(context).primaryText,
+                            ),
+                            maxLines: 2,
+                          ),
+                        ),
+                        SizedBox(width: 8),
+                        IconButton(
+                          icon: Icon(
+                            Icons.copy,
+                            size: 20,
+                            color: FlutterFlowTheme.of(context).primary,
+                          ),
+                          onPressed: () async {
+                            if (invitationLink != null) {
+                              await Clipboard.setData(
+                                ClipboardData(text: invitationLink!),
+                              );
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text('Link copied to clipboard!'),
+                                  duration: Duration(seconds: 2),
+                                  backgroundColor:
+                                      FlutterFlowTheme.of(context).primary,
+                                ),
+                              );
+                            }
+                          },
+                          tooltip: 'Copy link',
+                          padding: EdgeInsets.zero,
+                          constraints: BoxConstraints(),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+                if (isLoading) ...[
+                  SizedBox(height: 24),
+                  Center(
+                    child: Column(
+                      children: [
+                        CircularProgressIndicator(
+                          valueColor: AlwaysStoppedAnimation<Color>(
+                            FlutterFlowTheme.of(context).primary,
+                          ),
+                        ),
+                        SizedBox(height: 16),
+                        Text(
+                          'Generating invitation link...',
+                          style: FlutterFlowTheme.of(context)
+                              .bodyMedium
+                              .override(
+                                fontFamily: 'Inter',
+                                fontSize: 14,
+                                color:
+                                    FlutterFlowTheme.of(context).secondaryText,
+                                letterSpacing: 0,
+                              ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ],
             ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: isLoading ? null : () => Navigator.pop(context),
+              child: Text(
+                'Cancel',
+                style: FlutterFlowTheme.of(context).bodyMedium.override(
+                      fontFamily: 'Inter',
+                      color: FlutterFlowTheme.of(context).secondaryText,
+                      letterSpacing: 0,
+                    ),
+              ),
+            ),
+            ElevatedButton.icon(
+              onPressed: isLoading
+                  ? null
+                  : () async {
+                      final email = emailController.text.trim();
+                      if (email.isEmpty) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text('Please enter an email address'),
+                            backgroundColor: Colors.red,
+                          ),
+                        );
+                        return;
+                      }
+
+                      // Basic email validation
+                      final emailRegex = RegExp(
+                        r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$',
+                      );
+                      if (!emailRegex.hasMatch(email)) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text('Please enter a valid email address'),
+                            backgroundColor: Colors.red,
+                          ),
+                        );
+                        return;
+                      }
+
+                      setDialogState(() {
+                        isLoading = true;
+                      });
+
+                      try {
+                        // Generate invitation dynamic link using Firebase Dynamic Links
+                        final link =
+                            await actions.generateWorkspaceInviteLinkV2(
+                          workspace.reference,
+                          workspace.name,
+                          currentUserUid,
+                          currentUserDisplayName,
+                        );
+
+                        if (link != null) {
+                          setDialogState(() {
+                            invitationLink = link;
+                            linkGenerated = true;
+                            isLoading = false;
+                          });
+                        } else {
+                          setDialogState(() {
+                            isLoading = false;
+                          });
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text(
+                                'Failed to generate invitation link. Please try again.',
+                              ),
+                              backgroundColor: Colors.red,
+                            ),
+                          );
+                        }
+                      } catch (e) {
+                        setDialogState(() {
+                          isLoading = false;
+                        });
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text('Error: $e'),
+                            backgroundColor: Colors.red,
+                          ),
+                        );
+                      }
+                    },
+              icon: Icon(Icons.link, size: 18),
+              label: Text('Generate Link'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: FlutterFlowTheme.of(context).primary,
+                foregroundColor: Colors.white,
+                padding: EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
+              ),
+            ),
+            if (linkGenerated)
+              ElevatedButton.icon(
+                onPressed: () async {
+                  if (invitationLink != null) {
+                    // Copy link to clipboard
+                    await Clipboard.setData(
+                      ClipboardData(text: invitationLink!),
+                    );
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text('Link copied to clipboard!'),
+                        duration: Duration(seconds: 2),
+                        backgroundColor: FlutterFlowTheme.of(context).primary,
+                      ),
+                    );
+                  }
+                },
+                icon: Icon(Icons.copy, size: 18),
+                label: Text('Copy Link'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: FlutterFlowTheme.of(context).primary,
+                  foregroundColor: Colors.white,
+                  padding: EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                ),
+              ),
+            if (linkGenerated)
+              ElevatedButton.icon(
+                onPressed: () async {
+                  if (invitationLink != null &&
+                      emailController.text.isNotEmpty) {
+                    await _inviteUserByEmail(
+                      emailController.text.trim(),
+                      workspace,
+                      invitationLink!,
+                    );
+                    Navigator.pop(context);
+                  }
+                },
+                icon: Icon(Icons.send, size: 18),
+                label: Text('Send via Email'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: FlutterFlowTheme.of(context).primary,
+                  foregroundColor: Colors.white,
+                  padding: EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                ),
+              ),
+            if (linkGenerated)
+              ElevatedButton.icon(
+                onPressed: () async {
+                  if (invitationLink != null) {
+                    await Share.share(
+                      'Join me on ${workspace.name} workspace!\n\nClick here: $invitationLink',
+                      subject: 'Invitation to join ${workspace.name}',
+                    );
+                  }
+                },
+                icon: Icon(Icons.share, size: 18),
+                label: Text('Share'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor:
+                      FlutterFlowTheme.of(context).secondaryBackground,
+                  foregroundColor: FlutterFlowTheme.of(context).primaryText,
+                  padding: EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
+                    side: BorderSide(
+                      color: FlutterFlowTheme.of(context).alternate,
+                      width: 1,
+                    ),
+                  ),
+                ),
+              ),
           ],
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: Text('Cancel'),
-          ),
-          ElevatedButton(
-            onPressed: () async {
-              if (emailController.text.isNotEmpty) {
-                await _inviteUserByEmail(emailController.text, workspace);
-                Navigator.pop(context);
-              }
-            },
-            child: Text('Send Invite'),
-          ),
-        ],
       ),
     );
   }
@@ -740,11 +1120,58 @@ class _WorkspaceManagementWidgetState extends State<WorkspaceManagementWidget> {
   }
 
   Future<void> _inviteUserByEmail(
-      String email, WorkspacesRecord workspace) async {
-    // TODO: Implement email invitation logic
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('Invitation sent to $email')),
-    );
+    String email,
+    WorkspacesRecord workspace,
+    String invitationLink,
+  ) async {
+    try {
+      // Open email client with pre-filled invitation
+      final subject =
+          Uri.encodeComponent('Invitation to join ${workspace.name}');
+      final body = Uri.encodeComponent(
+        'Hi,\n\nYou\'ve been invited to join "${workspace.name}" workspace on LinkedUp!\n\n'
+        'Click the link below to accept the invitation:\n$invitationLink\n\n'
+        'Looking forward to having you on board!\n\n'
+        'Best regards,\n${currentUserDisplayName}',
+      );
+
+      final emailUri = Uri.parse('mailto:$email?subject=$subject&body=$body');
+
+      if (await canLaunchUrl(emailUri)) {
+        await launchUrl(emailUri);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Email client opened for $email'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      } else {
+        // Fallback: Copy invitation details to clipboard
+        await Clipboard.setData(
+          ClipboardData(
+            text: 'Subject: Invitation to join ${workspace.name}\n\n'
+                'Body: You\'ve been invited to join "${workspace.name}" workspace on LinkedUp!\n\n'
+                'Click here: $invitationLink',
+          ),
+        );
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Email client not available. Invitation details copied to clipboard.',
+            ),
+            duration: Duration(seconds: 4),
+            backgroundColor: Colors.orange,
+          ),
+        );
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error opening email: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
   }
 
   String _generateInviteCode() {

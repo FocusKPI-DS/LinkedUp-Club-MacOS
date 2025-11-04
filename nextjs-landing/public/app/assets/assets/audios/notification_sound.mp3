@@ -1,0 +1,11 @@
+# This is a placeholder for a notification sound
+# In a real implementation, you would:
+# 1. Download a free notification sound from freesound.org
+# 2. Convert it to MP3 format
+# 3. Place it in this directory
+# 4. Update pubspec.yaml to include it in assets
+
+# For now, the system will use the default macOS notification sound
+# which is actually better for user experience!
+
+

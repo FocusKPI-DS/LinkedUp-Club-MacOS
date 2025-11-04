@@ -38,6 +38,16 @@ class FFAppState extends ChangeNotifier {
       _searchUsersHistory =
           prefs.getStringList('ff_searchUsersHistory') ?? _searchUsersHistory;
     });
+    _safeInit(() {
+      final lastOpenedString = prefs.getString('ff_newsPageLastOpened');
+      _newsPageLastOpened =
+          lastOpenedString != null ? DateTime.parse(lastOpenedString) : null;
+    });
+    _safeInit(() {
+      final lastOpenedString = prefs.getString('ff_chatPageLastOpened');
+      _chatPageLastOpened =
+          lastOpenedString != null ? DateTime.parse(lastOpenedString) : null;
+    });
   }
 
   void update(VoidCallback callback) {
@@ -338,6 +348,37 @@ class FFAppState extends ChangeNotifier {
   bool get skippedInvitation => _skippedInvitation;
   set skippedInvitation(bool value) {
     _skippedInvitation = value;
+  }
+
+  // Transient flag to show the News alert only once per app run
+  bool _hasShownNewsAlert = false;
+  bool get hasShownNewsAlert => _hasShownNewsAlert;
+  set hasShownNewsAlert(bool value) {
+    _hasShownNewsAlert = value;
+  }
+
+  // Track when News page was last opened to show unread indicator
+  DateTime? _newsPageLastOpened;
+  DateTime? get newsPageLastOpened => _newsPageLastOpened;
+  set newsPageLastOpened(DateTime? value) {
+    _newsPageLastOpened = value;
+    if (value != null) {
+      prefs.setString('ff_newsPageLastOpened', value.toIso8601String());
+    } else {
+      prefs.remove('ff_newsPageLastOpened');
+    }
+  }
+
+  // Track when Chat page was last opened to show unread indicator
+  DateTime? _chatPageLastOpened;
+  DateTime? get chatPageLastOpened => _chatPageLastOpened;
+  set chatPageLastOpened(DateTime? value) {
+    _chatPageLastOpened = value;
+    if (value != null) {
+      prefs.setString('ff_chatPageLastOpened', value.toIso8601String());
+    } else {
+      prefs.remove('ff_chatPageLastOpened');
+    }
   }
 }
 

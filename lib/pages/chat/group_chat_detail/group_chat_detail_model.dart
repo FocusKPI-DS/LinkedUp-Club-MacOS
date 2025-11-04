@@ -32,6 +32,8 @@ class GroupChatDetailModel extends FlutterFlowModel<GroupChatDetailWidget> {
 
   bool laoding = false;
 
+  bool showAddUserPanel = false;
+
   List<ReportsRecord> report = [];
   void addToReport(ReportsRecord item) => report.add(item);
   void removeFromReport(ReportsRecord item) => report.remove(item);
