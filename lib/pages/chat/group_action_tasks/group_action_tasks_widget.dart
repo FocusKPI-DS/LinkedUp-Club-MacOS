@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '/backend/backend.dart';
-import '/flutter_flow/flutter_flow_icon_button.dart';
 import '/flutter_flow/flutter_flow_util.dart';
 import 'package:ff_theme/flutter_flow/flutter_flow_theme.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -34,6 +33,7 @@ class _GroupActionTasksWidgetState extends State<GroupActionTasksWidget> {
   final Set<String> _expandedDetails = {};
   final Map<String, String> _pendingStatusChange =
       {}; // id -> 'completed'|'pending'
+  bool _isClosing = false;
 
   final scaffoldKey = GlobalKey<ScaffoldState>();
 
@@ -52,180 +52,206 @@ class _GroupActionTasksWidgetState extends State<GroupActionTasksWidget> {
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: () {
-        FocusScope.of(context).unfocus();
-        FocusManager.instance.primaryFocus?.unfocus();
-      },
-      child: Scaffold(
-        key: scaffoldKey,
-        backgroundColor: const Color(0xFFF9FAFB),
-        appBar: AppBar(
-          backgroundColor: FlutterFlowTheme.of(context).secondaryBackground,
-          automaticallyImplyLeading: false,
-          leading: FlutterFlowIconButton(
-            borderRadius: 20.0,
-            buttonSize: 40.0,
-            icon: Icon(
-              Icons.arrow_back,
-              color: FlutterFlowTheme.of(context).primaryText,
-              size: 24.0,
-            ),
-            onPressed: () async {
-              context.safePop();
-            },
+    return Stack(
+      children: [
+        // Semi-transparent overlay
+        GestureDetector(
+          onTap: () {
+            if (!_isClosing && mounted) {
+              _isClosing = true;
+              Navigator.pop(context);
+            }
+          },
+          child: Container(
+            color: Colors.black.withOpacity(0.3),
           ),
-          title: Text(
-            '${widget.chatDoc?.title ?? 'Group'}\'s Action Tasks',
-            style: FlutterFlowTheme.of(context).headlineMedium.override(
-                  font: GoogleFonts.inter(
-                    fontWeight: FontWeight.w600,
-                    fontStyle:
-                        FlutterFlowTheme.of(context).headlineMedium.fontStyle,
-                  ),
-                  color: FlutterFlowTheme.of(context).primaryText,
-                  fontSize: 20.0,
-                  letterSpacing: 0.0,
-                  fontWeight: FontWeight.w600,
-                ),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-          ),
-          actions: const [],
-          centerTitle: false,
-          elevation: 0.0,
         ),
-        body: SafeArea(
-          top: true,
-          child: widget.chatDoc == null
-              ? const Center(child: Text('No group selected'))
-              : StreamBuilder<List<ActionItemsRecord>>(
-                  stream: queryActionItemsRecord(
-                    queryBuilder: (actionItemsRecord) => actionItemsRecord
-                        .where('chat_ref', isEqualTo: widget.chatDoc!.reference)
-                        .orderBy('created_time', descending: true)
-                        .limit(100),
+        // 35% width panel on the right
+        Align(
+          alignment: Alignment.centerRight,
+          child: Container(
+            width: MediaQuery.of(context).size.width * 0.35,
+            height: MediaQuery.of(context).size.height,
+            child: GestureDetector(
+              onTap: () {
+                FocusScope.of(context).unfocus();
+                FocusManager.instance.primaryFocus?.unfocus();
+              },
+              child: Scaffold(
+                key: scaffoldKey,
+                backgroundColor: const Color(0xFFF9FAFB),
+                appBar: AppBar(
+                  backgroundColor:
+                      FlutterFlowTheme.of(context).secondaryBackground,
+                  automaticallyImplyLeading: false,
+                  leading: const SizedBox.shrink(),
+                  title: Text(
+                    'Action Tasks',
+                    style: FlutterFlowTheme.of(context).headlineMedium.override(
+                          font: GoogleFonts.inter(
+                            fontWeight: FontWeight.w600,
+                            fontStyle: FlutterFlowTheme.of(context)
+                                .headlineMedium
+                                .fontStyle,
+                          ),
+                          color: FlutterFlowTheme.of(context).primaryText,
+                          fontSize: 18.0,
+                          letterSpacing: 0.0,
+                          fontWeight: FontWeight.w600,
+                        ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                   ),
-                  builder: (context, snapshot) {
-                    if (snapshot.connectionState == ConnectionState.waiting) {
-                      return const Center(child: CircularProgressIndicator());
-                    }
+                  actions: const [],
+                  centerTitle: false,
+                  elevation: 0.0,
+                ),
+                body: SafeArea(
+                  top: true,
+                  child: widget.chatDoc == null
+                      ? const Center(child: Text('No group selected'))
+                      : StreamBuilder<List<ActionItemsRecord>>(
+                          stream: queryActionItemsRecord(
+                            queryBuilder: (actionItemsRecord) =>
+                                actionItemsRecord
+                                    .where('chat_ref',
+                                        isEqualTo: widget.chatDoc!.reference)
+                                    .orderBy('created_time', descending: true)
+                                    .limit(100),
+                          ),
+                          builder: (context, snapshot) {
+                            if (snapshot.connectionState ==
+                                ConnectionState.waiting) {
+                              return const Center(
+                                  child: CircularProgressIndicator());
+                            }
 
-                    if (snapshot.hasError) {
-                      return Center(
-                        child: Text('Error: ${snapshot.error}'),
-                      );
-                    }
+                            if (snapshot.hasError) {
+                              return Center(
+                                child: Text('Error: ${snapshot.error}'),
+                              );
+                            }
 
-                    if (!snapshot.hasData || snapshot.data!.isEmpty) {
-                      return _buildEmptyState();
-                    }
+                            if (!snapshot.hasData || snapshot.data!.isEmpty) {
+                              return _buildEmptyState();
+                            }
 
-                    final allTodos = snapshot.data!;
+                            final allTodos = snapshot.data!;
 
-                    // Deduplicate tasks by title - show only one task per unique title
-                    // This prevents duplicate tasks from showing on the group page
-                    final Map<String, ActionItemsRecord> uniqueTodos = {};
-                    for (var todo in allTodos) {
-                      if (!uniqueTodos.containsKey(todo.title)) {
-                        uniqueTodos[todo.title] = todo;
-                      }
-                    }
-                    final deduplicatedTodos = uniqueTodos.values.toList();
+                            // Deduplicate tasks by title - show only one task per unique title
+                            // This prevents duplicate tasks from showing on the group page
+                            final Map<String, ActionItemsRecord> uniqueTodos =
+                                {};
+                            for (var todo in allTodos) {
+                              if (!uniqueTodos.containsKey(todo.title)) {
+                                uniqueTodos[todo.title] = todo;
+                              }
+                            }
+                            final deduplicatedTodos =
+                                uniqueTodos.values.toList();
 
-                    return SingleChildScrollView(
-                      child: Padding(
-                        padding: const EdgeInsets.all(16.0),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            // Add New Button
-                            Align(
-                              alignment: Alignment.centerRight,
-                              child: Material(
-                                color: const Color(0xFF3B82F6),
-                                borderRadius: BorderRadius.circular(6),
-                                child: InkWell(
-                                  onTap: () => _showAddNewDialog(),
-                                  borderRadius: BorderRadius.circular(6),
-                                  child: Container(
-                                    padding: const EdgeInsets.symmetric(
-                                        horizontal: 10, vertical: 6),
-                                    decoration: BoxDecoration(
-                                      color: const Color(0xFF3B82F6),
-                                      borderRadius: BorderRadius.circular(6),
-                                    ),
-                                    child: const Text(
-                                      '+ Add',
-                                      style: TextStyle(
-                                        fontFamily: 'Inter',
-                                        fontSize: 12,
-                                        fontWeight: FontWeight.w600,
-                                        color: Colors.white,
+                            return SingleChildScrollView(
+                              child: Padding(
+                                padding: const EdgeInsets.all(12.0),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    // Add New Button
+                                    Align(
+                                      alignment: Alignment.centerRight,
+                                      child: Material(
+                                        color: const Color(0xFF3B82F6),
+                                        borderRadius: BorderRadius.circular(6),
+                                        child: InkWell(
+                                          onTap: () => _showAddNewDialog(),
+                                          borderRadius:
+                                              BorderRadius.circular(6),
+                                          child: Container(
+                                            padding: const EdgeInsets.symmetric(
+                                                horizontal: 10, vertical: 6),
+                                            decoration: BoxDecoration(
+                                              color: const Color(0xFF3B82F6),
+                                              borderRadius:
+                                                  BorderRadius.circular(6),
+                                            ),
+                                            child: const Text(
+                                              '+ Add',
+                                              style: TextStyle(
+                                                fontFamily: 'Inter',
+                                                fontSize: 12,
+                                                fontWeight: FontWeight.w600,
+                                                color: Colors.white,
+                                              ),
+                                            ),
+                                          ),
+                                        ),
                                       ),
                                     ),
-                                  ),
+                                    const SizedBox(height: 16),
+
+                                    // Todo List
+                                    ListView.builder(
+                                      shrinkWrap: true,
+                                      physics:
+                                          const NeverScrollableScrollPhysics(),
+                                      itemCount: deduplicatedTodos.length,
+                                      itemBuilder: (context, index) {
+                                        final todo = deduplicatedTodos[index];
+                                        final isCompleting = _completingTasks
+                                            .containsKey(todo.reference.id);
+                                        final progress =
+                                            _completingTasks[todo.reference.id];
+                                        final isExpanded = _expandedDetails
+                                            .contains(todo.reference.id);
+                                        final pending = _pendingStatusChange[
+                                            todo.reference.id];
+                                        final displayCompleted = pending != null
+                                            ? (pending == 'completed')
+                                            : (_completedTasks.contains(
+                                                    todo.reference.path) ||
+                                                todo.status == 'completed');
+                                        final checkboxEnabled =
+                                            !isCompleting && pending == null;
+
+                                        return ActionItemCard(
+                                          key: ValueKey(todo.reference.id),
+                                          todo: todo,
+                                          isCompleting: isCompleting,
+                                          progress: progress,
+                                          isExpanded: isExpanded,
+                                          displayCompleted: displayCompleted,
+                                          checkboxEnabled: checkboxEnabled,
+                                          onToggleExpanded: () {
+                                            setState(() {
+                                              final id = todo.reference.id;
+                                              if (_expandedDetails
+                                                  .contains(id)) {
+                                                _expandedDetails.remove(id);
+                                              } else {
+                                                _expandedDetails.add(id);
+                                              }
+                                            });
+                                          },
+                                          onToggleComplete: (value) =>
+                                              _handleTaskToggle(todo, value),
+                                          onEdit: () => _showEditDialog(todo),
+                                          onDelete: () =>
+                                              _handleDeleteTask(todo),
+                                        );
+                                      },
+                                    ),
+                                  ],
                                 ),
                               ),
-                            ),
-                            const SizedBox(height: 16),
-
-                            // Todo List
-                            ListView.builder(
-                              shrinkWrap: true,
-                              physics: const NeverScrollableScrollPhysics(),
-                              itemCount: deduplicatedTodos.length,
-                              itemBuilder: (context, index) {
-                                final todo = deduplicatedTodos[index];
-                                final isCompleting = _completingTasks
-                                    .containsKey(todo.reference.id);
-                                final progress =
-                                    _completingTasks[todo.reference.id];
-                                final isExpanded = _expandedDetails
-                                    .contains(todo.reference.id);
-                                final pending =
-                                    _pendingStatusChange[todo.reference.id];
-                                final displayCompleted = pending != null
-                                    ? (pending == 'completed')
-                                    : (_completedTasks
-                                            .contains(todo.reference.path) ||
-                                        todo.status == 'completed');
-                                final checkboxEnabled =
-                                    !isCompleting && pending == null;
-
-                                return ActionItemCard(
-                                  key: ValueKey(todo.reference.id),
-                                  todo: todo,
-                                  isCompleting: isCompleting,
-                                  progress: progress,
-                                  isExpanded: isExpanded,
-                                  displayCompleted: displayCompleted,
-                                  checkboxEnabled: checkboxEnabled,
-                                  onToggleExpanded: () {
-                                    setState(() {
-                                      final id = todo.reference.id;
-                                      if (_expandedDetails.contains(id)) {
-                                        _expandedDetails.remove(id);
-                                      } else {
-                                        _expandedDetails.add(id);
-                                      }
-                                    });
-                                  },
-                                  onToggleComplete: (value) =>
-                                      _handleTaskToggle(todo, value),
-                                  onEdit: () => _showEditDialog(todo),
-                                  onDelete: () => _handleDeleteTask(todo),
-                                );
-                              },
-                            ),
-                          ],
+                            );
+                          },
                         ),
-                      ),
-                    );
-                  },
                 ),
+              ),
+            ),
+          ),
         ),
-      ),
+      ],
     );
   }
 

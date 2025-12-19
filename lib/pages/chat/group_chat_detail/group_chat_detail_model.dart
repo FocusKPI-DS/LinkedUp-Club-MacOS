@@ -34,6 +34,45 @@ class GroupChatDetailModel extends FlutterFlowModel<GroupChatDetailWidget> {
 
   bool showAddUserPanel = false;
 
+  // Action tasks inline view - expanded/collapsed state
+  bool showActionTasks = false;
+
+  // Media/Links/Docs view state
+  bool showMediaLinksDocs = false;
+
+  // Inline editing state
+  bool isEditingName = false;
+  bool isEditingDescription = false;
+  TextEditingController? groupNameController;
+  TextEditingController? groupDescriptionController;
+
+  // Group member search
+  TextEditingController? groupMemberSearchController;
+  List<DocumentReference> selectedMembersToAdd = [];
+  void addToSelectedMembersToAdd(DocumentReference item) =>
+      selectedMembersToAdd.add(item);
+  void removeFromSelectedMembersToAdd(DocumentReference item) =>
+      selectedMembersToAdd.remove(item);
+  void removeAtIndexFromSelectedMembersToAdd(int index) =>
+      selectedMembersToAdd.removeAt(index);
+  void insertAtIndexInSelectedMembersToAdd(int index, DocumentReference item) =>
+      selectedMembersToAdd.insert(index, item);
+  void updateSelectedMembersToAddAtIndex(
+          int index, Function(DocumentReference) updateFn) =>
+      selectedMembersToAdd[index] = updateFn(selectedMembersToAdd[index]);
+  void clearSelectedMembersToAdd() => selectedMembersToAdd.clear();
+
+  // User references for add members dialog
+  List<DocumentReference> userRef = [];
+  void addToUserRef(DocumentReference item) => userRef.add(item);
+  void removeFromUserRef(DocumentReference item) => userRef.remove(item);
+  void removeAtIndexFromUserRef(int index) => userRef.removeAt(index);
+  void insertAtIndexInUserRef(int index, DocumentReference item) =>
+      userRef.insert(index, item);
+  void updateUserRefAtIndex(int index, Function(DocumentReference) updateFn) =>
+      userRef[index] = updateFn(userRef[index]);
+  void clearUserRef() => userRef.clear();
+
   List<ReportsRecord> report = [];
   void addToReport(ReportsRecord item) => report.add(item);
   void removeFromReport(ReportsRecord item) => report.remove(item);
@@ -57,10 +96,16 @@ class GroupChatDetailModel extends FlutterFlowModel<GroupChatDetailWidget> {
   @override
   void initState(BuildContext context) {
     eventComponentModel = createModel(context, () => EventComponentModel());
+    groupMemberSearchController = TextEditingController();
+    groupNameController = TextEditingController();
+    groupDescriptionController = TextEditingController();
   }
 
   @override
   void dispose() {
     eventComponentModel.dispose();
+    groupMemberSearchController?.dispose();
+    groupNameController?.dispose();
+    groupDescriptionController?.dispose();
   }
 }

@@ -7,9 +7,9 @@ import 'package:provider/provider.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_web_plugins/url_strategy.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:cached_network_image/cached_network_image.dart';
-import 'package:get/get.dart';
 
 // Import for macOS camera delegate
 import 'package:image_picker_platform_interface/image_picker_platform_interface.dart';
@@ -22,10 +22,13 @@ import '/main/home/home_widget.dart';
 // import '/pages/chat/chat/chat_widget.dart'; // Commented out - using MobileChat (now called Chat) instead
 import '/pages/mobile_chat/mobile_chat_widget.dart';
 import '/pages/desktop_chat/desktop_chat_widget.dart';
+import '/pages/desktop_chat/chat_controller.dart';
+import '/pages/gmail/gmail_widget.dart';
+import '/pages/gmail/gmail_mobile_widget.dart';
+import 'package:get/get.dart';
 import 'auth/firebase_auth/firebase_user_provider.dart';
 import 'auth/firebase_auth/auth_util.dart';
 import 'backend/backend.dart';
-import 'pages/desktop_chat/chat_controller.dart';
 import 'backend/firebase/firebase_config.dart';
 import 'flutter_flow/flutter_flow_util.dart';
 import 'flutter_flow/nav/nav.dart';
@@ -116,6 +119,9 @@ void main() async {
       }
     }
 
+    // Gmail prefetch will be triggered when user authentication is confirmed
+    // via authenticatedUserStream listener
+
     runApp(MultiProvider(
       providers: [
         ChangeNotifierProvider(
@@ -142,6 +148,70 @@ void main() async {
         ),
       ),
     ));
+  }
+}
+
+// Flag to prevent duplicate prefetch calls
+bool _gmailPrefetchTriggered = false;
+
+/// Trigger Gmail prefetch if user is authenticated and Gmail is connected
+/// This is called from authenticatedUserStream listener to ensure user is fully authenticated
+void _triggerGmailPrefetchIfConnected() async {
+  // Prevent duplicate calls
+  if (_gmailPrefetchTriggered) {
+    return;
+  }
+
+  try {
+    // Small delay to ensure auth token is ready
+    await Future.delayed(const Duration(milliseconds: 500));
+
+    // Check if user is authenticated
+    if (currentUser == null || currentUserUid.isEmpty) {
+      print('📧 Gmail prefetch: User not authenticated, skipping');
+      return;
+    }
+
+    // Check if Gmail is connected by reading user document
+    try {
+      final userDoc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(currentUserUid)
+          .get();
+
+      if (!userDoc.exists) {
+        print('📧 Gmail prefetch: User document not found, skipping');
+        return;
+      }
+
+      final userData = userDoc.data();
+      if (userData == null || userData['gmail_connected'] != true) {
+        print('📧 Gmail prefetch: Gmail not connected, skipping');
+        return;
+      }
+
+      // Mark as triggered to prevent duplicate calls
+      _gmailPrefetchTriggered = true;
+
+      // Trigger priority prefetch (top 10 emails) - fire and forget
+      print('📧 Gmail prefetch: Triggering priority fetch...');
+      actions.gmailPrefetchPriority().then((result) {
+        if (result != null && result['success'] == true) {
+          print('✅ Gmail prefetch: Priority emails cached successfully');
+        } else {
+          print('⚠️ Gmail prefetch: Priority fetch failed (non-critical)');
+        }
+      }).catchError((error) {
+        print('⚠️ Gmail prefetch: Error (non-critical): $error');
+        // Reset flag on error so it can retry on next auth event
+        _gmailPrefetchTriggered = false;
+      });
+    } catch (e) {
+      print(
+          '⚠️ Gmail prefetch: Error checking Gmail connection (non-critical): $e');
+    }
+  } catch (e) {
+    print('⚠️ Gmail prefetch: Initialization error (non-critical): $e');
   }
 }
 
@@ -358,6 +428,11 @@ class _MyAppState extends State<MyApp> {
     if (!kIsWeb && !Platform.isMacOS) {
       revenue_cat.login(user?.uid);
     }
+
+    // Trigger Gmail prefetch when user is authenticated
+    if (user != null && user.uid.isNotEmpty) {
+      _triggerGmailPrefetchIfConnected();
+    }
   });
   // ❌ DISABLED: Causes race condition with ensureFcmToken() called from home/discover
   // The manual ensureFcmToken() in home_widget.dart (line 71) handles token registration
@@ -472,16 +547,97 @@ class NavBarPage extends StatefulWidget {
 }
 
 /// This is the private State class that goes with NavBarPage.
-class _NavBarPageState extends State<NavBarPage> {
+class _NavBarPageState extends State<NavBarPage> with WidgetsBindingObserver {
   String _currentPageName = 'Home';
   late Widget? _currentPage;
   bool _isChatOpen = false;
 
+  // Presence system for online status (like Slack)
+  Timer? _inactivityTimer;
+  static const Duration _inactivityThreshold = Duration(minutes: 10);
+
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _currentPageName = widget.initialPage ?? _currentPageName;
     _currentPage = widget.page;
+    
+    // Initialize presence system after a delay to ensure user is loaded
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      Future.delayed(Duration(milliseconds: 500), () {
+        _initializePresence();
+      });
+    });
+  }
+
+  // Initialize presence system (like Slack)
+  void _initializePresence() {
+    if (currentUserReference == null) {
+      return;
+    }
+    _updateOnlineStatus(true);
+    _resetInactivityTimer();
+  }
+
+  // Track user activity and reset inactivity timer
+  void _trackActivity() {
+    _resetInactivityTimer();
+    if (currentUserReference != null) {
+      UsersRecord.getDocumentOnce(currentUserReference!).then((user) {
+        if (!user.isOnline) {
+          _updateOnlineStatus(true);
+        }
+      });
+    }
+  }
+
+  // Reset inactivity timer (10 minutes like Slack)
+  void _resetInactivityTimer() {
+    _inactivityTimer?.cancel();
+    _inactivityTimer = Timer(_inactivityThreshold, () {
+      _updateOnlineStatus(false);
+    });
+  }
+
+  // Update online status in Firestore
+  Future<void> _updateOnlineStatus(bool isOnline) async {
+    if (currentUserReference == null) return;
+
+    try {
+      await currentUserReference!.update({
+        'is_online': isOnline,
+      });
+    } catch (e) {
+      // Silently fail - don't spam console
+    }
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    super.didChangeAppLifecycleState(state);
+    switch (state) {
+      case AppLifecycleState.resumed:
+        _trackActivity();
+        _updateOnlineStatus(true);
+        break;
+      case AppLifecycleState.paused:
+      case AppLifecycleState.inactive:
+      case AppLifecycleState.detached:
+        _updateOnlineStatus(false);
+        _inactivityTimer?.cancel();
+        break;
+      case AppLifecycleState.hidden:
+        break;
+    }
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _inactivityTimer?.cancel();
+    _updateOnlineStatus(false);
+    super.dispose();
   }
 
   void _setCurrentPageName(String pageName, Map<String, Widget> tabs) {
@@ -503,6 +659,11 @@ class _NavBarPageState extends State<NavBarPage> {
 
   @override
   Widget build(BuildContext context) {
+    // Track activity when widget is built (user is interacting)
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _trackActivity();
+    });
+    
     final tabs = {
       'Home': const HomeWidget(),
       // 'Chat': const ChatWidget(), // Commented out - using MobileChat (now called Chat) instead
@@ -513,7 +674,9 @@ class _NavBarPageState extends State<NavBarPage> {
           });
         },
       ),
-      'DesktopChat': const DesktopChatWidget(), // Desktop chat for macOS
+      'DesktopChat': DesktopChatWidget(), // Desktop chat for macOS
+      'Gmail': const GmailWidget(), // Gmail page for macOS
+      'GmailMobile': const GmailMobileWidget(), // Gmail mobile page for iOS
       'AIAssistant': const AIAssistantWidget(),
       'MobileAssistant': const MobileAssistantWidget(), // Mobile AI Assistant
       // 'Discover': const DiscoverWidget(), // Commented out since Home serves the same purpose
@@ -529,12 +692,14 @@ class _NavBarPageState extends State<NavBarPage> {
       // 'Chat': 1, // Commented out - using MobileChat instead
       'MobileChat': 1, // Chat (renamed from Mobile Chat) - for iOS
       'DesktopChat': 1, // Desktop Chat - for macOS
-      'AIAssistant': 2, // Desktop AI Assistant
-      'MobileAssistant': 2, // Mobile AI Assistant - for iOS
+      'Gmail': 2, // Gmail - for macOS
+      'GmailMobile': 2, // Gmail Mobile - for iOS
+      'AIAssistant': 3, // Desktop AI Assistant
+      'MobileAssistant': 3, // Mobile AI Assistant - for iOS
       // 'Discover': 3, // Commented out
-      'Announcements': 3, // Updated indices
-      'ProfileSettings': 4, // Settings
-      'MobileSettings': 4, // Mobile Settings
+      'Announcements': 4, // Updated indices
+      'ProfileSettings': 5, // Settings
+      'MobileSettings': 5, // Mobile Settings
     };
 
     final currentIndex = navItemToIndex[_currentPageName] ?? 0;
@@ -630,71 +795,141 @@ class _NavBarPageState extends State<NavBarPage> {
       return SizedBox.shrink();
     }
 
-    return StreamBuilder<List<ChatsRecord>>(
-      stream: queryChatsRecord(
-        queryBuilder: (chats) => chats
-            .where('members', arrayContains: currentUserReference)
-            .orderBy('last_message_at', descending: true),
-      ),
-      builder: (context, snapshot) {
-        if (!snapshot.hasData) {
-          return SizedBox.shrink();
-        }
-
-        final chats = snapshot.data!;
-        if (chats.isEmpty) {
-          return SizedBox.shrink();
-        }
-
-        // Check if there's any unread message in any chat
-        bool hasUnread = false;
-        DateTime? latestUnreadTime;
-
-        for (final chat in chats) {
-          // Check if current user has unread messages in this chat
-          if (chat.lastMessage.isNotEmpty &&
-              chat.lastMessageSent != currentUserReference &&
-              !chat.lastMessageSeen.contains(currentUserReference)) {
-            hasUnread = true;
-            if (chat.lastMessageAt != null) {
-              if (latestUnreadTime == null ||
-                  chat.lastMessageAt!.isAfter(latestUnreadTime)) {
-                latestUnreadTime = chat.lastMessageAt;
-              }
-            }
+    // Try to use ChatController if available, otherwise fall back to chat-level counting
+    try {
+      final chatController = Get.find<ChatController>();
+      
+      return StreamBuilder<int>(
+        stream: chatController.getTotalUnreadMessageCount(),
+        builder: (context, snapshot) {
+          if (!snapshot.hasData || snapshot.data == null) {
+            return SizedBox.shrink();
           }
-        }
 
-        if (!hasUnread) {
-          return SizedBox.shrink();
-        }
+          final unreadCount = snapshot.data!;
 
-        // Check if Chat page was opened after the latest unread message
-        final lastOpened = FFAppState().chatPageLastOpened;
-        if (lastOpened != null &&
-            latestUnreadTime != null &&
-            lastOpened.isAfter(latestUnreadTime)) {
-          return SizedBox.shrink();
-        }
+          if (unreadCount == 0) {
+            return SizedBox.shrink();
+          }
 
-        // Show red dot indicator
-        return Positioned(
-          right: -4,
-          top: -2,
-          child: Container(
-            width: 8,
-            height: 8,
-            decoration: BoxDecoration(
-              color: Colors.red,
-              shape: BoxShape.circle,
-              border: Border.all(
-                color: Color(0xFF2D3142), // Background color of navbar
-                width: 1.5,
+          // Show blue badge with total unread message count
+          return Positioned(
+            right: -4,
+            top: -4,
+            child: Container(
+              padding: EdgeInsets.symmetric(horizontal: unreadCount > 99 ? 4 : 3, vertical: 3),
+              decoration: BoxDecoration(
+                color: Color(0xFF3B82F6),
+                shape: BoxShape.circle,
+                border: Border.all(
+                  color: Colors.white,
+                  width: 1.5,
+                ),
+              ),
+              constraints: BoxConstraints(
+                minWidth: 18,
+                minHeight: 18,
+              ),
+              child: Center(
+                child: Text(
+                  unreadCount > 99 ? '99+' : '$unreadCount',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: unreadCount > 99 ? 8 : 9,
+                    fontWeight: FontWeight.w700,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
               ),
             ),
-          ),
-        );
-      },
+          );
+        },
+      );
+    } catch (e) {
+      // ChatController not available, use fallback method
+      return StreamBuilder<List<ChatsRecord>>(
+        stream: queryChatsRecord(
+          queryBuilder: (chats) => chats
+              .where('members', arrayContains: currentUserReference)
+              .orderBy('last_message_at', descending: true),
+        ),
+        builder: (context, snapshot) {
+          if (!snapshot.hasData) {
+            return SizedBox.shrink();
+          }
+
+          final chats = snapshot.data!;
+          if (chats.isEmpty) {
+            return SizedBox.shrink();
+          }
+
+          // Count chats with unread messages (fallback)
+          int unreadChatCount = 0;
+          for (final chat in chats) {
+            if (chat.lastMessage.isNotEmpty &&
+                chat.lastMessageSent != currentUserReference &&
+                !chat.lastMessageSeen.contains(currentUserReference)) {
+              unreadChatCount++;
+            }
+          }
+
+          if (unreadChatCount == 0) {
+            return SizedBox.shrink();
+          }
+
+          // Show blue badge with count
+          return Positioned(
+            right: -4,
+            top: -4,
+            child: Container(
+              padding: EdgeInsets.all(3),
+              decoration: BoxDecoration(
+                color: Color(0xFF3B82F6),
+                shape: BoxShape.circle,
+                border: Border.all(
+                  color: Colors.white,
+                  width: 1.5,
+                ),
+              ),
+              constraints: BoxConstraints(
+                minWidth: 16,
+                minHeight: 16,
+              ),
+              child: Center(
+                child: Text(
+                  unreadChatCount > 99 ? '99+' : '$unreadChatCount',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 9,
+                    fontWeight: FontWeight.w700,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+              ),
+            ),
+          );
+        },
+      );
+    }
+  }
+
+  Widget _buildNavItemWithTooltip({
+    required Map<String, dynamic> item,
+    required bool isSelected,
+    required Map<String, int> navItemToIndex,
+    required int currentIndex,
+    required Map<String, Widget> tabs,
+    required void Function(VoidCallback) safeSetState,
+  }) {
+    return _NavItemWithTooltip(
+      item: item,
+      isSelected: isSelected,
+      onTap: () => safeSetState(() {
+        _currentPage = null;
+        _setCurrentPageName(item['page'] as String, tabs);
+      }),
+      buildNewsUnreadIndicator: _buildNewsUnreadIndicator,
+      buildChatUnreadIndicator: _buildChatUnreadIndicator,
     );
   }
 
@@ -717,6 +952,11 @@ class _NavBarPageState extends State<NavBarPage> {
         'page': 'DesktopChat', // Desktop chat for macOS and web
       },
       {
+        'icon': Icons.mail_outline_rounded,
+        'label': 'Gmail',
+        'page': 'Gmail', // Gmail for macOS and web
+      },
+      {
         'icon': 'assets/images/67b27b2cda06e9c69e5d000615c1153f80b09576.png',
         'label': 'LonaAI',
         'page': 'AIAssistant',
@@ -726,552 +966,387 @@ class _NavBarPageState extends State<NavBarPage> {
         'label': 'News',
         'page': 'Announcements',
       },
-      {
-        'icon': Icons.settings_outlined,
-        'label': 'Settings',
-        'page': 'ProfileSettings', // Desktop settings for macOS/web
-      },
     ];
 
+    // Settings button (separated to place at bottom)
+    final settingsItem = {
+      'icon': Icons.settings_outlined,
+      'label': 'Settings',
+      'page': 'ProfileSettings', // Desktop settings for macOS/web
+    };
+
     return Container(
-      width: 100,
+      width: 70,
       height: double.infinity,
       decoration: BoxDecoration(
-        color: Color(0xFF2D3142),
+        color: Colors.white,
         border: Border(
           right: BorderSide(
-            color: Color(0xFF374151),
+            color: Color(0xFFE5E7EB),
             width: 1,
           ),
         ),
       ),
       child: Column(
         children: [
-          // Workspace Name at top (like Slack)
+          // User Profile Photo at top
           if (currentUserReference != null)
-            StreamBuilder<UsersRecord>(
-              stream: UsersRecord.getDocument(currentUserReference ??
-                  FirebaseFirestore.instance
-                      .collection('users')
-                      .doc('placeholder')),
-              builder: (context, snapshot) {
-                if (!snapshot.hasData || currentUserReference == null) {
-                  return SizedBox(height: 20);
-                }
-
-                final currentUser = snapshot.data!;
-
-                // Get all workspace memberships
-                return StreamBuilder<List<WorkspaceMembersRecord>>(
-                  stream: queryWorkspaceMembersRecord(
-                    queryBuilder: (q) =>
-                        q.where('user_ref', isEqualTo: currentUserReference),
-                  ),
-                  builder: (context, membershipSnapshot) {
-                    if (!membershipSnapshot.hasData) {
-                      return SizedBox(height: 20);
-                    }
-
-                    final memberships = membershipSnapshot.data!;
-
-                    // If no workspace, show message
-                    if (!currentUser.hasCurrentWorkspaceRef()) {
-                      return Container(
-                        width: double.infinity,
-                        margin: EdgeInsets.only(
-                            top: 16, bottom: 20, left: 8, right: 8),
-                        padding:
-                            EdgeInsets.symmetric(vertical: 16, horizontal: 12),
-                        decoration: BoxDecoration(
-                          color: Color(0xFF374151),
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: Text(
-                          'No Workspace',
-                          textAlign: TextAlign.center,
-                          style: TextStyle(
-                            color: Color(0xFF9CA3AF),
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      );
-                    }
-
-                    // Show current workspace with switcher
-                    final workspaceRef = currentUser.currentWorkspaceRef;
-                    if (workspaceRef == null) {
-                      return Container(
-                        width: double.infinity,
-                        margin: EdgeInsets.only(
-                            top: 16, bottom: 20, left: 8, right: 8),
-                        padding:
-                            EdgeInsets.symmetric(vertical: 16, horizontal: 12),
-                        decoration: BoxDecoration(
-                          color: Color(0xFF374151),
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: Text(
-                          'No Workspace',
-                          textAlign: TextAlign.center,
-                          style: TextStyle(
-                            color: Color(0xFF9CA3AF),
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      );
-                    }
-
-                    return FutureBuilder<WorkspacesRecord>(
-                      future: WorkspacesRecord.getDocumentOnce(workspaceRef),
-                      builder: (context, workspaceSnapshot) {
-                        final workspaceName = workspaceSnapshot.hasData
-                            ? workspaceSnapshot.data?.name ?? 'Loading...'
-                            : 'Loading...';
-
-                        // If only one workspace, just show it (Slack style)
-                        if (memberships.length <= 1) {
-                          final workspace = workspaceSnapshot.data;
-                          final hasLogo =
-                              workspace?.logoUrl.isNotEmpty ?? false;
-
-                          return Container(
-                            width: double.infinity,
-                            margin: EdgeInsets.only(
-                                top: 16, bottom: 20, left: 8, right: 8),
-                            padding: EdgeInsets.symmetric(
-                                vertical: 16, horizontal: 8),
-                            decoration: BoxDecoration(
-                              color: Color(0xFF1F2937),
-                              borderRadius: BorderRadius.circular(12),
-                              boxShadow: [
-                                BoxShadow(
-                                  color: Colors.black.withOpacity(0.1),
-                                  blurRadius: 8,
-                                  offset: Offset(0, 2),
-                                ),
-                              ],
-                            ),
-                            child: Column(
-                              children: [
-                                // Workspace logo or initial
-                                Container(
+            Container(
+              margin: EdgeInsets.only(top: 16, bottom: 20),
+              child: InkWell(
+                onTap: () {
+                  context.pushNamed(MobileSettingsWidget.routeName);
+                },
+                borderRadius: BorderRadius.circular(24),
+                child: StreamBuilder<UsersRecord>(
+                  stream: UsersRecord.getDocument(currentUserReference!),
+                  builder: (context, userSnapshot) {
+                    final isOnline = userSnapshot.hasData && 
+                                    userSnapshot.data != null && 
+                                    userSnapshot.data!.isOnline;
+                    
+                    return Stack(
+                      clipBehavior: Clip.none,
+                      children: [
+                        currentUserPhoto.isNotEmpty
+                            ? ClipOval(
+                                child: CachedNetworkImage(
+                                  imageUrl: currentUserPhoto,
                                   width: 48,
                                   height: 48,
-                                  decoration: BoxDecoration(
-                                    color: hasLogo
-                                        ? Colors.white
-                                        : Color(0xFF3B82F6),
-                                    borderRadius: BorderRadius.circular(10),
-                                  ),
-                                  child: hasLogo
-                                      ? ClipRRect(
-                                          borderRadius:
-                                              BorderRadius.circular(10),
-                                          child: CachedNetworkImage(
-                                            imageUrl: workspace?.logoUrl ?? '',
-                                            width: 48,
-                                            height: 48,
-                                            fit: BoxFit.cover,
-                                            placeholder: (context, url) =>
-                                                Center(
-                                              child: CircularProgressIndicator(
-                                                strokeWidth: 2,
-                                                valueColor:
-                                                    AlwaysStoppedAnimation<
-                                                        Color>(
-                                                  Color(0xFF3B82F6),
-                                                ),
-                                              ),
-                                            ),
-                                            errorWidget:
-                                                (context, url, error) => Center(
-                                              child: Text(
-                                                workspaceName.isNotEmpty
-                                                    ? workspaceName[0]
-                                                        .toUpperCase()
-                                                    : 'W',
-                                                style: TextStyle(
-                                                  color: Colors.white,
-                                                  fontSize: 20,
-                                                  fontWeight: FontWeight.w700,
-                                                ),
-                                              ),
-                                            ),
-                                          ),
-                                        )
-                                      : Center(
-                                          child: Text(
-                                            workspaceName.isNotEmpty
-                                                ? workspaceName[0].toUpperCase()
-                                                : 'W',
-                                            style: TextStyle(
-                                              color: Colors.white,
-                                              fontSize: 20,
-                                              fontWeight: FontWeight.w700,
-                                            ),
-                                          ),
-                                        ),
-                                ),
-                                SizedBox(height: 8),
-                                Text(
-                                  workspaceName,
-                                  textAlign: TextAlign.center,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.visible,
-                                  style: TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 11,
-                                    fontWeight: FontWeight.w700,
-                                    letterSpacing: 0.2,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          );
-                        }
-
-                        // Multiple workspaces - show dropdown (Slack style)
-                        final workspace = workspaceSnapshot.data;
-                        final hasLogo = workspace?.logoUrl.isNotEmpty ?? false;
-
-                        return PopupMenuButton<DocumentReference>(
-                          offset: Offset(100, 0),
-                          child: Container(
-                            width: double.infinity,
-                            margin: EdgeInsets.only(
-                                top: 16, bottom: 20, left: 8, right: 8),
-                            padding: EdgeInsets.symmetric(
-                                vertical: 16, horizontal: 8),
-                            decoration: BoxDecoration(
-                              color: Color(0xFF1F2937),
-                              borderRadius: BorderRadius.circular(12),
-                              boxShadow: [
-                                BoxShadow(
-                                  color: Colors.black.withOpacity(0.1),
-                                  blurRadius: 8,
-                                  offset: Offset(0, 2),
-                                ),
-                              ],
-                            ),
-                            child: Column(
-                              children: [
-                                // Workspace logo or initial
-                                Container(
-                                  width: 48,
-                                  height: 48,
-                                  decoration: BoxDecoration(
-                                    color: hasLogo
-                                        ? Colors.white
-                                        : Color(0xFF3B82F6),
-                                    borderRadius: BorderRadius.circular(10),
-                                  ),
-                                  child: hasLogo
-                                      ? ClipRRect(
-                                          borderRadius:
-                                              BorderRadius.circular(10),
-                                          child: CachedNetworkImage(
-                                            imageUrl: workspace?.logoUrl ?? '',
-                                            width: 48,
-                                            height: 48,
-                                            fit: BoxFit.cover,
-                                            placeholder: (context, url) =>
-                                                Center(
-                                              child: CircularProgressIndicator(
-                                                strokeWidth: 2,
-                                                valueColor:
-                                                    AlwaysStoppedAnimation<
-                                                        Color>(
-                                                  Color(0xFF3B82F6),
-                                                ),
-                                              ),
-                                            ),
-                                            errorWidget:
-                                                (context, url, error) => Center(
-                                              child: Text(
-                                                workspaceName.isNotEmpty
-                                                    ? workspaceName[0]
-                                                        .toUpperCase()
-                                                    : 'W',
-                                                style: TextStyle(
-                                                  color: Colors.white,
-                                                  fontSize: 20,
-                                                  fontWeight: FontWeight.w700,
-                                                ),
-                                              ),
-                                            ),
-                                          ),
-                                        )
-                                      : Center(
-                                          child: Text(
-                                            workspaceName.isNotEmpty
-                                                ? workspaceName[0].toUpperCase()
-                                                : 'W',
-                                            style: TextStyle(
-                                              color: Colors.white,
-                                              fontSize: 20,
-                                              fontWeight: FontWeight.w700,
-                                            ),
-                                          ),
-                                        ),
-                                ),
-                                SizedBox(height: 8),
-                                Text(
-                                  workspaceName,
-                                  textAlign: TextAlign.center,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.visible,
-                                  style: TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 11,
-                                    fontWeight: FontWeight.w700,
-                                    letterSpacing: 0.2,
-                                  ),
-                                ),
-                                SizedBox(height: 4),
-                                Row(
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  children: [
-                                    Icon(
-                                      Icons.unfold_more_rounded,
-                                      color: Color(0xFF9CA3AF),
-                                      size: 16,
+                                  fit: BoxFit.cover,
+                                  placeholder: (context, url) => Container(
+                                    width: 48,
+                                    height: 48,
+                                    color: Color(0xFFE5E7EB),
+                                    child: Icon(
+                                      Icons.person,
+                                      color: Color(0xFF64748B),
+                                      size: 24,
                                     ),
-                                  ],
+                                  ),
+                                  errorWidget: (context, url, error) => Container(
+                                    width: 48,
+                                    height: 48,
+                                    color: Color(0xFF2563EB),
+                                    child: Center(
+                                      child: Text(
+                                        currentUserDisplayName.isNotEmpty
+                                            ? currentUserDisplayName[0].toUpperCase()
+                                            : 'U',
+                                        style: TextStyle(
+                                          color: Colors.white,
+                                          fontSize: 20,
+                                          fontWeight: FontWeight.w700,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
                                 ),
-                              ],
+                              )
+                            : Container(
+                                width: 48,
+                                height: 48,
+                                decoration: BoxDecoration(
+                                  shape: BoxShape.circle,
+                                  color: Color(0xFF2563EB),
+                                ),
+                                child: Center(
+                                  child: Text(
+                                    currentUserDisplayName.isNotEmpty
+                                        ? currentUserDisplayName[0].toUpperCase()
+                                        : 'U',
+                                    style: TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 20,
+                                      fontWeight: FontWeight.w700,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                        // Green dot indicator for online status (like Slack)
+                        if (isOnline)
+                          Positioned(
+                            right: -1,
+                            bottom: -1,
+                            child: Container(
+                              width: 16,
+                              height: 16,
+                              decoration: BoxDecoration(
+                                color: Color(0xFF10B981), // Green color
+                                shape: BoxShape.circle,
+                                border: Border.all(
+                                  color: Colors.white,
+                                  width: 3,
+                                ),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: Color(0xFF10B981).withOpacity(0.3),
+                                    blurRadius: 4,
+                                    spreadRadius: 1,
+                                  ),
+                                ],
+                              ),
                             ),
                           ),
-                          onSelected: (workspaceRef) async {
-                            // Update user's current workspace
-                            final userRef = currentUserReference;
-                            if (userRef != null) {
-                              await userRef.update({
-                                'current_workspace_ref': workspaceRef,
-                              });
-
-                              // Update chat controller with new workspace
-                              try {
-                                final chatController =
-                                    Get.find<ChatController>();
-                                chatController
-                                    .updateCurrentWorkspace(workspaceRef);
-                              } catch (e) {
-                                // ChatController not found
-                              }
-
-                              // Show confirmation
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(
-                                  content: Text('Workspace switched'),
-                                  duration: Duration(seconds: 2),
-                                ),
-                              );
-
-                              // Refresh the page
-                              safeSetState(() {});
-                            }
-                          },
-                          itemBuilder: (context) {
-                            return memberships.map((membership) {
-                              return PopupMenuItem<DocumentReference>(
-                                value: membership.workspaceRef,
-                                child: FutureBuilder<WorkspacesRecord>(
-                                  future: WorkspacesRecord.getDocumentOnce(
-                                    membership.workspaceRef ??
-                                        FirebaseFirestore.instance
-                                            .collection('workspaces')
-                                            .doc('placeholder'),
-                                  ),
-                                  builder: (context, ws) {
-                                    final name = ws.hasData
-                                        ? ws.data?.name ?? 'Loading...'
-                                        : 'Loading...';
-                                    final isSelected =
-                                        currentUser.currentWorkspaceRef?.id ==
-                                            membership.workspaceRef?.id;
-
-                                    return Row(
-                                      children: [
-                                        if (isSelected)
-                                          Icon(
-                                            Icons.check_circle,
-                                            color: Color(0xFF3B82F6),
-                                            size: 16,
-                                          ),
-                                        if (isSelected) SizedBox(width: 8),
-                                        Expanded(
-                                          child: Text(
-                                            name,
-                                            style: TextStyle(
-                                              fontWeight: isSelected
-                                                  ? FontWeight.w600
-                                                  : FontWeight.w400,
-                                            ),
-                                          ),
-                                        ),
-                                      ],
-                                    );
-                                  },
-                                ),
-                              );
-                            }).toList();
-                          },
-                        );
-                      },
+                      ],
                     );
                   },
-                );
-              },
+                ),
+              ),
             ),
-          // Navigation Items
+          // Navigation Items - Top 40% of navbar
           Expanded(
+            flex: 4, // TWEAK: Flex value for top 40% - currently 4 (40% = 4/10)
             child: Column(
-              mainAxisAlignment: MainAxisAlignment.start,
+              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
               children: navItems.map((item) {
                 final isSelected = navItemToIndex[item['page']] == currentIndex;
 
-                return Container(
-                  width: double.infinity,
-                  margin: EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-                  child: Material(
-                    color: Colors.transparent,
-                    child: InkWell(
-                      onTap: () => safeSetState(() {
-                        _currentPage = null;
-                        _setCurrentPageName(item['page'] as String, tabs);
-                      }),
-                      borderRadius: BorderRadius.circular(12),
-                      child: Container(
-                        height: 56,
-                        decoration: BoxDecoration(
-                          color: isSelected
-                              ? Color(0xFF1F2937)
-                              : Colors.transparent,
-                          borderRadius: BorderRadius.circular(12),
-                          border: isSelected
-                              ? Border.all(
-                                  color: Color(0xFF3B82F6),
-                                  width: 2,
-                                )
-                              : null,
-                        ),
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            // Icon with unread indicator
-                            Stack(
-                              clipBehavior: Clip.none,
-                              children: [
-                                item['icon'] is String
-                                    ? Container(
-                                        width: 24,
-                                        height: 24,
-                                        child: Image.asset(
-                                          item['icon'] as String,
-                                          width: 24,
-                                          height: 24,
-                                          fit: BoxFit.contain,
-                                        ),
-                                      )
-                                    : item['icon'] is IconData
-                                        ? Icon(
-                                            item['icon'] as IconData,
-                                            color: isSelected
-                                                ? Colors.white
-                                                : Color(0xFFD1D5DB),
-                                            size: 24,
-                                          )
-                                        : FaIcon(
-                                            item['icon'] as IconData,
-                                            color: isSelected
-                                                ? Colors.white
-                                                : Color(0xFFD1D5DB),
-                                            size: 20,
-                                          ),
-                                // Red dot indicator for News button
-                                if (item['page'] == 'Announcements')
-                                  _buildNewsUnreadIndicator(),
-                                // Red dot indicator for Chat button
-                                if (item['page'] == 'DesktopChat')
-                                  _buildChatUnreadIndicator(),
-                              ],
-                            ),
-                            SizedBox(height: 4),
-                            // Label
-                            Text(
-                              item['label'] as String,
-                              style: TextStyle(
-                                fontFamily: 'Inter',
-                                color: isSelected
-                                    ? Colors.white
-                                    : Color(0xFFD1D5DB),
-                                fontSize: 10,
-                                fontWeight: isSelected
-                                    ? FontWeight.w600
-                                    : FontWeight.w500,
-                              ),
-                              textAlign: TextAlign.center,
-                              maxLines: 2,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ),
+                return _buildNavItemWithTooltip(
+                  item: item,
+                  isSelected: isSelected,
+                  navItemToIndex: navItemToIndex,
+                  currentIndex: currentIndex,
+                  tabs: tabs,
+                  safeSetState: safeSetState,
                 );
               }).toList(),
             ),
           ),
-          // Logout Button
-          Container(
-            width: double.infinity,
-            margin: EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-            child: Material(
-              color: Colors.transparent,
-              child: InkWell(
-                onTap: () async {
-                  await authManager.signOut();
-                  if (context.mounted) {
-                    context.goNamedAuth('OnBoarding', context.mounted);
-                  }
-                },
-                borderRadius: BorderRadius.circular(12),
-                child: Container(
-                  height: 48,
+          // Spacer to push settings and logout to bottom - 60% of navbar
+          Expanded(
+            flex:
+                6, // TWEAK: Flex value for bottom 60% - currently 6 (60% = 6/10)
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                // Horizontal divider line above Settings
+                Container(
+                  width: 75,
+                  height: 1,
+                  margin: EdgeInsets.only(
+                      bottom:
+                          16), // TWEAK: Spacing above Settings - currently 16px
                   decoration: BoxDecoration(
-                    color: Color(0xFF374151),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      // Logout Icon
-                      Icon(
-                        Icons.logout,
-                        color: Colors.white,
-                        size: 20,
-                      ),
-                      SizedBox(height: 4),
-                      // Logout Label
-                      Text(
-                        'Logout',
-                        style: TextStyle(
-                          fontFamily: 'Inter',
-                          color: Colors.white,
-                          fontSize: 10,
-                          fontWeight: FontWeight.w600,
-                        ),
-                        textAlign: TextAlign.center,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ],
+                    color: Color.fromARGB(255, 120, 125,
+                        142), // TWEAK: Divider color - currently light grey
                   ),
                 ),
-              ),
+                // Settings Button
+                Builder(
+                  builder: (context) {
+                    final isSelected =
+                        navItemToIndex[settingsItem['page']] == currentIndex;
+                    return StatefulBuilder(
+                      builder: (context, setState) {
+                        bool isHovered = false;
+
+                        return MouseRegion(
+                          onEnter: (_) => setState(() => isHovered = true),
+                          onExit: (_) => setState(() => isHovered = false),
+                          child: Stack(
+                            clipBehavior: Clip.none,
+                            children: [
+                              Container(
+                                // TWEAK: Square size - currently 48x48 (perfect square)
+                                width: 48,
+                                height: 48,
+                                margin: EdgeInsets.only(
+                                    bottom:
+                                        12), // TWEAK: Spacing between Settings and Logout
+                                child: Material(
+                                  color: Colors.transparent,
+                                  child: InkWell(
+                                    onTap: () => safeSetState(() {
+                                      _currentPage = null;
+                                      _setCurrentPageName(
+                                          settingsItem['page'] as String, tabs);
+                                    }),
+                                    borderRadius: BorderRadius.circular(12),
+                                    child: Container(
+                                      // TWEAK: Square size - currently 48x48 (perfect square)
+                                      width: 48,
+                                      height: 48,
+                                      decoration: BoxDecoration(
+                                        color: isSelected
+                                            ? Color.fromRGBO(250, 252, 255,
+                                                1) // Very light cyan tint
+                                            : Colors.transparent,
+                                        borderRadius: BorderRadius.circular(12),
+                                        border: isSelected
+                                            ? Border.all(
+                                                color: Color.fromRGBO(230, 235,
+                                                    245, 1), // Light border
+                                                width: 1,
+                                              )
+                                            : null,
+                                        boxShadow: isSelected
+                                            ? [
+                                                BoxShadow(
+                                                  color: Color.fromRGBO(
+                                                      16,
+                                                      184,
+                                                      239,
+                                                      0.08), // Subtle cyan shadow
+                                                  blurRadius: 4,
+                                                  offset: Offset(0, 1),
+                                                  spreadRadius: 0,
+                                                ),
+                                              ]
+                                            : null,
+                                      ),
+                                      child: Center(
+                                        child: Icon(
+                                          settingsItem['icon'] as IconData,
+                                          color:
+                                              Color(0xFF64748B), // Always grey
+                                          size: 28,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                              // Tooltip on hover
+                              if (isHovered)
+                                Positioned(
+                                  left: 60, // Position to the right of the icon
+                                  top: 0,
+                                  bottom: 0,
+                                  child: Center(
+                                    child: Material(
+                                      elevation: 8,
+                                      borderRadius: BorderRadius.circular(6),
+                                      color: Colors.transparent,
+                                      child: Container(
+                                        padding: EdgeInsets.symmetric(
+                                            horizontal: 12, vertical: 6),
+                                        decoration: BoxDecoration(
+                                          color: Colors.white,
+                                          borderRadius:
+                                              BorderRadius.circular(6),
+                                          boxShadow: [
+                                            BoxShadow(
+                                              color: Colors.black
+                                                  .withOpacity(0.15),
+                                              blurRadius: 8,
+                                              offset: Offset(0, 2),
+                                              spreadRadius: 1,
+                                            ),
+                                          ],
+                                        ),
+                                        child: Text(
+                                          settingsItem['label'] as String,
+                                          style: TextStyle(
+                                            color: Colors.black,
+                                            fontSize: 14,
+                                            fontWeight: FontWeight.w500,
+                                            fontFamily: 'Inter',
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                            ],
+                          ),
+                        );
+                      },
+                    );
+                  },
+                ),
+                // Logout Button
+                StatefulBuilder(
+                  builder: (context, setState) {
+                    bool isHovered = false;
+
+                    return MouseRegion(
+                      onEnter: (_) => setState(() => isHovered = true),
+                      onExit: (_) => setState(() => isHovered = false),
+                      child: Stack(
+                        clipBehavior: Clip.none,
+                        children: [
+                          Container(
+                            // TWEAK: Square size - currently 48x48 (perfect square)
+                            width: 48,
+                            height: 48,
+                            margin: EdgeInsets.zero,
+                            child: Material(
+                              color: Colors.transparent,
+                              child: InkWell(
+                                onTap: () async {
+                                  await authManager.signOut();
+                                  if (context.mounted) {
+                                    context.goNamedAuth(
+                                        'OnBoarding', context.mounted);
+                                  }
+                                },
+                                borderRadius: BorderRadius.circular(12),
+                                child: Container(
+                                  // TWEAK: Square size - currently 48x48 (perfect square)
+                                  width: 48,
+                                  height: 48,
+                                  decoration: BoxDecoration(
+                                    color: Color(0xFFF1F5F9),
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                  child: Center(
+                                    child: Icon(
+                                      Icons.logout,
+                                      color: Color(0xFF64748B),
+                                      size: 24,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                          // Tooltip on hover
+                          if (isHovered)
+                            Positioned(
+                              left: 60, // Position to the right of the icon
+                              top: 0,
+                              bottom: 0,
+                              child: Center(
+                                child: Material(
+                                  elevation: 8,
+                                  borderRadius: BorderRadius.circular(6),
+                                  color: Colors.transparent,
+                                  child: Container(
+                                    padding: EdgeInsets.symmetric(
+                                        horizontal: 12, vertical: 6),
+                                    decoration: BoxDecoration(
+                                      color: Colors.white,
+                                      borderRadius: BorderRadius.circular(6),
+                                      boxShadow: [
+                                        BoxShadow(
+                                          color: Colors.black.withOpacity(0.15),
+                                          blurRadius: 8,
+                                          offset: Offset(0, 2),
+                                          spreadRadius: 1,
+                                        ),
+                                      ],
+                                    ),
+                                    child: Text(
+                                      'Logout',
+                                      style: TextStyle(
+                                        color: Colors.black,
+                                        fontSize: 14,
+                                        fontWeight: FontWeight.w500,
+                                        fontFamily: 'Inter',
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                        ],
+                      ),
+                    );
+                  },
+                ),
+              ],
             ),
           ),
           // Bottom spacing
@@ -1300,10 +1375,15 @@ class _NavBarPageState extends State<NavBarPage> {
         'page': 'MobileChat',
       },
       {
-        'icon': 'assets/images/67b27b2cda06e9c69e5d000615c1153f80b09576.png',
-        'label': 'LonaAI',
-        'page': 'MobileAssistant',
+        'icon': Icons.mail_outline_rounded,
+        'label': 'Gmail',
+        'page': 'GmailMobile',
       },
+      // {
+      //   'icon': 'assets/images/67b27b2cda06e9c69e5d000615c1153f80b09576.png',
+      //   'label': 'LonaAI',
+      //   'page': 'MobileAssistant',
+      // }, // Commented out - hiding LonaAI button on iOS
       {
         'icon': Icons.campaign_rounded,
         'label': 'News',
@@ -1417,6 +1497,188 @@ class _NavBarPageState extends State<NavBarPage> {
               ),
             );
           }).toList(),
+        ),
+      ),
+    );
+  }
+}
+
+class _NavItemWithTooltip extends StatefulWidget {
+  final Map<String, dynamic> item;
+  final bool isSelected;
+  final VoidCallback onTap;
+  final Widget Function() buildNewsUnreadIndicator;
+  final Widget Function() buildChatUnreadIndicator;
+
+  const _NavItemWithTooltip({
+    required this.item,
+    required this.isSelected,
+    required this.onTap,
+    required this.buildNewsUnreadIndicator,
+    required this.buildChatUnreadIndicator,
+  });
+
+  @override
+  State<_NavItemWithTooltip> createState() => _NavItemWithTooltipState();
+}
+
+class _NavItemWithTooltipState extends State<_NavItemWithTooltip> {
+  OverlayEntry? _overlayEntry;
+  final GlobalKey _iconKey = GlobalKey();
+
+  void _showTooltip() {
+    if (_overlayEntry != null) return;
+
+    final overlay = Overlay.of(context);
+    final renderBox = _iconKey.currentContext?.findRenderObject() as RenderBox?;
+    if (renderBox == null) return;
+
+    final position = renderBox.localToGlobal(Offset.zero);
+    final size = renderBox.size;
+
+    _overlayEntry = OverlayEntry(
+      builder: (context) => Positioned(
+        left: position.dx, // Start at left edge of icon
+        top: position.dy +
+            size.height +
+            8, // TWEAK: Gap below icon - currently 8px (increase to move down, decrease to move up)
+        child: SizedBox(
+          width: size.width, // Match icon width
+          child: Align(
+            alignment: Alignment.center, // Center the tooltip
+            child: Material(
+              elevation: 12,
+              borderRadius: BorderRadius.circular(6),
+              color: Colors.transparent,
+              child: Container(
+                padding: EdgeInsets.symmetric(horizontal: 9, vertical: 6),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(6),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.2),
+                      blurRadius: 10,
+                      offset: Offset(0, 2),
+                      spreadRadius: 1,
+                    ),
+                  ],
+                ),
+                child: Text(
+                  widget.item['label'] as String,
+                  style: TextStyle(
+                    color: Colors.black,
+                    fontSize: 10,
+                    fontWeight: FontWeight.w500,
+                    fontFamily: 'Inter',
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    overlay.insert(_overlayEntry!);
+  }
+
+  void _hideTooltip() {
+    _overlayEntry?.remove();
+    _overlayEntry = null;
+  }
+
+  @override
+  void dispose() {
+    _hideTooltip();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return MouseRegion(
+      onEnter: (_) => _showTooltip(),
+      onExit: (_) => _hideTooltip(),
+      child: Container(
+        key: _iconKey,
+        // TWEAK: Square size - currently 48x48 (perfect square)
+        width: 48,
+        height: 48,
+        margin: EdgeInsets.zero,
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            onTap: widget.onTap,
+            borderRadius: BorderRadius.circular(12),
+            child: Container(
+              // TWEAK: Square size - currently 48x48 (perfect square)
+              width: 48,
+              height: 48,
+              decoration: BoxDecoration(
+                color: widget.isSelected
+                    ? Color.fromRGBO(250, 252, 255, 1) // Very light cyan tint
+                    : Colors.transparent,
+                borderRadius: BorderRadius.circular(12),
+                border: widget.isSelected
+                    ? Border.all(
+                        color: Color.fromRGBO(230, 235, 245, 1), // Light border
+                        width: 1,
+                      )
+                    : null,
+                boxShadow: widget.isSelected
+                    ? [
+                        BoxShadow(
+                          color: Color.fromRGBO(
+                              16, 184, 239, 0.08), // Subtle cyan shadow
+                          blurRadius: 4,
+                          offset: Offset(0, 1),
+                          spreadRadius: 0,
+                        ),
+                      ]
+                    : null,
+              ),
+              child: Center(
+                child: Stack(
+                  clipBehavior: Clip.none,
+                  children: [
+                    widget.item['icon'] is String
+                        ? Center(
+                            child: Container(
+                              // TWEAK: Icon size for image assets - currently 28
+                              width: 28,
+                              height: 28,
+                              child: Image.asset(
+                                widget.item['icon'] as String,
+                                width: 28,
+                                height: 28,
+                                fit: BoxFit.contain,
+                              ),
+                            ),
+                          )
+                        : widget.item['icon'] is IconData
+                            ? Icon(
+                                widget.item['icon'] as IconData,
+                                color: Color(0xFF64748B), // Always grey
+                                // TWEAK: Icon size for IconData - currently 28
+                                size: 28,
+                              )
+                            : FaIcon(
+                                widget.item['icon'] as IconData,
+                                color: Color(0xFF64748B), // Always grey
+                                // TWEAK: Icon size for FaIcon - currently 24
+                                size: 24,
+                              ),
+                    // Red dot indicator for News button
+                    if (widget.item['page'] == 'Announcements')
+                      widget.buildNewsUnreadIndicator(),
+                    // Red dot indicator for Chat button
+                    if (widget.item['page'] == 'DesktopChat')
+                      widget.buildChatUnreadIndicator(),
+                  ],
+                ),
+              ),
+            ),
+          ),
         ),
       ),
     );

@@ -1,6 +1,7 @@
 import '/auth/firebase_auth/auth_util.dart';
 import '/backend/backend.dart';
 import '/backend/firebase_storage/storage.dart';
+import '/components/invite_friends_button_widget.dart';
 import '/flutter_flow/flutter_flow_icon_button.dart';
 import '/flutter_flow/flutter_flow_util.dart';
 import '/flutter_flow/flutter_flow_widgets.dart';
@@ -123,11 +124,11 @@ class _ChatGroupCreationWidgetState extends State<ChatGroupCreationWidget> {
           backgroundColor: FlutterFlowTheme.of(context).secondaryBackground,
           automaticallyImplyLeading: false,
           leading: FlutterFlowIconButton(
-            borderRadius: 20.0,
+            borderRadius: 8.0,
             buttonSize: 40.0,
             icon: Icon(
-              Icons.arrow_back_ios,
-              color: FlutterFlowTheme.of(context).primaryText,
+              Icons.close,
+              color: const Color(0xFF6B7280),
               size: 20.0,
             ),
             onPressed: () async {
@@ -1908,6 +1909,11 @@ class _ChatGroupCreationWidgetState extends State<ChatGroupCreationWidget> {
                                                 .asValidator(context),
                                           ),
                                         ),
+                                        const SizedBox(height: 16.0),
+                                        const Center(
+                                          child: InviteFriendsButtonWidget(),
+                                        ),
+                                        const SizedBox(height: 16.0),
                                         Builder(
                                           builder: (context) {
                                             final friend =

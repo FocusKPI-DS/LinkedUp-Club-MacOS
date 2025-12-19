@@ -1,0 +1,38 @@
+#!/bin/bash
+
+set -e  # Exit on any error
+
+echo "🚀 Starting deployment process..."
+
+# Step 1: Build Next.js landing page
+echo "📦 Building Next.js landing page..."
+cd nextjs-landing
+npm run build
+cd ..
+
+# Step 2: Clean and build Flutter web app
+echo "📦 Building Flutter web app..."
+flutter clean
+rm -rf build/web
+flutter pub get
+flutter build web --release --web-renderer canvaskit --base-href /app/
+
+# Step 3: Copy Flutter build to Next.js output under /app
+echo "📋 Copying Flutter app to /app directory..."
+rm -rf nextjs-landing/out/app
+mkdir -p nextjs-landing/out/app
+cp -r build/web/* nextjs-landing/out/app/
+
+# Step 4: Deploy to Firebase
+echo "🔥 Deploying to Firebase..."
+firebase deploy --only hosting
+
+echo ""
+echo "✅ Deployment complete!"
+echo "🌐 Landing page: https://linkedup-c3e29.web.app"
+echo "🌐 Flutter app: https://linkedup-c3e29.web.app/app"
+echo ""
+echo "💡 If you still see old version:"
+echo "   1. Hard refresh: Cmd+Shift+R (Mac) or Ctrl+Shift+R (Windows)"
+echo "   2. Clear browser cache"
+echo "   3. Try incognito mode"

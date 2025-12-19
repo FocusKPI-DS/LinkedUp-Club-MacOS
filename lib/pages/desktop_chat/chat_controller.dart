@@ -2,6 +2,7 @@ import '/auth/firebase_auth/auth_util.dart';
 import '/backend/backend.dart';
 import '/custom_code/services/web_notification_service.dart';
 import 'package:get/get.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'dart:async';
 
 enum ChatState { loading, success, error }
@@ -126,15 +127,6 @@ class ChatController extends GetxController {
       return false; // Already marked as seen locally
     }
 
-    // Debug logging
-    print('Checking unread messages for chat: ${chat.reference.id}');
-    print('Last message: "${chat.lastMessage}"');
-    print('Last message sent by: ${chat.lastMessageSent}');
-    print('Current user: $currentUserReference');
-    print('Last message seen by: ${chat.lastMessageSeen}');
-    print(
-        'Has current user seen: ${chat.lastMessageSeen.contains(currentUserReference)}');
-
     // Then check Firestore state
     if (currentUserReference == null) return false;
 
@@ -142,84 +134,256 @@ class ChatController extends GetxController {
         chat.lastMessage.isNotEmpty &&
         chat.lastMessageSent != currentUserReference;
 
-    print('Has unread messages: $hasUnread');
     return hasUnread;
+  }
+
+  // Get unread message count for a specific chat
+  // Returns a stream that efficiently counts unread messages
+  // Uses smart logic: only counts messages at/after lastMessageAt if user hasn't seen last message
+  Stream<int> getUnreadMessageCount(ChatsRecord chat) {
+    if (currentUserReference == null) {
+      return Stream.value(0);
+    }
+
+    // Check local state first - if chat is marked as seen locally, return 0
+    if (locallySeenChats.contains(chat.reference.id)) {
+      return Stream.value(0);
+    }
+
+    // If user has seen the last message, no unread messages
+    if (chat.lastMessageSeen.contains(currentUserReference)) {
+      return Stream.value(0);
+    }
+
+    // If no last message or user sent the last message, no unread
+    if (chat.lastMessage.isEmpty || chat.lastMessageSent == currentUserReference) {
+      return Stream.value(0);
+    }
+
+    // Get the timestamp of the last message - we only count messages at/after this
+    // This prevents counting old messages that don't have isReadBy populated
+    final lastMessageAt = chat.lastMessageAt;
+    if (lastMessageAt == null) {
+      return Stream.value(0);
+    }
+
+    // Stream messages and count only those at/after lastMessageAt that are unread
+    // This ensures we only count NEW messages since the user last saw the chat
+    return queryMessagesRecord(
+      parent: chat.reference,
+      queryBuilder: (messages) => messages
+          .orderBy('created_at', descending: true)
+          .limit(500), // Limit to recent messages for performance
+    ).map((messagesList) {
+      int count = 0;
+      
+      for (final message in messagesList) {
+        // Stop if we've reached messages older than lastMessageAt
+        // All messages before this are considered "seen" (user was in chat before)
+        if (message.createdAt == null || message.createdAt!.isBefore(lastMessageAt)) {
+          break;
+        }
+
+        // Only count messages at/after lastMessageAt that are:
+        // 1. Not sent by current user
+        // 2. Not system messages
+        // 3. Not in isReadBy (truly unread)
+        if (message.senderRef != currentUserReference &&
+            !message.isSystemMessage &&
+            !message.isReadBy.contains(currentUserReference) &&
+            (message.createdAt!.isAfter(lastMessageAt) ||
+             message.createdAt!.isAtSameMomentAs(lastMessageAt))) {
+          count++;
+        }
+      }
+      
+      return count;
+    });
+  }
+
+  // Get total unread message count across all chats
+  // Optimized to efficiently count unread messages across all chats
+  Stream<int> getTotalUnreadMessageCount() {
+    if (currentUserReference == null) {
+      return Stream.value(0);
+    }
+
+    // Use the chats stream and count unread messages efficiently
+    return chats.stream.asyncMap((chatsList) async {
+      int totalCount = 0;
+      
+      // Process chats in batches for better performance
+      final batchSize = 10; // Process 10 chats at a time
+      for (int i = 0; i < chatsList.length; i += batchSize) {
+        final batch = chatsList.skip(i).take(batchSize);
+        
+        final futures = batch.map((chat) async {
+          // Skip if locally marked as seen
+          if (locallySeenChats.contains(chat.reference.id)) {
+            return 0;
+          }
+
+          // Quick check: if user has seen last message, likely no unread
+          if (chat.lastMessageSeen.contains(currentUserReference) ||
+              chat.lastMessage.isEmpty ||
+              chat.lastMessageSent == currentUserReference) {
+            return 0;
+          }
+
+          // For chats with potential unread messages, count only NEW unread messages
+          // Only count messages at/after lastMessageAt to avoid counting old messages
+          try {
+            final lastMessageAt = chat.lastMessageAt;
+            if (lastMessageAt == null) {
+              return 0;
+            }
+
+            final messages = await queryMessagesRecord(
+              parent: chat.reference,
+              queryBuilder: (messages) => messages
+                  .orderBy('created_at', descending: true)
+                  .limit(500), // Limit to recent messages
+            ).first;
+
+            int chatCount = 0;
+            for (final message in messages) {
+              // Stop if we've reached messages older than lastMessageAt
+              if (message.createdAt == null || message.createdAt!.isBefore(lastMessageAt)) {
+                break;
+              }
+
+              // Only count messages at/after lastMessageAt that are unread
+              if (message.senderRef != currentUserReference &&
+                  !message.isSystemMessage &&
+                  !message.isReadBy.contains(currentUserReference) &&
+                  (message.createdAt!.isAfter(lastMessageAt) ||
+                   message.createdAt!.isAtSameMomentAs(lastMessageAt))) {
+                chatCount++;
+              }
+            }
+            return chatCount;
+          } catch (e) {
+            print('Error counting unread for chat ${chat.reference.id}: $e');
+            return 0;
+          }
+        });
+
+        final counts = await Future.wait(futures);
+        totalCount += counts.fold(0, (sum, count) => sum + count);
+      }
+      
+      return totalCount;
+    });
   }
 
   // Mark messages as seen
   Future<void> markMessagesAsSeen(ChatsRecord chat) async {
     try {
-      print('Marking messages as seen for chat: ${chat.reference.id}');
-      print('Current user: $currentUserReference');
-      print('Last message seen by: ${chat.lastMessageSeen}');
-      print(
-          'Has current user seen: ${chat.lastMessageSeen.contains(currentUserReference)}');
-
-      // Only update if current user hasn't seen the last message
       if (currentUserReference == null) return;
 
+      // Immediately update local state to prevent flickering
+      locallySeenChats.add(chat.reference.id);
+
+      // Mark individual messages as read
+      await _markIndividualMessagesAsRead(chat);
+
+      // Update chat-level lastMessageSeen
       if (!chat.lastMessageSeen.contains(currentUserReference) &&
           chat.lastMessage.isNotEmpty &&
           chat.lastMessageSent != currentUserReference) {
-        print('Updating last_message_seen for chat: ${chat.reference.id}');
-
-        // Immediately update local state to prevent flickering
-        locallySeenChats.add(chat.reference.id);
-
-        // Add current user to the lastMessageSeen list
         final updatedSeenList =
             List<DocumentReference>.from(chat.lastMessageSeen);
-        updatedSeenList.add(currentUserReference ??
-            FirebaseFirestore.instance.collection('users').doc('placeholder'));
+        if (!updatedSeenList.contains(currentUserReference)) {
+          updatedSeenList.add(currentUserReference!);
 
-        // Update Firestore in background without blocking UI
-        chat.reference.update({
-          'last_message_seen': updatedSeenList.map((ref) => ref).toList(),
-        }).then((_) {
-          print(
-              'Successfully updated last_message_seen for chat: ${chat.reference.id}');
-        }).catchError((e) {
-          // If Firestore update fails, remove from local state
-          locallySeenChats.remove(chat.reference.id);
-          print('Error marking messages as seen: $e');
-        });
-      } else {
-        print(
-            'No need to update last_message_seen - already seen or conditions not met');
+          // Update Firestore in background without blocking UI
+          chat.reference.update({
+            'last_message_seen': updatedSeenList.map((ref) => ref).toList(),
+          }).then((_) {
+            // Force UI update by refreshing the chat list
+            loadChats();
+          }).catchError((e) {
+            // If Firestore update fails, remove from local state
+            locallySeenChats.remove(chat.reference.id);
+            print('❌ Error marking messages as seen: $e');
+          });
+        }
       }
     } catch (e) {
-      print('Error marking messages as seen: $e');
+      print('❌ Error marking messages as seen: $e');
     }
   }
 
-  // Get filtered chats based on search, tab, and workspace
+  // Mark individual messages as read for better accuracy
+  // Marks ALL unread messages in the chat as read
+  Future<void> _markIndividualMessagesAsRead(ChatsRecord chat) async {
+    if (currentUserReference == null) return;
+
+    try {
+      // Get all messages (increased limit to handle more messages)
+      final messages = await queryMessagesRecord(
+        parent: chat.reference,
+        queryBuilder: (messages) => messages
+            .orderBy('created_at', descending: true)
+            .limit(1000), // Process more messages for accuracy
+      ).first;
+
+      // Batch update messages - Firestore batch limit is 500 operations
+      final batch = FirebaseFirestore.instance.batch();
+      int updateCount = 0;
+      const maxBatchSize = 500;
+
+      for (final message in messages) {
+        // Only mark messages that are unread and not sent by current user
+        if (message.senderRef != currentUserReference &&
+            !message.isSystemMessage &&
+            !message.isReadBy.contains(currentUserReference)) {
+          final updatedReadBy =
+              List<DocumentReference>.from(message.isReadBy);
+          if (!updatedReadBy.contains(currentUserReference)) {
+            updatedReadBy.add(currentUserReference!);
+            batch.update(message.reference, {
+              'is_read_by': updatedReadBy.map((ref) => ref).toList(),
+            });
+            updateCount++;
+            
+            // Commit batch if we reach the limit
+            if (updateCount >= maxBatchSize) {
+              await batch.commit();
+              print('✅ Marked $updateCount messages as read in chat ${chat.reference.id} (batch)');
+              // Note: We can't create a new batch in the same function easily,
+              // so for now we'll just commit what we have. If there are more than 500,
+              // they'll be marked in the next call or we'd need to implement pagination.
+              break;
+            }
+          }
+        }
+      }
+
+      // Commit batch update if there are changes
+      if (updateCount > 0 && updateCount < maxBatchSize) {
+        await batch.commit();
+        print('✅ Marked $updateCount messages as read in chat ${chat.reference.id}');
+      } else if (updateCount >= maxBatchSize) {
+        // If we hit the limit, we'd need to process remaining messages
+        // For now, log it - in production you might want to implement pagination
+        print('⚠️ Marked $updateCount messages as read (hit batch limit, may need to process more)');
+      }
+    } catch (e) {
+      print('❌ Error marking individual messages as read: $e');
+    }
+  }
+
+  // Get filtered chats based on search and tab
   List<ChatsRecord> get filteredChats {
     List<ChatsRecord> filteredChats = List.from(chats);
 
-    // Filter by current workspace (UI-level filtering - safer approach)
-    // Show chats that belong to the current workspace or have no workspace_ref (for backward compatibility)
+    // Hide chats with no messages (temporary chats only appear when selected)
     filteredChats = filteredChats.where((chat) {
-      // Hide chats with no messages (temporary chats only appear when selected)
       if (chat.lastMessage.isEmpty) {
         return false;
       }
-
-      // If current workspace is null, show all chats (backward compatibility)
-      if (currentWorkspaceRef.value == null) {
-        return true;
-      }
-
-      // If current workspace is set, filter by workspace
-      // Show chats that match the workspace OR have no workspace_ref (legacy chats)
-      if (chat.hasWorkspaceRef()) {
-        // Chat has workspace_ref - only show if it matches current workspace
-        final matches =
-            chat.workspaceRef?.path == currentWorkspaceRef.value?.path;
-        return matches;
-      } else {
-        // Chat has no workspace_ref - show it (legacy chat)
-        return true;
-      }
+      return true;
     }).toList();
 
     // Filter by search query

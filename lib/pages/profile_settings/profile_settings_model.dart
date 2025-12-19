@@ -26,6 +26,9 @@ class ProfileSettingsModel extends FlutterFlowModel<ProfileSettingsWidget> {
   TextEditingController? displayNameController;
   TextEditingController? emailController;
   TextEditingController? locationController;
+  TextEditingController? bioController;
+  TextEditingController? websiteController;
+  TextEditingController? roleController;
 
   /// Workspace creation
   bool _isCreatingWorkspace = false;
@@ -55,6 +58,9 @@ class ProfileSettingsModel extends FlutterFlowModel<ProfileSettingsWidget> {
     displayNameController = TextEditingController();
     emailController = TextEditingController();
     locationController = TextEditingController();
+    bioController = TextEditingController();
+    websiteController = TextEditingController();
+    roleController = TextEditingController();
     workspaceNameController = TextEditingController();
     workspaceDescriptionController = TextEditingController();
     deleteConfirmationController = TextEditingController();
@@ -68,6 +74,9 @@ class ProfileSettingsModel extends FlutterFlowModel<ProfileSettingsWidget> {
     displayNameController?.dispose();
     emailController?.dispose();
     locationController?.dispose();
+    bioController?.dispose();
+    websiteController?.dispose();
+    roleController?.dispose();
     workspaceNameController?.dispose();
     workspaceDescriptionController?.dispose();
     deleteConfirmationController?.dispose();

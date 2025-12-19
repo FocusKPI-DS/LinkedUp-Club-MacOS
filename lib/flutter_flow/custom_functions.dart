@@ -197,6 +197,39 @@ bool? checkmention(String? string) {
   return trimmed == '@' || trimmed.toLowerCase() == '@linkai';
 }
 
+/// Extract the mention query after @ symbol
+/// Returns the text after the last @ symbol for filtering members
+String? extractMentionQuery(String? text) {
+  if (text == null || text.isEmpty) return null;
+  
+  // Find the last @ symbol
+  final lastAtIndex = text.lastIndexOf('@');
+  if (lastAtIndex == -1) return null;
+  
+  // Check if @ is at the start or preceded by whitespace
+  if (lastAtIndex > 0) {
+    final charBeforeAt = text[lastAtIndex - 1];
+    if (charBeforeAt != ' ' && charBeforeAt != '\n') {
+      return null; // @ is in the middle of a word
+    }
+  }
+  
+  // Extract text after @
+  final afterAt = text.substring(lastAtIndex + 1);
+  
+  // Check if there's a space after the @ (which means mention is complete)
+  if (afterAt.contains(' ') || afterAt.contains('\n')) {
+    return null;
+  }
+  
+  return afterAt.toLowerCase();
+}
+
+/// Check if text contains an active mention being typed
+bool hasActiveMention(String? text) {
+  return extractMentionQuery(text) != null;
+}
+
 bool? locationNear(
   LatLng? eventLocation,
   LatLng? userLocation,

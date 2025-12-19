@@ -317,18 +317,27 @@ class FirebaseAuthManager extends AuthManager
     } on PlatformException catch (e) {
       // Handle platform-specific errors (e.g., keychain errors on macOS)
       String errorMsg;
-      if (e.code == 'sign_in_failed' &&
-          e.message?.contains('keychain') == true) {
-        errorMsg =
-            'Sign-in failed due to keychain access issue. Please ensure the app is properly signed. If the problem persists, try signing in with email/password or Apple Sign-In.';
-      } else if (e.code == 'sign_in_failed') {
-        errorMsg = 'Sign-in failed: ${e.message ?? 'Unknown error'}';
+      if (e.code == 'sign_in_failed') {
+        // Check for specific GIDSignIn errors
+        if (e.message?.contains('GIDSignIn') == true ||
+            e.message?.contains('com.google.GIDSignIn') == true) {
+          errorMsg =
+              'Google Sign-In failed. This may be due to a conflict with Gmail OAuth or keychain access. Please try restarting the app, or use email/password or Apple Sign-In instead.';
+        } else if (e.message?.contains('keychain') == true) {
+          errorMsg =
+              'Sign-in failed due to keychain access issue. Please ensure the app is properly signed. If the problem persists, try signing in with email/password or Apple Sign-In.';
+        } else {
+          errorMsg = 'Sign-in failed: ${e.message ?? 'Unknown error'}';
+        }
       } else {
         errorMsg = 'Error: ${e.message ?? 'Unknown platform error'}';
       }
       ScaffoldMessenger.of(context).hideCurrentSnackBar();
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(errorMsg)),
+        SnackBar(
+          content: Text(errorMsg),
+          duration: const Duration(seconds: 5),
+        ),
       );
       return null;
     } on FirebaseAuthException catch (e) {

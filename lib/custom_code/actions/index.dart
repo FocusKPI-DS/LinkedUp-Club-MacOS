@@ -42,3 +42,18 @@ export 'generate_workspace_invite_link_v2.dart'
 export 'check_workspace_invite.dart' show checkWorkspaceInvite;
 export 'verify_workspace_invite.dart' show verifyWorkspaceInvite;
 export 'handle_workspace_invite_link.dart' show handleWorkspaceInviteLink;
+export 'gmail_o_auth_connect.dart' show gmailOAuthConnect;
+export 'gmail_list_emails.dart' show gmailListEmails;
+export 'gmail_get_email.dart' show gmailGetEmail;
+export 'gmail_send_email.dart' show gmailSendEmail;
+export 'gmail_reply.dart' show gmailReply;
+export 'gmail_download_attachment.dart' show gmailDownloadAttachment;
+export 'gmail_mark_as_read.dart' show gmailMarkAsRead;
+export 'gmail_prefetch_priority.dart' show gmailPrefetchPriority;
+export 'gmail_prefetch_batch.dart' show gmailPrefetchBatch;
+export 'gmail_refresh_cache.dart' show gmailRefreshCache;
+export 'gmail_check_for_new_emails.dart' show gmailCheckForNewEmails;
+// Gmail Watch actions temporarily removed
+// export 'gmail_setup_watch.dart' show gmailSetupWatch;
+// export 'gmail_renew_watch.dart' show gmailRenewWatch;
+export 'calendar_list_events.dart' show calendarListEvents;

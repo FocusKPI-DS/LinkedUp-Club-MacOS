@@ -27,6 +27,8 @@ export '/pages/setting/privacy_and_policy/privacy_and_policy_widget.dart'
     show PrivacyAndPolicyWidget;
 export '/pages/chat/group_chat_detail/group_chat_detail_widget.dart'
     show GroupChatDetailWidget;
+export '/pages/chat/group_chat_detail/group_media_links_docs_widget.dart'
+    show GroupMediaLinksDocsWidget;
 export '/pages/chat/user_profile_detail/user_profile_detail_widget.dart'
     show UserProfileDetailWidget;
 export '/pages/chat/chat/chat_widget.dart' show ChatWidget;

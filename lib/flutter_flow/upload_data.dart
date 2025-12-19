@@ -312,11 +312,19 @@ bool validateFileFormat(String filePath, BuildContext context) {
     return true;
   }
 
-  ScaffoldMessenger.of(context)
-    ..hideCurrentSnackBar()
-    ..showSnackBar(SnackBar(
-      content: Text('Invalid file format: ${mime(filePath) ?? 'unknown'}'),
-    ));
+  // Check if the widget is still mounted before showing the message
+  if (context.mounted) {
+    try {
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(SnackBar(
+          content: Text('Invalid file format: ${mime(filePath) ?? 'unknown'}'),
+        ));
+    } catch (e) {
+      // Widget was disposed, silently ignore
+      print('validateFileFormat: Widget disposed, cannot show error message');
+    }
+  }
   return false;
 }
 
@@ -454,29 +462,39 @@ void showUploadMessage(
   String message, {
   bool showLoading = false,
 }) {
-  ScaffoldMessenger.of(context)
-    ..hideCurrentSnackBar()
-    ..showSnackBar(
-      SnackBar(
-        content: Row(
-          children: [
-            if (showLoading)
-              Padding(
-                padding: const EdgeInsetsDirectional.only(end: 10.0),
-                child: CircularProgressIndicator(
-                  valueColor: Theme.of(context).brightness == Brightness.dark
-                      ? AlwaysStoppedAnimation<Color>(
-                          FlutterFlowTheme.of(context).accent4)
-                      : null,
+  // Check if the widget is still mounted before showing the message
+  if (!context.mounted) {
+    return;
+  }
+  
+  try {
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(
+          content: Row(
+            children: [
+              if (showLoading)
+                Padding(
+                  padding: const EdgeInsetsDirectional.only(end: 10.0),
+                  child: CircularProgressIndicator(
+                    valueColor: Theme.of(context).brightness == Brightness.dark
+                        ? AlwaysStoppedAnimation<Color>(
+                            FlutterFlowTheme.of(context).accent4)
+                        : null,
+                  ),
                 ),
-              ),
-            Text(message),
-          ],
+              Text(message),
+            ],
+          ),
+          duration:
+              showLoading ? const Duration(days: 1) : const Duration(seconds: 4),
         ),
-        duration:
-            showLoading ? const Duration(days: 1) : const Duration(seconds: 4),
-      ),
-    );
+      );
+  } catch (e) {
+    // Widget was disposed, silently ignore
+    print('showUploadMessage: Widget disposed, cannot show message: $message');
+  }
 }
 
 String? _removeTrailingSlash(String? path) => path != null && path.endsWith('/')

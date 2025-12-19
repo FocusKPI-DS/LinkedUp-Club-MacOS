@@ -3,6 +3,7 @@ import '/backend/backend.dart';
 import '/backend/schema/structs/index.dart';
 import 'package:ff_theme/flutter_flow/flutter_flow_theme.dart';
 import '/flutter_flow/flutter_flow_util.dart';
+import '/flutter_flow/flutter_flow_icon_button.dart';
 import 'package:flutter/material.dart';
 // Begin custom widget code
 // DO NOT REMOVE OR MODIFY THE CODE ABOVE!
@@ -12,6 +13,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 import '/auth/firebase_auth/auth_util.dart';
 import '/flutter_flow/flutter_flow_expanded_image_view.dart';
 import '/pages/chat/user_profile_detail/user_profile_detail_widget.dart';
+import '/pages/feed/post_detail/post_detail_widget.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 class PostItem extends StatefulWidget {
@@ -35,6 +37,9 @@ class PostItem extends StatefulWidget {
 }
 
 class _PostItemState extends State<PostItem> {
+  bool _isLikeAnimating = false;
+  bool _isSaveAnimating = false;
+
   @override
   void initState() {
     super.initState();
@@ -43,6 +48,72 @@ class _PostItemState extends State<PostItem> {
   @override
   void dispose() {
     super.dispose();
+  }
+
+  Future<void> _toggleLike(PostsRecord post, bool isLiked) async {
+    setState(() {
+      _isLikeAnimating = true;
+    });
+
+    await Future.delayed(const Duration(milliseconds: 200));
+
+    try {
+      if (isLiked) {
+        // Unlike
+        await post.reference.update({
+          ...mapToFirestore({
+            'like_count': FieldValue.increment(-1),
+            'liked_by': FieldValue.arrayRemove([currentUserReference]),
+          }),
+        });
+      } else {
+        // Like
+        await post.reference.update({
+          ...mapToFirestore({
+            'like_count': FieldValue.increment(1),
+            'liked_by': FieldValue.arrayUnion([currentUserReference]),
+          }),
+        });
+      }
+    } catch (e) {
+      debugPrint('Error toggling like: $e');
+    }
+
+    setState(() {
+      _isLikeAnimating = false;
+    });
+  }
+
+  Future<void> _toggleSave(PostsRecord post, bool isSaved) async {
+    setState(() {
+      _isSaveAnimating = true;
+    });
+
+    await Future.delayed(const Duration(milliseconds: 200));
+
+    try {
+      if (isSaved) {
+        // Unsave
+        await post.reference.update({
+          ...mapToFirestore({
+            'saved_by': FieldValue.arrayRemove([currentUserReference]),
+          }),
+        });
+      } else {
+        // Save
+        await post.reference.update({
+          ...mapToFirestore({
+            'saved_by': FieldValue.arrayUnion([currentUserReference]),
+          }),
+        });
+      }
+    } catch (e) {
+      debugPrint('Error toggling save: $e');
+    }
+
+    setState(() {
+      _isSaveAnimating = false;
+    });
   }
 
   Color _getCategoryColor(String category) {
@@ -472,115 +543,120 @@ class _PostItemState extends State<PostItem> {
                 ],
                 const SizedBox(height: 12.0),
 
-                // Actions row - TEMPORARILY COMMENTED OUT
-                /*
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Row(
+                // Actions row
+                Builder(
+                  builder: (context) {
+                    final isLiked = post.likedBy.contains(currentUserReference);
+                    final isSaved = post.savedBy.contains(currentUserReference);
+                    
+                    return Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        // Like button
                         Row(
                           children: [
-                            AnimatedScale(
-                              scale: _isLikeAnimating ? 1.2 : 1.0,
-                              duration: const Duration(milliseconds: 200),
-                              child: FlutterFlowIconButton(
-                                borderRadius: 16.0,
-                                buttonSize: 40.0,
-                                icon: Icon(
-                                  isLiked
-                                      ? Icons.favorite
-                                      : Icons.favorite_border,
-                                  color: isLiked
-                                      ? FlutterFlowTheme.of(context).primary
-                                      : FlutterFlowTheme.of(context)
-                                          .secondaryText,
-                                  size: 25.0,
-                                ),
-                                onPressed: () => _toggleLike(post, isLiked),
-                              ),
-                            ),
-                            const SizedBox(width: 4.0),
-                            Text(
-                              post.likeCount.toString(),
-                              style: FlutterFlowTheme.of(context)
-                                  .bodySmall
-                                  .override(
-                                    font: GoogleFonts.inter(),
-                                    color: FlutterFlowTheme.of(context)
-                                        .secondaryText,
-                                    letterSpacing: 0.0,
+                            // Like button
+                            Row(
+                              children: [
+                                AnimatedScale(
+                                  scale: _isLikeAnimating ? 1.2 : 1.0,
+                                  duration: const Duration(milliseconds: 200),
+                                  child: FlutterFlowIconButton(
+                                    borderRadius: 16.0,
+                                    buttonSize: 40.0,
+                                    icon: Icon(
+                                      isLiked
+                                          ? Icons.favorite
+                                          : Icons.favorite_border,
+                                      color: isLiked
+                                          ? FlutterFlowTheme.of(context).primary
+                                          : FlutterFlowTheme.of(context)
+                                              .secondaryText,
+                                      size: 25.0,
+                                    ),
+                                    onPressed: () => _toggleLike(post, isLiked),
                                   ),
+                                ),
+                                const SizedBox(width: 4.0),
+                                Text(
+                                  post.likeCount.toString(),
+                                  style: FlutterFlowTheme.of(context)
+                                      .bodySmall
+                                      .override(
+                                        font: GoogleFonts.inter(),
+                                        color: FlutterFlowTheme.of(context)
+                                            .secondaryText,
+                                        letterSpacing: 0.0,
+                                      ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(width: 16.0),
+
+                            // Comment button
+                            Row(
+                              children: [
+                                FlutterFlowIconButton(
+                                  borderRadius: 16.0,
+                                  buttonSize: 40.0,
+                                  icon: Icon(
+                                    Icons.chat_bubble_outline,
+                                    color:
+                                        FlutterFlowTheme.of(context).secondaryText,
+                                    size: 25.0,
+                                  ),
+                                  onPressed: () async {
+                                    if (!widget.isPostDetail) {
+                                      context.pushNamed(
+                                        PostDetailWidget.routeName,
+                                        queryParameters: {
+                                          'postDoc': serializeParam(
+                                              post, ParamType.Document),
+                                        }.withoutNulls,
+                                        extra: <String, dynamic>{'postDoc': post},
+                                      );
+                                    }
+                                  },
+                                ),
+                                const SizedBox(width: 4.0),
+                                Text(
+                                  post.commentCount.toString(),
+                                  style: FlutterFlowTheme.of(context)
+                                      .bodySmall
+                                      .override(
+                                        font: GoogleFonts.inter(),
+                                        color: FlutterFlowTheme.of(context)
+                                            .secondaryText,
+                                        letterSpacing: 0.0,
+                                      ),
+                                ),
+                              ],
                             ),
                           ],
                         ),
-                        const SizedBox(width: 16.0),
 
-                        // Comment button
-                        Row(
-                          children: [
-                            FlutterFlowIconButton(
-                              borderRadius: 16.0,
-                              buttonSize: 40.0,
-                              icon: Icon(
-                                Icons.chat_bubble_outline,
-                                color:
-                                    FlutterFlowTheme.of(context).secondaryText,
-                                size: 25.0,
-                              ),
-                              onPressed: () async {
-                                if (!widget.isPostDetail) {
-                                  context.pushNamed(
-                                    PostDetailWidget.routeName,
-                                    queryParameters: {
-                                      'postDoc': serializeParam(
-                                          post, ParamType.Document),
-                                    }.withoutNulls,
-                                    extra: <String, dynamic>{'postDoc': post},
-                                  );
-                                }
-                              },
+                        // Save button
+                        AnimatedScale(
+                          scale: _isSaveAnimating ? 1.2 : 1.0,
+                          duration: const Duration(milliseconds: 200),
+                          child: FlutterFlowIconButton(
+                            borderRadius: 16.0,
+                            buttonSize: 40.0,
+                            icon: Icon(
+                              isSaved
+                                  ? Icons.bookmark_rounded
+                                  : Icons.bookmark_border,
+                              color: isSaved
+                                  ? FlutterFlowTheme.of(context).primary
+                                  : FlutterFlowTheme.of(context).secondaryText,
+                              size: 25.0,
                             ),
-                            const SizedBox(width: 4.0),
-                            Text(
-                              post.commentCount.toString(),
-                              style: FlutterFlowTheme.of(context)
-                                  .bodySmall
-                                  .override(
-                                    font: GoogleFonts.inter(),
-                                    color: FlutterFlowTheme.of(context)
-                                        .secondaryText,
-                                    letterSpacing: 0.0,
-                                  ),
-                            ),
-                          ],
+                            onPressed: () => _toggleSave(post, isSaved),
+                          ),
                         ),
                       ],
-                    ),
-
-                    // Save button
-                    AnimatedScale(
-                      scale: _isSaveAnimating ? 1.2 : 1.0,
-                      duration: const Duration(milliseconds: 200),
-                      child: FlutterFlowIconButton(
-                        borderRadius: 16.0,
-                        buttonSize: 40.0,
-                        icon: Icon(
-                          isSaved
-                              ? Icons.bookmark_rounded
-                              : Icons.bookmark_border,
-                          color: isSaved
-                              ? FlutterFlowTheme.of(context).primary
-                              : FlutterFlowTheme.of(context).secondaryText,
-                          size: 25.0,
-                        ),
-                        onPressed: () => _toggleSave(post, isSaved),
-                      ),
-                    ),
-                  ],
+                    );
+                  },
                 ),
-                */
               ],
             ),
           ),

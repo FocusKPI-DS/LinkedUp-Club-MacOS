@@ -219,21 +219,11 @@ class _FeedWidgetState extends State<FeedWidget> {
                                 ),
                                 primary: false,
                                 shrinkWrap: true,
-                                itemCount:
-                                    posts.length + 1, // +1 for AI summary
+                                itemCount: posts.length,
                                 separatorBuilder: (_, __) =>
                                     const SizedBox(height: 16.0),
                                 itemBuilder: (context, index) {
-                                  // Show AI summary as first item
-                                  if (index == 0) {
-                                    return custom_widgets
-                                        .AIAnnouncementsSummary(
-                                      width: double.infinity,
-                                    );
-                                  }
-
-                                  // Show posts (adjust index by -1)
-                                  final post = posts[index - 1];
+                                  final post = posts[index];
 
                                   // Check if the post author is blocked
                                   return FutureBuilder<bool>(

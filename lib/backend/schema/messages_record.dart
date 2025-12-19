@@ -112,6 +112,11 @@ class MessagesRecord extends FirestoreRecord {
   DateTime? get editedAt => _editedAt;
   bool hasEditedAt() => _editedAt != null;
 
+  // "is_system_message" field.
+  bool? _isSystemMessage;
+  bool get isSystemMessage => _isSystemMessage ?? false;
+  bool hasIsSystemMessage() => _isSystemMessage != null;
+
   DocumentReference get parentReference => reference.parent.parent!;
 
   void _initializeFields() {
@@ -135,6 +140,7 @@ class MessagesRecord extends FirestoreRecord {
     _images = getDataList(snapshotData['images']);
     _isEdited = snapshotData['is_edited'] as bool?;
     _editedAt = snapshotData['edited_at'] as DateTime?;
+    _isSystemMessage = snapshotData['is_system_message'] as bool?;
     final rbU = snapshotData['reactions_by_user'];
     if (rbU is Map) {
       final Map<String, List<String>> parsed = {};
@@ -209,6 +215,7 @@ Map<String, dynamic> createMessagesRecordData({
   Map<String, List<String>>? reactionsByUser,
   bool? isEdited,
   DateTime? editedAt,
+  bool? isSystemMessage,
 }) {
   final firestoreData = mapToFirestore(
     <String, dynamic>{
@@ -229,6 +236,7 @@ Map<String, dynamic> createMessagesRecordData({
       'reactions_by_user': reactionsByUser,
       'is_edited': isEdited,
       'edited_at': editedAt,
+      'is_system_message': isSystemMessage,
     }.withoutNulls,
   );
 
@@ -258,7 +266,8 @@ class MessagesRecordDocumentEquality implements Equality<MessagesRecord> {
         e1?.image == e2?.image &&
         listEquality.equals(e1?.images, e2?.images) &&
         e1?.isEdited == e2?.isEdited &&
-        e1?.editedAt == e2?.editedAt;
+        e1?.editedAt == e2?.editedAt &&
+        e1?.isSystemMessage == e2?.isSystemMessage;
   }
 
   @override
@@ -280,7 +289,8 @@ class MessagesRecordDocumentEquality implements Equality<MessagesRecord> {
         e?.image,
         e?.images,
         e?.isEdited,
-        e?.editedAt
+        e?.editedAt,
+        e?.isSystemMessage
       ]);
 
   @override

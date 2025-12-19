@@ -34,11 +34,18 @@ class ChatThreadComponentModel
 
   ScrollController? scrollController;
 
+  String? highlightedMessageId;
+
   bool? isSending = false;
 
   bool? isSendingImage = false;
 
   bool isMention = false;
+
+  // Mention overlay state
+  bool showMentionOverlay = false;
+  String mentionQuery = '';
+  List<UsersRecord> filteredMembers = [];
 
   List<DocumentReference> userSend = [];
   void addToUserSend(DocumentReference item) => userSend.add(item);

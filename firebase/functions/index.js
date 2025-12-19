@@ -13,6 +13,33 @@ exports.newsOnCreate = require('./newsNotifications').newsOnCreate;
 // Export workspace invitation email function
 exports.sendWorkspaceInviteEmail = require('./sendWorkspaceInviteEmail').sendWorkspaceInviteEmail;
 
+// Export Gmail integration functions
+exports.gmailOAuth = require('./gmailIntegration').gmailOAuth;
+exports.gmailOAuthCallback = require('./gmailIntegration').gmailOAuthCallback;
+exports.gmailListEmails = require('./gmailIntegration').gmailListEmails;
+exports.gmailGetEmail = require('./gmailIntegration').gmailGetEmail;
+exports.gmailSendEmail = require('./gmailIntegration').gmailSendEmail;
+exports.gmailReply = require('./gmailIntegration').gmailReply;
+exports.gmailDownloadAttachment = require('./gmailIntegration').gmailDownloadAttachment;
+exports.gmailMarkAsRead = require('./gmailIntegration').gmailMarkAsRead;
+exports.gmailPrefetchPriority = require('./gmailIntegration').gmailPrefetchPriority;
+exports.gmailPrefetchBatch = require('./gmailIntegration').gmailPrefetchBatch;
+exports.gmailRefreshCache = require('./gmailIntegration').gmailRefreshCache;
+exports.gmailCheckForNewEmails = require('./gmailIntegration').gmailCheckForNewEmails;
+// Gmail Watch functions temporarily removed
+// exports.gmailSetupWatch = require('./gmailIntegration').gmailSetupWatch;
+// exports.gmailRenewWatch = require('./gmailIntegration').gmailRenewWatch;
+// exports.gmailNotificationHandler = require('./gmailIntegration').gmailNotificationHandler;
+// exports.gmailAutoRenewWatches = require('./gmailIntegration').gmailAutoRenewWatches;
+
+// Export Google Calendar integration functions
+exports.calendarListCalendars = require('./gmailIntegration').calendarListCalendars;
+exports.calendarListEvents = require('./gmailIntegration').calendarListEvents;
+exports.calendarGetEvent = require('./gmailIntegration').calendarGetEvent;
+exports.calendarCreateEvent = require('./gmailIntegration').calendarCreateEvent;
+exports.calendarUpdateEvent = require('./gmailIntegration').calendarUpdateEvent;
+exports.calendarDeleteEvent = require('./gmailIntegration').calendarDeleteEvent;
+
 const kPushNotificationRuntimeOpts = {
   timeoutSeconds: 540,
   memory: "2GB",
@@ -115,6 +142,37 @@ async function extractAndSaveActionItems({ summary, chatId, chatData, userId, re
       apiKey: openaiApiKey,
     });
 
+    // Get actual member display names from chat members
+    const memberNames = [];
+    if (chatData.members && chatData.members.length > 0) {
+      const memberPromises = chatData.members.map(async (memberRef) => {
+        try {
+          const memberDoc = await memberRef.get();
+          if (memberDoc.exists) {
+            const memberData = memberDoc.data();
+            const displayName = memberData.display_name || memberData.displayName || memberData.name;
+            if (displayName && !displayName.includes('ai_agent') && !displayName.toLowerCase().includes('summer')) {
+              return displayName;
+            }
+          }
+        } catch (e) {
+          console.log(`Error fetching member ${memberRef.path}:`, e);
+        }
+        return null;
+      });
+      
+      const names = await Promise.all(memberPromises);
+      memberNames.push(...names.filter(n => n !== null));
+    }
+
+    // Get actual group name for prompt
+    const actualGroupName = chatData.title || chatData.group_name || chatData.name || "Group Chat";
+    
+    // Build member names list for prompt
+    const memberNamesText = memberNames.length > 0 
+      ? `\n\nEXACT MEMBER NAMES (USE THESE EXACT NAMES ONLY - DO NOT GUESS OR USE PARTIAL NAMES):\n${memberNames.map((n, i) => `${i + 1}. ${n}`).join('\n')}\n\nCRITICAL: When assigning tasks, use ONLY the exact names from this list. If a name appears in the summary as "Mitansh" but the exact name is "Mitansh Patel", you MUST use "Mitansh Patel". Do NOT use partial names or guess names.`
+      : '';
+
     // TaskManagerAI System Prompt (refined)
     const taskManagerPrompt = `You are TaskManagerAI, an intelligent task extraction assistant.
 Your job is to carefully analyze SummerAI's summary and extract ONLY real, actionable tasks with accurate priority, owners, and a clear "Details" text. Do NOT include or infer due dates; due dates are set by humans later.
@@ -132,15 +190,28 @@ OUTPUT FORMAT (JSON ONLY):
       "title": "Verb-first, specific task (<= 80 chars)",
       "priority": "Urgent" | "High" | "Moderate" | "Low",
       "involvedPeople": ["Exact Participant Name"],
-      "groupName": "Group/Chat name if known",
       "description": "Details text per template below"
     }
   ]
 }
 
+NOTE: Do NOT include "groupName" in your output. The actual group name will be provided separately and will be used automatically.
+
 DETAILS (description) TEMPLATE:
-"In the group '{GroupName}' on {CurrentDate}, {PeopleInvolved} discussed {Topics/TasksSummary}. You are responsible for completing: {Concise action steps}. Dependencies: {Dependencies or 'None'}. Risks: {Risks or 'None'}."
-- Use 2–5 sentences, no markdown. If GroupName/People/Date are not clear from the input, omit those fragments gracefully but still produce a coherent description.
+Write a clear, engaging description that tells the story of this task. Format it naturally:
+
+"During the ${actualGroupName} discussion on {CurrentDate}, {PeopleInvolved} identified the need to {action summary}. This task involves {specific steps and context}. {Why this matters - business impact or reason}. {Any dependencies, blockers, or important context if relevant - otherwise omit this part}."
+
+IMPORTANT: The actual group name is "${actualGroupName}". Use this exact name in your descriptions, not generic terms like "Group" or "the group".
+
+Guidelines:
+- Write in a natural, conversational tone (2-3 sentences)
+- Make it clear why this task exists and what it accomplishes
+- Focus on the "what" and "why", not just dry facts
+- Always use the actual group name "${actualGroupName}" in descriptions
+- If People/Date are unclear, write naturally without forcing those details
+- No markdown, no bullet points - just flowing prose
+- Make it interesting and easy to understand at a glance
 
 PRIORITY RUBRIC:
 - Urgent: deadline ≤ 48h, blocks others, explicit urgency ("ASAP", "today/tomorrow").
@@ -150,12 +221,16 @@ PRIORITY RUBRIC:
 If mixed signals, choose the highest justified and briefly reflect that in description.
 
 INVOLVED PEOPLE:
-- Use only real participant names present in the input; exclude bots/assistants.
-- If ownership is unclear, include the most directly responsible named person(s) mentioned; otherwise, leave involvedPeople empty.
+- Use ONLY the exact member names provided in the list below. DO NOT guess names, use partial names, or create variations.
+- If a name appears in the summary as "Mitansh" but the exact name is "Mitansh Patel", you MUST use "Mitansh Patel".
+- Match names from the summary to the exact names in the provided list. If unsure, leave involvedPeople empty rather than guessing.
+- Exclude bots/assistants (SummerAI, etc.).
+${memberNamesText}
 
 QUALITY + SAFETY CHECKS BEFORE RETURNING:
-- Deduplicate tasks (same intent/owner).
+- Deduplicate tasks (same intent/owner). If multiple tasks have the same core objective, merge them into ONE task.
 - Remove non-actionable items.
+- If you see similar tasks (e.g., "integrate Gmail" and "focus on Gmail integration"), return ONLY ONE consolidated task.
 - Ensure valid JSON ONLY (no prose outside JSON). Start with { and end with }.`;
 
     // Call GPT-4
@@ -191,23 +266,35 @@ QUALITY + SAFETY CHECKS BEFORE RETURNING:
 
     // Get chat reference
     const chatRef = firestore.collection("chats").doc(chatId);
-    const groupName = chatData.title || chatData.group_name || "Group Chat";
+    // Always use the actual chat/group name - never use generic "Group" or AI guesses
+    const groupName = chatData.title || chatData.group_name || chatData.name || "Group Chat";
     const workspaceRef = chatData.workspace_ref;
+    
+    // Log the actual group name being used
+    console.log(`📋 Using actual group name: "${groupName}" for chat: ${chatId}`);
 
     // Build dedupe window (last 48 hours)
     const now = new Date();
     const fortyEightHoursAgo = new Date(now.getTime() - 48 * 60 * 60 * 1000);
     const cutoffTs = admin.firestore.Timestamp.fromDate(fortyEightHoursAgo);
 
-    // Helper to normalize titles for dedupe
-    const normalizeTitle = (t) =>
-      (t || '')
+    // Helper to normalize titles for dedupe - improved to catch semantic duplicates
+    const normalizeTitle = (t) => {
+      if (!t) return '';
+      // Remove articles, common words, and normalize
+      let normalized = t
         .toLowerCase()
-        .replace(/[\p{P}\p{S}]/gu, ' ')
-        .replace(/\s+/g, ' ')
+        .replace(/\b(the|a|an|on|of|in|into|for|to|with|and|or|but)\b/gi, ' ') // Remove articles and common words
+        .replace(/[\p{P}\p{S}]/gu, ' ') // Remove punctuation
+        .replace(/\s+/g, ' ') // Normalize whitespace
         .trim();
+      
+      // Sort words to catch word order variations (e.g., "gmail calendar integration" vs "integration gmail calendar")
+      const words = normalized.split(' ').filter(w => w.length > 2); // Filter out very short words
+      return words.sort().join(' ');
+    };
 
-    // Fetch existing recent tasks for this chat to avoid duplicates
+    // Fetch existing recent tasks for this chat across ALL users to avoid duplicates
     const existingRecentSnapshot = await firestore
       .collection("action_items")
       .where("chat_ref", "==", chatRef)
@@ -223,30 +310,66 @@ QUALITY + SAFETY CHECKS BEFORE RETURNING:
 
     // Create batch to save all non-duplicate action items
     const batch = firestore.batch();
+    
+    // Track keys within this batch to avoid duplicates in the same run
+    const batchTitleKeys = new Set();
+    let createdCount = 0;
 
     for (const item of actionItems) {
       const incomingKey = normalizeTitle(item.title || '');
       if (!incomingKey) {
+        console.log(`⚠️ Skipping task with empty normalized title: "${item.title}"`);
         continue; // skip empty titles
       }
-      if (existingTitleKeys.has(incomingKey)) {
-        // Duplicate within 48h window: skip creating
-        continue;
+      
+      // Check against existing tasks AND tasks in this batch
+      if (existingTitleKeys.has(incomingKey) || batchTitleKeys.has(incomingKey)) {
+        console.log(`⚠️ Skipping duplicate task: "${item.title}" (normalized: "${incomingKey}")`);
+        continue; // Duplicate: skip creating
       }
+      
       // Track this key to dedupe within the same run as well
       existingTitleKeys.add(incomingKey);
+      batchTitleKeys.add(incomingKey);
+      createdCount++;
+      
       // Create action item document
       const actionItemRef = firestore.collection("action_items").doc();
       
+      // Map involvedPeople names to exact member names
+      const exactInvolvedPeople = [];
+      if (item.involvedPeople && item.involvedPeople.length > 0 && memberNames.length > 0) {
+        for (const nameFromAI of item.involvedPeople) {
+          // Find exact match or closest match from member names
+          const exactMatch = memberNames.find(memberName => 
+            memberName.toLowerCase() === nameFromAI.toLowerCase() ||
+            memberName.toLowerCase().includes(nameFromAI.toLowerCase()) ||
+            nameFromAI.toLowerCase().includes(memberName.toLowerCase().split(' ')[0])
+          );
+          
+          if (exactMatch) {
+            exactInvolvedPeople.push(exactMatch);
+          } else {
+            // If no match found, use the name from AI but log warning
+            console.log(`⚠️ Name "${nameFromAI}" not found in member list, using as-is`);
+            exactInvolvedPeople.push(nameFromAI);
+          }
+        }
+      }
+
+      // Always use the actual group name - never use AI's groupName guess
+      // The AI might return "Group" or generic names, but we have the actual chat name
+      const actualGroupName = groupName; // Use the real chat name, not AI's guess
+      
       const actionItemData = {
         title: item.title || "",
-        group_name: item.groupName || groupName,
+        group_name: actualGroupName, // Always use actual chat name, ignore AI's groupName
         priority: item.priority || "Moderate",
         status: "pending",
         user_ref: requestingUserRef,
         workspace_ref: workspaceRef || null,
         chat_ref: chatRef,
-        involved_people: item.involvedPeople || [],
+        involved_people: exactInvolvedPeople.length > 0 ? exactInvolvedPeople : (item.involvedPeople || []),
         created_time: admin.firestore.FieldValue.serverTimestamp(),
         last_summary_at: admin.firestore.FieldValue.serverTimestamp(),
         description: item.description || "",
@@ -259,8 +382,12 @@ QUALITY + SAFETY CHECKS BEFORE RETURNING:
     }
 
     // Commit all action items at once
-    await batch.commit();
-    console.log(`✅ TaskManagerAI: Successfully created ${actionItems.length} action items`);
+    if (createdCount > 0) {
+      await batch.commit();
+      console.log(`✅ TaskManagerAI: Successfully created ${createdCount} action items (${actionItems.length - createdCount} duplicates skipped)`);
+    } else {
+      console.log(`⚠️ TaskManagerAI: All ${actionItems.length} action items were duplicates - none created`);
+    }
 
   } catch (error) {
     console.error("❌ TaskManagerAI Error:", error);
@@ -462,8 +589,6 @@ exports.sendReactionNotificationTrigger = functions
     }
   });
 
-
-// COMMENTED OUT - Disabled to prevent duplicate notifications
 // exports.sendMessageNotificationTrigger = functions
 //   .runWith({
 //     timeoutSeconds: 60,
@@ -2404,11 +2529,15 @@ exports.InGroupSummer = functions
                 }
               });
               
-              // Create tasks for all members in parallel but don't wait
-              // This prevents blocking the scheduled function
-              Promise.all(memberPromises).catch(err => {
-                console.error("Error in parallel task creation:", err);
-              });
+              // Create tasks for all members in parallel
+              // Wait for completion to ensure tasks are created successfully
+              try {
+                await Promise.all(memberPromises);
+                console.log(`✅ TaskManagerAI: Successfully created tasks for all ${chatData.members.length} members`);
+              } catch (err) {
+                console.error("❌ Error in parallel task creation:", err);
+                // Don't throw - continue with other chats even if task creation fails
+              }
             }
           } catch (taskError) {
             console.error("Error extracting action items:", taskError);

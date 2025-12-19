@@ -9,13 +9,18 @@ import '/flutter_flow/flutter_flow_util.dart';
 import '/pages/chat/chat_component/p_d_f_view/p_d_f_view_widget.dart';
 import '/pages/chat/chat_component/report_component/report_component_widget.dart';
 import 'dart:ui';
-import 'dart:io' show Platform;
+import 'dart:io';
 import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:path_provider/path_provider.dart';
+import '/custom_code/actions/web_download_helper.dart';
+import 'package:permission_handler/permission_handler.dart';
 import '/custom_code/actions/index.dart' as actions;
 import '/custom_code/widgets/index.dart' as custom_widgets;
 import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:aligned_dialog/aligned_dialog.dart';
+import 'package:http/http.dart' as http;
+import 'package:file_picker/file_picker.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:ff_theme/flutter_flow/flutter_flow_theme.dart';
@@ -42,6 +47,7 @@ class ChatThreadWidget extends StatefulWidget {
     this.onReplyToMessage,
     this.onScrollToMessage,
     this.onEditMessage,
+    this.isHighlighted = false,
   });
 
   final MessagesRecord? message;
@@ -54,6 +60,7 @@ class ChatThreadWidget extends StatefulWidget {
   final Function(MessagesRecord)? onReplyToMessage;
   final Function(String)? onScrollToMessage;
   final Function(MessagesRecord)? onEditMessage;
+  final bool isHighlighted;
 
   @override
   State<ChatThreadWidget> createState() => _ChatThreadWidgetState();
@@ -66,6 +73,9 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
   final Set<String> _locallyRemovedReactions = <String>{};
   bool _isHoveredForMenu = false;
   bool _isMenuOpen = false;
+  // Cache for file info results to prevent unnecessary rebuilds
+  Map<String, dynamic>? _cachedFileInfo;
+  ScaffoldMessengerState? _scaffoldMessenger;
 
   @override
   void setState(VoidCallback callback) {
@@ -81,15 +91,404 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
   }
 
   @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // Store ScaffoldMessenger reference for safe use after async operations
+    _scaffoldMessenger = ScaffoldMessenger.maybeOf(context);
+  }
+
+  @override
   void dispose() {
     _model.maybeDispose();
+    _scaffoldMessenger = null;
     super.dispose();
+  }
+
+  String _formatMessageTimestamp(DateTime? timestamp) {
+    if (timestamp == null) return 'N/A';
+
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final messageDate =
+        DateTime(timestamp.year, timestamp.month, timestamp.day);
+
+    // Format hour, minute, and period
+    final hour = timestamp.hour == 0
+        ? 12
+        : (timestamp.hour > 12 ? timestamp.hour - 12 : timestamp.hour);
+    final minute = timestamp.minute.toString().padLeft(2, '0');
+    final period = timestamp.hour < 12 ? 'AM' : 'PM';
+    final timeString = '$hour:$minute $period';
+
+    // If same calendar day (today), show only time
+    if (messageDate == today) {
+      return timeString;
+    } else {
+      // Format as date and time (e.g., "Nov 21, 3:45 PM")
+      final months = [
+        'Jan',
+        'Feb',
+        'Mar',
+        'Apr',
+        'May',
+        'Jun',
+        'Jul',
+        'Aug',
+        'Sep',
+        'Oct',
+        'Nov',
+        'Dec'
+      ];
+      final month = months[timestamp.month - 1];
+      final day = timestamp.day;
+      return '$month $day, $timeString';
+    }
   }
 
   Future<void> _launchURL(String url) async {
     final uri = Uri.tryParse(url);
     if (uri != null && await canLaunchUrl(uri)) {
       await launchUrl(uri, mode: LaunchMode.externalApplication);
+    }
+  }
+
+  Widget _buildFileAttachment(String attachmentUrl) {
+    // Check static cache first
+    if (_staticFileInfoCache.containsKey(attachmentUrl)) {
+      final fileInfo = _staticFileInfoCache[attachmentUrl]!;
+      return _buildFileAttachmentCard(fileInfo, attachmentUrl);
+    }
+
+    // If not cached, use FutureBuilder but ensure it only builds once
+    return FutureBuilder<Map<String, dynamic>>(
+      key: ValueKey(attachmentUrl),
+      future: _getFileInfo(attachmentUrl),
+      builder: (context, snapshot) {
+        if (!snapshot.hasData) {
+          return Container(
+            constraints: const BoxConstraints(maxWidth: 280.0),
+            height: 70.0,
+            decoration: BoxDecoration(
+              color: FlutterFlowTheme.of(context).secondaryBackground,
+              borderRadius: BorderRadius.circular(12.0),
+            ),
+            child: Center(
+              child: CircularProgressIndicator(
+                color: FlutterFlowTheme.of(context).primary,
+              ),
+            ),
+          );
+        }
+
+        final fileInfo = snapshot.data!;
+        return _buildFileAttachmentCard(fileInfo, attachmentUrl);
+      },
+    );
+  }
+
+  Widget _buildFileAttachmentCard(
+      Map<String, dynamic> fileInfo, String attachmentUrl) {
+    final isPdf = fileInfo['isPdf'] == true;
+
+    return InkWell(
+      splashColor: Colors.transparent,
+      focusColor: Colors.transparent,
+      hoverColor: Colors.transparent,
+      highlightColor: Colors.transparent,
+      onTap: () async {
+        if (isPdf) {
+          await showDialog(
+            context: context,
+            builder: (dialogContext) {
+              return Dialog(
+                elevation: 0,
+                insetPadding: EdgeInsets.zero,
+                backgroundColor: Colors.transparent,
+                alignment: const AlignmentDirectional(0.0, 0.0)
+                    .resolve(Directionality.of(context)),
+                child: PDFViewWidget(
+                  url: attachmentUrl,
+                ),
+              );
+            },
+          );
+        } else {
+          // Download file directly instead of opening in browser
+          final fileName = fileInfo['fileName'] as String;
+          await _downloadFile(attachmentUrl, fileName);
+        }
+      },
+      child: Container(
+        constraints: const BoxConstraints(
+          maxWidth: 280.0,
+        ),
+        padding: EdgeInsets.all(12.0),
+        decoration: BoxDecoration(
+          color: FlutterFlowTheme.of(context).secondaryBackground,
+          borderRadius: BorderRadius.circular(12.0),
+          border: Border.all(
+            color: FlutterFlowTheme.of(context).alternate,
+            width: 1.0,
+          ),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 48.0,
+              height: 48.0,
+              decoration: BoxDecoration(
+                color: (fileInfo['iconColor'] as Color).withOpacity(0.1),
+                borderRadius: BorderRadius.circular(8.0),
+              ),
+              child: Icon(
+                fileInfo['fileIcon'] as IconData,
+                color: fileInfo['iconColor'] as Color,
+                size: 28.0,
+              ),
+            ),
+            SizedBox(width: 12.0),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    fileInfo['fileName'] as String,
+                    style: FlutterFlowTheme.of(context).bodyMedium.override(
+                          fontFamily: 'Inter',
+                          fontSize: 14.0,
+                          fontWeight: FontWeight.w600,
+                        ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  SizedBox(height: 4.0),
+                  Text(
+                    (fileInfo['fileSize'] as String).isNotEmpty
+                        ? '${fileInfo['fileType']} • ${fileInfo['fileSize']}'
+                        : '${fileInfo['fileType']} File',
+                    style: FlutterFlowTheme.of(context).bodySmall.override(
+                          fontFamily: 'Inter',
+                          fontSize: 12.0,
+                          color: FlutterFlowTheme.of(context).secondaryText,
+                        ),
+                  ),
+                ],
+              ),
+            ),
+            SizedBox(width: 8.0),
+            GestureDetector(
+              onTap: () async {
+                final fileName = fileInfo['fileName'] as String;
+                await _downloadFile(attachmentUrl, fileName);
+              },
+              child: Container(
+                width: 36.0,
+                height: 36.0,
+                decoration: BoxDecoration(
+                  color: FlutterFlowTheme.of(context).alternate,
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(
+                  Icons.download_rounded,
+                  color: FlutterFlowTheme.of(context).secondaryText,
+                  size: 20.0,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // Static cache shared across all widget instances
+  static final Map<String, Map<String, dynamic>> _staticFileInfoCache = {};
+  static final Map<String, Future<Map<String, dynamic>>>
+      _staticFileInfoFutures = {};
+
+  Future<Map<String, dynamic>> _getFileInfo(String fileUrl) async {
+    // Return cached result if available
+    if (_staticFileInfoCache.containsKey(fileUrl)) {
+      return _staticFileInfoCache[fileUrl]!;
+    }
+
+    // Return cached future if already fetching
+    if (_staticFileInfoFutures.containsKey(fileUrl)) {
+      return _staticFileInfoFutures[fileUrl]!;
+    }
+
+    // Create and cache the future
+    final future = _fetchFileInfo(fileUrl);
+    _staticFileInfoFutures[fileUrl] = future;
+
+    // Cache the result when it completes
+    future.then((result) {
+      _staticFileInfoCache[fileUrl] = result;
+      _staticFileInfoFutures.remove(fileUrl);
+    });
+
+    return future;
+  }
+
+  Future<Map<String, dynamic>> _fetchFileInfo(String fileUrl) async {
+    try {
+      final uri = Uri.parse(fileUrl);
+
+      // First, try to get the original file name from message content
+      // When there's an attachment, content is likely the original filename (if no caption was sent)
+      String fileName = 'file';
+      final hasAttachment = widget.message?.attachmentUrl != null &&
+          widget.message!.attachmentUrl.isNotEmpty;
+
+      if (widget.message?.content != null &&
+          widget.message!.content.isNotEmpty) {
+        final content = widget.message!.content;
+        // Check if content looks like a file name
+        final hasExtension = content.contains('.');
+        final noPathSeparators =
+            !content.contains('/') && !content.contains('\\');
+        final notStoragePath =
+            !content.contains('users/') && !content.contains('uploads/');
+        final reasonableLength = content.length < 200 && content.length > 0;
+
+        // If there's an attachment, be more lenient - content is likely the filename
+        // Allow spaces in filenames (e.g., "test data.csv", "test_data.csv")
+        // Exclude if it looks like a full sentence (too many words or too long)
+        final wordCount = content.split(' ').length;
+        final looksLikeFilename = hasExtension &&
+            noPathSeparators &&
+            notStoragePath &&
+            reasonableLength &&
+            // If there's an attachment, prioritize treating content as filename
+            // unless it's clearly a sentence (many words or very long)
+            (hasAttachment
+                ? (content.length < 150 && wordCount < 8)
+                : (content.length < 100 && wordCount < 5));
+
+        if (looksLikeFilename) {
+          fileName = content;
+        } else {
+          // If content is not a file name, extract from URL
+          final pathSegments = uri.pathSegments;
+          if (pathSegments.isNotEmpty) {
+            final lastSegment = pathSegments.last.split('?').first;
+            // If it's a Firebase Storage path, try to extract just the filename part
+            // Format: users/.../uploads/timestamp.ext -> extract timestamp.ext
+            if (lastSegment.contains('/')) {
+              fileName = lastSegment.split('/').last;
+            } else {
+              fileName = lastSegment;
+            }
+          } else {
+            fileName = 'file';
+          }
+        }
+      } else {
+        // Extract from URL if no content
+        final pathSegments = uri.pathSegments;
+        if (pathSegments.isNotEmpty) {
+          final lastSegment = pathSegments.last.split('?').first;
+          // If it's a Firebase Storage path, try to extract just the filename part
+          if (lastSegment.contains('/')) {
+            fileName = lastSegment.split('/').last;
+          } else {
+            fileName = lastSegment;
+          }
+        } else {
+          fileName = 'file';
+        }
+      }
+
+      final extension =
+          fileName.contains('.') ? fileName.split('.').last.toLowerCase() : '';
+
+      IconData fileIcon;
+      String fileType;
+      Color iconColor;
+
+      switch (extension) {
+        case 'pdf':
+          fileIcon = Icons.picture_as_pdf;
+          fileType = 'PDF';
+          iconColor = Colors.red;
+          break;
+        case 'csv':
+        case 'xls':
+        case 'xlsx':
+          fileIcon = Icons.table_chart;
+          fileType = extension.toUpperCase();
+          iconColor = Colors.green;
+          break;
+        case 'doc':
+        case 'docx':
+          fileIcon = Icons.description;
+          fileType = 'DOC';
+          iconColor = Colors.blue;
+          break;
+        case 'txt':
+          fileIcon = Icons.text_snippet;
+          fileType = 'TXT';
+          iconColor = Colors.grey;
+          break;
+        case 'zip':
+        case 'rar':
+        case '7z':
+          fileIcon = Icons.folder_zip;
+          fileType = extension.toUpperCase();
+          iconColor = Colors.orange;
+          break;
+        case 'ppt':
+        case 'pptx':
+          fileIcon = Icons.slideshow;
+          fileType = 'PPT';
+          iconColor = Colors.orange;
+          break;
+        default:
+          fileIcon = Icons.insert_drive_file;
+          fileType = extension.isNotEmpty ? extension.toUpperCase() : 'FILE';
+          iconColor = FlutterFlowTheme.of(context).primary;
+      }
+
+      // Try to get file size
+      String fileSizeText = '';
+      try {
+        final response = await http.head(uri).timeout(Duration(seconds: 3));
+        final contentLength = response.headers['content-length'];
+        if (contentLength != null) {
+          final size = int.tryParse(contentLength) ?? 0;
+          if (size > 0) {
+            if (size < 1024) {
+              fileSizeText = '$size B';
+            } else if (size < 1024 * 1024) {
+              fileSizeText = '${(size / 1024).toStringAsFixed(1)} KB';
+            } else {
+              fileSizeText = '${(size / (1024 * 1024)).toStringAsFixed(1)} MB';
+            }
+          }
+        }
+      } catch (e) {
+        // If we can't get file size, just show file type
+      }
+
+      return {
+        'fileName': fileName,
+        'fileType': fileType,
+        'fileSize': fileSizeText,
+        'fileIcon': fileIcon,
+        'iconColor': iconColor,
+        'isPdf': extension == 'pdf',
+      };
+    } catch (e) {
+      return {
+        'fileName': 'file',
+        'fileType': 'FILE',
+        'fileSize': '',
+        'fileIcon': Icons.insert_drive_file,
+        'iconColor': FlutterFlowTheme.of(context).primary,
+        'isPdf': false,
+      };
     }
   }
 
@@ -374,6 +773,9 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
           case _MsgAction.edit:
             await _editMessage();
             break;
+          case _MsgAction.save:
+            await _saveImage();
+            break;
         }
       },
       itemBuilder: (context) => [
@@ -413,6 +815,21 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
                 (!kIsWeb && Platform.isIOS) ? Colors.black : Colors.white,
           ),
         ),
+        // Show Save option for messages with images (single or multiple)
+        if ((widget.message?.image != null &&
+                widget.message!.image.isNotEmpty) ||
+            (widget.message?.images != null &&
+                widget.message!.images.isNotEmpty)) ...[
+          PopupMenuItem(
+            value: _MsgAction.save,
+            child: _MenuRow(
+              icon: Icons.download_rounded,
+              label: 'Save',
+              textColor:
+                  (!kIsWeb && Platform.isIOS) ? Colors.black : Colors.white,
+            ),
+          ),
+        ],
         // Only show edit and unsend options for messages sent by current user
         if (widget.message?.senderRef == currentUserReference) ...[
           PopupMenuItem(
@@ -717,13 +1134,39 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
   @override
   Widget build(BuildContext context) {
     final isMe = widget.message?.senderRef == currentUserReference;
+    final isSystemMessage = widget.message?.isSystemMessage ?? false;
+
+    // System message - centered, no profile picture
+    if (isSystemMessage) {
+      return Center(
+        child: Container(
+          margin: const EdgeInsets.symmetric(vertical: 8.0, horizontal: 16.0),
+          padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 6.0),
+          decoration: BoxDecoration(
+            color: const Color(0xFFF3F4F6),
+            borderRadius: BorderRadius.circular(8.0),
+          ),
+          child: Text(
+            widget.message?.content ?? '',
+            textAlign: TextAlign.center,
+            style: FlutterFlowTheme.of(context).bodySmall.override(
+                  font: GoogleFonts.inter(),
+                  color: const Color(0xFF6B7280),
+                  fontSize: 13.0,
+                  letterSpacing: 0.0,
+                  fontWeight: FontWeight.w500,
+                ),
+          ),
+        ),
+      );
+    }
 
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
         if (isMe)
           Align(
-            alignment: const AlignmentDirectional(-1.0, 0.0),
+            alignment: const AlignmentDirectional(1.0, 0.0),
             child: Builder(
               builder: (context) => InkWell(
                 splashColor: Colors.transparent,
@@ -748,13 +1191,11 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
                         Flexible(
                           child: Container(
                             constraints: BoxConstraints(
-                              maxWidth: MediaQuery.of(context).size.width * 0.8,
-                              minWidth: MediaQuery.of(context).size.width * 0.3,
-                              minHeight: 60,
+                              maxWidth: MediaQuery.of(context).size.width * 0.7,
                             ),
                             child: Column(
-                              mainAxisSize: MainAxisSize.max,
-                              crossAxisAlignment: CrossAxisAlignment.start,
+                              mainAxisSize: MainAxisSize.min,
+                              crossAxisAlignment: CrossAxisAlignment.end,
                               children: [
                                 Align(
                                   alignment:
@@ -770,14 +1211,44 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
                                       highlightColor: Colors.transparent,
                                       onLongPress: _copyContentIfAny,
                                       child: _withMessageMenu(
-                                        bubble: Container(
+                                        bubble: AnimatedContainer(
+                                          duration:
+                                              const Duration(milliseconds: 300),
+                                          constraints: BoxConstraints(
+                                            maxWidth: MediaQuery.of(context)
+                                                    .size
+                                                    .width *
+                                                0.7,
+                                          ),
                                           decoration: BoxDecoration(
-                                            color: const Color(0xFFF3F4F6),
+                                            color: Colors.white,
                                             borderRadius:
-                                                BorderRadius.circular(16.0),
+                                                BorderRadius.circular(8.0),
+                                            border: widget.isHighlighted
+                                                ? Border.all(
+                                                    color:
+                                                        const Color(0xFF3B82F6),
+                                                    width: 3.0,
+                                                  )
+                                                : Border.all(
+                                                    color: Colors.black
+                                                        .withOpacity(0.1),
+                                                    width: 1.0,
+                                                  ),
+                                            boxShadow: widget.isHighlighted
+                                                ? [
+                                                    BoxShadow(
+                                                      color: const Color(
+                                                              0xFF3B82F6)
+                                                          .withOpacity(0.3),
+                                                      blurRadius: 8.0,
+                                                      spreadRadius: 2.0,
+                                                    ),
+                                                  ]
+                                                : null,
                                           ),
                                           child: Padding(
-                                            padding: const EdgeInsets.all(16.0),
+                                            padding: const EdgeInsets.all(10.0),
                                             child: Column(
                                               mainAxisSize: MainAxisSize.min,
                                               crossAxisAlignment:
@@ -792,47 +1263,59 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
                                                     onTap: () =>
                                                         _scrollToRepliedMessage(),
                                                     child: Container(
-                                                      width: double.infinity,
+                                                      constraints:
+                                                          const BoxConstraints(
+                                                        maxWidth: 280.0,
+                                                      ),
                                                       margin:
                                                           const EdgeInsets.only(
                                                               bottom: 8.0),
-                                                      padding:
-                                                          const EdgeInsets.all(
-                                                              8.0),
+                                                      padding: const EdgeInsets
+                                                          .symmetric(
+                                                          horizontal: 10.0,
+                                                          vertical: 6.0),
                                                       decoration: BoxDecoration(
-                                                        color: FlutterFlowTheme
-                                                                .of(context)
-                                                            .primaryBackground,
+                                                        color: const Color(
+                                                            0xFFF0F2F5),
                                                         borderRadius:
                                                             BorderRadius
-                                                                .circular(8.0),
+                                                                .circular(4.0),
                                                         border: Border(
                                                           left: BorderSide(
                                                             color: FlutterFlowTheme
                                                                     .of(context)
                                                                 .primary,
-                                                            width: 4.0,
+                                                            width: 3.0,
                                                           ),
                                                         ),
                                                       ),
                                                       child: Row(
+                                                        mainAxisSize:
+                                                            MainAxisSize.min,
                                                         children: [
-                                                          const SizedBox(
-                                                              width: 8.0),
                                                           Expanded(
                                                             child: Column(
                                                               crossAxisAlignment:
                                                                   CrossAxisAlignment
                                                                       .start,
+                                                              mainAxisSize:
+                                                                  MainAxisSize
+                                                                      .min,
                                                               children: [
                                                                 Text(
-                                                                  'Replying to ${widget.message?.replyToSender ?? 'Unknown'}',
+                                                                  widget.message
+                                                                          ?.replyToSender ??
+                                                                      'Unknown',
                                                                   style: FlutterFlowTheme.of(
                                                                           context)
                                                                       .bodySmall
                                                                       .override(
+                                                                        fontFamily:
+                                                                            'Inter',
                                                                         color: FlutterFlowTheme.of(context)
                                                                             .primary,
+                                                                        fontSize:
+                                                                            12.0,
                                                                         fontWeight:
                                                                             FontWeight.w600,
                                                                       ),
@@ -848,8 +1331,12 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
                                                                           context)
                                                                       .bodySmall
                                                                       .override(
-                                                                        color: FlutterFlowTheme.of(context)
-                                                                            .secondaryText,
+                                                                        fontFamily:
+                                                                            'Inter',
+                                                                        color: const Color(
+                                                                            0xFF667781),
+                                                                        fontSize:
+                                                                            12.0,
                                                                       ),
                                                                   maxLines: 1,
                                                                   overflow:
@@ -859,22 +1346,21 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
                                                               ],
                                                             ),
                                                           ),
-                                                          Icon(
-                                                            Icons
-                                                                .keyboard_arrow_up,
-                                                            color: FlutterFlowTheme
-                                                                    .of(context)
-                                                                .primary,
-                                                            size: 16.0,
-                                                          ),
                                                         ],
                                                       ),
                                                     ),
                                                   ),
+                                                // Only show content if there's no file attachment (file name is shown in the file card)
                                                 if (widget.message?.content !=
                                                         null &&
                                                     widget.message?.content !=
-                                                        '')
+                                                        '' &&
+                                                    (widget.message
+                                                                ?.attachmentUrl ==
+                                                            null ||
+                                                        widget.message
+                                                                ?.attachmentUrl ==
+                                                            ''))
                                                   custom_widgets
                                                       .MessageContentWidget(
                                                     content:
@@ -1088,104 +1574,195 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
                                                 if (widget.message?.image !=
                                                         null &&
                                                     widget.message?.image != '')
-                                                  Container(
-                                                    width: 265.0,
-                                                    height: 207.2,
-                                                    decoration: BoxDecoration(
-                                                      color: const Color(
-                                                          0xFFE5E7EB),
-                                                      borderRadius:
-                                                          BorderRadius.circular(
-                                                              8.0),
-                                                    ),
-                                                    child: InkWell(
-                                                      splashColor:
-                                                          Colors.transparent,
-                                                      focusColor:
-                                                          Colors.transparent,
-                                                      hoverColor:
-                                                          Colors.transparent,
-                                                      highlightColor:
-                                                          Colors.transparent,
-                                                      onTap: () async {
-                                                        await Navigator.push(
-                                                          context,
-                                                          PageTransition(
-                                                            type:
-                                                                PageTransitionType
-                                                                    .fade,
-                                                            child:
-                                                                FlutterFlowExpandedImageView(
-                                                              image:
-                                                                  CachedNetworkImage(
-                                                                fadeInDuration:
-                                                                    const Duration(
-                                                                        milliseconds:
-                                                                            300),
-                                                                fadeOutDuration:
-                                                                    const Duration(
-                                                                        milliseconds:
-                                                                            300),
-                                                                imageUrl:
+                                                  OverflowBox(
+                                                    maxWidth: double.infinity,
+                                                    alignment:
+                                                        AlignmentDirectional
+                                                            .centerStart,
+                                                    child: Padding(
+                                                      padding:
+                                                          const EdgeInsets.only(
+                                                              left: 40.0),
+                                                      child: Stack(
+                                                        clipBehavior: Clip.none,
+                                                        children: [
+                                                          // Image bubble container
+                                                          Container(
+                                                            constraints:
+                                                                BoxConstraints(
+                                                              maxWidth: MediaQuery.of(
+                                                                          context)
+                                                                      .size
+                                                                      .width *
+                                                                  0.7,
+                                                              maxHeight: 400.0,
+                                                            ),
+                                                            margin:
+                                                                const EdgeInsets
+                                                                    .only(
+                                                              bottom: 4.0,
+                                                            ),
+                                                            decoration:
+                                                                BoxDecoration(
+                                                              color: const Color(
+                                                                  0xFFE5E7EB),
+                                                              borderRadius:
+                                                                  BorderRadius
+                                                                      .only(
+                                                                topLeft: Radius
+                                                                    .circular(
+                                                                        8.0),
+                                                                topRight: Radius
+                                                                    .circular(
+                                                                        8.0),
+                                                                bottomLeft: Radius
+                                                                    .circular(
+                                                                        8.0),
+                                                                bottomRight: Radius.circular((widget.message?.content !=
+                                                                            null &&
+                                                                        widget
+                                                                            .message!
+                                                                            .content
+                                                                            .isNotEmpty &&
+                                                                        (widget.message?.attachmentUrl ==
+                                                                                null ||
+                                                                            widget.message?.attachmentUrl ==
+                                                                                ''))
+                                                                    ? 0.0
+                                                                    : 8.0),
+                                                              ),
+                                                            ),
+                                                            child: InkWell(
+                                                              splashColor: Colors
+                                                                  .transparent,
+                                                              focusColor: Colors
+                                                                  .transparent,
+                                                              hoverColor: Colors
+                                                                  .transparent,
+                                                              highlightColor:
+                                                                  Colors
+                                                                      .transparent,
+                                                              onTap: () async {
+                                                                await Navigator
+                                                                    .push(
+                                                                  context,
+                                                                  PageTransition(
+                                                                    type: PageTransitionType
+                                                                        .fade,
+                                                                    child:
+                                                                        FlutterFlowExpandedImageView(
+                                                                      image:
+                                                                          CachedNetworkImage(
+                                                                        fadeInDuration:
+                                                                            const Duration(milliseconds: 300),
+                                                                        fadeOutDuration:
+                                                                            const Duration(milliseconds: 300),
+                                                                        imageUrl:
+                                                                            valueOrDefault<String>(
+                                                                          widget
+                                                                              .message
+                                                                              ?.image,
+                                                                          'https://firebasestorage.googleapis.com/v0/b/linkedup-c3e29.firebasestorage.app/o/asset%2Fdefault-user.png?alt=media&token=35d4da12-13b0-4f43-8b8e-375e6e126683',
+                                                                        ),
+                                                                        fit: BoxFit
+                                                                            .contain,
+                                                                      ),
+                                                                      allowRotation:
+                                                                          false,
+                                                                      tag: valueOrDefault<
+                                                                          String>(
+                                                                        widget
+                                                                            .message
+                                                                            ?.image,
+                                                                        'https://firebasestorage.googleapis.com/v0/b/linkedup-c3e29.firebasestorage.app/o/asset%2Fdefault-user.png?alt=media&token=35d4da12-13b0-4f43-8b8e-375e6e126683',
+                                                                      ),
+                                                                      useHeroAnimation:
+                                                                          true,
+                                                                    ),
+                                                                  ),
+                                                                );
+                                                              },
+                                                              child: Hero(
+                                                                tag:
                                                                     valueOrDefault<
                                                                         String>(
                                                                   widget.message
                                                                       ?.image,
                                                                   'https://firebasestorage.googleapis.com/v0/b/linkedup-c3e29.firebasestorage.app/o/asset%2Fdefault-user.png?alt=media&token=35d4da12-13b0-4f43-8b8e-375e6e126683',
                                                                 ),
-                                                                fit: BoxFit
-                                                                    .contain,
+                                                                transitionOnUserGestures:
+                                                                    true,
+                                                                child:
+                                                                    ClipRRect(
+                                                                  borderRadius:
+                                                                      BorderRadius
+                                                                          .only(
+                                                                    topLeft: Radius
+                                                                        .circular(
+                                                                            8.0),
+                                                                    topRight: Radius
+                                                                        .circular(
+                                                                            8.0),
+                                                                    bottomLeft:
+                                                                        Radius.circular(
+                                                                            8.0),
+                                                                    bottomRight: Radius.circular((widget.message?.content !=
+                                                                                null &&
+                                                                            widget
+                                                                                .message!.content.isNotEmpty &&
+                                                                            (widget.message?.attachmentUrl == null ||
+                                                                                widget.message?.attachmentUrl == ''))
+                                                                        ? 0.0
+                                                                        : 8.0),
+                                                                  ),
+                                                                  child:
+                                                                      CachedNetworkImage(
+                                                                    fadeInDuration:
+                                                                        const Duration(
+                                                                            milliseconds:
+                                                                                300),
+                                                                    fadeOutDuration:
+                                                                        const Duration(
+                                                                            milliseconds:
+                                                                                300),
+                                                                    imageUrl:
+                                                                        valueOrDefault<
+                                                                            String>(
+                                                                      widget
+                                                                          .message
+                                                                          ?.image,
+                                                                      'https://firebasestorage.googleapis.com/v0/b/linkedup-c3e29.firebasestorage.app/o/asset%2Fdefault-user.png?alt=media&token=35d4da12-13b0-4f43-8b8e-375e6e126683',
+                                                                    ),
+                                                                    width: double
+                                                                        .infinity,
+                                                                    height: double
+                                                                        .infinity,
+                                                                    fit: BoxFit
+                                                                        .cover,
+                                                                    errorWidget: (context,
+                                                                            error,
+                                                                            stackTrace) =>
+                                                                        Container(
+                                                                      width: double
+                                                                          .infinity,
+                                                                      height:
+                                                                          200.0,
+                                                                      color: const Color(
+                                                                          0xFFE5E7EB),
+                                                                      child:
+                                                                          Icon(
+                                                                        Icons
+                                                                            .broken_image,
+                                                                        color: Colors
+                                                                            .grey,
+                                                                      ),
+                                                                    ),
+                                                                  ),
+                                                                ),
                                                               ),
-                                                              allowRotation:
-                                                                  false,
-                                                              tag:
-                                                                  valueOrDefault<
-                                                                      String>(
-                                                                widget.message
-                                                                    ?.image,
-                                                                'https://firebasestorage.googleapis.com/v0/b/linkedup-c3e29.firebasestorage.app/o/asset%2Fdefault-user.png?alt=media&token=35d4da12-13b0-4f43-8b8e-375e6e126683',
-                                                              ),
-                                                              useHeroAnimation:
-                                                                  true,
                                                             ),
                                                           ),
-                                                        );
-                                                      },
-                                                      child: Hero(
-                                                        tag: valueOrDefault<
-                                                            String>(
-                                                          widget.message?.image,
-                                                          'https://firebasestorage.googleapis.com/v0/b/linkedup-c3e29.firebasestorage.app/o/asset%2Fdefault-user.png?alt=media&token=35d4da12-13b0-4f43-8b8e-375e6e126683',
-                                                        ),
-                                                        transitionOnUserGestures:
-                                                            true,
-                                                        child: ClipRRect(
-                                                          borderRadius:
-                                                              BorderRadius
-                                                                  .circular(
-                                                                      8.0),
-                                                          child:
-                                                              CachedNetworkImage(
-                                                            fadeInDuration:
-                                                                const Duration(
-                                                                    milliseconds:
-                                                                        300),
-                                                            fadeOutDuration:
-                                                                const Duration(
-                                                                    milliseconds:
-                                                                        300),
-                                                            imageUrl:
-                                                                valueOrDefault<
-                                                                    String>(
-                                                              widget.message
-                                                                  ?.image,
-                                                              'https://firebasestorage.googleapis.com/v0/b/linkedup-c3e29.firebasestorage.app/o/asset%2Fdefault-user.png?alt=media&token=35d4da12-13b0-4f43-8b8e-375e6e126683',
-                                                            ),
-                                                            width: 222.23,
-                                                            height: 144.0,
-                                                            fit: BoxFit.cover,
-                                                          ),
-                                                        ),
+                                                        ],
                                                       ),
                                                     ),
                                                   ),
@@ -1254,28 +1831,71 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
                                                                 final multipleImagesItem =
                                                                     multipleImages[
                                                                         multipleImagesIndex];
-                                                                return InkWell(
-                                                                  splashColor:
-                                                                      Colors
-                                                                          .transparent,
-                                                                  focusColor: Colors
-                                                                      .transparent,
-                                                                  hoverColor: Colors
-                                                                      .transparent,
-                                                                  highlightColor:
-                                                                      Colors
-                                                                          .transparent,
-                                                                  onTap:
-                                                                      () async {
-                                                                    await Navigator
-                                                                        .push(
-                                                                      context,
-                                                                      PageTransition(
-                                                                        type: PageTransitionType
-                                                                            .fade,
+                                                                return Stack(
+                                                                  clipBehavior:
+                                                                      Clip.none,
+                                                                  children: [
+                                                                    // Image container
+                                                                    InkWell(
+                                                                      splashColor:
+                                                                          Colors
+                                                                              .transparent,
+                                                                      focusColor:
+                                                                          Colors
+                                                                              .transparent,
+                                                                      hoverColor:
+                                                                          Colors
+                                                                              .transparent,
+                                                                      highlightColor:
+                                                                          Colors
+                                                                              .transparent,
+                                                                      onTap:
+                                                                          () async {
+                                                                        await Navigator
+                                                                            .push(
+                                                                          context,
+                                                                          PageTransition(
+                                                                            type:
+                                                                                PageTransitionType.fade,
+                                                                            child:
+                                                                                FlutterFlowExpandedImageView(
+                                                                              image: CachedNetworkImage(
+                                                                                fadeInDuration: const Duration(milliseconds: 300),
+                                                                                fadeOutDuration: const Duration(milliseconds: 300),
+                                                                                imageUrl: valueOrDefault<String>(
+                                                                                  multipleImagesItem,
+                                                                                  'https://firebasestorage.googleapis.com/v0/b/linkedup-c3e29.firebasestorage.app/o/asset%2Fdefault-user.png?alt=media&token=35d4da12-13b0-4f43-8b8e-375e6e126683',
+                                                                                ),
+                                                                                fit: BoxFit.contain,
+                                                                                errorWidget: (context, error, stackTrace) => Image.asset(
+                                                                                  'assets/images/error_image.png',
+                                                                                  fit: BoxFit.contain,
+                                                                                ),
+                                                                              ),
+                                                                              allowRotation: false,
+                                                                              tag: valueOrDefault<String>(
+                                                                                multipleImagesItem,
+                                                                                'https://firebasestorage.googleapis.com/v0/b/linkedup-c3e29.firebasestorage.app/o/asset%2Fdefault-user.png?alt=media&token=35d4da12-13b0-4f43-8b8e-375e6e126683$multipleImagesIndex',
+                                                                              ),
+                                                                              useHeroAnimation: true,
+                                                                            ),
+                                                                          ),
+                                                                        );
+                                                                      },
+                                                                      child:
+                                                                          Hero(
+                                                                        tag: valueOrDefault<
+                                                                            String>(
+                                                                          multipleImagesItem,
+                                                                          'https://firebasestorage.googleapis.com/v0/b/linkedup-c3e29.firebasestorage.app/o/asset%2Fdefault-user.png?alt=media&token=35d4da12-13b0-4f43-8b8e-375e6e126683$multipleImagesIndex',
+                                                                        ),
+                                                                        transitionOnUserGestures:
+                                                                            true,
                                                                         child:
-                                                                            FlutterFlowExpandedImageView(
-                                                                          image:
+                                                                            ClipRRect(
+                                                                          borderRadius:
+                                                                              BorderRadius.circular(8.0),
+                                                                          child:
                                                                               CachedNetworkImage(
                                                                             fadeInDuration:
                                                                                 const Duration(milliseconds: 300),
@@ -1286,72 +1906,24 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
                                                                               multipleImagesItem,
                                                                               'https://firebasestorage.googleapis.com/v0/b/linkedup-c3e29.firebasestorage.app/o/asset%2Fdefault-user.png?alt=media&token=35d4da12-13b0-4f43-8b8e-375e6e126683',
                                                                             ),
+                                                                            width:
+                                                                                double.infinity,
+                                                                            height:
+                                                                                207.2,
                                                                             fit:
-                                                                                BoxFit.contain,
+                                                                                BoxFit.cover,
                                                                             errorWidget: (context, error, stackTrace) =>
                                                                                 Image.asset(
                                                                               'assets/images/error_image.png',
-                                                                              fit: BoxFit.contain,
+                                                                              width: double.infinity,
+                                                                              height: 207.2,
+                                                                              fit: BoxFit.cover,
                                                                             ),
                                                                           ),
-                                                                          allowRotation:
-                                                                              false,
-                                                                          tag: valueOrDefault<
-                                                                              String>(
-                                                                            multipleImagesItem,
-                                                                            'https://firebasestorage.googleapis.com/v0/b/linkedup-c3e29.firebasestorage.app/o/asset%2Fdefault-user.png?alt=media&token=35d4da12-13b0-4f43-8b8e-375e6e126683$multipleImagesIndex',
-                                                                          ),
-                                                                          useHeroAnimation:
-                                                                              true,
-                                                                        ),
-                                                                      ),
-                                                                    );
-                                                                  },
-                                                                  child: Hero(
-                                                                    tag: valueOrDefault<
-                                                                        String>(
-                                                                      multipleImagesItem,
-                                                                      'https://firebasestorage.googleapis.com/v0/b/linkedup-c3e29.firebasestorage.app/o/asset%2Fdefault-user.png?alt=media&token=35d4da12-13b0-4f43-8b8e-375e6e126683$multipleImagesIndex',
-                                                                    ),
-                                                                    transitionOnUserGestures:
-                                                                        true,
-                                                                    child:
-                                                                        ClipRRect(
-                                                                      borderRadius:
-                                                                          BorderRadius.circular(
-                                                                              8.0),
-                                                                      child:
-                                                                          CachedNetworkImage(
-                                                                        fadeInDuration:
-                                                                            const Duration(milliseconds: 300),
-                                                                        fadeOutDuration:
-                                                                            const Duration(milliseconds: 300),
-                                                                        imageUrl:
-                                                                            valueOrDefault<String>(
-                                                                          multipleImagesItem,
-                                                                          'https://firebasestorage.googleapis.com/v0/b/linkedup-c3e29.firebasestorage.app/o/asset%2Fdefault-user.png?alt=media&token=35d4da12-13b0-4f43-8b8e-375e6e126683',
-                                                                        ),
-                                                                        width: double
-                                                                            .infinity,
-                                                                        height:
-                                                                            207.2,
-                                                                        fit: BoxFit
-                                                                            .cover,
-                                                                        errorWidget: (context,
-                                                                                error,
-                                                                                stackTrace) =>
-                                                                            Image.asset(
-                                                                          'assets/images/error_image.png',
-                                                                          width:
-                                                                              double.infinity,
-                                                                          height:
-                                                                              207.2,
-                                                                          fit: BoxFit
-                                                                              .cover,
                                                                         ),
                                                                       ),
                                                                     ),
-                                                                  ),
+                                                                  ],
                                                                 );
                                                               },
                                                             ).divide(
@@ -1468,117 +2040,8 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
                                                     widget.message
                                                             ?.attachmentUrl !=
                                                         '')
-                                                  Builder(
-                                                    builder: (context) =>
-                                                        InkWell(
-                                                      splashColor:
-                                                          Colors.transparent,
-                                                      focusColor:
-                                                          Colors.transparent,
-                                                      hoverColor:
-                                                          Colors.transparent,
-                                                      highlightColor:
-                                                          Colors.transparent,
-                                                      onTap: () async {
-                                                        await showDialog(
-                                                          context: context,
-                                                          builder:
-                                                              (dialogContext) {
-                                                            return Dialog(
-                                                              elevation: 0,
-                                                              insetPadding:
-                                                                  EdgeInsets
-                                                                      .zero,
-                                                              backgroundColor:
-                                                                  Colors
-                                                                      .transparent,
-                                                              alignment: const AlignmentDirectional(
-                                                                      0.0, 0.0)
-                                                                  .resolve(
-                                                                      Directionality.of(
-                                                                          context)),
-                                                              child:
-                                                                  PDFViewWidget(
-                                                                url: widget
-                                                                    .message!
-                                                                    .attachmentUrl,
-                                                              ),
-                                                            );
-                                                          },
-                                                        );
-                                                      },
-                                                      child: Container(
-                                                        width: double.infinity,
-                                                        height: 65.0,
-                                                        decoration:
-                                                            BoxDecoration(
-                                                          color: FlutterFlowTheme
-                                                                  .of(context)
-                                                              .secondaryBackground,
-                                                          borderRadius:
-                                                              BorderRadius
-                                                                  .circular(
-                                                                      12.0),
-                                                        ),
-                                                        child: Align(
-                                                          alignment:
-                                                              const AlignmentDirectional(
-                                                                  0.0, 0.0),
-                                                          child: Padding(
-                                                            padding:
-                                                                const EdgeInsets
-                                                                    .all(9.0),
-                                                            child: Row(
-                                                              mainAxisSize:
-                                                                  MainAxisSize
-                                                                      .max,
-                                                              mainAxisAlignment:
-                                                                  MainAxisAlignment
-                                                                      .center,
-                                                              children: [
-                                                                Text(
-                                                                  'View PDF File',
-                                                                  style: FlutterFlowTheme.of(
-                                                                          context)
-                                                                      .bodyMedium
-                                                                      .override(
-                                                                        font: GoogleFonts
-                                                                            .inter(
-                                                                          fontWeight: FlutterFlowTheme.of(context)
-                                                                              .bodyMedium
-                                                                              .fontWeight,
-                                                                          fontStyle: FlutterFlowTheme.of(context)
-                                                                              .bodyMedium
-                                                                              .fontStyle,
-                                                                        ),
-                                                                        letterSpacing:
-                                                                            0.0,
-                                                                        fontWeight: FlutterFlowTheme.of(context)
-                                                                            .bodyMedium
-                                                                            .fontWeight,
-                                                                        fontStyle: FlutterFlowTheme.of(context)
-                                                                            .bodyMedium
-                                                                            .fontStyle,
-                                                                      ),
-                                                                ),
-                                                                Icon(
-                                                                  Icons
-                                                                      .cloud_download,
-                                                                  color: FlutterFlowTheme.of(
-                                                                          context)
-                                                                      .primary,
-                                                                  size: 24.0,
-                                                                ),
-                                                              ].divide(
-                                                                  const SizedBox(
-                                                                      width:
-                                                                          15.0)),
-                                                            ),
-                                                          ),
-                                                        ),
-                                                      ),
-                                                    ),
-                                                  ),
+                                                  _buildFileAttachment(widget
+                                                      .message!.attachmentUrl),
                                               ].divide(
                                                   const SizedBox(height: 8.0)),
                                             ),
@@ -1595,7 +2058,7 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
                                     mainAxisAlignment: MainAxisAlignment.end,
                                     children: [
                                       Text(
-                                        'You',
+                                        widget.name ?? 'Unknown',
                                         style: FlutterFlowTheme.of(context)
                                             .bodySmall
                                             .override(
@@ -1634,11 +2097,8 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
                                             ),
                                       ),
                                       Text(
-                                        valueOrDefault<String>(
-                                          dateTimeFormat("relative",
-                                              widget.message?.createdAt),
-                                          'N/A',
-                                        ),
+                                        _formatMessageTimestamp(
+                                            widget.message?.createdAt),
                                         style: FlutterFlowTheme.of(context)
                                             .bodySmall
                                             .override(
@@ -1695,7 +2155,7 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
           ),
         if (!isMe)
           Align(
-            alignment: const AlignmentDirectional(1.0, 0.0),
+            alignment: const AlignmentDirectional(-1.0, 0.0),
             child: Builder(
               builder: (context) => InkWell(
                 splashColor: Colors.transparent,
@@ -1734,13 +2194,11 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
                         Flexible(
                           child: Container(
                             constraints: BoxConstraints(
-                              maxWidth: MediaQuery.of(context).size.width * 0.8,
-                              minWidth: MediaQuery.of(context).size.width * 0.3,
-                              minHeight: 60,
+                              maxWidth: MediaQuery.of(context).size.width * 0.7,
                             ),
                             child: Column(
-                              mainAxisSize: MainAxisSize.max,
-                              crossAxisAlignment: CrossAxisAlignment.end,
+                              mainAxisSize: MainAxisSize.min,
+                              crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 Align(
                                   alignment:
@@ -1756,18 +2214,48 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
                                       highlightColor: Colors.transparent,
                                       onLongPress: _copyContentIfAny,
                                       child: _withMessageMenu(
-                                        bubble: Container(
+                                        bubble: AnimatedContainer(
+                                          duration:
+                                              const Duration(milliseconds: 300),
+                                          constraints: BoxConstraints(
+                                            maxWidth: MediaQuery.of(context)
+                                                    .size
+                                                    .width *
+                                                0.7,
+                                          ),
                                           decoration: BoxDecoration(
-                                            color: const Color(0xFFF3F4F6),
+                                            color: Colors.white,
                                             borderRadius:
-                                                BorderRadius.circular(16.0),
+                                                BorderRadius.circular(8.0),
+                                            border: widget.isHighlighted
+                                                ? Border.all(
+                                                    color:
+                                                        const Color(0xFF3B82F6),
+                                                    width: 3.0,
+                                                  )
+                                                : Border.all(
+                                                    color: Colors.black
+                                                        .withOpacity(0.1),
+                                                    width: 1.0,
+                                                  ),
+                                            boxShadow: widget.isHighlighted
+                                                ? [
+                                                    BoxShadow(
+                                                      color: const Color(
+                                                              0xFF3B82F6)
+                                                          .withOpacity(0.3),
+                                                      blurRadius: 8.0,
+                                                      spreadRadius: 2.0,
+                                                    ),
+                                                  ]
+                                                : null,
                                           ),
                                           child: Padding(
-                                            padding: const EdgeInsets.all(16.0),
+                                            padding: const EdgeInsets.all(10.0),
                                             child: Column(
                                               mainAxisSize: MainAxisSize.min,
                                               crossAxisAlignment:
-                                                  CrossAxisAlignment.end,
+                                                  CrossAxisAlignment.start,
                                               children: [
                                                 // Reply indicator
                                                 if (widget.message?.replyTo !=
@@ -1778,47 +2266,59 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
                                                     onTap: () =>
                                                         _scrollToRepliedMessage(),
                                                     child: Container(
-                                                      width: double.infinity,
+                                                      constraints:
+                                                          const BoxConstraints(
+                                                        maxWidth: 280.0,
+                                                      ),
                                                       margin:
                                                           const EdgeInsets.only(
                                                               bottom: 8.0),
-                                                      padding:
-                                                          const EdgeInsets.all(
-                                                              8.0),
+                                                      padding: const EdgeInsets
+                                                          .symmetric(
+                                                          horizontal: 10.0,
+                                                          vertical: 6.0),
                                                       decoration: BoxDecoration(
-                                                        color: FlutterFlowTheme
-                                                                .of(context)
-                                                            .primaryBackground,
+                                                        color: const Color(
+                                                            0xFFF0F2F5),
                                                         borderRadius:
                                                             BorderRadius
-                                                                .circular(8.0),
+                                                                .circular(4.0),
                                                         border: Border(
                                                           left: BorderSide(
                                                             color: FlutterFlowTheme
                                                                     .of(context)
                                                                 .primary,
-                                                            width: 4.0,
+                                                            width: 3.0,
                                                           ),
                                                         ),
                                                       ),
                                                       child: Row(
+                                                        mainAxisSize:
+                                                            MainAxisSize.min,
                                                         children: [
-                                                          const SizedBox(
-                                                              width: 8.0),
                                                           Expanded(
                                                             child: Column(
                                                               crossAxisAlignment:
                                                                   CrossAxisAlignment
                                                                       .start,
+                                                              mainAxisSize:
+                                                                  MainAxisSize
+                                                                      .min,
                                                               children: [
                                                                 Text(
-                                                                  'Replying to ${widget.message?.replyToSender ?? 'Unknown'}',
+                                                                  widget.message
+                                                                          ?.replyToSender ??
+                                                                      'Unknown',
                                                                   style: FlutterFlowTheme.of(
                                                                           context)
                                                                       .bodySmall
                                                                       .override(
+                                                                        fontFamily:
+                                                                            'Inter',
                                                                         color: FlutterFlowTheme.of(context)
                                                                             .primary,
+                                                                        fontSize:
+                                                                            12.0,
                                                                         fontWeight:
                                                                             FontWeight.w600,
                                                                       ),
@@ -1834,8 +2334,12 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
                                                                           context)
                                                                       .bodySmall
                                                                       .override(
-                                                                        color: FlutterFlowTheme.of(context)
-                                                                            .secondaryText,
+                                                                        fontFamily:
+                                                                            'Inter',
+                                                                        color: const Color(
+                                                                            0xFF667781),
+                                                                        fontSize:
+                                                                            12.0,
                                                                       ),
                                                                   maxLines: 1,
                                                                   overflow:
@@ -1845,22 +2349,21 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
                                                               ],
                                                             ),
                                                           ),
-                                                          Icon(
-                                                            Icons
-                                                                .keyboard_arrow_up,
-                                                            color: FlutterFlowTheme
-                                                                    .of(context)
-                                                                .primary,
-                                                            size: 16.0,
-                                                          ),
                                                         ],
                                                       ),
                                                     ),
                                                   ),
+                                                // Only show content if there's no file attachment (file name is shown in the file card)
                                                 if (widget.message?.content !=
                                                         null &&
                                                     widget.message?.content !=
-                                                        '')
+                                                        '' &&
+                                                    (widget.message
+                                                                ?.attachmentUrl ==
+                                                            null ||
+                                                        widget.message
+                                                                ?.attachmentUrl ==
+                                                            ''))
                                                   custom_widgets
                                                       .MessageContentWidget(
                                                     content:
@@ -2074,121 +2577,152 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
                                                 if (widget.message?.image !=
                                                         null &&
                                                     widget.message?.image != '')
-                                                  Container(
-                                                    width: 265.0,
-                                                    height: 207.2,
-                                                    decoration: BoxDecoration(
-                                                      color: const Color(
-                                                          0xFFE5E7EB),
-                                                      borderRadius:
-                                                          BorderRadius.circular(
-                                                              8.0),
-                                                    ),
-                                                    child: InkWell(
-                                                      splashColor:
-                                                          Colors.transparent,
-                                                      focusColor:
-                                                          Colors.transparent,
-                                                      hoverColor:
-                                                          Colors.transparent,
-                                                      highlightColor:
-                                                          Colors.transparent,
-                                                      onTap: () async {
-                                                        await Navigator.push(
-                                                          context,
-                                                          PageTransition(
-                                                            type:
-                                                                PageTransitionType
-                                                                    .fade,
-                                                            child:
-                                                                FlutterFlowExpandedImageView(
-                                                              image:
-                                                                  CachedNetworkImage(
-                                                                fadeInDuration:
-                                                                    const Duration(
-                                                                        milliseconds:
-                                                                            300),
-                                                                fadeOutDuration:
-                                                                    const Duration(
-                                                                        milliseconds:
-                                                                            300),
-                                                                imageUrl:
+                                                  OverflowBox(
+                                                    maxWidth: double.infinity,
+                                                    alignment:
+                                                        AlignmentDirectional
+                                                            .centerStart,
+                                                    child: Padding(
+                                                      padding:
+                                                          const EdgeInsets.only(
+                                                              left: 40.0),
+                                                      child: Stack(
+                                                        clipBehavior: Clip.none,
+                                                        children: [
+                                                          // Image bubble container
+                                                          Container(
+                                                            constraints:
+                                                                BoxConstraints(
+                                                              maxWidth: MediaQuery.of(
+                                                                          context)
+                                                                      .size
+                                                                      .width *
+                                                                  0.7,
+                                                              maxHeight: 400.0,
+                                                            ),
+                                                            margin:
+                                                                const EdgeInsets
+                                                                    .only(
+                                                              bottom: 4.0,
+                                                            ),
+                                                            decoration:
+                                                                BoxDecoration(
+                                                              color: const Color(
+                                                                  0xFFE5E7EB),
+                                                              borderRadius:
+                                                                  BorderRadius
+                                                                      .circular(
+                                                                          8.0),
+                                                            ),
+                                                            child: InkWell(
+                                                              splashColor: Colors
+                                                                  .transparent,
+                                                              focusColor: Colors
+                                                                  .transparent,
+                                                              hoverColor: Colors
+                                                                  .transparent,
+                                                              highlightColor:
+                                                                  Colors
+                                                                      .transparent,
+                                                              onTap: () async {
+                                                                await Navigator
+                                                                    .push(
+                                                                  context,
+                                                                  PageTransition(
+                                                                    type: PageTransitionType
+                                                                        .fade,
+                                                                    child:
+                                                                        FlutterFlowExpandedImageView(
+                                                                      image:
+                                                                          CachedNetworkImage(
+                                                                        fadeInDuration:
+                                                                            const Duration(milliseconds: 300),
+                                                                        fadeOutDuration:
+                                                                            const Duration(milliseconds: 300),
+                                                                        imageUrl:
+                                                                            valueOrDefault<String>(
+                                                                          widget
+                                                                              .message
+                                                                              ?.image,
+                                                                          'https://firebasestorage.googleapis.com/v0/b/linkedup-c3e29.firebasestorage.app/o/asset%2Fdefault-user.png?alt=media&token=35d4da12-13b0-4f43-8b8e-375e6e126683',
+                                                                        ),
+                                                                        fit: BoxFit
+                                                                            .contain,
+                                                                        errorWidget: (context,
+                                                                                error,
+                                                                                stackTrace) =>
+                                                                            Image.asset(
+                                                                          'assets/images/error_image.png',
+                                                                          fit: BoxFit
+                                                                              .contain,
+                                                                        ),
+                                                                      ),
+                                                                      allowRotation:
+                                                                          false,
+                                                                      tag: valueOrDefault<
+                                                                          String>(
+                                                                        widget
+                                                                            .message
+                                                                            ?.image,
+                                                                        'https://firebasestorage.googleapis.com/v0/b/linkedup-c3e29.firebasestorage.app/o/asset%2Fdefault-user.png?alt=media&token=35d4da12-13b0-4f43-8b8e-375e6e126683',
+                                                                      ),
+                                                                      useHeroAnimation:
+                                                                          true,
+                                                                    ),
+                                                                  ),
+                                                                );
+                                                              },
+                                                              child: Hero(
+                                                                tag:
                                                                     valueOrDefault<
                                                                         String>(
                                                                   widget.message
                                                                       ?.image,
                                                                   'https://firebasestorage.googleapis.com/v0/b/linkedup-c3e29.firebasestorage.app/o/asset%2Fdefault-user.png?alt=media&token=35d4da12-13b0-4f43-8b8e-375e6e126683',
                                                                 ),
-                                                                fit: BoxFit
-                                                                    .contain,
-                                                                errorWidget: (context,
-                                                                        error,
-                                                                        stackTrace) =>
-                                                                    Image.asset(
-                                                                  'assets/images/error_image.png',
-                                                                  fit: BoxFit
-                                                                      .contain,
+                                                                transitionOnUserGestures:
+                                                                    true,
+                                                                child:
+                                                                    ClipRRect(
+                                                                  borderRadius:
+                                                                      BorderRadius
+                                                                          .circular(
+                                                                              8.0),
+                                                                  child:
+                                                                      CachedNetworkImage(
+                                                                    fadeInDuration:
+                                                                        const Duration(
+                                                                            milliseconds:
+                                                                                300),
+                                                                    fadeOutDuration:
+                                                                        const Duration(
+                                                                            milliseconds:
+                                                                                300),
+                                                                    imageUrl:
+                                                                        valueOrDefault<
+                                                                            String>(
+                                                                      widget
+                                                                          .message
+                                                                          ?.image,
+                                                                      'https://firebasestorage.googleapis.com/v0/b/linkedup-c3e29.firebasestorage.app/o/asset%2Fdefault-user.png?alt=media&token=35d4da12-13b0-4f43-8b8e-375e6e126683',
+                                                                    ),
+                                                                    fit: BoxFit
+                                                                        .cover,
+                                                                    errorWidget: (context,
+                                                                            error,
+                                                                            stackTrace) =>
+                                                                        Image
+                                                                            .asset(
+                                                                      'assets/images/error_image.png',
+                                                                      fit: BoxFit
+                                                                          .cover,
+                                                                    ),
+                                                                  ),
                                                                 ),
                                                               ),
-                                                              allowRotation:
-                                                                  false,
-                                                              tag:
-                                                                  valueOrDefault<
-                                                                      String>(
-                                                                widget.message
-                                                                    ?.image,
-                                                                'https://firebasestorage.googleapis.com/v0/b/linkedup-c3e29.firebasestorage.app/o/asset%2Fdefault-user.png?alt=media&token=35d4da12-13b0-4f43-8b8e-375e6e126683',
-                                                              ),
-                                                              useHeroAnimation:
-                                                                  true,
                                                             ),
                                                           ),
-                                                        );
-                                                      },
-                                                      child: Hero(
-                                                        tag: valueOrDefault<
-                                                            String>(
-                                                          widget.message?.image,
-                                                          'https://firebasestorage.googleapis.com/v0/b/linkedup-c3e29.firebasestorage.app/o/asset%2Fdefault-user.png?alt=media&token=35d4da12-13b0-4f43-8b8e-375e6e126683',
-                                                        ),
-                                                        transitionOnUserGestures:
-                                                            true,
-                                                        child: ClipRRect(
-                                                          borderRadius:
-                                                              BorderRadius
-                                                                  .circular(
-                                                                      8.0),
-                                                          child:
-                                                              CachedNetworkImage(
-                                                            fadeInDuration:
-                                                                const Duration(
-                                                                    milliseconds:
-                                                                        300),
-                                                            fadeOutDuration:
-                                                                const Duration(
-                                                                    milliseconds:
-                                                                        300),
-                                                            imageUrl:
-                                                                valueOrDefault<
-                                                                    String>(
-                                                              widget.message
-                                                                  ?.image,
-                                                              'https://firebasestorage.googleapis.com/v0/b/linkedup-c3e29.firebasestorage.app/o/asset%2Fdefault-user.png?alt=media&token=35d4da12-13b0-4f43-8b8e-375e6e126683',
-                                                            ),
-                                                            width: 222.2,
-                                                            height: 144.0,
-                                                            fit: BoxFit.cover,
-                                                            errorWidget: (context,
-                                                                    error,
-                                                                    stackTrace) =>
-                                                                Image.asset(
-                                                              'assets/images/error_image.png',
-                                                              width: 222.2,
-                                                              height: 144.0,
-                                                              fit: BoxFit.cover,
-                                                            ),
-                                                          ),
-                                                        ),
+                                                        ],
                                                       ),
                                                     ),
                                                   ),
@@ -2257,28 +2791,71 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
                                                                 final multipleImagesItem =
                                                                     multipleImages[
                                                                         multipleImagesIndex];
-                                                                return InkWell(
-                                                                  splashColor:
-                                                                      Colors
-                                                                          .transparent,
-                                                                  focusColor: Colors
-                                                                      .transparent,
-                                                                  hoverColor: Colors
-                                                                      .transparent,
-                                                                  highlightColor:
-                                                                      Colors
-                                                                          .transparent,
-                                                                  onTap:
-                                                                      () async {
-                                                                    await Navigator
-                                                                        .push(
-                                                                      context,
-                                                                      PageTransition(
-                                                                        type: PageTransitionType
-                                                                            .fade,
+                                                                return Stack(
+                                                                  clipBehavior:
+                                                                      Clip.none,
+                                                                  children: [
+                                                                    // Image container
+                                                                    InkWell(
+                                                                      splashColor:
+                                                                          Colors
+                                                                              .transparent,
+                                                                      focusColor:
+                                                                          Colors
+                                                                              .transparent,
+                                                                      hoverColor:
+                                                                          Colors
+                                                                              .transparent,
+                                                                      highlightColor:
+                                                                          Colors
+                                                                              .transparent,
+                                                                      onTap:
+                                                                          () async {
+                                                                        await Navigator
+                                                                            .push(
+                                                                          context,
+                                                                          PageTransition(
+                                                                            type:
+                                                                                PageTransitionType.fade,
+                                                                            child:
+                                                                                FlutterFlowExpandedImageView(
+                                                                              image: CachedNetworkImage(
+                                                                                fadeInDuration: const Duration(milliseconds: 300),
+                                                                                fadeOutDuration: const Duration(milliseconds: 300),
+                                                                                imageUrl: valueOrDefault<String>(
+                                                                                  multipleImagesItem,
+                                                                                  'https://firebasestorage.googleapis.com/v0/b/linkedup-c3e29.firebasestorage.app/o/asset%2Fdefault-user.png?alt=media&token=35d4da12-13b0-4f43-8b8e-375e6e126683',
+                                                                                ),
+                                                                                fit: BoxFit.contain,
+                                                                                errorWidget: (context, error, stackTrace) => Image.asset(
+                                                                                  'assets/images/error_image.png',
+                                                                                  fit: BoxFit.contain,
+                                                                                ),
+                                                                              ),
+                                                                              allowRotation: false,
+                                                                              tag: valueOrDefault<String>(
+                                                                                multipleImagesItem,
+                                                                                'https://firebasestorage.googleapis.com/v0/b/linkedup-c3e29.firebasestorage.app/o/asset%2Fdefault-user.png?alt=media&token=35d4da12-13b0-4f43-8b8e-375e6e126683$multipleImagesIndex',
+                                                                              ),
+                                                                              useHeroAnimation: true,
+                                                                            ),
+                                                                          ),
+                                                                        );
+                                                                      },
+                                                                      child:
+                                                                          Hero(
+                                                                        tag: valueOrDefault<
+                                                                            String>(
+                                                                          multipleImagesItem,
+                                                                          'https://firebasestorage.googleapis.com/v0/b/linkedup-c3e29.firebasestorage.app/o/asset%2Fdefault-user.png?alt=media&token=35d4da12-13b0-4f43-8b8e-375e6e126683$multipleImagesIndex',
+                                                                        ),
+                                                                        transitionOnUserGestures:
+                                                                            true,
                                                                         child:
-                                                                            FlutterFlowExpandedImageView(
-                                                                          image:
+                                                                            ClipRRect(
+                                                                          borderRadius:
+                                                                              BorderRadius.circular(8.0),
+                                                                          child:
                                                                               CachedNetworkImage(
                                                                             fadeInDuration:
                                                                                 const Duration(milliseconds: 300),
@@ -2289,72 +2866,24 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
                                                                               multipleImagesItem,
                                                                               'https://firebasestorage.googleapis.com/v0/b/linkedup-c3e29.firebasestorage.app/o/asset%2Fdefault-user.png?alt=media&token=35d4da12-13b0-4f43-8b8e-375e6e126683',
                                                                             ),
+                                                                            width:
+                                                                                double.infinity,
+                                                                            height:
+                                                                                207.2,
                                                                             fit:
-                                                                                BoxFit.contain,
+                                                                                BoxFit.cover,
                                                                             errorWidget: (context, error, stackTrace) =>
                                                                                 Image.asset(
                                                                               'assets/images/error_image.png',
-                                                                              fit: BoxFit.contain,
+                                                                              width: double.infinity,
+                                                                              height: 207.2,
+                                                                              fit: BoxFit.cover,
                                                                             ),
                                                                           ),
-                                                                          allowRotation:
-                                                                              false,
-                                                                          tag: valueOrDefault<
-                                                                              String>(
-                                                                            multipleImagesItem,
-                                                                            'https://firebasestorage.googleapis.com/v0/b/linkedup-c3e29.firebasestorage.app/o/asset%2Fdefault-user.png?alt=media&token=35d4da12-13b0-4f43-8b8e-375e6e126683$multipleImagesIndex',
-                                                                          ),
-                                                                          useHeroAnimation:
-                                                                              true,
-                                                                        ),
-                                                                      ),
-                                                                    );
-                                                                  },
-                                                                  child: Hero(
-                                                                    tag: valueOrDefault<
-                                                                        String>(
-                                                                      multipleImagesItem,
-                                                                      'https://firebasestorage.googleapis.com/v0/b/linkedup-c3e29.firebasestorage.app/o/asset%2Fdefault-user.png?alt=media&token=35d4da12-13b0-4f43-8b8e-375e6e126683$multipleImagesIndex',
-                                                                    ),
-                                                                    transitionOnUserGestures:
-                                                                        true,
-                                                                    child:
-                                                                        ClipRRect(
-                                                                      borderRadius:
-                                                                          BorderRadius.circular(
-                                                                              8.0),
-                                                                      child:
-                                                                          CachedNetworkImage(
-                                                                        fadeInDuration:
-                                                                            const Duration(milliseconds: 300),
-                                                                        fadeOutDuration:
-                                                                            const Duration(milliseconds: 300),
-                                                                        imageUrl:
-                                                                            valueOrDefault<String>(
-                                                                          multipleImagesItem,
-                                                                          'https://firebasestorage.googleapis.com/v0/b/linkedup-c3e29.firebasestorage.app/o/asset%2Fdefault-user.png?alt=media&token=35d4da12-13b0-4f43-8b8e-375e6e126683',
-                                                                        ),
-                                                                        width: double
-                                                                            .infinity,
-                                                                        height:
-                                                                            207.2,
-                                                                        fit: BoxFit
-                                                                            .cover,
-                                                                        errorWidget: (context,
-                                                                                error,
-                                                                                stackTrace) =>
-                                                                            Image.asset(
-                                                                          'assets/images/error_image.png',
-                                                                          width:
-                                                                              double.infinity,
-                                                                          height:
-                                                                              207.2,
-                                                                          fit: BoxFit
-                                                                              .cover,
                                                                         ),
                                                                       ),
                                                                     ),
-                                                                  ),
+                                                                  ],
                                                                 );
                                                               },
                                                             ).divide(
@@ -2475,117 +3004,8 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
                                                     widget.message
                                                             ?.attachmentUrl !=
                                                         '')
-                                                  Builder(
-                                                    builder: (context) =>
-                                                        InkWell(
-                                                      splashColor:
-                                                          Colors.transparent,
-                                                      focusColor:
-                                                          Colors.transparent,
-                                                      hoverColor:
-                                                          Colors.transparent,
-                                                      highlightColor:
-                                                          Colors.transparent,
-                                                      onTap: () async {
-                                                        await showDialog(
-                                                          context: context,
-                                                          builder:
-                                                              (dialogContext) {
-                                                            return Dialog(
-                                                              elevation: 0,
-                                                              insetPadding:
-                                                                  EdgeInsets
-                                                                      .zero,
-                                                              backgroundColor:
-                                                                  Colors
-                                                                      .transparent,
-                                                              alignment: const AlignmentDirectional(
-                                                                      0.0, 0.0)
-                                                                  .resolve(
-                                                                      Directionality.of(
-                                                                          context)),
-                                                              child:
-                                                                  PDFViewWidget(
-                                                                url: widget
-                                                                    .message!
-                                                                    .attachmentUrl,
-                                                              ),
-                                                            );
-                                                          },
-                                                        );
-                                                      },
-                                                      child: Container(
-                                                        width: double.infinity,
-                                                        height: 65.0,
-                                                        decoration:
-                                                            BoxDecoration(
-                                                          color: FlutterFlowTheme
-                                                                  .of(context)
-                                                              .secondaryBackground,
-                                                          borderRadius:
-                                                              BorderRadius
-                                                                  .circular(
-                                                                      12.0),
-                                                        ),
-                                                        child: Align(
-                                                          alignment:
-                                                              const AlignmentDirectional(
-                                                                  0.0, 0.0),
-                                                          child: Padding(
-                                                            padding:
-                                                                const EdgeInsets
-                                                                    .all(9.0),
-                                                            child: Row(
-                                                              mainAxisSize:
-                                                                  MainAxisSize
-                                                                      .max,
-                                                              mainAxisAlignment:
-                                                                  MainAxisAlignment
-                                                                      .center,
-                                                              children: [
-                                                                Text(
-                                                                  'View PDF File',
-                                                                  style: FlutterFlowTheme.of(
-                                                                          context)
-                                                                      .bodyMedium
-                                                                      .override(
-                                                                        font: GoogleFonts
-                                                                            .inter(
-                                                                          fontWeight: FlutterFlowTheme.of(context)
-                                                                              .bodyMedium
-                                                                              .fontWeight,
-                                                                          fontStyle: FlutterFlowTheme.of(context)
-                                                                              .bodyMedium
-                                                                              .fontStyle,
-                                                                        ),
-                                                                        letterSpacing:
-                                                                            0.0,
-                                                                        fontWeight: FlutterFlowTheme.of(context)
-                                                                            .bodyMedium
-                                                                            .fontWeight,
-                                                                        fontStyle: FlutterFlowTheme.of(context)
-                                                                            .bodyMedium
-                                                                            .fontStyle,
-                                                                      ),
-                                                                ),
-                                                                Icon(
-                                                                  Icons
-                                                                      .cloud_download,
-                                                                  color: FlutterFlowTheme.of(
-                                                                          context)
-                                                                      .primary,
-                                                                  size: 24.0,
-                                                                ),
-                                                              ].divide(
-                                                                  const SizedBox(
-                                                                      width:
-                                                                          15.0)),
-                                                            ),
-                                                          ),
-                                                        ),
-                                                      ),
-                                                    ),
-                                                  ),
+                                                  _buildFileAttachment(widget
+                                                      .message!.attachmentUrl),
                                               ].divide(
                                                   const SizedBox(height: 8.0)),
                                             ),
@@ -2648,11 +3068,8 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
                                             style: TextStyle(),
                                           ),
                                           TextSpan(
-                                            text: valueOrDefault<String>(
-                                              dateTimeFormat("relative",
-                                                  widget.message?.createdAt),
-                                              'N/A',
-                                            ),
+                                            text: _formatMessageTimestamp(
+                                                widget.message?.createdAt),
                                             style: const TextStyle(),
                                           )
                                         ],
@@ -2702,9 +3119,590 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
           .addToEnd(const SizedBox(height: 8.0)),
     );
   }
+
+  // Helper method to safely show SnackBar
+  void _showSnackBar(SnackBar snackBar) {
+    if (!mounted || _scaffoldMessenger == null) return;
+    try {
+      _scaffoldMessenger!.showSnackBar(snackBar);
+    } catch (e) {
+      // Widget was disposed or context invalid, silently ignore
+    }
+  }
+
+  // Helper method to safely hide current SnackBar
+  void _hideSnackBar() {
+    if (!mounted || _scaffoldMessenger == null) return;
+    try {
+      _scaffoldMessenger!.hideCurrentSnackBar();
+    } catch (e) {
+      // Widget was disposed or context invalid, silently ignore
+    }
+  }
+
+  // Show subtle popup notification with tick icon
+  void _showSuccessPopup(String message) {
+    if (!mounted) return;
+
+    final overlay = Overlay.of(context);
+    late OverlayEntry overlayEntry;
+
+    overlayEntry = OverlayEntry(
+      builder: (context) => Positioned(
+        top: 80,
+        left: 0,
+        right: 0,
+        child: Center(
+          child: Material(
+            color: Colors.transparent,
+            child: TweenAnimationBuilder<double>(
+              tween: Tween(begin: 0.0, end: 1.0),
+              duration: const Duration(milliseconds: 300),
+              curve: Curves.easeOut,
+              builder: (context, value, child) {
+                return Transform.scale(
+                  scale: value,
+                  child: Opacity(
+                    opacity: value,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 20,
+                        vertical: 12,
+                      ),
+                      decoration: BoxDecoration(
+                        color: Colors.green,
+                        borderRadius: BorderRadius.circular(8),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.2),
+                            blurRadius: 10,
+                            offset: const Offset(0, 4),
+                            spreadRadius: 2,
+                          ),
+                        ],
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(
+                            Icons.check_circle,
+                            color: Colors.white,
+                            size: 20,
+                          ),
+                          const SizedBox(width: 8),
+                          Text(
+                            message,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 14,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                );
+              },
+            ),
+          ),
+        ),
+      ),
+    );
+
+    overlay.insert(overlayEntry);
+
+    // Auto-remove after 2 seconds with fade out
+    Future.delayed(const Duration(seconds: 2), () {
+      if (overlayEntry.mounted) {
+        overlayEntry.remove();
+      }
+    });
+  }
+
+  // Helper method to save file and reveal in Finder
+  Future<void> _saveFileToPath(String url, String path, String fileName) async {
+    try {
+      final file = File(path);
+
+      // Ensure parent directory exists before writing
+      final parentDir = file.parent;
+      if (!await parentDir.exists()) {
+        debugPrint('Creating directory: ${parentDir.path}');
+        await parentDir.create(recursive: true);
+      }
+
+      // Download and save
+      debugPrint('Downloading from URL: $url');
+      final res = await http.get(Uri.parse(url));
+      debugPrint('Download response status: ${res.statusCode}');
+
+      if (res.statusCode == 200) {
+        debugPrint('Saving file to: $path');
+        await file.writeAsBytes(res.bodyBytes);
+        debugPrint('File saved successfully!');
+
+        // Reveal in Finder
+        debugPrint('Revealing file in Finder...');
+        try {
+          await Process.run('open', ['-R', path]);
+          debugPrint('Download complete!');
+
+          _showSnackBar(
+            SnackBar(
+              content: Text('Downloaded: $fileName'),
+              backgroundColor: Colors.green,
+              duration: const Duration(seconds: 3),
+            ),
+          );
+        } catch (e) {
+          debugPrint('Error revealing file in Finder: $e');
+          _showSnackBar(
+            SnackBar(
+              content: Text('File saved to: $path'),
+              backgroundColor: Colors.green,
+              duration: const Duration(seconds: 5),
+            ),
+          );
+        }
+      } else {
+        debugPrint('Download failed with status: ${res.statusCode}');
+        _showSnackBar(
+          SnackBar(
+            content: Text('Failed to download file. Status: ${res.statusCode}'),
+            backgroundColor: Colors.red,
+            duration: const Duration(seconds: 3),
+          ),
+        );
+      }
+    } catch (e) {
+      debugPrint('Error saving file: $e');
+      _showSnackBar(
+        SnackBar(
+          content: Text('Error saving file: $e'),
+          backgroundColor: Colors.red,
+          duration: const Duration(seconds: 3),
+        ),
+      );
+    }
+  }
+
+  // Save image from message
+  Future<void> _saveImage() async {
+    debugPrint('========================================');
+    debugPrint('=== SAVE IMAGE FROM MENU ===');
+    debugPrint('========================================');
+
+    // Try single image first
+    final imageUrl = valueOrDefault<String>(
+      widget.message?.image,
+      '',
+    );
+
+    if (imageUrl.isNotEmpty) {
+      final fileName = _getFileNameFromUrl(imageUrl);
+      debugPrint('Saving single image: $fileName');
+      await _downloadFile(imageUrl, fileName);
+    } else if (widget.message?.images != null &&
+        widget.message!.images!.isNotEmpty) {
+      // Save all images in the multiple images array
+      debugPrint('Saving ${widget.message!.images!.length} images');
+      for (final imgUrl in widget.message!.images!) {
+        if (imgUrl.isNotEmpty) {
+          final fileName = _getFileNameFromUrl(imgUrl);
+          debugPrint('Saving image: $fileName');
+          await _downloadFile(imgUrl, fileName);
+        }
+      }
+    } else {
+      debugPrint('No images found in message!');
+      _showSnackBar(
+        const SnackBar(
+          content: Text('No images found in this message'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
+  // Download function for images
+  Future<void> _downloadFile(String url, String fileName) async {
+    debugPrint('_downloadFile called with URL: $url, fileName: $fileName');
+    // macOS - Handle separately to avoid any fallthrough
+    if (Platform.isMacOS) {
+      debugPrint('Platform is macOS, starting download...');
+      try {
+        // Sanitize filename
+        String safeFileName = fileName;
+        safeFileName = safeFileName.replaceAll('/', '_').replaceAll('\\', '_');
+        safeFileName = safeFileName.split('/').last.split('\\').last;
+        if (!safeFileName.contains('.')) {
+          safeFileName = '${safeFileName}.jpg';
+        }
+
+        // Download the file first
+        debugPrint('Downloading from URL: $url');
+        final response = await http.get(Uri.parse(url));
+        debugPrint('Download response status: ${response.statusCode}');
+
+        if (response.statusCode != 200) {
+          throw Exception('Failed to download file: ${response.statusCode}');
+        }
+
+        // Use file_picker's saveFile to handle macOS sandboxing properly
+        // This will show a save dialog and handle permissions correctly
+        final fileExtension = safeFileName.contains('.')
+            ? safeFileName.split('.').last.toLowerCase()
+            : 'jpg';
+
+        // Determine file type based on extension
+        FileType fileType = FileType.any;
+        List<String>? allowedExtensions;
+
+        // For common image types, use custom type with specific extension
+        if (['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 'svg']
+            .contains(fileExtension)) {
+          fileType = FileType.custom;
+          allowedExtensions = [fileExtension];
+        } else if (['pdf'].contains(fileExtension)) {
+          fileType = FileType.custom;
+          allowedExtensions = [fileExtension];
+        }
+
+        final result = await FilePicker.platform.saveFile(
+          dialogTitle: 'Save File',
+          fileName: safeFileName,
+          type: fileType,
+          allowedExtensions: allowedExtensions,
+        );
+
+        if (result != null && result.isNotEmpty) {
+          try {
+            final file = File(result);
+            await file.writeAsBytes(response.bodyBytes);
+            debugPrint('File saved successfully to: $result');
+
+            // Reveal in Finder
+            try {
+              await Process.run('open', ['-R', result]);
+              debugPrint('Download complete!');
+
+              _showSuccessPopup('Downloaded');
+            } catch (e) {
+              debugPrint('Error revealing file in Finder: $e');
+              _showSuccessPopup('File saved');
+            }
+          } catch (e) {
+            debugPrint('Error saving file: $e');
+            _showSnackBar(
+              SnackBar(
+                content: Text('Error saving file: $e'),
+                backgroundColor: Colors.red,
+                duration: const Duration(seconds: 3),
+              ),
+            );
+          }
+        } else {
+          debugPrint('User cancelled file save dialog');
+        }
+      } catch (e) {
+        debugPrint('Error during download: $e');
+        _showSnackBar(
+          SnackBar(
+            content: Text('Error downloading file: $e'),
+            backgroundColor: Colors.red,
+            duration: const Duration(seconds: 3),
+          ),
+        );
+      }
+      return; // ALWAYS return for macOS
+    }
+
+    // Rest of the code for other platforms
+    try {
+      if (kIsWeb) {
+        // For web, download the file using blob URL
+        try {
+          _showSnackBar(
+            SnackBar(
+              content: Row(
+                children: [
+                  const SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  ),
+                  const SizedBox(width: 16),
+                  Text('Downloading $fileName...'),
+                ],
+              ),
+              duration: const Duration(seconds: 30),
+            ),
+          );
+
+          // Fetch the file
+          final response = await http.get(Uri.parse(url));
+          if (response.statusCode != 200) {
+            throw Exception('Failed to download file: ${response.statusCode}');
+          }
+
+          // Sanitize filename for web
+          String safeFileName = fileName;
+          safeFileName = safeFileName.replaceAll('/', '_').replaceAll('\\', '_');
+          safeFileName = safeFileName.split('/').last.split('\\').last;
+          if (!safeFileName.contains('.')) {
+            // Try to detect file type from content type or default to jpg
+            final contentType = response.headers['content-type'] ?? 'image/jpeg';
+            String extension = 'jpg';
+            if (contentType.contains('png')) {
+              extension = 'png';
+            } else if (contentType.contains('gif')) {
+              extension = 'gif';
+            } else if (contentType.contains('webp')) {
+              extension = 'webp';
+            } else if (contentType.contains('pdf')) {
+              extension = 'pdf';
+            }
+            safeFileName = '${safeFileName}.$extension';
+          }
+
+          // Create blob and download using helper (only works on web)
+          await downloadFileOnWeb(url, safeFileName, response.bodyBytes);
+
+          _hideSnackBar();
+          _showSnackBar(
+            SnackBar(
+              content: Row(
+                children: [
+                  const Icon(Icons.check_circle, color: Colors.white),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: Text('Downloaded: $safeFileName'),
+                  ),
+                ],
+              ),
+              backgroundColor: Colors.green,
+              duration: const Duration(seconds: 3),
+            ),
+          );
+        } catch (e) {
+          debugPrint('Error downloading file on web: $e');
+          _hideSnackBar();
+          _showSnackBar(
+            SnackBar(
+              content: Text('Failed to download file: $e'),
+              backgroundColor: Colors.red,
+              duration: const Duration(seconds: 3),
+            ),
+          );
+        }
+        return;
+      }
+
+      // For other desktop platforms
+      if (Platform.isLinux || Platform.isWindows) {
+        _showSnackBar(
+          SnackBar(
+            content: Text('Downloading $fileName...'),
+            duration: const Duration(seconds: 30),
+          ),
+        );
+
+        final response = await http.get(Uri.parse(url));
+        if (response.statusCode == 200) {
+          Directory? directory;
+          if (Platform.isLinux) {
+            final homeDir = Platform.environment['HOME'];
+            if (homeDir != null) {
+              directory = Directory('$homeDir/Downloads');
+            }
+          } else if (Platform.isWindows) {
+            final userProfile = Platform.environment['USERPROFILE'];
+            if (userProfile != null) {
+              directory = Directory('$userProfile/Downloads');
+            }
+          }
+
+          if (directory == null || !await directory.exists()) {
+            directory = await getApplicationDocumentsDirectory();
+          }
+
+          String finalFileName = fileName;
+          int counter = 1;
+          while (await File('${directory.path}/$finalFileName').exists()) {
+            final extension = fileName.split('.').last;
+            final nameWithoutExtension = fileName.replaceAll('.$extension', '');
+            finalFileName = '${nameWithoutExtension}_$counter.$extension';
+            counter++;
+          }
+
+          final file = File('${directory.path}/$finalFileName');
+          await file.writeAsBytes(response.bodyBytes);
+
+          _hideSnackBar();
+          _showSnackBar(
+            SnackBar(
+              content: Text('Downloaded: $finalFileName'),
+              backgroundColor: Colors.green,
+              duration: const Duration(seconds: 3),
+            ),
+          );
+        } else {
+          throw Exception('Failed to download: ${response.statusCode}');
+        }
+        return;
+      }
+
+      // For mobile platforms (Android/iOS), download to device storage
+      // Request storage permission (wrapped in try-catch for platforms that don't support it)
+      try {
+        var status = await Permission.storage.status;
+        if (!status.isGranted) {
+          status = await Permission.storage.request();
+          if (!status.isGranted) {
+            _showSnackBar(
+              const SnackBar(
+                content:
+                    Text('Storage permission is required to download files'),
+                backgroundColor: Colors.red,
+              ),
+            );
+            return;
+          }
+        }
+      } catch (e) {
+        // Permission handler not available (e.g., on some platforms)
+        // Continue without permission check
+      }
+
+      // Show loading indicator
+      _showSnackBar(
+        SnackBar(
+          content: Row(
+            children: [
+              const SizedBox(
+                width: 20,
+                height: 20,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              ),
+              const SizedBox(width: 16),
+              Text('Downloading $fileName...'),
+            ],
+          ),
+          duration: const Duration(seconds: 30),
+        ),
+      );
+
+      // Download the file
+      final response = await http.get(Uri.parse(url));
+      if (response.statusCode == 200) {
+        // Get the downloads directory
+        Directory? directory;
+        if (Platform.isAndroid) {
+          directory = Directory('/storage/emulated/0/Download');
+          if (!await directory.exists()) {
+            directory = await getExternalStorageDirectory();
+          }
+        } else if (Platform.isIOS) {
+          directory = await getApplicationDocumentsDirectory();
+        }
+
+        if (directory != null) {
+          // Create unique filename if file already exists
+          String finalFileName = fileName;
+          int counter = 1;
+          while (await File('${directory.path}/$finalFileName').exists()) {
+            final extension = fileName.split('.').last;
+            final nameWithoutExtension = fileName.replaceAll('.$extension', '');
+            finalFileName = '${nameWithoutExtension}_$counter.$extension';
+            counter++;
+          }
+
+          final file = File('${directory.path}/$finalFileName');
+          await file.writeAsBytes(response.bodyBytes);
+
+          _hideSnackBar();
+          _showSnackBar(
+            SnackBar(
+              content: Row(
+                children: [
+                  const Icon(Icons.check_circle, color: Colors.white),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: Text('Downloaded: $finalFileName'),
+                  ),
+                ],
+              ),
+              backgroundColor: Colors.green,
+              action: SnackBarAction(
+                label: 'Open',
+                textColor: Colors.white,
+                onPressed: () async {
+                  await launchURL(file.path);
+                },
+              ),
+            ),
+          );
+        }
+      } else {
+        throw Exception('Failed to download file: ${response.statusCode}');
+      }
+    } catch (e) {
+      _hideSnackBar();
+      _showSnackBar(
+        SnackBar(
+          content: Row(
+            children: [
+              const Icon(Icons.error, color: Colors.white),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Text('Download failed: ${e.toString()}'),
+              ),
+            ],
+          ),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
+  // Extract filename from URL
+  String _getFileNameFromUrl(String url) {
+    try {
+      final uri = Uri.parse(url);
+      final segments = uri.pathSegments;
+      if (segments.isNotEmpty) {
+        String fileName = segments.last;
+        // Remove Firebase storage tokens and parameters
+        if (fileName.contains('?')) {
+          fileName = fileName.split('?').first;
+        }
+        // Decode URL encoding
+        fileName = Uri.decodeComponent(fileName);
+        return fileName;
+      }
+    } catch (e) {
+      // Fallback filename
+    }
+
+    // Generate filename based on content type
+    final timestamp = DateTime.now().millisecondsSinceEpoch;
+    if (url.contains('image') ||
+        url.contains('.jpg') ||
+        url.contains('.png') ||
+        url.contains('.jpeg')) {
+      return 'image_$timestamp.jpg';
+    } else if (url.contains('video') ||
+        url.contains('.mp4') ||
+        url.contains('.mov')) {
+      return 'video_$timestamp.mp4';
+    } else {
+      return 'file_$timestamp';
+    }
+  }
 }
 
-enum _MsgAction { react, copy, report, unsend, reply, edit }
+enum _MsgAction { react, copy, report, unsend, reply, edit, save }
 
 class _MenuRow extends StatelessWidget {
   final IconData icon;

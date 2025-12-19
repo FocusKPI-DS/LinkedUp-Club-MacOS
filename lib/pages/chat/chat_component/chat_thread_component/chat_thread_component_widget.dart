@@ -12,9 +12,13 @@ import '/flutter_flow/flutter_flow_video_player.dart';
 import '/flutter_flow/upload_data.dart';
 import '/pages/chat/chat_component/chat_thread/chat_thread_widget.dart';
 import 'dart:async';
-import 'dart:io' show Platform;
+import 'dart:io';
 import 'dart:ui';
+import 'dart:typed_data';
 import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:http/http.dart' as http;
+import 'package:path_provider/path_provider.dart';
+import 'package:permission_handler/permission_handler.dart';
 import '/custom_code/actions/index.dart' as actions;
 import '/custom_code/widgets/index.dart' as custom_widgets;
 import '/flutter_flow/custom_functions.dart' as functions;
@@ -25,9 +29,11 @@ import 'package:easy_debounce/easy_debounce.dart';
 import 'package:ff_theme/flutter_flow/flutter_flow_theme.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:record/record.dart';
+import 'package:file_picker/file_picker.dart';
 import 'chat_thread_component_model.dart';
 export 'chat_thread_component_model.dart';
 
@@ -113,7 +119,106 @@ class _ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget>
       this,
     );
 
-    WidgetsBinding.instance.addPostFrameCallback((_) => safeSetState(() {}));
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      safeSetState(() {});
+      // Mark messages as read when chat thread is displayed
+      _markMessagesAsRead();
+    });
+  }
+
+  @override
+  void didUpdateWidget(ChatThreadComponentWidget oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // If chat reference changed, mark messages as read
+    if (oldWidget.chatReference?.reference != widget.chatReference?.reference) {
+      _markMessagesAsRead();
+    }
+  }
+
+  /// Marks messages as read for the current chat
+  /// This marks both individual messages (isReadBy) and chat-level (lastMessageSeen)
+  void _markMessagesAsRead() async {
+    if (widget.chatReference == null || currentUserReference == null) {
+      return;
+    }
+
+    final chat = widget.chatReference!;
+    
+    // Mark individual messages as read first
+    await _markIndividualMessagesAsRead(chat);
+    
+    // Then update chat-level lastMessageSeen
+    if (!chat.lastMessageSeen.contains(currentUserReference) &&
+        chat.lastMessage.isNotEmpty &&
+        chat.lastMessageSent != currentUserReference) {
+      // Add current user to the lastMessageSeen list
+      final updatedSeenList =
+          List<DocumentReference>.from(chat.lastMessageSeen);
+      if (!updatedSeenList.contains(currentUserReference)) {
+        updatedSeenList.add(currentUserReference!);
+
+        // Update Firestore
+        chat.reference.update({
+          'last_message_seen': updatedSeenList.map((ref) => ref).toList(),
+        }).then((_) {
+          print('✅ Successfully marked messages as read for chat: ${chat.reference.id}');
+        }).catchError((e) {
+          print('❌ Error marking messages as read: $e');
+        });
+      }
+    }
+  }
+
+  /// Mark individual messages as read by updating isReadBy field
+  Future<void> _markIndividualMessagesAsRead(ChatsRecord chat) async {
+    if (currentUserReference == null) return;
+
+    try {
+      // Get all messages
+      final messages = await queryMessagesRecord(
+        parent: chat.reference,
+        queryBuilder: (messages) => messages
+            .orderBy('created_at', descending: true)
+            .limit(1000), // Process more messages
+      ).first;
+
+      // Batch update messages - Firestore batch limit is 500 operations
+      final batch = FirebaseFirestore.instance.batch();
+      int updateCount = 0;
+      const maxBatchSize = 500;
+
+      for (final message in messages) {
+        // Only mark messages that are unread and not sent by current user
+        if (message.senderRef != currentUserReference &&
+            !message.isSystemMessage &&
+            !message.isReadBy.contains(currentUserReference)) {
+          final updatedReadBy =
+              List<DocumentReference>.from(message.isReadBy);
+          if (!updatedReadBy.contains(currentUserReference)) {
+            updatedReadBy.add(currentUserReference!);
+            batch.update(message.reference, {
+              'is_read_by': updatedReadBy.map((ref) => ref).toList(),
+            });
+            updateCount++;
+            
+            // Commit batch if we reach the limit
+            if (updateCount >= maxBatchSize) {
+              await batch.commit();
+              print('✅ Marked $updateCount messages as read in chat ${chat.reference.id} (batch)');
+              break;
+            }
+          }
+        }
+      }
+
+      // Commit batch update if there are changes
+      if (updateCount > 0 && updateCount < maxBatchSize) {
+        await batch.commit();
+        print('✅ Marked $updateCount messages as read in chat ${chat.reference.id}');
+      }
+    } catch (e) {
+      print('❌ Error marking individual messages as read: $e');
+    }
   }
 
   @override
@@ -130,46 +235,138 @@ class _ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget>
       return;
     }
 
-    // Find the message in the list and scroll to it
+    // Find the message in the list
+    int? targetIndex;
     for (int i = 0; i < messages.length; i++) {
-      final message = messages[i];
-      if (message.reference.id == messageId) {
-        final scrollController = _model.scrollController!;
-
-        // For reversed ListView, calculate the approximate position
-        // Since ListView is reversed, index 0 is at the bottom
-        final targetIndex = i;
-
-        // Calculate approximate scroll position
-        // In reversed ListView: position = maxScrollExtent - (index * estimatedHeight)
-        double estimatedHeight = 0.0;
-        for (int j = 0; j <= targetIndex; j++) {
-          estimatedHeight += _estimateMessageHeight(messages[j]);
-        }
-
-        final maxScrollExtent = scrollController.position.maxScrollExtent;
-        final minScrollExtent = scrollController.position.minScrollExtent;
-
-        // Calculate target position (from bottom in reversed ListView)
-        double targetPosition = maxScrollExtent - estimatedHeight;
-
-        // Add some offset to center the message
-        final viewportHeight = scrollController.position.viewportDimension;
-        targetPosition +=
-            viewportHeight * 0.3; // Show message in upper third of viewport
-
-        // Ensure we don't scroll beyond bounds
-        targetPosition = targetPosition.clamp(minScrollExtent, maxScrollExtent);
-
-        // Smooth scroll to the calculated position
-        scrollController.animateTo(
-          targetPosition,
-          duration: const Duration(milliseconds: 600),
-          curve: Curves.easeInOut,
-        );
+      if (messages[i].reference.id == messageId) {
+        targetIndex = i;
         break;
       }
     }
+
+    if (targetIndex == null) return;
+
+    final scrollController = _model.scrollController!;
+    final finalTargetIndex =
+        targetIndex; // Capture non-nullable value for use in callback
+
+    // Wait for the next frame to ensure layout is complete
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!scrollController.hasClients) return;
+
+      final maxScrollExtent = scrollController.position.maxScrollExtent;
+      final minScrollExtent = scrollController.position.minScrollExtent;
+      final viewportHeight = scrollController.position.viewportDimension;
+      final currentPosition = scrollController.position.pixels;
+
+      // For reversed ListView:
+      // - Index 0 is at the bottom (scroll position 0)
+      // - Higher indices are at the top (higher scroll positions)
+      // - Scroll position = how far we've scrolled from the bottom
+
+      // Calculate the position where the target message starts (from bottom)
+      double heightBeforeTarget = 0.0;
+      for (int j = 0; j < finalTargetIndex && j < messages.length; j++) {
+        heightBeforeTarget += _estimateMessageHeight(messages[j]);
+      }
+
+      // Calculate the center of the target message (from bottom)
+      final targetMessageHeight =
+          _estimateMessageHeight(messages[finalTargetIndex]);
+      final messageCenterFromBottom =
+          heightBeforeTarget + (targetMessageHeight / 2);
+
+      // Capture for use in fine-tuning callback
+      final capturedMessageCenter = messageCenterFromBottom;
+
+      // To center the message with equal space above and below:
+      // Scroll so that messageCenterFromBottom is at viewportHeight/2 from top
+      // This means: scrollPosition = messageCenterFromBottom - (viewportHeight / 2)
+      double targetPosition = messageCenterFromBottom - (viewportHeight / 2);
+
+      // Critical: Ensure we don't scroll beyond bounds
+      targetPosition = targetPosition.clamp(minScrollExtent, maxScrollExtent);
+
+      // Additional safety: never scroll to more than 90% of maxScrollExtent
+      // This prevents scrolling to the very top
+      if (targetPosition > maxScrollExtent * 0.9) {
+        targetPosition = maxScrollExtent * 0.9;
+      }
+
+      // Also ensure we don't go negative (for messages near the bottom)
+      if (targetPosition < 0) {
+        targetPosition = 0;
+      }
+
+      // Only scroll if the target is significantly different from current position
+      if ((targetPosition - currentPosition).abs() > 50.0) {
+        scrollController
+            .animateTo(
+          targetPosition,
+          duration: const Duration(milliseconds: 600),
+          curve: Curves.easeInOut,
+        )
+            .then((_) {
+          // Wait a bit for layout to stabilize, then fine-tune centering
+          Future.delayed(const Duration(milliseconds: 100), () {
+            if (!scrollController.hasClients) return;
+
+            // Recalculate to ensure perfect centering after layout
+            final currentScrollPosition = scrollController.position.pixels;
+            final newViewportHeight =
+                scrollController.position.viewportDimension;
+
+            // Fine-tune: Recalculate the exact center position
+            // This ensures perfect centering with equal space above and below
+            final fineTunePosition =
+                capturedMessageCenter - (newViewportHeight / 2);
+            final adjustment = fineTunePosition - currentScrollPosition;
+
+            // Make adjustment to center the message perfectly
+            // Allow larger adjustments (up to 200px) to ensure proper centering
+            if (adjustment.abs() > 5) {
+              final clampedPosition = fineTunePosition.clamp(
+                scrollController.position.minScrollExtent,
+                scrollController.position.maxScrollExtent,
+              );
+              scrollController.animateTo(
+                clampedPosition,
+                duration: const Duration(milliseconds: 300),
+                curve: Curves.easeOut,
+              );
+            }
+          });
+
+          // After scrolling completes, highlight the message
+          safeSetState(() {
+            _model.highlightedMessageId = messageId;
+          });
+
+          // Clear highlight after 3 seconds
+          Future.delayed(const Duration(seconds: 3), () {
+            if (mounted && _model.highlightedMessageId == messageId) {
+              safeSetState(() {
+                _model.highlightedMessageId = null;
+              });
+            }
+          });
+        });
+      } else {
+        // Even if we don't scroll, still highlight the message
+        safeSetState(() {
+          _model.highlightedMessageId = messageId;
+        });
+
+        // Clear highlight after 3 seconds
+        Future.delayed(const Duration(seconds: 3), () {
+          if (mounted && _model.highlightedMessageId == messageId) {
+            safeSetState(() {
+              _model.highlightedMessageId = null;
+            });
+          }
+        });
+      }
+    });
   }
 
   Future<void> _updateMessage() async {
@@ -253,6 +450,11 @@ class _ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget>
 
   @override
   Widget build(BuildContext context) {
+    // Mark messages as read when widget is built/displayed
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _markMessagesAsRead();
+    });
+
     return InkWell(
       splashColor: Colors.transparent,
       focusColor: Colors.transparent,
@@ -277,6 +479,12 @@ class _ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget>
                           .orderBy('created_at', descending: true),
                     ),
                     builder: (context, snapshot) {
+                      // Mark messages as read when messages are loaded
+                      if (snapshot.hasData && snapshot.data!.isNotEmpty) {
+                        WidgetsBinding.instance.addPostFrameCallback((_) {
+                          _markMessagesAsRead();
+                        });
+                      }
                       // Customize what your widget looks like when it's loading.
                       if (!snapshot.hasData) {
                         return Center(
@@ -294,6 +502,51 @@ class _ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget>
                       List<MessagesRecord> listViewMessagesRecordList =
                           snapshot.data!;
 
+                      // Calculate unread messages using isReadBy field on each message
+                      final chat = widget.chatReference;
+                      int unreadCount = 0;
+                      int? unreadSeparatorIndex;
+                      
+                      if (chat != null && currentUserReference != null) {
+                        // Find unread messages and determine separator position
+                        // Messages are in descending order (newest first, index 0 = newest)
+                        // ListView has reverse: true, so:
+                        // - Index 0 (newest) appears at bottom of screen
+                        // - Last index (oldest) appears at top of screen
+                        // We want separator above unread messages (which are at bottom)
+                        
+                        int? firstUnreadIndex; // Index of the newest unread message
+                        
+                        // Iterate through messages from newest to oldest
+                        // Count ALL unread messages and find where to place the separator
+                        for (int i = 0; i < listViewMessagesRecordList.length; i++) {
+                          final message = listViewMessagesRecordList[i];
+                          
+                          // Message is unread if:
+                          // 1. Current user is NOT in the isReadBy list
+                          // 2. It wasn't sent by the current user (don't count own messages)
+                          // 3. It's not a system message
+                          final isUnread = message.senderRef != currentUserReference &&
+                              !message.isSystemMessage &&
+                              !message.isReadBy.contains(currentUserReference);
+                          
+                          if (isUnread) {
+                            unreadCount++;
+                            // Track the first (newest) unread message index
+                            if (firstUnreadIndex == null) {
+                              firstUnreadIndex = i;
+                            }
+                          }
+                        }
+                        
+                        // The separator should appear right before the first (newest) unread message
+                        // Since ListView has reverse: true, this will appear above unread messages
+                        // Insert separator at firstUnreadIndex (right before first unread)
+                        if (firstUnreadIndex != null && unreadCount > 0) {
+                          unreadSeparatorIndex = firstUnreadIndex;
+                        }
+                      }
+
                       return InkWell(
                         splashColor: Colors.transparent,
                         focusColor: Colors.transparent,
@@ -308,15 +561,60 @@ class _ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget>
                           reverse: true,
                           shrinkWrap: true,
                           scrollDirection: Axis.vertical,
-                          itemCount: listViewMessagesRecordList.length,
+                          itemCount: listViewMessagesRecordList.length + (unreadSeparatorIndex != null ? 1 : 0),
                           itemBuilder: (context, listViewIndex) {
+                            // Calculate the actual message index accounting for separator
+                            // The separator is inserted right before the first (newest) unread message
+                            int messageIndex = listViewIndex;
+                            
+                            // Insert separator right before first unread message
+                            if (unreadSeparatorIndex != null && listViewIndex == unreadSeparatorIndex) {
+                              return Container(
+                                margin: EdgeInsets.symmetric(vertical: 16.0),
+                                child: Center(
+                                  child: Container(
+                                    padding: EdgeInsets.symmetric(horizontal: 12.0, vertical: 6.0),
+                                    decoration: BoxDecoration(
+                                      color: FlutterFlowTheme.of(context).primary.withOpacity(0.1),
+                                      borderRadius: BorderRadius.circular(20.0),
+                                      border: Border.all(
+                                        color: FlutterFlowTheme.of(context).primary.withOpacity(0.3),
+                                        width: 1.0,
+                                      ),
+                                    ),
+                                    child: Text(
+                                      unreadCount == 1 
+                                          ? '1 unread message'
+                                          : '$unreadCount unread messages',
+                                      style: FlutterFlowTheme.of(context).bodySmall.override(
+                                            fontFamily: 'Inter',
+                                            color: FlutterFlowTheme.of(context).primary,
+                                            fontSize: 12.0,
+                                            fontWeight: FontWeight.w600,
+                                            letterSpacing: 0.0,
+                                          ),
+                                    ),
+                                  ),
+                                ),
+                              );
+                            }
+                            
+                            // Adjust message index if separator was inserted before this position
+                            if (unreadSeparatorIndex != null && listViewIndex > unreadSeparatorIndex) {
+                              messageIndex = listViewIndex - 1;
+                            }
+                            
+                            if (messageIndex < 0 || messageIndex >= listViewMessagesRecordList.length) {
+                              return SizedBox.shrink();
+                            }
+                            
                             final listViewMessagesRecord =
-                                listViewMessagesRecordList[listViewIndex];
+                                listViewMessagesRecordList[messageIndex];
                             return Container(
                               child: wrapWithModel(
                                 model: _model.chatThreadModels.getModel(
                                   listViewMessagesRecord.reference.id,
-                                  listViewIndex,
+                                  messageIndex,
                                 ),
                                 updateCallback: () => safeSetState(() {}),
                                 child: ChatThreadWidget(
@@ -348,6 +646,8 @@ class _ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget>
                                         message.content;
                                     safeSetState(() {});
                                   },
+                                  isHighlighted: _model.highlightedMessageId ==
+                                      listViewMessagesRecord.reference.id,
                                 ),
                               ),
                             );
@@ -408,10 +708,38 @@ class _ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget>
                                                 final uploadedImages =
                                                     _model.images.toList();
 
-                                                return Row(
-                                                  mainAxisSize:
-                                                      MainAxisSize.max,
-                                                  children: List.generate(
+                                                return Column(
+                                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                                  children: [
+                                                    if (uploadedImages.length > 1)
+                                                      Padding(
+                                                        padding: const EdgeInsets.only(left: 8.0, bottom: 8.0),
+                                                        child: Container(
+                                                          padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 4.0),
+                                                          decoration: BoxDecoration(
+                                                            color: FlutterFlowTheme.of(context).primary.withOpacity(0.1),
+                                                            borderRadius: BorderRadius.circular(12.0),
+                                                            border: Border.all(
+                                                              color: FlutterFlowTheme.of(context).primary,
+                                                              width: 1.0,
+                                                            ),
+                                                          ),
+                                                          child: Text(
+                                                            '${uploadedImages.length} images selected',
+                                                            style: TextStyle(
+                                                              color: FlutterFlowTheme.of(context).primary,
+                                                              fontSize: 12.0,
+                                                              fontWeight: FontWeight.w600,
+                                                            ),
+                                                          ),
+                                                        ),
+                                                      ),
+                                                    SingleChildScrollView(
+                                                      scrollDirection: Axis.horizontal,
+                                                      child: Row(
+                                                        mainAxisSize:
+                                                            MainAxisSize.min,
+                                                        children: List.generate(
                                                       uploadedImages.length,
                                                       (uploadedImagesIndex) {
                                                     final uploadedImagesItem =
@@ -426,47 +754,47 @@ class _ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget>
                                                                 0.0, 0.0),
                                                         children: [
                                                           FlutterFlowMediaDisplay(
-                                                            path:
-                                                                uploadedImagesItem,
-                                                            imageBuilder:
-                                                                (path) =>
-                                                                    ClipRRect(
-                                                              borderRadius:
-                                                                  BorderRadius
-                                                                      .circular(
-                                                                          8.0),
-                                                              child:
-                                                                  CachedNetworkImage(
-                                                                fadeInDuration:
-                                                                    const Duration(
-                                                                        milliseconds:
-                                                                            500),
-                                                                fadeOutDuration:
-                                                                    const Duration(
-                                                                        milliseconds:
-                                                                            500),
-                                                                imageUrl: path,
-                                                                width: 120.0,
-                                                                height: 100.0,
-                                                                fit: BoxFit
-                                                                    .cover,
+                                                              path:
+                                                                  uploadedImagesItem,
+                                                              imageBuilder:
+                                                                  (path) =>
+                                                                      ClipRRect(
+                                                                borderRadius:
+                                                                    BorderRadius
+                                                                        .circular(
+                                                                            8.0),
+                                                                child:
+                                                                    CachedNetworkImage(
+                                                                  fadeInDuration:
+                                                                      const Duration(
+                                                                          milliseconds:
+                                                                              500),
+                                                                  fadeOutDuration:
+                                                                      const Duration(
+                                                                          milliseconds:
+                                                                              500),
+                                                                  imageUrl: path,
+                                                                  width: 120.0,
+                                                                  height: 100.0,
+                                                                  fit: BoxFit
+                                                                      .cover,
+                                                                ),
+                                                              ),
+                                                              videoPlayerBuilder:
+                                                                  (path) =>
+                                                                      FlutterFlowVideoPlayer(
+                                                                path: path,
+                                                                width: 300.0,
+                                                                autoPlay: false,
+                                                                looping: true,
+                                                                showControls:
+                                                                    true,
+                                                                allowFullScreen:
+                                                                    true,
+                                                                allowPlaybackSpeedMenu:
+                                                                    false,
                                                               ),
                                                             ),
-                                                            videoPlayerBuilder:
-                                                                (path) =>
-                                                                    FlutterFlowVideoPlayer(
-                                                              path: path,
-                                                              width: 300.0,
-                                                              autoPlay: false,
-                                                              looping: true,
-                                                              showControls:
-                                                                  true,
-                                                              allowFullScreen:
-                                                                  true,
-                                                              allowPlaybackSpeedMenu:
-                                                                  false,
-                                                            ),
-                                                          ),
                                                           Align(
                                                             alignment:
                                                                 const AlignmentDirectional(
@@ -501,69 +829,209 @@ class _ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget>
                                                               },
                                                             ),
                                                           ),
+
                                                         ],
                                                       ),
                                                     );
                                                   }).divide(const SizedBox(
                                                       width: 5.0)),
+                                                      ),
+                                                    ),
+                                                  ],
                                                 );
                                               },
                                             ),
                                           if (_model.file != null &&
                                               _model.file != '')
-                                            SizedBox(
-                                              width: 160.0,
-                                              height: 120.0,
-                                              child: Stack(
-                                                alignment:
-                                                    const AlignmentDirectional(
-                                                        0.0, 0.0),
-                                                children: [
-                                                  FlutterFlowPdfViewer(
-                                                    networkPath: _model.file!,
-                                                    height: 300.0,
-                                                    horizontalScroll: false,
-                                                  ),
-                                                  Align(
-                                                    alignment:
-                                                        const AlignmentDirectional(
-                                                            1.0, -0.95),
-                                                    child:
-                                                        FlutterFlowIconButton(
-                                                      borderColor:
-                                                          FlutterFlowTheme.of(
-                                                                  context)
-                                                              .error,
-                                                      borderRadius: 20.0,
-                                                      borderWidth: 2.0,
-                                                      buttonSize: 40.0,
-                                                      fillColor:
-                                                          FlutterFlowTheme.of(
-                                                                  context)
-                                                              .primaryBackground,
-                                                      icon: Icon(
-                                                        Icons
-                                                            .delete_outline_rounded,
-                                                        color: Colors.black,
-                                                        size: 24.0,
-                                                      ),
-                                                      onPressed: () async {
-                                                        safeSetState(() {
-                                                          _model.isDataUploading_uploadDataFile =
-                                                              false;
-                                                          _model.uploadedLocalFile_uploadDataFile =
-                                                              FFUploadedFile(
-                                                                  bytes: Uint8List
-                                                                      .fromList(
-                                                                          []));
-                                                          _model.uploadedFileUrl_uploadDataFile =
-                                                              '';
-                                                        });
-                                                      },
+                                            Builder(
+                                              builder: (context) {
+                                                final fileUrl = _model.file!;
+                                                final isPdf = fileUrl
+                                                        .toLowerCase()
+                                                        .endsWith('.pdf') ||
+                                                    fileUrl
+                                                        .toLowerCase()
+                                                        .contains('.pdf');
+                                                final uploadedFileName = _model
+                                                    .uploadedLocalFile_uploadDataFile
+                                                    .name;
+                                                final fileName =
+                                                    (uploadedFileName != null &&
+                                                            uploadedFileName
+                                                                .isNotEmpty)
+                                                        ? uploadedFileName
+                                                        : (fileUrl
+                                                                .split('/')
+                                                                .last
+                                                                .split('?')
+                                                                .first
+                                                                .isNotEmpty
+                                                            ? fileUrl
+                                                                .split('/')
+                                                                .last
+                                                                .split('?')
+                                                                .first
+                                                            : 'file');
+
+                                                if (isPdf) {
+                                                  return SizedBox(
+                                                    width: 160.0,
+                                                    height: 120.0,
+                                                    child: Stack(
+                                                      alignment:
+                                                          const AlignmentDirectional(
+                                                              0.0, 0.0),
+                                                      children: [
+                                                        FlutterFlowPdfViewer(
+                                                          networkPath: fileUrl,
+                                                          height: 300.0,
+                                                          horizontalScroll:
+                                                              false,
+                                                        ),
+                                                        Align(
+                                                          alignment:
+                                                              const AlignmentDirectional(
+                                                                  1.0, -0.95),
+                                                          child:
+                                                              FlutterFlowIconButton(
+                                                            borderColor:
+                                                                FlutterFlowTheme.of(
+                                                                        context)
+                                                                    .error,
+                                                            borderRadius: 20.0,
+                                                            borderWidth: 2.0,
+                                                            buttonSize: 40.0,
+                                                            fillColor: FlutterFlowTheme
+                                                                    .of(context)
+                                                                .primaryBackground,
+                                                            icon: Icon(
+                                                              Icons
+                                                                  .delete_outline_rounded,
+                                                              color:
+                                                                  Colors.black,
+                                                              size: 24.0,
+                                                            ),
+                                                            onPressed:
+                                                                () async {
+                                                              safeSetState(() {
+                                                                _model.isDataUploading_uploadDataFile =
+                                                                    false;
+                                                                _model.uploadedLocalFile_uploadDataFile =
+                                                                    FFUploadedFile(
+                                                                        bytes: Uint8List.fromList(
+                                                                            []));
+                                                                _model.uploadedFileUrl_uploadDataFile =
+                                                                    '';
+                                                                _model.file = '';
+                                                              });
+                                                            },
+                                                          ),
+                                                        ),
+                                                      ],
                                                     ),
-                                                  ),
-                                                ],
-                                              ),
+                                                  );
+                                                } else {
+                                                  return Container(
+                                                    width: 200.0,
+                                                    padding:
+                                                        EdgeInsets.all(12.0),
+                                                    decoration: BoxDecoration(
+                                                      color: FlutterFlowTheme
+                                                              .of(context)
+                                                          .secondaryBackground,
+                                                      borderRadius:
+                                                          BorderRadius.circular(
+                                                              8.0),
+                                                      border: Border.all(
+                                                        color:
+                                                            FlutterFlowTheme.of(
+                                                                    context)
+                                                                .alternate,
+                                                      ),
+                                                    ),
+                                                    child: Stack(
+                                                      children: [
+                                                        Row(
+                                                          children: [
+                                                            Icon(
+                                                              Icons
+                                                                  .insert_drive_file_rounded,
+                                                              color: FlutterFlowTheme
+                                                                      .of(context)
+                                                                  .primary,
+                                                              size: 32.0,
+                                                            ),
+                                                            SizedBox(
+                                                                width: 12.0),
+                                                            Expanded(
+                                                              child: Column(
+                                                                crossAxisAlignment:
+                                                                    CrossAxisAlignment
+                                                                        .start,
+                                                                mainAxisSize:
+                                                                    MainAxisSize
+                                                                        .min,
+                                                                children: [
+                                                                  Text(
+                                                                    fileName,
+                                                                    style: FlutterFlowTheme.of(
+                                                                            context)
+                                                                        .bodyMedium,
+                                                                    maxLines: 2,
+                                                                    overflow:
+                                                                        TextOverflow
+                                                                            .ellipsis,
+                                                                  ),
+
+                                                                ],
+                                                              ),
+                                                            ),
+                                                          ],
+                                                        ),
+                                                        Align(
+                                                          alignment:
+                                                              AlignmentDirectional(
+                                                                  1.0, -1.0),
+                                                          child:
+                                                              FlutterFlowIconButton(
+                                                            borderColor:
+                                                                FlutterFlowTheme.of(
+                                                                        context)
+                                                                    .error,
+                                                            borderRadius: 20.0,
+                                                            borderWidth: 2.0,
+                                                            buttonSize: 32.0,
+                                                            fillColor: FlutterFlowTheme
+                                                                    .of(context)
+                                                                .primaryBackground,
+                                                            icon: Icon(
+                                                              Icons
+                                                                  .delete_outline_rounded,
+                                                              color:
+                                                                  Colors.black,
+                                                              size: 18.0,
+                                                            ),
+                                                            onPressed:
+                                                                () async {
+                                                              safeSetState(() {
+                                                                _model.isDataUploading_uploadDataFile =
+                                                                    false;
+                                                                _model.uploadedLocalFile_uploadDataFile =
+                                                                    FFUploadedFile(
+                                                                        bytes: Uint8List.fromList(
+                                                                            []));
+                                                                _model.uploadedFileUrl_uploadDataFile =
+                                                                    '';
+                                                                _model.file = '';
+                                                              });
+                                                            },
+                                                          ),
+                                                        ),
+                                                      ],
+                                                    ),
+                                                  );
+                                                }
+                                              },
                                             ),
                                           if (_model.audiopath != null &&
                                               _model.audiopath != '')
@@ -640,39 +1108,39 @@ class _ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget>
                                                         0.0, 0.0),
                                                 children: [
                                                   FlutterFlowMediaDisplay(
-                                                    path: _model.image!,
-                                                    imageBuilder: (path) =>
-                                                        ClipRRect(
-                                                      borderRadius:
-                                                          BorderRadius.circular(
-                                                              8.0),
-                                                      child: CachedNetworkImage(
-                                                        fadeInDuration:
-                                                            const Duration(
-                                                                milliseconds:
-                                                                    500),
-                                                        fadeOutDuration:
-                                                            const Duration(
-                                                                milliseconds:
-                                                                    500),
-                                                        imageUrl: path,
-                                                        width: 120.0,
-                                                        height: 100.0,
-                                                        fit: BoxFit.cover,
+                                                      path: _model.image!,
+                                                      imageBuilder: (path) =>
+                                                          ClipRRect(
+                                                        borderRadius:
+                                                            BorderRadius.circular(
+                                                                8.0),
+                                                        child: CachedNetworkImage(
+                                                          fadeInDuration:
+                                                              const Duration(
+                                                                  milliseconds:
+                                                                      500),
+                                                          fadeOutDuration:
+                                                              const Duration(
+                                                                  milliseconds:
+                                                                      500),
+                                                          imageUrl: path,
+                                                          width: 120.0,
+                                                          height: 100.0,
+                                                          fit: BoxFit.cover,
+                                                        ),
+                                                      ),
+                                                      videoPlayerBuilder: (path) =>
+                                                          FlutterFlowVideoPlayer(
+                                                        path: path,
+                                                        width: 300.0,
+                                                        autoPlay: false,
+                                                        looping: true,
+                                                        showControls: true,
+                                                        allowFullScreen: true,
+                                                        allowPlaybackSpeedMenu:
+                                                          false,
                                                       ),
                                                     ),
-                                                    videoPlayerBuilder: (path) =>
-                                                        FlutterFlowVideoPlayer(
-                                                      path: path,
-                                                      width: 300.0,
-                                                      autoPlay: false,
-                                                      looping: true,
-                                                      showControls: true,
-                                                      allowFullScreen: true,
-                                                      allowPlaybackSpeedMenu:
-                                                          false,
-                                                    ),
-                                                  ),
                                                   Align(
                                                     alignment:
                                                         const AlignmentDirectional(
@@ -714,6 +1182,7 @@ class _ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget>
                                                       },
                                                     ),
                                                   ),
+
                                                 ],
                                               ),
                                             ),
@@ -862,6 +1331,155 @@ class _ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget>
                               Column(
                                 mainAxisSize: MainAxisSize.max,
                                 children: [
+                                  // Group member mention overlay
+                                  if (_model.showMentionOverlay && _model.filteredMembers.isNotEmpty)
+                                    Container(
+                                      constraints: BoxConstraints(
+                                        maxHeight: 200.0,
+                                      ),
+                                      decoration: BoxDecoration(
+                                        color: FlutterFlowTheme.of(context).secondaryBackground,
+                                        borderRadius: BorderRadius.circular(8.0),
+                                        border: Border.all(
+                                          color: FlutterFlowTheme.of(context).alternate,
+                                          width: 1.0,
+                                        ),
+                                        boxShadow: [
+                                          BoxShadow(
+                                            color: Color(0x1A000000),
+                                            blurRadius: 8.0,
+                                            offset: Offset(0, -2),
+                                          ),
+                                        ],
+                                      ),
+                                      child: ListView.builder(
+                                        shrinkWrap: true,
+                                        padding: EdgeInsets.zero,
+                                        itemCount: _model.filteredMembers.length,
+                                        itemBuilder: (context, index) {
+                                          final member = _model.filteredMembers[index];
+                                          return InkWell(
+                                            onTap: () async {
+                                              // Replace the @query with @username
+                                              final currentText = _model.messageTextController?.text ?? '';
+                                              final lastAtIndex = currentText.lastIndexOf('@');
+                                              if (lastAtIndex != -1) {
+                                                final beforeAt = currentText.substring(0, lastAtIndex);
+                                                final mention = '@${member.displayName} ';
+                                                _model.messageTextController?.text = beforeAt + mention;
+                                                _model.messageTextController?.selection = TextSelection.fromPosition(
+                                                  TextPosition(offset: (beforeAt + mention).length),
+                                                );
+                                              }
+                                              
+                                              // Hide overlay
+                                              _model.showMentionOverlay = false;
+                                              _model.filteredMembers = [];
+                                              safeSetState(() {});
+                                              
+                                              // Refocus on text field
+                                              _model.messageFocusNode?.requestFocus();
+                                            },
+                                            child: Container(
+                                              padding: EdgeInsetsDirectional.fromSTEB(12.0, 8.0, 12.0, 8.0),
+                                              decoration: BoxDecoration(
+                                                color: FlutterFlowTheme.of(context).secondaryBackground,
+                                                border: Border(
+                                                  bottom: BorderSide(
+                                                    color: FlutterFlowTheme.of(context).alternate,
+                                                    width: 0.5,
+                                                  ),
+                                                ),
+                                              ),
+                                              child: Row(
+                                                children: [
+                                                  // Avatar
+                                                  Container(
+                                                    width: 32.0,
+                                                    height: 32.0,
+                                                    decoration: BoxDecoration(
+                                                      shape: BoxShape.circle,
+                                                      border: Border.all(
+                                                        color: FlutterFlowTheme.of(context).primary,
+                                                        width: 1.0,
+                                                      ),
+                                                    ),
+                                                    child: ClipRRect(
+                                                      borderRadius: BorderRadius.circular(16.0),
+                                                      child: member.photoUrl.isNotEmpty
+                                                          ? CachedNetworkImage(
+                                                              imageUrl: member.photoUrl,
+                                                              width: 32.0,
+                                                              height: 32.0,
+                                                              fit: BoxFit.cover,
+                                                              placeholder: (context, url) => Container(
+                                                                color: FlutterFlowTheme.of(context).alternate,
+                                                                child: Icon(
+                                                                  Icons.person,
+                                                                  color: FlutterFlowTheme.of(context).secondaryText,
+                                                                  size: 16.0,
+                                                                ),
+                                                              ),
+                                                              errorWidget: (context, url, error) => Container(
+                                                                color: FlutterFlowTheme.of(context).alternate,
+                                                                child: Icon(
+                                                                  Icons.person,
+                                                                  color: FlutterFlowTheme.of(context).secondaryText,
+                                                                  size: 16.0,
+                                                                ),
+                                                              ),
+                                                            )
+                                                          : Container(
+                                                              color: FlutterFlowTheme.of(context).alternate,
+                                                              child: Icon(
+                                                                Icons.person,
+                                                                color: FlutterFlowTheme.of(context).secondaryText,
+                                                                size: 16.0,
+                                                              ),
+                                                            ),
+                                                    ),
+                                                  ),
+                                                  SizedBox(width: 12.0),
+                                                  // Name and email
+                                                  Expanded(
+                                                    child: Column(
+                                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                                      mainAxisSize: MainAxisSize.min,
+                                                      children: [
+                                                        Text(
+                                                          member.displayName,
+                                                          style: FlutterFlowTheme.of(context).bodyMedium.override(
+                                                            font: GoogleFonts.inter(),
+                                                            fontSize: 14.0,
+                                                            fontWeight: FontWeight.w500,
+                                                            letterSpacing: 0.0,
+                                                          ),
+                                                          maxLines: 1,
+                                                          overflow: TextOverflow.ellipsis,
+                                                        ),
+                                                        if (member.email.isNotEmpty)
+                                                          Text(
+                                                            member.email,
+                                                            style: FlutterFlowTheme.of(context).bodySmall.override(
+                                                              font: GoogleFonts.inter(),
+                                                              fontSize: 12.0,
+                                                              color: FlutterFlowTheme.of(context).secondaryText,
+                                                              letterSpacing: 0.0,
+                                                            ),
+                                                            maxLines: 1,
+                                                            overflow: TextOverflow.ellipsis,
+                                                          ),
+                                                      ],
+                                                    ),
+                                                  ),
+                                                ],
+                                              ),
+                                            ),
+                                          );
+                                        },
+                                      ),
+                                    ),
+                                  // AI mention overlay (keep existing)
                                   if (_model.isMention == true)
                                     Padding(
                                       padding:
@@ -1139,13 +1757,44 @@ class _ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget>
                                                       EasyDebounce.debounce(
                                                     '_model.messageTextController',
                                                     const Duration(
-                                                        milliseconds: 0),
+                                                        milliseconds: 100),
                                                     () async {
+                                                      // Check for AI mention
                                                       _model.isMention = functions
                                                           .checkmention(_model
                                                               .messageTextController
                                                               .text)!;
+                                                      
+                                                      // Check for group member mentions
+                                                      final mentionQuery = functions.extractMentionQuery(
+                                                        _model.messageTextController.text
+                                                      );
+                                                      
+                                                      if (mentionQuery != null && widget.chatReference?.isGroup == true) {
+                                                        // Show mention overlay for group members
+                                                        _model.showMentionOverlay = true;
+                                                        _model.mentionQuery = mentionQuery;
+                                                        
+                                                        // Fetch and filter group members
+                                                        final memberRefs = widget.chatReference?.members ?? [];
+                                                        final members = await Future.wait(
+                                                          memberRefs.map((ref) => UsersRecord.getDocumentOnce(ref))
+                                                        );
+                                                        
+                                                        // Filter members by query
+                                                        _model.filteredMembers = members.where((member) {
+                                                          final displayName = member.displayName.toLowerCase();
+                                                          final email = member.email.toLowerCase();
+                                                          final query = mentionQuery.toLowerCase();
+                                                          return displayName.contains(query) || email.contains(query);
+                                                        }).toList();
+                                                      } else {
+                                                        _model.showMentionOverlay = false;
+                                                        _model.filteredMembers = [];
+                                                      }
+                                                      
                                                       safeSetState(() {});
+                                                      
                                                       if (_model.isMention ==
                                                           true) {
                                                         if (animationsMap[
@@ -1411,6 +2060,10 @@ class _ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget>
                                                                           '') &&
                                                                   (_model.selectedVideoFile ==
                                                                       null) &&
+                                                                  (_model.file ==
+                                                                          null ||
+                                                                      _model.file ==
+                                                                          '') &&
                                                                   !(_model
                                                                       .images
                                                                       .isNotEmpty))) {
@@ -1613,9 +2266,18 @@ class _ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget>
                                                                         ...createMessagesRecordData(
                                                                           senderRef:
                                                                               currentUserReference,
-                                                                          content: _model
-                                                                              .messageTextController
-                                                                              .text,
+                                                                          content:
+                                                                              () {
+                                                                            // If sending a file without text, store the original file name in content
+                                                                            if (_model.file != null &&
+                                                                                _model.file != '' &&
+                                                                                (_model.messageTextController?.text.isEmpty ?? true)) {
+                                                                              final originalFileName = _model.uploadedLocalFile_uploadDataFile.name;
+                                                                              return (originalFileName != null && originalFileName.isNotEmpty) ? originalFileName : (_model.messageTextController?.text ?? '');
+                                                                            }
+                                                                            return _model.messageTextController?.text ??
+                                                                                '';
+                                                                          }(),
                                                                           createdAt:
                                                                               getCurrentTimestamp,
                                                                           replyTo: _model
@@ -1675,9 +2337,24 @@ class _ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget>
                                                                     ...createMessagesRecordData(
                                                                       senderRef:
                                                                           currentUserReference,
-                                                                      content: _model
-                                                                          .messageTextController
-                                                                          .text,
+                                                                      content:
+                                                                          () {
+                                                                        // If sending a file without text, store the original file name in content
+                                                                        if (_model.file != null &&
+                                                                            _model.file !=
+                                                                                '' &&
+                                                                            (_model.messageTextController?.text.isEmpty ??
+                                                                                true)) {
+                                                                          final originalFileName = _model
+                                                                              .uploadedLocalFile_uploadDataFile
+                                                                              .name;
+                                                                          return (originalFileName != null && originalFileName.isNotEmpty)
+                                                                              ? originalFileName
+                                                                              : (_model.messageTextController?.text ?? '');
+                                                                        }
+                                                                        return _model.messageTextController?.text ??
+                                                                            '';
+                                                                      }(),
                                                                       createdAt:
                                                                           getCurrentTimestamp,
                                                                       replyTo: _model
@@ -2060,6 +2737,26 @@ class _ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget>
                                             selectedMedia.every((m) =>
                                                 validateFileFormat(
                                                     m.storagePath, context))) {
+                                          // Check if more than 10 images selected
+                                          if (selectedMedia.length > 10) {
+                                            ScaffoldMessenger.of(context).showSnackBar(
+                                              SnackBar(
+                                                content: Row(
+                                                  children: [
+                                                    const Icon(Icons.warning, color: Colors.white),
+                                                    const SizedBox(width: 12),
+                                                    Expanded(
+                                                      child: Text('You can only select up to 10 images at once'),
+                                                    ),
+                                                  ],
+                                                ),
+                                                backgroundColor: Colors.orange,
+                                              ),
+                                            );
+                                            _model.isSendingImage = false;
+                                            safeSetState(() {});
+                                            return;
+                                          }
                                           safeSetState(() => _model
                                                   .isDataUploading_uploadData =
                                               true);
@@ -2117,8 +2814,8 @@ class _ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget>
                                             true) {
                                           _model.images = _model
                                               .uploadedFileUrls_uploadData
-                                              .toList()
-                                              .cast<String>();
+                                              .map((url) => url.toString())
+                                              .toList();
                                           safeSetState(() {});
                                         }
                                         _model.isSendingImage = false;
@@ -2151,7 +2848,7 @@ class _ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget>
                                             width: 50.0,
                                             decoration: const BoxDecoration(),
                                             child: Text(
-                                              'Image',
+                                              'Images',
                                               style:
                                                   FlutterFlowTheme.of(context)
                                                       .bodyMedium
@@ -2349,78 +3046,89 @@ class _ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget>
                                       hoverColor: Colors.transparent,
                                       highlightColor: Colors.transparent,
                                       onTap: () async {
-                                        final selectedFiles = await selectFiles(
-                                          allowedExtensions: ['pdf'],
-                                          multiFile: false,
-                                        );
-                                        if (selectedFiles != null) {
-                                          safeSetState(() => _model
-                                                  .isDataUploading_uploadDataFile =
-                                              true);
-                                          var selectedUploadedFiles =
-                                              <FFUploadedFile>[];
-
-                                          var downloadUrls = <String>[];
-                                          try {
-                                            showUploadMessage(
-                                              context,
-                                              'Uploading file...',
-                                              showLoading: true,
-                                            );
-                                            selectedUploadedFiles =
-                                                selectedFiles
-                                                    .map((m) => FFUploadedFile(
-                                                          name: m.storagePath
-                                                              .split('/')
-                                                              .last,
-                                                          bytes: m.bytes,
-                                                        ))
-                                                    .toList();
-
-                                            downloadUrls = (await Future.wait(
-                                              selectedFiles.map(
-                                                (f) async => await uploadData(
-                                                    f.storagePath, f.bytes),
-                                              ),
-                                            ))
-                                                .where((u) => u != null)
-                                                .map((u) => u!)
-                                                .toList();
-                                          } finally {
-                                            ScaffoldMessenger.of(context)
-                                                .hideCurrentSnackBar();
-                                            _model.isDataUploading_uploadDataFile =
-                                                false;
-                                          }
-                                          if (selectedUploadedFiles.length ==
-                                                  selectedFiles.length &&
-                                              downloadUrls.length ==
-                                                  selectedFiles.length) {
-                                            safeSetState(() {
-                                              _model.uploadedLocalFile_uploadDataFile =
-                                                  selectedUploadedFiles.first;
-                                              _model.uploadedFileUrl_uploadDataFile =
-                                                  downloadUrls.first;
-                                            });
-                                            showUploadMessage(
-                                              context,
-                                              'Success!',
-                                            );
-                                          } else {
-                                            safeSetState(() {});
-                                            showUploadMessage(
-                                              context,
-                                              'Failed to upload file',
-                                            );
-                                            return;
-                                          }
-                                        }
-
                                         _model.select = false;
                                         safeSetState(() {});
-                                        _model.file = _model
-                                            .uploadedFileUrl_uploadDataFile;
-                                        safeSetState(() {});
+                                        
+                                        // Get original filename from file picker
+                                        final pickedFiles =
+                                            await FilePicker.platform.pickFiles(
+                                          type: FileType.any,
+                                          withData: true,
+                                          allowMultiple: false,
+                                        );
+
+                                        if (pickedFiles == null ||
+                                            pickedFiles.files.isEmpty) {
+                                          return;
+                                        }
+
+                                        final pickedFile =
+                                            pickedFiles.files.first;
+                                        if (pickedFile.bytes == null) {
+                                          return;
+                                        }
+
+                                        final originalFileName =
+                                            pickedFile.name;
+
+                                        safeSetState(() => _model
+                                                .isDataUploading_uploadDataFile =
+                                            true);
+                                        var selectedUploadedFiles =
+                                            <FFUploadedFile>[];
+
+                                        var downloadUrls = <String>[];
+                                        try {
+                                          // Generate storage path (similar to selectFiles)
+                                          // Format: users/{uid}/uploads/{timestamp}.{ext}
+                                          final currentUserUid =
+                                              currentUserReference?.id ?? '';
+                                          final pathPrefix =
+                                              'users/$currentUserUid/uploads';
+                                          final timestamp = DateTime.now()
+                                              .microsecondsSinceEpoch;
+                                          final ext = originalFileName
+                                                  .contains('.')
+                                              ? originalFileName.split('.').last
+                                              : 'file';
+                                          final storagePath =
+                                              '$pathPrefix/$timestamp.$ext';
+
+                                          // Use the original filename instead of storage path
+                                          selectedUploadedFiles = [
+                                            FFUploadedFile(
+                                              name: originalFileName,
+                                              bytes: pickedFile.bytes!,
+                                            )
+                                          ];
+
+                                          downloadUrls = [
+                                            (await uploadData(storagePath,
+                                                    pickedFile.bytes!)) ??
+                                                ''
+                                          ].where((u) => u.isNotEmpty).toList();
+                                        } finally {
+                                          _model.isDataUploading_uploadDataFile =
+                                              false;
+                                        }
+                                        if (selectedUploadedFiles.length == 1 &&
+                                            downloadUrls.length == 1) {
+                                          safeSetState(() {
+                                            _model.uploadedLocalFile_uploadDataFile =
+                                                selectedUploadedFiles.first;
+                                            _model.uploadedFileUrl_uploadDataFile =
+                                                downloadUrls.first;
+                                          });
+                                        } else {
+                                          safeSetState(() {});
+                                          return;
+                                        }
+
+                                        if (_model.uploadedFileUrl_uploadDataFile != '') {
+                                          _model.file = _model
+                                              .uploadedFileUrl_uploadDataFile;
+                                          safeSetState(() {});
+                                        }
                                       },
                                       child: Row(
                                         mainAxisSize: MainAxisSize.max,
@@ -2769,4 +3477,6 @@ class _ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget>
       ),
     );
   }
+
+
 }

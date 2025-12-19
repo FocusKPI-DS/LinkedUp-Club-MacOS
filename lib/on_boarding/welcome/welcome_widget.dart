@@ -2,7 +2,6 @@ import '/backend/schema/structs/index.dart';
 import '/flutter_flow/flutter_flow_animations.dart';
 import '/flutter_flow/flutter_flow_util.dart';
 import '/flutter_flow/flutter_flow_widgets.dart';
-import 'dart:math';
 import 'dart:ui';
 import '/custom_code/actions/index.dart' as actions;
 import '/index.dart';
@@ -54,7 +53,7 @@ class _WelcomeWidgetState extends State<WelcomeWidget>
           FFAppState().update(() {});
 
           context.pushNamed(
-            InvitationCodeWidget.routeName,
+            SignUpWidget.routeName,
             queryParameters: {
               'isDeeplink': serializeParam(
                 true,
@@ -323,23 +322,34 @@ class _WelcomeWidgetState extends State<WelcomeWidget>
                                     scrollDirection: Axis.horizontal,
                                     children: [
                                       Padding(
-                                        padding: const EdgeInsetsDirectional.fromSTEB(
-                                            24.0, 24.0, 24.0, 0.0),
+                                        padding: const EdgeInsetsDirectional
+                                            .fromSTEB(24.0, 24.0, 24.0, 0.0),
                                         child: Column(
                                           mainAxisSize: MainAxisSize.max,
                                           mainAxisAlignment:
                                               MainAxisAlignment.start,
                                           children: [
                                             Container(
-                                              width: 238.0,
-                                              height: 238.0,
+                                              width: 400.0,
+                                              height: 400.0,
                                               clipBehavior: Clip.antiAlias,
-                                              decoration: const BoxDecoration(
-                                                shape: BoxShape.circle,
+                                              decoration: BoxDecoration(
+                                                borderRadius:
+                                                    BorderRadius.circular(16.0),
+                                                boxShadow: [
+                                                  BoxShadow(
+                                                    blurRadius: 20.0,
+                                                    color: FlutterFlowTheme.of(
+                                                            context)
+                                                        .alternate,
+                                                    offset:
+                                                        const Offset(0.0, 4.0),
+                                                  ),
+                                                ],
                                               ),
                                               child: Image.asset(
-                                                'assets/images/00315368875b4683939ad1b231c721a5cc3c7227.png',
-                                                fit: BoxFit.cover,
+                                                'assets/images/lona-workspace.png',
+                                                fit: BoxFit.contain,
                                               ),
                                             ),
                                             Column(
@@ -350,7 +360,7 @@ class _WelcomeWidgetState extends State<WelcomeWidget>
                                                       MainAxisSize.max,
                                                   children: [
                                                     Text(
-                                                      'Invite-only community',
+                                                      'Work Across All Tools From One AI Workspace',
                                                       textAlign:
                                                           TextAlign.center,
                                                       style:
@@ -387,7 +397,7 @@ class _WelcomeWidgetState extends State<WelcomeWidget>
                                                         animationsMap[
                                                             'textOnPageLoadAnimation1']!),
                                                     Text(
-                                                      'Access curated events and connect with trusted professionals.',
+                                                      'One inbox. One task list. One AI PM.',
                                                       textAlign:
                                                           TextAlign.center,
                                                       style:
@@ -420,32 +430,44 @@ class _WelcomeWidgetState extends State<WelcomeWidget>
                                                     ).animateOnPageLoad(
                                                         animationsMap[
                                                             'textOnPageLoadAnimation2']!),
-                                                  ].divide(
-                                                      const SizedBox(height: 16.0)),
+                                                  ].divide(const SizedBox(
+                                                      height: 16.0)),
                                                 ),
                                               ],
                                             ),
-                                          ].divide(const SizedBox(height: 30.0)),
+                                          ].divide(
+                                              const SizedBox(height: 30.0)),
                                         ),
                                       ),
                                       Padding(
-                                        padding: const EdgeInsetsDirectional.fromSTEB(
-                                            24.0, 0.0, 24.0, 0.0),
+                                        padding: const EdgeInsetsDirectional
+                                            .fromSTEB(24.0, 0.0, 24.0, 0.0),
                                         child: Column(
                                           mainAxisSize: MainAxisSize.max,
                                           mainAxisAlignment:
                                               MainAxisAlignment.start,
                                           children: [
                                             Container(
-                                              width: 238.0,
-                                              height: 238.0,
+                                              width: 400.0,
+                                              height: 400.0,
                                               clipBehavior: Clip.antiAlias,
-                                              decoration: const BoxDecoration(
-                                                shape: BoxShape.circle,
+                                              decoration: BoxDecoration(
+                                                borderRadius:
+                                                    BorderRadius.circular(16.0),
+                                                boxShadow: [
+                                                  BoxShadow(
+                                                    blurRadius: 20.0,
+                                                    color: FlutterFlowTheme.of(
+                                                            context)
+                                                        .alternate,
+                                                    offset:
+                                                        const Offset(0.0, 4.0),
+                                                  ),
+                                                ],
                                               ),
                                               child: Image.asset(
-                                                'assets/images/ac223b5163821230e58fbb86c4f9ddd0d1772771.png',
-                                                fit: BoxFit.cover,
+                                                'assets/images/lona-workspace.png',
+                                                fit: BoxFit.contain,
                                               ),
                                             ),
                                             Column(
@@ -456,7 +478,7 @@ class _WelcomeWidgetState extends State<WelcomeWidget>
                                                       MainAxisSize.max,
                                                   children: [
                                                     Text(
-                                                      'Build meaningful connections',
+                                                      'The Only Tool That Replaces Switching Apps',
                                                       textAlign:
                                                           TextAlign.center,
                                                       style:
@@ -493,7 +515,7 @@ class _WelcomeWidgetState extends State<WelcomeWidget>
                                                         animationsMap[
                                                             'textOnPageLoadAnimation3']!),
                                                     Text(
-                                                      'Chat and network based on \nshared interests.',
+                                                      'See everything in one place. Never lose track of messages or tasks.',
                                                       textAlign:
                                                           TextAlign.center,
                                                       style:
@@ -526,32 +548,44 @@ class _WelcomeWidgetState extends State<WelcomeWidget>
                                                     ).animateOnPageLoad(
                                                         animationsMap[
                                                             'textOnPageLoadAnimation4']!),
-                                                  ].divide(
-                                                      const SizedBox(height: 16.0)),
+                                                  ].divide(const SizedBox(
+                                                      height: 16.0)),
                                                 ),
                                               ],
                                             ),
-                                          ].divide(const SizedBox(height: 30.0)),
+                                          ].divide(
+                                              const SizedBox(height: 30.0)),
                                         ),
                                       ),
                                       Padding(
-                                        padding: const EdgeInsetsDirectional.fromSTEB(
-                                            24.0, 0.0, 24.0, 0.0),
+                                        padding: const EdgeInsetsDirectional
+                                            .fromSTEB(24.0, 0.0, 24.0, 0.0),
                                         child: Column(
                                           mainAxisSize: MainAxisSize.max,
                                           mainAxisAlignment:
                                               MainAxisAlignment.start,
                                           children: [
                                             Container(
-                                              width: 238.0,
-                                              height: 238.0,
+                                              width: 400.0,
+                                              height: 400.0,
                                               clipBehavior: Clip.antiAlias,
-                                              decoration: const BoxDecoration(
-                                                shape: BoxShape.circle,
+                                              decoration: BoxDecoration(
+                                                borderRadius:
+                                                    BorderRadius.circular(16.0),
+                                                boxShadow: [
+                                                  BoxShadow(
+                                                    blurRadius: 20.0,
+                                                    color: FlutterFlowTheme.of(
+                                                            context)
+                                                        .alternate,
+                                                    offset:
+                                                        const Offset(0.0, 4.0),
+                                                  ),
+                                                ],
                                               ),
                                               child: Image.asset(
-                                                'assets/images/9939941067409a27e7334f498969c725da0ae11a.png',
-                                                fit: BoxFit.cover,
+                                                'assets/images/lona-workspace.png',
+                                                fit: BoxFit.contain,
                                               ),
                                             ),
                                             Column(
@@ -562,7 +596,7 @@ class _WelcomeWidgetState extends State<WelcomeWidget>
                                                       MainAxisSize.max,
                                                   children: [
                                                     Text(
-                                                      'Smarter networking with AI',
+                                                      'All-in-One AI Workspace for Modern Teams',
                                                       textAlign:
                                                           TextAlign.center,
                                                       style:
@@ -599,7 +633,7 @@ class _WelcomeWidgetState extends State<WelcomeWidget>
                                                         animationsMap[
                                                             'textOnPageLoadAnimation5']!),
                                                     Text(
-                                                      'Let AI help you stay engaged with chat groups.',
+                                                      'Privacy-first workspace. Focus on the work, not on where the work lives.',
                                                       textAlign:
                                                           TextAlign.center,
                                                       style:
@@ -632,22 +666,25 @@ class _WelcomeWidgetState extends State<WelcomeWidget>
                                                     ).animateOnPageLoad(
                                                         animationsMap[
                                                             'textOnPageLoadAnimation6']!),
-                                                  ].divide(
-                                                      const SizedBox(height: 20.0)),
+                                                  ].divide(const SizedBox(
+                                                      height: 20.0)),
                                                 ),
                                               ],
                                             ),
-                                          ].divide(const SizedBox(height: 30.0)),
+                                          ].divide(
+                                              const SizedBox(height: 30.0)),
                                         ),
                                       ),
                                     ],
                                   ),
                                 ),
                                 Align(
-                                  alignment: const AlignmentDirectional(0.0, 1.0),
+                                  alignment:
+                                      const AlignmentDirectional(0.0, 1.0),
                                   child: Padding(
-                                    padding: const EdgeInsetsDirectional.fromSTEB(
-                                        0.0, 0.0, 0.0, 10.0),
+                                    padding:
+                                        const EdgeInsetsDirectional.fromSTEB(
+                                            0.0, 0.0, 0.0, 10.0),
                                     child: smooth_page_indicator
                                         .SmoothPageIndicator(
                                       controller: _model.pageViewController ??=
@@ -658,7 +695,8 @@ class _WelcomeWidgetState extends State<WelcomeWidget>
                                         await _model.pageViewController!
                                             .animateToPage(
                                           i,
-                                          duration: const Duration(milliseconds: 500),
+                                          duration:
+                                              const Duration(milliseconds: 500),
                                           curve: Curves.ease,
                                         );
                                         safeSetState(() {});
@@ -691,7 +729,7 @@ class _WelcomeWidgetState extends State<WelcomeWidget>
                           child: FFButtonWidget(
                             onPressed: () async {
                               context.pushNamed(
-                                InvitationCodeWidget.routeName,
+                                SignUpWidget.routeName,
                                 extra: <String, dynamic>{
                                   kTransitionInfoKey: const TransitionInfo(
                                     hasTransition: true,
@@ -700,7 +738,7 @@ class _WelcomeWidgetState extends State<WelcomeWidget>
                                 },
                               );
                             },
-                            text: 'Get Started',
+                            text: 'Signup',
                             options: FFButtonOptions(
                               width: double.infinity,
                               height: 48.0,

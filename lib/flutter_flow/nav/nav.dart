@@ -25,6 +25,7 @@ import '/pages/create_workspace/create_workspace_widget.dart';
 import '/pages/mobile_chat/mobile_chat_widget.dart';
 import '/pages/mobile_settings/mobile_settings_widget.dart';
 import '/pages/profile_settings/profile_settings_widget.dart';
+import '/pages/invite_friends/invite_friends_widget.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'dart:io' show Platform;
 import 'package:branchio_dynamic_linking_akp5u6/index.dart'
@@ -230,6 +231,12 @@ GoRouter createRouter(AppStateNotifier appStateNotifier) {
         builder: (context, params) => const CreateWorkspaceWidget(),
       ),
       FFRoute(
+        name: InviteFriendsWidget.routeName,
+        path: InviteFriendsWidget.routePath,
+        requireAuth: true,
+        builder: (context, params) => const InviteFriendsWidget(),
+      ),
+      FFRoute(
         name: CreateEventWidget.routeName,
         path: CreateEventWidget.routePath,
         requireAuth: true,
@@ -291,6 +298,20 @@ GoRouter createRouter(AppStateNotifier appStateNotifier) {
           'chatDoc': getDoc(['chats'], ChatsRecord.fromSnapshot),
         },
         builder: (context, params) => GroupChatDetailWidget(
+          chatDoc: params.getParam(
+            'chatDoc',
+            ParamType.Document,
+          ),
+        ),
+      ),
+      FFRoute(
+        name: GroupMediaLinksDocsWidget.routeName,
+        path: GroupMediaLinksDocsWidget.routePath,
+        requireAuth: true,
+        asyncParams: {
+          'chatDoc': getDoc(['chats'], ChatsRecord.fromSnapshot),
+        },
+        builder: (context, params) => GroupMediaLinksDocsWidget(
           chatDoc: params.getParam(
             'chatDoc',
             ParamType.Document,

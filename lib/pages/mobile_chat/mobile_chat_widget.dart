@@ -9,6 +9,7 @@ import '/pages/desktop_chat/chat_controller.dart';
 import '/pages/chat/user_profile_detail/user_profile_detail_widget.dart';
 import '/pages/chat/group_chat_detail/group_chat_detail_widget.dart';
 import 'dart:io';
+import 'dart:ui';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:easy_debounce/easy_debounce.dart';
 // import 'package:ff_theme/flutter_flow/flutter_flow_theme.dart'; // Removed unused import
@@ -43,6 +44,7 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
 
   final scaffoldKey = GlobalKey<ScaffoldState>();
   final animationsMap = <String, AnimationInfo>{};
+  double? _dragStartX;
 
   @override
   void initState() {
@@ -115,7 +117,7 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: Color(0xFFF5F5F7),
       body: RepaintBoundary(
         child:
             _model.selectedChat != null ? _buildChatView() : _buildChatList(),
@@ -124,18 +126,51 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
   }
 
   Widget _buildChatView() {
-    return Column(
-      children: [
-        // iOS-style navigation bar
-        _buildIOSNavigationBar(),
-        // Chat thread component
-        Expanded(
-          child: ChatThreadComponentWidget(
-            chatReference: _model.selectedChat,
-            onMessageLongPress: _showMessageMenu,
+    return GestureDetector(
+      onHorizontalDragStart: (details) {
+        // Track drag start position for iOS swipe-to-go-back
+        if (Platform.isIOS) {
+          _dragStartX = details.globalPosition.dx;
+        }
+      },
+      onHorizontalDragUpdate: (details) {
+        // Only allow swipe if it started from the left edge (within 20px)
+        if (Platform.isIOS && _dragStartX != null) {
+          if (_dragStartX! > 20) {
+            // Reset if drag didn't start from left edge
+            _dragStartX = null;
+          }
+        }
+      },
+      onHorizontalDragEnd: (details) {
+        // Enable swipe-to-go-back on iOS only
+        if (Platform.isIOS && _dragStartX != null && _dragStartX! <= 20) {
+          // Check if swipe was from left to right (positive velocity)
+          if (details.primaryVelocity != null &&
+              details.primaryVelocity! > 200) {
+            // Navigate back
+            setState(() {
+              _model.selectedChat = null;
+            });
+            // Notify parent that chat is closed
+            widget.onChatStateChanged?.call(false);
+          }
+        }
+        _dragStartX = null;
+      },
+      child: Column(
+        children: [
+          // iOS-style navigation bar
+          _buildIOSNavigationBar(),
+          // Chat thread component
+          Expanded(
+            child: ChatThreadComponentWidget(
+              chatReference: _model.selectedChat,
+              onMessageLongPress: _showMessageMenu,
+            ),
           ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 
@@ -229,147 +264,169 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
         if (_model.isSearchVisible) _buildSearchBar(),
         // Navigation tabs
         _buildNavigationTabs(),
-        // Chat list
+        // Chat list with smooth transitions
         Expanded(
-          child: _buildChatListContent(),
+          child: AnimatedSwitcher(
+            duration: Duration(milliseconds: 300),
+            transitionBuilder: (Widget child, Animation<double> animation) {
+              return FadeTransition(
+                opacity: animation,
+                child: SlideTransition(
+                  position: Tween<Offset>(
+                    begin: Offset(0.05, 0),
+                    end: Offset.zero,
+                  ).animate(CurvedAnimation(
+                    parent: animation,
+                    curve: Curves.easeOutCubic,
+                  )),
+                  child: child,
+                ),
+              );
+            },
+            child: _buildChatListContent(),
+          ),
         ),
       ],
     );
   }
 
   Widget _buildIOSHeader() {
-    return Container(
-      decoration: BoxDecoration(
-        color: Color(0xFF2D3142),
-        border: Border(
-          bottom: BorderSide(
-            color: Color(0xFF374151),
-            width: 1,
-          ),
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.05),
-            blurRadius: 10,
-            offset: Offset(0, 1),
-          ),
-        ],
-      ),
-      child: SafeArea(
+    return ClipRRect(
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
         child: Container(
-          height: 40,
-          padding: EdgeInsets.symmetric(horizontal: 16),
-          child: Row(
-            children: [
-              // App title
-              Expanded(
-                child: Text(
-                  'Chats',
-                  style: TextStyle(
-                    fontFamily: 'System',
-                    color: Colors.white,
-                    fontSize: 22,
-                    fontWeight: FontWeight.normal,
-                    letterSpacing: -0.2,
-                  ),
-                ),
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [
+                Color(0xFF1A1D29).withOpacity(0.95),
+                Color(0xFF2D3142).withOpacity(0.95),
+              ],
+            ),
+            border: Border(
+              bottom: BorderSide(
+                color: Colors.white.withOpacity(0.1),
+                width: 0.5,
               ),
-              // Action buttons
-              Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  // Search button
-                  GestureDetector(
-                    onTap: () {
-                      setState(() {
-                        _model.isSearchVisible = !_model.isSearchVisible;
-                        if (_model.isSearchVisible) {
-                          // Focus on search field when opened
-                          Future.delayed(Duration(milliseconds: 100), () {
-                            _model.searchFocusNode?.requestFocus();
-                          });
-                        } else {
-                          // Clear search when closed
-                          _model.searchTextController?.clear();
-                          chatController.updateSearchQuery('');
-                        }
-                      });
-                    },
-                    child: Container(
-                      width: 40,
-                      height: 40,
-                      decoration: BoxDecoration(
-                        color: Colors.transparent,
-                        borderRadius: BorderRadius.circular(20),
-                      ),
-                      child: Icon(
-                        Icons.search,
-                        color: _model.isSearchVisible
-                            ? Color(0xFF007AFF)
-                            : Colors.white,
-                        size: 20,
-                      ),
-                    ),
-                  ),
-                  SizedBox(width: 8),
-                  GestureDetector(
-                    onTap: () {
-                      setState(() {
-                        _model.showGroupCreation = !_model.showGroupCreation;
-                        if (_model.showGroupCreation) {
-                          _model.groupName = '';
-                          _model.selectedMembers = [];
-                          _model.groupNameController?.clear();
-                          _model.groupImagePath = null;
-                          _model.groupImageUrl = null;
-                          _model.isUploadingImage = false;
-                        }
-                      });
-                    },
-                    child: Container(
-                      width: 40,
-                      height: 40,
-                      decoration: BoxDecoration(
-                        color: Colors.transparent,
-                        borderRadius: BorderRadius.circular(20),
-                      ),
-                      child: Icon(
-                        Icons.add,
-                        color: _model.showGroupCreation
-                            ? Color(0xFF007AFF)
-                            : Colors.white,
-                        size: 20,
-                      ),
-                    ),
-                  ),
-                  SizedBox(width: 8),
-                  GestureDetector(
-                    onTap: () {
-                      setState(() {
-                        _model.showWorkspaceMembers =
-                            !_model.showWorkspaceMembers;
-                      });
-                    },
-                    child: Container(
-                      width: 40,
-                      height: 40,
-                      decoration: BoxDecoration(
-                        color: Colors.transparent,
-                        borderRadius: BorderRadius.circular(20),
-                      ),
-                      child: Icon(
-                        Icons.person,
-                        color: _model.showWorkspaceMembers
-                            ? Color(0xFF007AFF)
-                            : Colors.white,
-                        size: 20,
-                      ),
-                    ),
-                  ),
-                ],
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.1),
+                blurRadius: 20,
+                offset: Offset(0, 2),
               ),
             ],
           ),
+          child: SafeArea(
+            child: Container(
+              height: 56,
+              padding: EdgeInsets.symmetric(horizontal: 20),
+              child: Row(
+                children: [
+                  // App title
+                  Expanded(
+                    child: Text(
+                      'Chats',
+                      style: TextStyle(
+                        fontFamily: 'SF Pro Text',
+                        color: Colors.white,
+                        fontSize: 28,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: -0.5,
+                      ),
+                    ),
+                  ),
+                  // Action buttons
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      // Search button
+                      _buildHeaderButton(
+                        icon: Icons.search_rounded,
+                        isActive: _model.isSearchVisible,
+                        onTap: () {
+                          setState(() {
+                            _model.isSearchVisible = !_model.isSearchVisible;
+                            if (_model.isSearchVisible) {
+                              Future.delayed(Duration(milliseconds: 100), () {
+                                _model.searchFocusNode?.requestFocus();
+                              });
+                            } else {
+                              _model.searchTextController?.clear();
+                              chatController.updateSearchQuery('');
+                            }
+                          });
+                        },
+                      ),
+                      SizedBox(width: 12),
+                      _buildHeaderButton(
+                        icon: Icons.add_rounded,
+                        isActive: _model.showGroupCreation,
+                        onTap: () {
+                          setState(() {
+                            _model.showGroupCreation =
+                                !_model.showGroupCreation;
+                            if (_model.showGroupCreation) {
+                              _model.groupName = '';
+                              _model.selectedMembers = [];
+                              _model.groupNameController?.clear();
+                              _model.groupImagePath = null;
+                              _model.groupImageUrl = null;
+                              _model.isUploadingImage = false;
+                            }
+                          });
+                        },
+                      ),
+                      SizedBox(width: 12),
+                      _buildHeaderButton(
+                        icon: Icons.person_rounded,
+                        isActive: _model.showWorkspaceMembers,
+                        onTap: () {
+                          setState(() {
+                            _model.showWorkspaceMembers =
+                                !_model.showWorkspaceMembers;
+                          });
+                        },
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildHeaderButton({
+    required IconData icon,
+    required bool isActive,
+    required VoidCallback onTap,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: Duration(milliseconds: 200),
+        width: 44,
+        height: 44,
+        decoration: BoxDecoration(
+          color: isActive
+              ? Color(0xFF007AFF).withOpacity(0.2)
+              : Colors.white.withOpacity(0.1),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: isActive
+                ? Color(0xFF007AFF).withOpacity(0.3)
+                : Colors.white.withOpacity(0.2),
+            width: 1,
+          ),
+        ),
+        child: Icon(
+          icon,
+          color: isActive ? Color(0xFF007AFF) : Colors.white,
+          size: 22,
         ),
       ),
     );
@@ -1291,72 +1348,115 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
 
   Widget _buildSearchBar() {
     return Container(
-      padding: EdgeInsets.all(16),
-      child: Container(
-        height: 36,
-        decoration: BoxDecoration(
-          color: Color(0xFFF2F2F7), // iOS search bar color
-          borderRadius: BorderRadius.circular(10),
-        ),
-        child: TextFormField(
-          controller: _model.searchTextController,
-          focusNode: _model.searchFocusNode,
-          onChanged: (value) {
-            EasyDebounce.debounce(
-              'searchTextController',
-              Duration(milliseconds: 500),
-              () => chatController.updateSearchQuery(value),
-            );
-          },
-          decoration: InputDecoration(
-            hintText: 'Search',
-            hintStyle: TextStyle(
-              fontFamily: 'System',
-              color: Color(0xFF8E8E93),
-              fontSize: 16,
-              fontWeight: FontWeight.w400,
+      margin: EdgeInsets.fromLTRB(16, 8, 16, 12),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(16),
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
+          child: Container(
+            height: 50,
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.8),
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(
+                color: Colors.white.withOpacity(0.9),
+                width: 1.5,
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.05),
+                  blurRadius: 20,
+                  offset: Offset(0, 4),
+                ),
+              ],
             ),
-            border: InputBorder.none,
-            contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-            prefixIcon: Icon(
-              Icons.search,
-              color: Color(0xFF8E8E93),
-              size: 18,
+            child: TextFormField(
+              controller: _model.searchTextController,
+              focusNode: _model.searchFocusNode,
+              onChanged: (value) {
+                EasyDebounce.debounce(
+                  'searchTextController',
+                  Duration(milliseconds: 500),
+                  () => chatController.updateSearchQuery(value),
+                );
+              },
+              decoration: InputDecoration(
+                hintText: 'Search chats...',
+                hintStyle: TextStyle(
+                  fontFamily: 'SF Pro Text',
+                  color: Color(0xFF8E8E93),
+                  fontSize: 16,
+                  fontWeight: FontWeight.w400,
+                ),
+                border: InputBorder.none,
+                contentPadding:
+                    EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+                prefixIcon: Padding(
+                  padding: EdgeInsets.only(left: 16, right: 12),
+                  child: Icon(
+                    Icons.search_rounded,
+                    color: Color(0xFF8E8E93),
+                    size: 22,
+                  ),
+                ),
+                suffixIcon: Obx(() {
+                  return chatController.searchQuery.value.isNotEmpty
+                      ? Padding(
+                          padding: EdgeInsets.only(right: 12),
+                          child: GestureDetector(
+                            onTap: () {
+                              _model.searchTextController?.clear();
+                              chatController.updateSearchQuery('');
+                            },
+                            child: Container(
+                              width: 32,
+                              height: 32,
+                              decoration: BoxDecoration(
+                                color: Color(0xFF8E8E93).withOpacity(0.1),
+                                shape: BoxShape.circle,
+                              ),
+                              child: Icon(
+                                Icons.close_rounded,
+                                color: Color(0xFF8E8E93),
+                                size: 18,
+                              ),
+                            ),
+                          ),
+                        )
+                      : Padding(
+                          padding: EdgeInsets.only(right: 12),
+                          child: GestureDetector(
+                            onTap: () {
+                              setState(() {
+                                _model.isSearchVisible = false;
+                                _model.searchTextController?.clear();
+                                chatController.updateSearchQuery('');
+                              });
+                            },
+                            child: Container(
+                              width: 32,
+                              height: 32,
+                              decoration: BoxDecoration(
+                                color: Color(0xFF8E8E93).withOpacity(0.1),
+                                shape: BoxShape.circle,
+                              ),
+                              child: Icon(
+                                Icons.close_rounded,
+                                color: Color(0xFF8E8E93),
+                                size: 18,
+                              ),
+                            ),
+                          ),
+                        );
+                }),
+              ),
+              style: TextStyle(
+                fontFamily: 'SF Pro Text',
+                color: Color(0xFF1D1D1F),
+                fontSize: 16,
+                fontWeight: FontWeight.w400,
+              ),
             ),
-            suffixIcon: Obx(() {
-              return chatController.searchQuery.value.isNotEmpty
-                  ? GestureDetector(
-                      onTap: () {
-                        _model.searchTextController?.clear();
-                        chatController.updateSearchQuery('');
-                      },
-                      child: Icon(
-                        Icons.clear,
-                        color: Color(0xFF8E8E93),
-                        size: 18,
-                      ),
-                    )
-                  : GestureDetector(
-                      onTap: () {
-                        setState(() {
-                          _model.isSearchVisible = false;
-                          _model.searchTextController?.clear();
-                          chatController.updateSearchQuery('');
-                        });
-                      },
-                      child: Icon(
-                        Icons.close,
-                        color: Color(0xFF8E8E93),
-                        size: 18,
-                      ),
-                    );
-            }),
-          ),
-          style: TextStyle(
-            fontFamily: 'System',
-            color: Color(0xFF1D1D1F),
-            fontSize: 16,
-            fontWeight: FontWeight.w400,
           ),
         ),
       ),
@@ -1365,16 +1465,44 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
 
   Widget _buildNavigationTabs() {
     return Container(
-      height: 36,
-      padding: EdgeInsets.symmetric(horizontal: 12),
-      child: Row(
-        children: [
-          Expanded(child: _buildTab('All', 0)),
-          SizedBox(width: 6),
-          Expanded(child: _buildTab('DM', 1)),
-          SizedBox(width: 6),
-          Expanded(child: _buildTab('Groups', 2)),
-        ],
+      margin: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(16),
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
+          child: Container(
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.7),
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(
+                color: Colors.white.withOpacity(0.8),
+                width: 1.5,
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.05),
+                  blurRadius: 20,
+                  offset: Offset(0, 4),
+                ),
+                BoxShadow(
+                  color: Colors.white.withOpacity(0.8),
+                  blurRadius: 6,
+                  offset: Offset(0, -2),
+                ),
+              ],
+            ),
+            padding: EdgeInsets.all(4),
+            child: Row(
+              children: [
+                Expanded(child: _buildTab('All', 0)),
+                SizedBox(width: 4),
+                Expanded(child: _buildTab('DM', 1)),
+                SizedBox(width: 4),
+                Expanded(child: _buildTab('Groups', 2)),
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }
@@ -1383,23 +1511,51 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
     final isSelected = _model.tabController?.index == index;
     return GestureDetector(
       onTap: () {
-        _model.tabController?.animateTo(index);
+        _model.tabController?.animateTo(
+          index,
+          duration: Duration(milliseconds: 300),
+          curve: Curves.easeInOutCubic,
+        );
       },
-      child: Container(
-        height: 28,
+      child: AnimatedContainer(
+        duration: Duration(milliseconds: 300),
+        curve: Curves.easeInOutCubic,
+        height: 36,
         decoration: BoxDecoration(
-          color: isSelected ? Color(0xFF007AFF) : Colors.transparent,
-          borderRadius: BorderRadius.circular(6),
+          gradient: isSelected
+              ? LinearGradient(
+                  colors: [
+                    Color(0xFF5AC8FA), // Lighter blue
+                    Color(0xFF007AFF), // Slightly lighter than before
+                  ],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                )
+              : null,
+          color: isSelected ? null : Colors.transparent,
+          borderRadius: BorderRadius.circular(12),
+          boxShadow: isSelected
+              ? [
+                  BoxShadow(
+                    color: Color(0xFF5AC8FA).withOpacity(0.3),
+                    blurRadius: 12,
+                    offset: Offset(0, 4),
+                  ),
+                ]
+              : null,
         ),
         child: Center(
-          child: Text(
-            text,
+          child: AnimatedDefaultTextStyle(
+            duration: Duration(milliseconds: 300),
+            curve: Curves.easeInOutCubic,
             style: TextStyle(
-              fontFamily: 'System',
-              color: isSelected ? Colors.white : Color(0xFF8E8E93),
-              fontSize: 16,
-              fontWeight: FontWeight.normal,
+              fontFamily: 'SF Pro Text',
+              color: isSelected ? Colors.white : Color(0xFF6B7280),
+              fontSize: 15,
+              fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
+              letterSpacing: -0.2,
             ),
+            child: Text(text),
           ),
         ),
       ),
@@ -1407,6 +1563,17 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
   }
 
   Widget _buildChatListContent() {
+    return Obx(() {
+      final currentTabIndex = _model.tabController?.index ?? 0;
+      return Container(
+        key: ValueKey(
+            'chat_list_${currentTabIndex}_${chatController.searchQuery.value}'),
+        child: _buildChatListContentInner(),
+      );
+    });
+  }
+
+  Widget _buildChatListContentInner() {
     return Obx(() {
       switch (chatController.chatState.value) {
         case ChatState.loading:
@@ -1518,7 +1685,7 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
 
           return ListView.builder(
             key: ValueKey(
-                'chat_list_${filteredChats.length}_${chatController.searchQuery.value}'),
+                'chat_list_items_${_model.tabController?.index ?? 0}_${filteredChats.length}_${chatController.searchQuery.value}'),
             padding: EdgeInsets.zero,
             itemCount: filteredChats.length,
             itemBuilder: (context, index) {
@@ -1910,7 +2077,7 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
               children: [
                 // Group name input
                 Text(
-                  'Group Name',
+                  'Group Name (Optional)',
                   style: TextStyle(
                     fontFamily: 'System',
                     color: Color(0xFF1D1D1F),
@@ -2338,13 +2505,11 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
                 SizedBox(
                   width: double.infinity,
                   child: ElevatedButton(
-                    onPressed: _model.groupName.isNotEmpty &&
-                            _model.selectedMembers.isNotEmpty
+                    onPressed: _model.selectedMembers.isNotEmpty
                         ? () => _createGroup()
                         : null,
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: _model.groupName.isNotEmpty &&
-                              _model.selectedMembers.isNotEmpty
+                      backgroundColor: _model.selectedMembers.isNotEmpty
                           ? Color(0xFF007AFF)
                           : Color(0xFF8E8E93),
                       padding: EdgeInsets.symmetric(vertical: 16),
@@ -2545,11 +2710,10 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
 
   Future<void> _createGroup() async {
     try {
-      if (_model.groupName.isEmpty || _model.selectedMembers.isEmpty) {
+      if (_model.selectedMembers.isEmpty) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(
-                'Please enter a group name and select at least one member'),
+            content: Text('Please select at least one member'),
             backgroundColor: Color(0xFFFF3B30),
           ),
         );
@@ -2563,10 +2727,44 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
         ..._model.selectedMembers
       ];
 
+      // Auto-generate group name from member names if not provided
+      String groupName = _model.groupName.trim();
+      if (groupName.isEmpty) {
+        // Fetch all member names
+        final List<String> memberNames = [];
+        
+        // Get current user name
+        if (currentUserReference != null) {
+          try {
+            final currentUser = await UsersRecord.getDocumentOnce(currentUserReference!);
+            memberNames.add(currentUser.displayName.isNotEmpty 
+                ? currentUser.displayName 
+                : currentUser.email.split('@')[0]);
+          } catch (e) {
+            memberNames.add('You');
+          }
+        }
+        
+        // Get selected member names
+        for (final memberRef in _model.selectedMembers) {
+          try {
+            final user = await UsersRecord.getDocumentOnce(memberRef);
+            memberNames.add(user.displayName.isNotEmpty 
+                ? user.displayName 
+                : user.email.split('@')[0]);
+          } catch (e) {
+            // Skip if we can't fetch the user
+          }
+        }
+        
+        // Join names with comma and space (like Slack)
+        groupName = memberNames.join(', ');
+      }
+
       // Create the group chat
       final newChatRef = await ChatsRecord.collection.add({
         ...createChatsRecordData(
-          title: _model.groupName,
+          title: groupName,
           isGroup: true,
           createdAt: getCurrentTimestamp,
           lastMessageAt: getCurrentTimestamp,
@@ -2603,7 +2801,7 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
       // Show success message
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Group "${_model.groupName}" created successfully!'),
+          content: Text('Group "$groupName" created successfully!'),
           backgroundColor: Color(0xFF34C759),
         ),
       );
@@ -3162,7 +3360,7 @@ class _MobileChatListItemState extends State<_MobileChatListItem>
               Text(
                 title,
                 style: TextStyle(
-                  fontFamily: 'System',
+                  fontFamily: 'SF Pro Text',
                   color: textColor ?? defaultColor,
                   fontSize: 16,
                   fontWeight: FontWeight.w400,
@@ -3256,15 +3454,18 @@ class _MobileChatListItemState extends State<_MobileChatListItem>
         onTap: null, // Disable InkWell tap since GestureDetector handles it
         child: Container(
           width: double.infinity,
-          padding: EdgeInsets.all(16),
+          padding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          margin: EdgeInsets.symmetric(horizontal: 16, vertical: 4),
           decoration: BoxDecoration(
             color: Colors.white,
-            border: Border(
-              bottom: BorderSide(
-                color: Color(0xFFE5E7EB),
-                width: 0.5,
+            borderRadius: BorderRadius.circular(16),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.03),
+                blurRadius: 10,
+                offset: Offset(0, 2),
               ),
-            ),
+            ],
           ),
           child: Row(
             children: [
@@ -3290,7 +3491,7 @@ class _MobileChatListItemState extends State<_MobileChatListItem>
                   Text(
                     _formatTimestamp(widget.chat.lastMessageAt),
                     style: TextStyle(
-                      fontFamily: 'System',
+                      fontFamily: 'SF Pro Text',
                       color: Color(0xFF8E8E93),
                       fontSize: 13,
                     ),
@@ -3454,10 +3655,11 @@ class _MobileChatListItemState extends State<_MobileChatListItem>
       return Text(
         chat.title.isNotEmpty ? chat.title : 'Group Chat',
         style: TextStyle(
-          fontFamily: 'System',
+          fontFamily: 'SF Pro Text',
           color: Color(0xFF1D1D1F),
           fontSize: 16,
-          fontWeight: FontWeight.normal,
+          fontWeight: FontWeight.w500,
+          letterSpacing: -0.2,
         ),
         maxLines: 1,
         overflow: TextOverflow.ellipsis,
@@ -3488,10 +3690,11 @@ class _MobileChatListItemState extends State<_MobileChatListItem>
           return Text(
             displayName,
             style: TextStyle(
-              fontFamily: 'System',
+              fontFamily: 'SF Pro Text',
               color: Color(0xFF1D1D1F),
               fontSize: 17,
-              fontWeight: FontWeight.normal,
+              fontWeight: FontWeight.w500,
+              letterSpacing: -0.2,
             ),
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
@@ -3506,7 +3709,7 @@ class _MobileChatListItemState extends State<_MobileChatListItem>
       return Text(
         'No messages',
         style: TextStyle(
-          fontFamily: 'System',
+          fontFamily: 'SF Pro Text',
           color: Color(0xFF8E8E93),
           fontSize: 15,
         ),
@@ -3518,7 +3721,7 @@ class _MobileChatListItemState extends State<_MobileChatListItem>
     return Text(
       chat.lastMessage,
       style: TextStyle(
-        fontFamily: 'System',
+        fontFamily: 'SF Pro Text',
         color: Color(0xFF8E8E93),
         fontSize: 15,
       ),

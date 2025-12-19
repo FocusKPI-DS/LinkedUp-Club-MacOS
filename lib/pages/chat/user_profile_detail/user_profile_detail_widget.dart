@@ -195,7 +195,8 @@ class _UserProfileDetailWidgetState extends State<UserProfileDetailWidget> {
                                 crossAxisAlignment: CrossAxisAlignment.center,
                                 children: [
                                   Stack(
-                                    alignment: const AlignmentDirectional(0.0, 0.0),
+                                    alignment:
+                                        const AlignmentDirectional(0.0, 0.0),
                                     children: [
                                       Container(
                                         width: 96.0,
@@ -212,10 +213,10 @@ class _UserProfileDetailWidgetState extends State<UserProfileDetailWidget> {
                                           borderRadius:
                                               BorderRadius.circular(48.0),
                                           child: CachedNetworkImage(
-                                            fadeInDuration:
-                                                const Duration(milliseconds: 500),
-                                            fadeOutDuration:
-                                                const Duration(milliseconds: 500),
+                                            fadeInDuration: const Duration(
+                                                milliseconds: 500),
+                                            fadeOutDuration: const Duration(
+                                                milliseconds: 500),
                                             imageUrl: widget.user!.photoUrl,
                                             width: 96.0,
                                             height: 96.0,
@@ -294,14 +295,12 @@ class _UserProfileDetailWidgetState extends State<UserProfileDetailWidget> {
                                                       {
                                                         'friends': FieldValue
                                                             .arrayUnion([
-                                                          widget
-                                                              .user?.reference
+                                                          widget.user?.reference
                                                         ]),
                                                         'friend_requests':
                                                             FieldValue
                                                                 .arrayRemove([
-                                                          widget
-                                                              .user?.reference
+                                                          widget.user?.reference
                                                         ]),
                                                       },
                                                     ),
@@ -342,11 +341,12 @@ class _UserProfileDetailWidgetState extends State<UserProfileDetailWidget> {
                                                 options: FFButtonOptions(
                                                   width: double.infinity,
                                                   height: 40.0,
-                                                  padding: const EdgeInsets.all(8.0),
+                                                  padding:
+                                                      const EdgeInsets.all(8.0),
                                                   iconPadding:
                                                       const EdgeInsetsDirectional
-                                                          .fromSTEB(0.0, 0.0,
-                                                              0.0, 0.0),
+                                                          .fromSTEB(
+                                                          0.0, 0.0, 0.0, 0.0),
                                                   color: FlutterFlowTheme.of(
                                                           context)
                                                       .primary,
@@ -408,11 +408,12 @@ class _UserProfileDetailWidgetState extends State<UserProfileDetailWidget> {
                                                 options: FFButtonOptions(
                                                   width: double.infinity,
                                                   height: 40.0,
-                                                  padding: const EdgeInsets.all(8.0),
+                                                  padding:
+                                                      const EdgeInsets.all(8.0),
                                                   iconPadding:
                                                       const EdgeInsetsDirectional
-                                                          .fromSTEB(0.0, 0.0,
-                                                              0.0, 0.0),
+                                                          .fromSTEB(
+                                                          0.0, 0.0, 0.0, 0.0),
                                                   color: FlutterFlowTheme.of(
                                                           context)
                                                       .error,
@@ -562,7 +563,8 @@ class _UserProfileDetailWidgetState extends State<UserProfileDetailWidget> {
                                             height: 40.0,
                                             padding: const EdgeInsets.all(8.0),
                                             iconPadding:
-                                                const EdgeInsetsDirectional.fromSTEB(
+                                                const EdgeInsetsDirectional
+                                                    .fromSTEB(
                                                     0.0, 0.0, 0.0, 0.0),
                                             color: FlutterFlowTheme.of(context)
                                                 .primary,
@@ -646,7 +648,8 @@ class _UserProfileDetailWidgetState extends State<UserProfileDetailWidget> {
                                             height: 40.0,
                                             padding: const EdgeInsets.all(8.0),
                                             iconPadding:
-                                                const EdgeInsetsDirectional.fromSTEB(
+                                                const EdgeInsetsDirectional
+                                                    .fromSTEB(
                                                     0.0, 0.0, 0.0, 0.0),
                                             color: FlutterFlowTheme.of(context)
                                                 .warning,
@@ -739,7 +742,8 @@ class _UserProfileDetailWidgetState extends State<UserProfileDetailWidget> {
                                             height: 40.0,
                                             padding: const EdgeInsets.all(8.0),
                                             iconPadding:
-                                                const EdgeInsetsDirectional.fromSTEB(
+                                                const EdgeInsetsDirectional
+                                                    .fromSTEB(
                                                     0.0, 0.0, 0.0, 0.0),
                                             color: FlutterFlowTheme.of(context)
                                                 .primary,
@@ -819,7 +823,8 @@ class _UserProfileDetailWidgetState extends State<UserProfileDetailWidget> {
                                                               .titleMedium
                                                               .fontStyle,
                                                     ),
-                                                    color: const Color(0xFF111827),
+                                                    color:
+                                                        const Color(0xFF111827),
                                                     fontSize: 16.0,
                                                     letterSpacing: 0.0,
                                                     fontWeight: FontWeight.w600,
@@ -831,18 +836,21 @@ class _UserProfileDetailWidgetState extends State<UserProfileDetailWidget> {
                                                   ),
                                             ),
                                             Padding(
-                                              padding: const EdgeInsetsDirectional
-                                                  .fromSTEB(
+                                              padding:
+                                                  const EdgeInsetsDirectional
+                                                      .fromSTEB(
                                                       12.0, 4.0, 0.0, 4.0),
                                               child: Container(
                                                 decoration: BoxDecoration(
-                                                  color: const Color(0xFFE0F2FE),
+                                                  color:
+                                                      const Color(0xFFE0F2FE),
                                                   borderRadius:
                                                       BorderRadius.circular(
                                                           12.0),
                                                 ),
                                                 child: Padding(
-                                                  padding: const EdgeInsets.all(8.0),
+                                                  padding:
+                                                      const EdgeInsets.all(8.0),
                                                   child: Text(
                                                     'Connected',
                                                     style: FlutterFlowTheme.of(
@@ -860,8 +868,8 @@ class _UserProfileDetailWidgetState extends State<UserProfileDetailWidget> {
                                                                     .bodySmall
                                                                     .fontStyle,
                                                           ),
-                                                          color:
-                                                              const Color(0xFF0369A1),
+                                                          color: const Color(
+                                                              0xFF0369A1),
                                                           fontSize: 12.0,
                                                           letterSpacing: 0.0,
                                                           fontWeight:
@@ -904,8 +912,8 @@ class _UserProfileDetailWidgetState extends State<UserProfileDetailWidget> {
                                                                   .bodyMedium
                                                                   .fontStyle,
                                                         ),
-                                                        color:
-                                                            const Color(0xFF6B7280),
+                                                        color: const Color(
+                                                            0xFF6B7280),
                                                         fontSize: 14.0,
                                                         letterSpacing: 0.0,
                                                         fontWeight:
@@ -1027,8 +1035,8 @@ class _UserProfileDetailWidgetState extends State<UserProfileDetailWidget> {
                                                                     .bodyMedium
                                                                     .fontStyle,
                                                           ),
-                                                          color:
-                                                              const Color(0xFF6B7280),
+                                                          color: const Color(
+                                                              0xFF6B7280),
                                                           fontSize: 14.0,
                                                           letterSpacing: 0.0,
                                                           fontWeight:
@@ -1056,8 +1064,8 @@ class _UserProfileDetailWidgetState extends State<UserProfileDetailWidget> {
                                                                     .bodyMedium
                                                                     .fontStyle,
                                                           ),
-                                                          color:
-                                                              const Color(0xFF111827),
+                                                          color: const Color(
+                                                              0xFF111827),
                                                           fontSize: 14.0,
                                                           letterSpacing: 0.0,
                                                           fontWeight:
@@ -1095,8 +1103,8 @@ class _UserProfileDetailWidgetState extends State<UserProfileDetailWidget> {
                                                                     .bodyMedium
                                                                     .fontStyle,
                                                           ),
-                                                          color:
-                                                              const Color(0xFF6B7280),
+                                                          color: const Color(
+                                                              0xFF6B7280),
                                                           fontSize: 14.0,
                                                           letterSpacing: 0.0,
                                                           fontWeight:
@@ -1124,8 +1132,8 @@ class _UserProfileDetailWidgetState extends State<UserProfileDetailWidget> {
                                                                     .bodyMedium
                                                                     .fontStyle,
                                                           ),
-                                                          color:
-                                                              const Color(0xFF111827),
+                                                          color: const Color(
+                                                              0xFF111827),
                                                           fontSize: 14.0,
                                                           letterSpacing: 0.0,
                                                           fontWeight:
@@ -1295,7 +1303,8 @@ class _UserProfileDetailWidgetState extends State<UserProfileDetailWidget> {
                                                     fit: BoxFit.cover,
                                                   ),
                                                 );
-                                              }).divide(const SizedBox(width: 10.0)),
+                                              }).divide(
+                                                  const SizedBox(width: 10.0)),
                                             );
                                           },
                                         ),
@@ -1338,7 +1347,8 @@ class _UserProfileDetailWidgetState extends State<UserProfileDetailWidget> {
                                                               .titleMedium
                                                               .fontStyle,
                                                     ),
-                                                    color: const Color(0xFF111827),
+                                                    color:
+                                                        const Color(0xFF111827),
                                                     fontSize: 16.0,
                                                     letterSpacing: 0.0,
                                                     fontWeight: FontWeight.w600,
@@ -1446,8 +1456,8 @@ class _UserProfileDetailWidgetState extends State<UserProfileDetailWidget> {
                                                                     .fontStyle,
                                                           ),
                                                     ),
-                                                  ].divide(
-                                                      const SizedBox(width: 4.0)),
+                                                  ].divide(const SizedBox(
+                                                      width: 4.0)),
                                                 ),
                                               ),
                                             ),
@@ -1474,7 +1484,8 @@ class _UserProfileDetailWidgetState extends State<UserProfileDetailWidget> {
                                                   BorderRadius.circular(8.0),
                                             ),
                                             child: Padding(
-                                              padding: const EdgeInsets.all(8.0),
+                                              padding:
+                                                  const EdgeInsets.all(8.0),
                                               child: Text(
                                                 valueOrDefault<String>(
                                                   _model.memoText,
@@ -1493,7 +1504,8 @@ class _UserProfileDetailWidgetState extends State<UserProfileDetailWidget> {
                                                                 .bodyMedium
                                                                 .fontStyle,
                                                       ),
-                                                      color: const Color(0xFF374151),
+                                                      color: const Color(
+                                                          0xFF374151),
                                                       fontSize: 14.0,
                                                       letterSpacing: 0.0,
                                                       fontWeight:
@@ -1543,7 +1555,8 @@ class _UserProfileDetailWidgetState extends State<UserProfileDetailWidget> {
                                                             .titleMedium
                                                             .fontStyle,
                                                   ),
-                                                  color: const Color(0xFF111827),
+                                                  color:
+                                                      const Color(0xFF111827),
                                                   fontSize: 16.0,
                                                   letterSpacing: 0.0,
                                                   fontWeight: FontWeight.w600,
@@ -1606,8 +1619,8 @@ class _UserProfileDetailWidgetState extends State<UserProfileDetailWidget> {
                                                                       .fontStyle,
                                                             ),
                                                       ),
-                                                    ].divide(
-                                                        const SizedBox(width: 12.0)),
+                                                    ].divide(const SizedBox(
+                                                        width: 12.0)),
                                                   ),
                                                   Switch(
                                                     value: _model.switchValue!,
@@ -1679,8 +1692,8 @@ class _UserProfileDetailWidgetState extends State<UserProfileDetailWidget> {
                                                                       .fontStyle,
                                                             ),
                                                       ),
-                                                    ].divide(
-                                                        const SizedBox(width: 12.0)),
+                                                    ].divide(const SizedBox(
+                                                        width: 12.0)),
                                                   ),
                                                   const Icon(
                                                     Icons.chevron_right,
@@ -1736,8 +1749,8 @@ class _UserProfileDetailWidgetState extends State<UserProfileDetailWidget> {
                                                                       .fontStyle,
                                                             ),
                                                       ),
-                                                    ].divide(
-                                                        const SizedBox(width: 12.0)),
+                                                    ].divide(const SizedBox(
+                                                        width: 12.0)),
                                                   ),
                                                   const Icon(
                                                     Icons.chevron_right,
@@ -1746,7 +1759,8 @@ class _UserProfileDetailWidgetState extends State<UserProfileDetailWidget> {
                                                   ),
                                                 ],
                                               ),
-                                            ].divide(const SizedBox(height: 12.0)),
+                                            ].divide(
+                                                const SizedBox(height: 12.0)),
                                           ),
                                         ].divide(const SizedBox(height: 16.0)),
                                       ),

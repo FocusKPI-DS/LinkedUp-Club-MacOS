@@ -8,6 +8,10 @@ import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/services.dart';
 import 'package:cloud_functions/cloud_functions.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:firebase_storage/firebase_storage.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
+import 'dart:io';
 import 'dart:math';
 import '/index.dart';
 import 'profile_settings_model.dart';
@@ -29,6 +33,24 @@ class _ProfileSettingsWidgetState extends State<ProfileSettingsWidget> {
   bool _newMessageEnabled = true;
   bool _emailNotificationsEnabled = true;
   bool _eventRemindersEnabled = false;
+
+  // Cover photo dropdown state
+  final GlobalKey _coverPhotoDropdownKey = GlobalKey();
+
+  // Constants for profile layout
+  static const double _coverPhotoHeight = 280.0;
+  static const double _profilePictureSize = 140.0;
+  static const double _profilePictureBorderWidth = 5.0;
+  static const double _profilePictureOffset = -100.0;
+  static const double _borderRadius = 16.0;
+  static const double _coverPhotoButtonBorderRadius = 10.0;
+
+  // Color constants
+  static const Color _errorColor = Color(0xFFEF4444);
+  static const Color _successColor = Color(0xFF10B981);
+  static const Color _textColorPrimary = Color(0xFF374151);
+  static const Color _textColorSecondary = Color(0xFF9CA3AF);
+  static const Color _backgroundColor = Color(0xFFF3F4F6);
 
   @override
   void initState() {
@@ -122,7 +144,7 @@ class _ProfileSettingsWidgetState extends State<ProfileSettingsWidget> {
       width: 280,
       height: double.infinity,
       decoration: BoxDecoration(
-        color: Color(0xFF374151),
+        color: Colors.white,
         border: Border(
           right: BorderSide(
             color: FlutterFlowTheme.of(context).alternate,
@@ -137,7 +159,7 @@ class _ProfileSettingsWidgetState extends State<ProfileSettingsWidget> {
             width: double.infinity,
             padding: EdgeInsets.all(24),
             decoration: BoxDecoration(
-              color: Color(0xFF374151),
+              color: FlutterFlowTheme.of(context).primary,
             ),
             child: Row(
               children: [
@@ -182,11 +204,15 @@ class _ProfileSettingsWidgetState extends State<ProfileSettingsWidget> {
                       padding:
                           EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                       decoration: BoxDecoration(
-                        color: isSelected ? Colors.white : Colors.transparent,
+                        color: isSelected
+                            ? FlutterFlowTheme.of(context)
+                                .primary
+                                .withOpacity(0.1)
+                            : Colors.transparent,
                         borderRadius: BorderRadius.circular(8),
                         border: isSelected
                             ? Border.all(
-                                color: Colors.white,
+                                color: FlutterFlowTheme.of(context).primary,
                                 width: 1,
                               )
                             : null,
@@ -196,8 +222,8 @@ class _ProfileSettingsWidgetState extends State<ProfileSettingsWidget> {
                           Icon(
                             item['icon'] as IconData,
                             color: isSelected
-                                ? Colors.black
-                                : Colors.white.withOpacity(0.7),
+                                ? FlutterFlowTheme.of(context).primary
+                                : FlutterFlowTheme.of(context).secondaryText,
                             size: 20,
                           ),
                           SizedBox(width: 12),
@@ -214,15 +240,16 @@ class _ProfileSettingsWidgetState extends State<ProfileSettingsWidget> {
                                         : FontWeight.w500,
                                     letterSpacing: 0,
                                     color: isSelected
-                                        ? Colors.black
-                                        : Colors.white.withOpacity(0.7),
+                                        ? FlutterFlowTheme.of(context).primary
+                                        : FlutterFlowTheme.of(context)
+                                            .secondaryText,
                                   ),
                             ),
                           ),
                           if (isSelected)
                             Icon(
                               Icons.arrow_forward_ios_rounded,
-                              color: Colors.black,
+                              color: FlutterFlowTheme.of(context).primary,
                               size: 16,
                             ),
                         ],
@@ -239,6 +266,20 @@ class _ProfileSettingsWidgetState extends State<ProfileSettingsWidget> {
   }
 
   Widget _buildSettingsContent() {
+    // For Personal Information, we want full-width cover photo
+    if (_model.selectedSetting == 'Personal Information') {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Content without padding for full-width cover photo
+          Expanded(
+            child: _buildSettingContent(_model.selectedSetting),
+          ),
+        ],
+      );
+    }
+
+    // For other settings, use normal padding
     return Container(
       padding: EdgeInsets.all(32),
       child: Column(
@@ -298,8 +339,8 @@ class _ProfileSettingsWidgetState extends State<ProfileSettingsWidget> {
   Widget _buildPersonalInformationContent() {
     return StreamBuilder<UsersRecord>(
       stream: UsersRecord.getDocument(currentUserReference!),
-      builder: (context, snapshot) {
-        if (!snapshot.hasData) {
+      builder: (context, userSnapshot) {
+        if (!userSnapshot.hasData) {
           return Container(
             padding: EdgeInsets.all(24),
             decoration: BoxDecoration(
@@ -314,299 +355,1769 @@ class _ProfileSettingsWidgetState extends State<ProfileSettingsWidget> {
           );
         }
 
-        final user = snapshot.data!;
+        final user = userSnapshot.data!;
 
         // Initialize controllers with current user data if not already set
         if (_model.displayNameController?.text.isEmpty ?? true) {
           _model.displayNameController?.text = user.displayName;
         }
-        if (_model.emailController?.text.isEmpty ?? true) {
-          _model.emailController?.text = user.email;
-        }
         if (_model.locationController?.text.isEmpty ?? true) {
           _model.locationController?.text = user.location;
         }
+        if (_model.bioController?.text.isEmpty ?? true) {
+          _model.bioController?.text = user.bio;
+        }
+        if (_model.emailController?.text.isEmpty ?? true) {
+          _model.emailController?.text = currentUserEmail;
+        }
+        if (_model.websiteController?.text.isEmpty ?? true) {
+          _model.websiteController?.text = user.snapshotData['website']?.toString() ?? '';
+        }
+        if (_model.roleController?.text.isEmpty ?? true) {
+          _model.roleController?.text = '';
+        }
 
-        return Container(
-          padding: EdgeInsets.all(24),
-          decoration: BoxDecoration(
-            color: FlutterFlowTheme.of(context).secondaryBackground,
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(
-              color: FlutterFlowTheme.of(context).alternate,
-              width: 1,
-            ),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'Personal Information',
-                style: FlutterFlowTheme.of(context).titleLarge.override(
-                      fontFamily: 'Inter',
-                      fontSize: 20,
-                      fontWeight: FontWeight.w600,
-                      letterSpacing: 0,
-                    ),
-              ),
-              SizedBox(height: 16),
-              Text(
-                'Manage your personal details and profile information.',
-                style: FlutterFlowTheme.of(context).bodyMedium.override(
-                      fontFamily: 'Inter',
-                      fontSize: 14,
-                      fontWeight: FontWeight.w400,
-                      letterSpacing: 0,
-                      color: FlutterFlowTheme.of(context).secondaryText,
-                    ),
-              ),
-              SizedBox(height: 24),
+        // Get user's role from workspace
+        return StreamBuilder<UsersRecord>(
+          stream: UsersRecord.getDocument(currentUserReference!),
+          builder: (context, snapshot) {
+            String userRole = '';
 
-              // Profile Photo Section
-              Row(
-                children: [
-                  // Left side - Info cards
-                  Expanded(
-                    flex: 2,
-                    child: Column(
-                      children: [
-                        _buildEditableInfoField(
-                          'Display Name',
-                          _model.displayNameController!,
-                          Icons.person_outline,
-                          enabled: _model.isEditingProfile,
-                        ),
-                        SizedBox(height: 16),
-                        _buildEditableInfoField(
-                          'Email',
-                          _model.emailController!,
-                          Icons.email_outlined,
-                          enabled: false, // Email cannot be changed
-                        ),
-                        SizedBox(height: 16),
-                        _buildEditableInfoField(
-                          'Location',
-                          _model.locationController!,
-                          Icons.location_on_outlined,
-                          enabled: _model.isEditingProfile,
-                        ),
-                      ],
-                    ),
-                  ),
+            if (snapshot.hasData &&
+                snapshot.data!.currentWorkspaceRef != null) {
+              return StreamBuilder<List<WorkspaceMembersRecord>>(
+                stream: queryWorkspaceMembersRecord(
+                  queryBuilder: (workspaceMembers) => workspaceMembers
+                      .where('workspace_ref',
+                          isEqualTo: snapshot.data!.currentWorkspaceRef)
+                      .where('user_ref', isEqualTo: currentUserReference),
+                ),
+                builder: (context, membersSnapshot) {
+                  if (membersSnapshot.hasData &&
+                      membersSnapshot.data!.isNotEmpty) {
+                    userRole = membersSnapshot.data!.first.role;
+                  }
 
-                  SizedBox(width: 24),
+                  return _buildModernProfileLayout(user, userRole);
+                },
+              );
+            }
 
-                  // Right side - Profile Photo
-                  Expanded(
-                    flex: 1,
-                    child: Column(
-                      children: [
-                        Text(
-                          'Profile Photo',
-                          style:
-                              FlutterFlowTheme.of(context).bodyMedium.override(
-                                    fontFamily: 'Inter',
-                                    fontSize: 14,
-                                    fontWeight: FontWeight.w600,
-                                    letterSpacing: 0,
-                                  ),
-                        ),
-                        SizedBox(height: 12),
-                        InkWell(
-                          splashColor: Colors.transparent,
-                          focusColor: Colors.transparent,
-                          hoverColor: Colors.transparent,
-                          highlightColor: Colors.transparent,
-                          onTap: () async {
-                            context.pushNamed(EditProfileWidget.routeName);
-                          },
-                          child: Stack(
-                            alignment: const AlignmentDirectional(1.0, 1.0),
-                            children: [
-                              AuthUserStreamWidget(
-                                builder: (context) => Container(
-                                  width: 120.0,
-                                  height: 120.0,
-                                  clipBehavior: Clip.antiAlias,
-                                  decoration: const BoxDecoration(
-                                    shape: BoxShape.circle,
-                                  ),
-                                  child: CachedNetworkImage(
-                                    fadeInDuration:
-                                        const Duration(milliseconds: 500),
-                                    fadeOutDuration:
-                                        const Duration(milliseconds: 500),
-                                    imageUrl: valueOrDefault<String>(
-                                      currentUserPhoto,
-                                      'https://firebasestorage.googleapis.com/v0/b/linkedup-c3e29.firebasestorage.app/o/asset%2Fdefault-user.png?alt=media&token=35d4da12-13b0-4f43-8b8e-375e6e126683',
-                                    ),
-                                    fit: BoxFit.cover,
-                                    placeholder: (context, url) => Container(
-                                      color: FlutterFlowTheme.of(context)
-                                          .alternate,
-                                      child: Icon(
-                                        Icons.person,
-                                        color: FlutterFlowTheme.of(context)
-                                            .secondaryText,
-                                        size: 40,
-                                      ),
-                                    ),
-                                    errorWidget: (context, url, error) =>
-                                        Container(
-                                      color: FlutterFlowTheme.of(context)
-                                          .alternate,
-                                      child: Icon(
-                                        Icons.person,
-                                        color: FlutterFlowTheme.of(context)
-                                            .secondaryText,
-                                        size: 40,
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                              ),
-                              Container(
-                                width: 30.0,
-                                height: 30.0,
-                                decoration: BoxDecoration(
-                                  color: FlutterFlowTheme.of(context).primary,
-                                  shape: BoxShape.circle,
-                                  border: Border.all(
-                                    color: FlutterFlowTheme.of(context)
-                                        .secondaryBackground,
-                                    width: 2.0,
-                                  ),
-                                ),
-                                child: Icon(
-                                  Icons.camera_alt,
-                                  color: Colors.white,
-                                  size: 16.0,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        SizedBox(height: 8),
-                        Text(
-                          'Tap to upload photo',
-                          style: FlutterFlowTheme.of(context)
-                              .bodySmall
-                              .override(
-                                fontFamily: 'Inter',
-                                fontSize: 12,
-                                fontWeight: FontWeight.w400,
-                                letterSpacing: 0,
-                                color:
-                                    FlutterFlowTheme.of(context).secondaryText,
-                              ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-              SizedBox(height: 24),
-              Row(
-                children: [
-                  Spacer(),
-                  if (!_model.isEditingProfile)
-                    FFButtonWidget(
-                      onPressed: () {
-                        setState(() {
-                          _model.isEditingProfile = true;
-                        });
-                      },
-                      text: 'Edit Profile',
-                      icon: Icon(Icons.edit_outlined, size: 16),
-                      options: FFButtonOptions(
-                        height: 44,
-                        padding: EdgeInsetsDirectional.fromSTEB(20, 0, 20, 0),
-                        iconPadding: EdgeInsetsDirectional.fromSTEB(0, 0, 8, 0),
-                        color: FlutterFlowTheme.of(context).primary,
-                        textStyle:
-                            FlutterFlowTheme.of(context).titleSmall.override(
-                                  fontFamily: 'Inter',
-                                  color: Colors.white,
-                                  fontSize: 14,
-                                  fontWeight: FontWeight.w600,
-                                  letterSpacing: 0,
-                                ),
-                        elevation: 0,
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                    ),
-                  if (_model.isEditingProfile) ...[
-                    FFButtonWidget(
-                      onPressed: () {
-                        setState(() {
-                          _model.isEditingProfile = false;
-                        });
-                      },
-                      text: 'Cancel',
-                      icon: Icon(Icons.close, size: 16),
-                      options: FFButtonOptions(
-                        height: 44,
-                        padding: EdgeInsetsDirectional.fromSTEB(20, 0, 20, 0),
-                        iconPadding: EdgeInsetsDirectional.fromSTEB(0, 0, 8, 0),
-                        color: FlutterFlowTheme.of(context).secondaryText,
-                        textStyle:
-                            FlutterFlowTheme.of(context).titleSmall.override(
-                                  fontFamily: 'Inter',
-                                  color: Colors.white,
-                                  fontSize: 14,
-                                  fontWeight: FontWeight.w600,
-                                  letterSpacing: 0,
-                                ),
-                        elevation: 0,
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                    ),
-                    SizedBox(width: 12),
-                    FFButtonWidget(
-                      onPressed: () async {
-                        // Save the changes
-                        await user.reference.update({
-                          'display_name': _model.displayNameController?.text ??
-                              user.displayName,
-                          'location':
-                              _model.locationController?.text ?? user.location,
-                        });
-
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
-                              content: Text('Profile updated successfully')),
-                        );
-                        setState(() {
-                          _model.isEditingProfile = false;
-                        });
-                      },
-                      text: 'Save',
-                      icon: Icon(Icons.check, size: 16),
-                      options: FFButtonOptions(
-                        height: 44,
-                        padding: EdgeInsetsDirectional.fromSTEB(20, 0, 20, 0),
-                        iconPadding: EdgeInsetsDirectional.fromSTEB(0, 0, 8, 0),
-                        color: Colors.green,
-                        textStyle:
-                            FlutterFlowTheme.of(context).titleSmall.override(
-                                  fontFamily: 'Inter',
-                                  color: Colors.white,
-                                  fontSize: 14,
-                                  fontWeight: FontWeight.w600,
-                                  letterSpacing: 0,
-                                ),
-                        elevation: 0,
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                    ),
-                  ],
-                ],
-              ),
-            ],
-          ),
+            return _buildModernProfileLayout(user, userRole);
+          },
         );
       },
     );
+  }
+
+  Widget _buildModernProfileLayout(UsersRecord user, String role) {
+    final coverPhotoUrl = _getCoverPhotoUrl(user);
+
+    return SingleChildScrollView(
+      child: Container(
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: Color(0xFFE0E0E0), width: 1),
+        ),
+        child: Stack(
+          children: [
+            Column(
+              children: [
+                _buildLinkedInCoverPhotoSection(coverPhotoUrl),
+                _buildLinkedInProfileInfoSection(user, role),
+              ],
+            ),
+            // Profile picture positioned to overlap cover photo - CENTERED
+            Positioned(
+              top: 140, // Position at bottom of 200px cover photo minus half of profile picture
+              left: 0,
+              right: 0,
+              child: Center(
+                child: Stack(
+                  children: [
+                    _buildLinkedInProfilePicture(),
+                    if (_model.isEditingProfile)
+                      Positioned(
+                        bottom: 4,
+                        right: 4,
+                        child: InkWell(
+                          onTap: () => context.pushNamed(EditProfileWidget.routeName),
+                          child: Container(
+                            width: 32,
+                            height: 32,
+                            decoration: BoxDecoration(
+                              color: Color(0xFF0077B5),
+                              shape: BoxShape.circle,
+                              border: Border.all(
+                                color: Colors.white,
+                                width: 2,
+                              ),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.black.withOpacity(0.15),
+                                  blurRadius: 4,
+                                  offset: Offset(0, 2),
+                                ),
+                              ],
+                            ),
+                            child: Icon(
+                              Icons.camera_alt_rounded,
+                              color: Colors.white,
+                              size: 16,
+                            ),
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildProfileLayout(UsersRecord user, String role) {
+    final coverPhotoUrl = _getCoverPhotoUrl(user);
+
+    return SingleChildScrollView(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _buildCoverPhotoSection(coverPhotoUrl),
+          _buildProfileInfoSection(user, role),
+        ],
+      ),
+    );
+  }
+
+  /// Retrieves the cover photo URL from user record
+  String? _getCoverPhotoUrl(UsersRecord user) {
+    final userData = user.snapshotData;
+    return userData['cover_photo_url'] as String?;
+  }
+
+  /// Builds the cover photo section with image or gradient fallback
+  Widget _buildCoverPhotoSection(String? coverPhotoUrl) {
+    return Container(
+      height: _coverPhotoHeight,
+      width: double.infinity,
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.only(
+          topLeft: Radius.circular(_borderRadius),
+          topRight: Radius.circular(_borderRadius),
+        ),
+      ),
+      child: Stack(
+        children: [
+          _buildCoverPhotoContent(coverPhotoUrl),
+          if (_model.isEditingProfile)
+            Positioned(
+              top: 20,
+              right: 20,
+              child: _buildCoverPhotoEditButton(),
+            ),
+        ],
+      ),
+    );
+  }
+
+  /// Builds the cover photo content (image or gradient)
+  Widget _buildCoverPhotoContent(String? coverPhotoUrl) {
+    final borderRadius = BorderRadius.only(
+      topLeft: Radius.circular(_borderRadius),
+      topRight: Radius.circular(_borderRadius),
+    );
+
+    if (coverPhotoUrl != null && coverPhotoUrl.isNotEmpty) {
+      return ClipRRect(
+        borderRadius: borderRadius,
+        child: CachedNetworkImage(
+          imageUrl: coverPhotoUrl,
+          fit: BoxFit.cover,
+          width: double.infinity,
+          height: double.infinity,
+          placeholder: (context, url) => _buildDefaultGradient(),
+          errorWidget: (context, url, error) => _buildDefaultGradient(),
+        ),
+      );
+    }
+
+    return Container(
+      width: double.infinity,
+      height: double.infinity,
+      decoration: BoxDecoration(
+        borderRadius: borderRadius,
+      ),
+      child: _buildDefaultGradient(),
+    );
+  }
+
+  /// Builds the default gradient for cover photo
+  Widget _buildDefaultGradient() {
+    return Container(
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            FlutterFlowTheme.of(context).primary,
+            FlutterFlowTheme.of(context).primary.withOpacity(0.7),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// Builds the modern cover photo section with beautiful gradients
+  Widget _buildModernCoverPhotoSection(String? coverPhotoUrl) {
+    return Container(
+      height: 280,
+      width: double.infinity,
+      child: Stack(
+        children: [
+          _buildModernCoverPhotoContent(coverPhotoUrl),
+          if (_model.isEditingProfile)
+            Positioned(
+              top: 20,
+              right: 20,
+              child: _buildCoverPhotoEditButton(),
+            ),
+        ],
+      ),
+    );
+  }
+
+  /// Builds the modern cover photo content with gradient templates
+  Widget _buildModernCoverPhotoContent(String? coverPhotoUrl) {
+    final borderRadius = BorderRadius.only(
+      topLeft: Radius.circular(16),
+      topRight: Radius.circular(16),
+    );
+
+    if (coverPhotoUrl != null && coverPhotoUrl.isNotEmpty) {
+      return ClipRRect(
+        borderRadius: borderRadius,
+        child: CachedNetworkImage(
+          imageUrl: coverPhotoUrl,
+          fit: BoxFit.cover,
+          width: double.infinity,
+          height: double.infinity,
+          placeholder: (context, url) => _buildBeautifulGradient(),
+          errorWidget: (context, url, error) => _buildBeautifulGradient(),
+        ),
+      );
+    }
+
+    return Container(
+      width: double.infinity,
+      height: double.infinity,
+      decoration: BoxDecoration(
+        borderRadius: borderRadius,
+      ),
+      child: _buildBeautifulGradient(),
+    );
+  }
+
+  /// Builds beautiful gradient templates for cover photos
+  Widget _buildBeautifulGradient() {
+    // Create a list of beautiful gradient templates
+    final gradients = [
+      // LinkedIn-style professional gradients
+      LinearGradient(
+        begin: Alignment.topLeft,
+        end: Alignment.bottomRight,
+        colors: [
+          Color(0xFF0077B5), // LinkedIn blue
+          Color(0xFF004182),
+        ],
+      ),
+      // Professional dark gradient
+      LinearGradient(
+        begin: Alignment.topLeft,
+        end: Alignment.bottomRight,
+        colors: [
+          Color(0xFF2C3E50),
+          Color(0xFF34495E),
+        ],
+      ),
+      // Modern tech gradient
+      LinearGradient(
+        begin: Alignment.topLeft,
+        end: Alignment.bottomRight,
+        colors: [
+          Color(0xFF667eea),
+          Color(0xFF764ba2),
+        ],
+      ),
+      // Professional green
+      LinearGradient(
+        begin: Alignment.topLeft,
+        end: Alignment.bottomRight,
+        colors: [
+          Color(0xFF11998e),
+          Color(0xFF38ef7d),
+        ],
+      ),
+      // Corporate purple
+      LinearGradient(
+        begin: Alignment.topLeft,
+        end: Alignment.bottomRight,
+        colors: [
+          Color(0xFF8360c3),
+          Color(0xFF2ebf91),
+        ],
+      ),
+    ];
+
+    // Use user ID to consistently pick the same gradient
+    final userHash = currentUserUid.hashCode;
+    final selectedGradient = gradients[userHash.abs() % gradients.length];
+
+    return Container(
+      decoration: BoxDecoration(
+        gradient: selectedGradient,
+      ),
+    );
+  }
+
+  /// Builds LinkedIn-style cover photo section
+  Widget _buildLinkedInCoverPhotoSection(String? coverPhotoUrl) {
+    return Container(
+      height: 200,
+      width: double.infinity,
+      child: Stack(
+        children: [
+          _buildLinkedInCoverPhotoContent(coverPhotoUrl),
+          if (_model.isEditingProfile)
+            Positioned(
+              top: 16,
+              right: 16,
+              child: _buildCoverPhotoEditButton(),
+            ),
+        ],
+      ),
+    );
+  }
+
+  /// Builds LinkedIn-style cover photo content
+  Widget _buildLinkedInCoverPhotoContent(String? coverPhotoUrl) {
+    final borderRadius = BorderRadius.only(
+      topLeft: Radius.circular(8),
+      topRight: Radius.circular(8),
+    );
+
+    if (coverPhotoUrl != null && coverPhotoUrl.isNotEmpty) {
+      return ClipRRect(
+        borderRadius: borderRadius,
+        child: CachedNetworkImage(
+          imageUrl: coverPhotoUrl,
+          fit: BoxFit.cover,
+          width: double.infinity,
+          height: double.infinity,
+          placeholder: (context, url) => _buildBeautifulGradient(),
+          errorWidget: (context, url, error) => _buildBeautifulGradient(),
+        ),
+      );
+    }
+
+    return Container(
+      width: double.infinity,
+      height: double.infinity,
+      decoration: BoxDecoration(
+        borderRadius: borderRadius,
+      ),
+      child: _buildBeautifulGradient(),
+    );
+  }
+
+  /// Builds LinkedIn-style profile info section
+  Widget _buildLinkedInProfileInfoSection(UsersRecord user, String role) {
+    return Container(
+      padding: EdgeInsets.fromLTRB(24, 40, 24, 24), // Reduced top padding for overlapping profile picture
+      child: Column(
+        children: [
+          // Profile picture space (handled by positioned widget)
+          SizedBox(height: 30), // Reduced space for the overlapping profile picture
+          
+          // Name - Centered and Bigger
+          if (_model.isEditingProfile)
+            Container(
+              width: double.infinity,
+              child: TextField(
+                controller: _model.displayNameController,
+                style: FlutterFlowTheme.of(context).headlineLarge.override(
+                      fontFamily: 'Inter',
+                      fontSize: 32,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: 0,
+                      color: Color(0xFF000000),
+                    ),
+                textAlign: TextAlign.center,
+                decoration: InputDecoration(
+                  labelText: 'Full Name',
+                  labelStyle: FlutterFlowTheme.of(context).bodyMedium.override(
+                    fontFamily: 'Inter',
+                    fontSize: 14,
+                    color: Color(0xFF6B7280),
+                    fontWeight: FontWeight.w500,
+                  ),
+                  hintText: 'Enter your full name',
+                  hintStyle: FlutterFlowTheme.of(context).bodyMedium.override(
+                    fontFamily: 'Inter',
+                    fontSize: 18,
+                    color: Color(0xFF999999),
+                    fontWeight: FontWeight.w400,
+                  ),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(8),
+                    borderSide: BorderSide(color: Color(0xFFDDDDDD)),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(8),
+                    borderSide: BorderSide(color: Color(0xFF0077B5), width: 2),
+                  ),
+                  contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                ),
+              ),
+            )
+          else
+            Text(
+              user.displayName,
+              style: FlutterFlowTheme.of(context).headlineLarge.override(
+                    fontFamily: 'Inter',
+                    fontSize: 32,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 0,
+                    color: Color(0xFF000000),
+                  ),
+              textAlign: TextAlign.center,
+            ),
+          
+          SizedBox(height: 16),
+          
+          // Bio/About Section - Multiple lines, centered
+          if (_model.isEditingProfile)
+            Container(
+              width: double.infinity,
+              constraints: BoxConstraints(maxWidth: 600),
+              child: TextField(
+                controller: _model.bioController,
+                maxLines: 4,
+                style: FlutterFlowTheme.of(context).bodyLarge.override(
+                      fontFamily: 'Inter',
+                      fontSize: 16,
+                      letterSpacing: 0,
+                      color: Color(0xFF374151),
+                    ).copyWith(height: 1.5),
+                textAlign: TextAlign.center,
+                decoration: InputDecoration(
+                  labelText: 'Bio',
+                  labelStyle: FlutterFlowTheme.of(context).bodyMedium.override(
+                    fontFamily: 'Inter',
+                    fontSize: 14,
+                    color: Color(0xFF6B7280),
+                    fontWeight: FontWeight.w500,
+                  ),
+                  hintText: 'Tell us about yourself...',
+                  hintStyle: FlutterFlowTheme.of(context).bodyMedium.override(
+                    fontFamily: 'Inter',
+                    fontSize: 14,
+                    color: Color(0xFF999999),
+                    fontWeight: FontWeight.w400,
+                  ).copyWith(height: 1.5),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(8),
+                    borderSide: BorderSide(color: Color(0xFFDDDDDD)),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(8),
+                    borderSide: BorderSide(color: Color(0xFF0077B5), width: 2),
+                  ),
+                  contentPadding: EdgeInsets.all(16),
+                ),
+              ),
+            )
+          else if (user.bio.isNotEmpty)
+            Container(
+              constraints: BoxConstraints(maxWidth: 600),
+              child: Text(
+                user.bio,
+                style: FlutterFlowTheme.of(context).bodyLarge.override(
+                      fontFamily: 'Inter',
+                      fontSize: 16,
+                      letterSpacing: 0,
+                      color: Color(0xFF374151),
+                    ).copyWith(height: 1.5),
+                textAlign: TextAlign.center,
+              ),
+            ),
+          
+          SizedBox(height: 20),
+          
+          // Location - Centered with bold label
+          if (user.location.isNotEmpty || _model.isEditingProfile)
+            if (_model.isEditingProfile)
+              Container(
+                width: 300,
+                child: TextField(
+                  controller: _model.locationController,
+                  style: FlutterFlowTheme.of(context).bodyLarge.override(
+                        fontFamily: 'Inter',
+                        fontSize: 18,
+                        letterSpacing: 0,
+                        fontWeight: FontWeight.w600,
+                        color: Color(0xFF000000),
+                      ),
+                  textAlign: TextAlign.center,
+                  decoration: InputDecoration(
+                    labelText: 'Location',
+                    labelStyle: FlutterFlowTheme.of(context).bodyMedium.override(
+                      fontFamily: 'Inter',
+                      fontSize: 14,
+                      color: Color(0xFF6B7280),
+                      fontWeight: FontWeight.w500,
+                    ),
+                    hintText: 'Enter your location (e.g., New York, NY, USA)',
+                    hintStyle: FlutterFlowTheme.of(context).bodyMedium.override(
+                      fontFamily: 'Inter',
+                      fontSize: 16,
+                      color: Color(0xFF999999),
+                      fontWeight: FontWeight.w400,
+                    ),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(8),
+                      borderSide: BorderSide(color: Color(0xFFDDDDDD)),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(8),
+                      borderSide: BorderSide(color: Color(0xFF0077B5), width: 2),
+                    ),
+                    contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  ),
+                ),
+              )
+            else
+              Column(
+                children: [
+                  Text(
+                    'Location: ${user.location}',
+                    style: FlutterFlowTheme.of(context).bodyLarge.override(
+                          fontFamily: 'Inter',
+                          fontSize: 18,
+                          letterSpacing: 0,
+                          fontWeight: FontWeight.w600,
+                          color: Color(0xFF000000),
+                        ),
+                    textAlign: TextAlign.center,
+                  ),
+                ],
+              ),
+          
+          SizedBox(height: 24),
+          
+          // Contact Information
+          _buildLinkedInContactInfo(user),
+          
+          SizedBox(height: 24),
+          
+          // Action Buttons
+          if (_model.isEditingProfile)
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                FFButtonWidget(
+                  onPressed: () {
+                    setState(() {
+                      _model.isEditingProfile = false;
+                    });
+                  },
+                  text: 'Cancel',
+                  options: FFButtonOptions(
+                    height: 40,
+                    padding: EdgeInsetsDirectional.fromSTEB(24, 0, 24, 0),
+                    color: Colors.transparent,
+                    textStyle: FlutterFlowTheme.of(context).titleSmall.override(
+                          fontFamily: 'Inter',
+                          color: Color(0xFF0077B5),
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                          letterSpacing: 0,
+                        ),
+                    elevation: 0,
+                    borderSide: BorderSide(
+                      color: Color(0xFF0077B5),
+                      width: 1,
+                    ),
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                ),
+                SizedBox(width: 16),
+                FFButtonWidget(
+                  onPressed: () async {
+                    await _saveModernProfileChanges(user);
+                  },
+                  text: 'Save',
+                  options: FFButtonOptions(
+                    height: 40,
+                    padding: EdgeInsetsDirectional.fromSTEB(24, 0, 24, 0),
+                    color: Color(0xFF0077B5),
+                    textStyle: FlutterFlowTheme.of(context).titleSmall.override(
+                          fontFamily: 'Inter',
+                          color: Colors.white,
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                          letterSpacing: 0,
+                        ),
+                    elevation: 0,
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                ),
+              ],
+            )
+          else
+            FFButtonWidget(
+              onPressed: () {
+                setState(() {
+                  _model.isEditingProfile = true;
+                });
+              },
+              text: 'Edit Profile',
+              icon: Icon(Icons.edit_outlined, size: 16, color: Colors.white),
+              options: FFButtonOptions(
+                height: 40,
+                padding: EdgeInsetsDirectional.fromSTEB(24, 0, 24, 0),
+                color: Color(0xFF0077B5),
+                textStyle: FlutterFlowTheme.of(context).titleSmall.override(
+                      fontFamily: 'Inter',
+                      color: Colors.white,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      letterSpacing: 0,
+                    ),
+                elevation: 0,
+                borderRadius: BorderRadius.circular(20),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  /// Builds LinkedIn-style profile picture
+  Widget _buildLinkedInProfilePicture() {
+    return Container(
+      width: 120,
+      height: 120,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        border: Border.all(
+          color: Colors.white,
+          width: 4,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.1),
+            blurRadius: 8,
+            offset: Offset(0, 2),
+          ),
+        ],
+      ),
+      child: ClipOval(
+        child: CachedNetworkImage(
+          fadeInDuration: const Duration(milliseconds: 500),
+          fadeOutDuration: const Duration(milliseconds: 500),
+          imageUrl: valueOrDefault<String>(
+            currentUserPhoto,
+            'https://firebasestorage.googleapis.com/v0/b/linkedup-c3e29.firebasestorage.app/o/asset%2Fdefault-user.png?alt=media&token=35d4da12-13b0-4f43-8b8e-375e6e126683',
+          ),
+          fit: BoxFit.cover,
+          placeholder: (context, url) => Container(
+            color: Color(0xFFF3F4F6),
+            child: Icon(
+              Icons.person,
+              color: Color(0xFF9CA3AF),
+              size: 40,
+            ),
+          ),
+          errorWidget: (context, url, error) => Container(
+            color: Color(0xFFF3F4F6),
+            child: Icon(
+              Icons.person,
+              color: Color(0xFF9CA3AF),
+              size: 40,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// Builds LinkedIn-style contact information
+  Widget _buildLinkedInContactInfo(UsersRecord user) {
+    return Container(
+      constraints: BoxConstraints(maxWidth: 500),
+      child: Column(
+        children: [
+          // Website
+          if (_model.isEditingProfile || (_model.websiteController?.text.isNotEmpty ?? false))
+            Container(
+              margin: EdgeInsets.only(bottom: 12),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  if (_model.isEditingProfile)
+                    Expanded(
+                      child: TextField(
+                        controller: _model.websiteController,
+                        style: FlutterFlowTheme.of(context).bodyMedium.override(
+                              fontFamily: 'Inter',
+                              fontSize: 16,
+                              letterSpacing: 0,
+                              color: Color(0xFF000000),
+                            ),
+                        textAlign: TextAlign.left,
+                        decoration: InputDecoration(
+                          labelText: 'Website',
+                          labelStyle: FlutterFlowTheme.of(context).bodyMedium.override(
+                            fontFamily: 'Inter',
+                            fontSize: 14,
+                            color: Color(0xFF6B7280),
+                            fontWeight: FontWeight.w500,
+                          ),
+                          hintText: 'https://www.example.com',
+                          hintStyle: FlutterFlowTheme.of(context).bodyMedium.override(
+                            fontFamily: 'Inter',
+                            fontSize: 16,
+                            color: Color(0xFF999999),
+                            fontWeight: FontWeight.w400,
+                          ),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(4),
+                            borderSide: BorderSide(color: Color(0xFFDDDDDD)),
+                          ),
+                          focusedBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(4),
+                            borderSide: BorderSide(color: Color(0xFF0077B5), width: 2),
+                          ),
+                          contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                        ),
+                      ),
+                    )
+                  else
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Text(
+                          'Website:',
+                          style: FlutterFlowTheme.of(context).bodyLarge.override(
+                                fontFamily: 'Inter',
+                                fontSize: 16,
+                                fontWeight: FontWeight.w600,
+                                letterSpacing: 0,
+                                color: Color(0xFF000000),
+                              ),
+                        ),
+                        SizedBox(width: 16),
+                        Text(
+                          _model.websiteController?.text ?? '',
+                          style: FlutterFlowTheme.of(context).bodyMedium.override(
+                                fontFamily: 'Inter',
+                                fontSize: 16,
+                                letterSpacing: 0,
+                                color: Color(0xFF000000),
+                              ),
+                        ),
+                      ],
+                    ),
+                ],
+              ),
+            ),
+          
+          // Email
+          Container(
+            margin: EdgeInsets.only(bottom: 12),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Text(
+                  'Email:',
+                  style: FlutterFlowTheme.of(context).bodyLarge.override(
+                        fontFamily: 'Inter',
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                        letterSpacing: 0,
+                        color: Color(0xFF000000),
+                      ),
+                ),
+                SizedBox(width: 16),
+                Text(
+                  currentUserEmail,
+                  style: FlutterFlowTheme.of(context).bodyMedium.override(
+                        fontFamily: 'Inter',
+                        fontSize: 16,
+                        letterSpacing: 0,
+                        color: Color(0xFF000000),
+                      ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Builds the profile picture widget
+  Widget _buildProfilePicture() {
+    return Transform.translate(
+      offset: Offset(0, _profilePictureOffset),
+      child: Center(
+        child: Stack(
+          children: [
+            AuthUserStreamWidget(
+              builder: (context) => _buildProfilePictureContainer(),
+            ),
+            if (_model.isEditingProfile) _buildProfilePictureEditButton(),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// Builds the profile picture container
+  Widget _buildProfilePictureContainer() {
+    return Container(
+      width: _profilePictureSize,
+      height: _profilePictureSize,
+      clipBehavior: Clip.antiAlias,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        border: Border.all(
+          color: Colors.white,
+          width: _profilePictureBorderWidth,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.1),
+            blurRadius: 10,
+            offset: Offset(0, 4),
+          ),
+        ],
+      ),
+      child: CachedNetworkImage(
+        fadeInDuration: const Duration(milliseconds: 500),
+        fadeOutDuration: const Duration(milliseconds: 500),
+        imageUrl: valueOrDefault<String>(
+          currentUserPhoto,
+          'https://firebasestorage.googleapis.com/v0/b/linkedup-c3e29.firebasestorage.app/o/asset%2Fdefault-user.png?alt=media&token=35d4da12-13b0-4f43-8b8e-375e6e126683',
+        ),
+        fit: BoxFit.cover,
+        placeholder: (context, url) => _buildProfilePicturePlaceholder(),
+        errorWidget: (context, url, error) => _buildProfilePicturePlaceholder(),
+      ),
+    );
+  }
+
+  /// Builds the profile picture placeholder
+  Widget _buildProfilePicturePlaceholder() {
+    return Container(
+      color: _backgroundColor,
+      child: Icon(
+        Icons.person,
+        color: _textColorSecondary,
+        size: 50,
+      ),
+    );
+  }
+
+  /// Builds the profile picture edit button
+  Widget _buildProfilePictureEditButton() {
+    return Positioned(
+      bottom: 4,
+      right: 4,
+      child: InkWell(
+        onTap: () => context.pushNamed(EditProfileWidget.routeName),
+        child: Container(
+          width: 40.0,
+          height: 40.0,
+          decoration: BoxDecoration(
+            color: FlutterFlowTheme.of(context).primary,
+            shape: BoxShape.circle,
+            border: Border.all(
+              color: Colors.white,
+              width: 3.0,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.15),
+                blurRadius: 8,
+                offset: Offset(0, 2),
+              ),
+            ],
+          ),
+          child: Icon(
+            Icons.camera_alt_rounded,
+            color: Colors.white,
+            size: 20.0,
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// Builds the profile info section with picture and details
+  Widget _buildProfileInfoSection(UsersRecord user, String role) {
+    return Container(
+      padding: EdgeInsets.fromLTRB(32, 80, 32, 32),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.only(
+          bottomLeft: Radius.circular(_borderRadius),
+          bottomRight: Radius.circular(_borderRadius),
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 10,
+            offset: Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _buildProfilePicture(),
+          SizedBox(height: 12),
+          // Name, Role, Bio, and Location - all centered
+          Center(
+            child: Column(
+              children: [
+                // Name
+                if (_model.isEditingProfile)
+                  TextField(
+                    controller: _model.displayNameController,
+                    style: FlutterFlowTheme.of(context).headlineMedium.override(
+                          fontFamily: 'Inter',
+                          fontSize: 24,
+                          fontWeight: FontWeight.w700,
+                          letterSpacing: 0,
+                        ),
+                    textAlign: TextAlign.center,
+                    decoration: InputDecoration(
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      contentPadding:
+                          EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    ),
+                  )
+                else
+                  Text(
+                    user.displayName,
+                    style: FlutterFlowTheme.of(context).headlineMedium.override(
+                          fontFamily: 'Inter',
+                          fontSize: 24,
+                          fontWeight: FontWeight.w700,
+                          letterSpacing: 0,
+                        ),
+                    textAlign: TextAlign.center,
+                  ),
+                SizedBox(height: 8),
+                // Role
+                Container(
+                  padding: EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  decoration: BoxDecoration(
+                    color:
+                        FlutterFlowTheme.of(context).primary.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  child: Text(
+                    role.isNotEmpty ? role : 'Member',
+                    style: FlutterFlowTheme.of(context).bodyMedium.override(
+                          fontFamily: 'Inter',
+                          fontSize: 14,
+                          fontWeight: FontWeight.w500,
+                          color: FlutterFlowTheme.of(context).primary,
+                          letterSpacing: 0,
+                        ),
+                  ),
+                ),
+                SizedBox(height: 12),
+                // Bio (centered, multi-line, no label)
+                if (_model.isEditingProfile)
+                  SizedBox(
+                    width: double.infinity,
+                    child: TextField(
+                      controller: _model.bioController,
+                      maxLines: null,
+                      textAlign: TextAlign.center,
+                      style: FlutterFlowTheme.of(context).bodyMedium.override(
+                            fontFamily: 'Inter',
+                            fontSize: 14,
+                            letterSpacing: 0,
+                          ),
+                      decoration: InputDecoration(
+                        hintText: 'Tell us about yourself...',
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        contentPadding:
+                            EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                      ),
+                    ),
+                  )
+                else
+                  user.bio.isNotEmpty
+                      ? Padding(
+                          padding: EdgeInsets.symmetric(horizontal: 32),
+                          child: Text(
+                            user.bio,
+                            style: FlutterFlowTheme.of(context)
+                                .bodyMedium
+                                .override(
+                                  fontFamily: 'Inter',
+                                  fontSize: 14,
+                                  letterSpacing: 0,
+                                  color: Color(0xFF374151),
+                                ),
+                            textAlign: TextAlign.center,
+                          ),
+                        )
+                      : SizedBox.shrink(),
+                SizedBox(height: 12),
+                // Location (centered with icon)
+                if (user.location.isNotEmpty || _model.isEditingProfile)
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(
+                        Icons.location_on_outlined,
+                        color: FlutterFlowTheme.of(context).secondaryText,
+                        size: 18,
+                      ),
+                      SizedBox(width: 6),
+                      _model.isEditingProfile
+                          ? SizedBox(
+                              width: 200,
+                              child: TextField(
+                                controller: _model.locationController,
+                                style: FlutterFlowTheme.of(context)
+                                    .bodyMedium
+                                    .override(
+                                      fontFamily: 'Inter',
+                                      fontSize: 14,
+                                      letterSpacing: 0,
+                                      fontWeight: FontWeight.w500,
+                                    ),
+                                textAlign: TextAlign.center,
+                                decoration: InputDecoration(
+                                  hintText: 'Location',
+                                  border: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                  contentPadding: EdgeInsets.symmetric(
+                                      horizontal: 12, vertical: 8),
+                                ),
+                              ),
+                            )
+                          : Text(
+                              user.location,
+                              style: FlutterFlowTheme.of(context)
+                                  .bodyMedium
+                                  .override(
+                                    fontFamily: 'Inter',
+                                    fontSize: 14,
+                                    letterSpacing: 0,
+                                    fontWeight: FontWeight.w500,
+                                    color: Color(0xFF374151),
+                                  ),
+                            ),
+                    ],
+                  ),
+              ],
+            ),
+          ),
+          SizedBox(height: 32),
+          _buildProfileActionButtons(user),
+        ],
+      ),
+    );
+  }
+
+  /// Builds the profile action buttons (Edit/Save/Cancel)
+  Widget _buildProfileActionButtons(UsersRecord user) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.end,
+      children: [
+        if (!_model.isEditingProfile)
+          _buildEditProfileButton()
+        else
+          ..._buildSaveCancelButtons(user),
+      ],
+    );
+  }
+
+  /// Builds the edit profile button
+  Widget _buildEditProfileButton() {
+    return FFButtonWidget(
+      onPressed: () {
+        setState(() {
+          _model.isEditingProfile = true;
+        });
+      },
+      text: 'Edit Profile',
+      icon: Icon(Icons.edit_outlined, size: 16),
+      options: FFButtonOptions(
+        height: 44,
+        padding: EdgeInsetsDirectional.fromSTEB(20, 0, 20, 0),
+        iconPadding: EdgeInsetsDirectional.fromSTEB(0, 0, 8, 0),
+        color: FlutterFlowTheme.of(context).primary,
+        textStyle: FlutterFlowTheme.of(context).titleSmall.override(
+              fontFamily: 'Inter',
+              color: Colors.white,
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+              letterSpacing: 0,
+            ),
+        elevation: 0,
+        borderRadius: BorderRadius.circular(8),
+      ),
+    );
+  }
+
+  /// Builds the save and cancel buttons
+  List<Widget> _buildSaveCancelButtons(UsersRecord user) {
+    return [
+      _buildCancelButton(),
+      SizedBox(width: 12),
+      _buildSaveButton(user),
+    ];
+  }
+
+  /// Builds the cancel button
+  Widget _buildCancelButton() {
+    return FFButtonWidget(
+      onPressed: () {
+        setState(() {
+          _model.isEditingProfile = false;
+        });
+      },
+      text: 'Cancel',
+      icon: Icon(Icons.close, size: 16),
+      options: FFButtonOptions(
+        height: 44,
+        padding: EdgeInsetsDirectional.fromSTEB(20, 0, 20, 0),
+        iconPadding: EdgeInsetsDirectional.fromSTEB(0, 0, 8, 0),
+        color: FlutterFlowTheme.of(context).secondaryText,
+        textStyle: FlutterFlowTheme.of(context).titleSmall.override(
+              fontFamily: 'Inter',
+              color: Colors.white,
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+              letterSpacing: 0,
+            ),
+        elevation: 0,
+        borderRadius: BorderRadius.circular(8),
+      ),
+    );
+  }
+
+  /// Builds the save button
+  Widget _buildSaveButton(UsersRecord user) {
+    return FFButtonWidget(
+      onPressed: () => _saveProfileChanges(user),
+      text: 'Save',
+      icon: Icon(Icons.check, size: 16),
+      options: FFButtonOptions(
+        height: 44,
+        padding: EdgeInsetsDirectional.fromSTEB(20, 0, 20, 0),
+        iconPadding: EdgeInsetsDirectional.fromSTEB(0, 0, 8, 0),
+        color: Colors.green,
+        textStyle: FlutterFlowTheme.of(context).titleSmall.override(
+              fontFamily: 'Inter',
+              color: Colors.white,
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+              letterSpacing: 0,
+            ),
+        elevation: 0,
+        borderRadius: BorderRadius.circular(8),
+      ),
+    );
+  }
+
+  /// Builds the modern profile info section
+  Widget _buildModernProfileInfoSection(UsersRecord user, String role) {
+    return Container(
+      padding: EdgeInsets.fromLTRB(32, 0, 32, 32),
+      child: Column(
+        children: [
+          // Profile Picture (overlapping the cover photo)
+          Transform.translate(
+            offset: Offset(0, -70),
+            child: _buildModernProfilePicture(),
+          ),
+          
+          // Name
+          Transform.translate(
+            offset: Offset(0, -50),
+            child: Column(
+              children: [
+                if (_model.isEditingProfile)
+                  Container(
+                    width: 300,
+                    child: TextField(
+                      controller: _model.displayNameController,
+                      style: FlutterFlowTheme.of(context).headlineMedium.override(
+                            fontFamily: 'Inter',
+                            fontSize: 28,
+                            fontWeight: FontWeight.w700,
+                            letterSpacing: 0,
+                          ),
+                      textAlign: TextAlign.center,
+                      decoration: InputDecoration(
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: BorderSide(color: FlutterFlowTheme.of(context).alternate),
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: BorderSide(color: FlutterFlowTheme.of(context).primary, width: 2),
+                        ),
+                        contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                      ),
+                    ),
+                  )
+                else
+                  Text(
+                    user.displayName,
+                    style: FlutterFlowTheme.of(context).headlineMedium.override(
+                          fontFamily: 'Inter',
+                          fontSize: 28,
+                          fontWeight: FontWeight.w700,
+                          letterSpacing: 0,
+                          color: Color(0xFF1F2937),
+                        ),
+                    textAlign: TextAlign.center,
+                  ),
+                
+                SizedBox(height: 12),
+                
+                // Role (Optional)
+                if (_model.isEditingProfile)
+                  Container(
+                    width: 250,
+                    child: TextField(
+                      controller: _model.roleController,
+                      style: FlutterFlowTheme.of(context).bodyMedium.override(
+                            fontFamily: 'Inter',
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600,
+                            letterSpacing: 0,
+                          ),
+                      textAlign: TextAlign.center,
+                      decoration: InputDecoration(
+                        hintText: 'Role (Optional)',
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(20),
+                          borderSide: BorderSide(color: FlutterFlowTheme.of(context).alternate),
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(20),
+                          borderSide: BorderSide(color: FlutterFlowTheme.of(context).primary, width: 2),
+                        ),
+                        contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                      ),
+                    ),
+                  )
+                else if (role.isNotEmpty || (_model.roleController?.text.isNotEmpty ?? false))
+                  Container(
+                    padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: FlutterFlowTheme.of(context).primary.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(
+                        color: FlutterFlowTheme.of(context).primary.withOpacity(0.3),
+                        width: 1,
+                      ),
+                    ),
+                    child: Text(
+                      _model.roleController?.text.isNotEmpty == true ? _model.roleController!.text : role,
+                      style: FlutterFlowTheme.of(context).bodyMedium.override(
+                            fontFamily: 'Inter',
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600,
+                            color: FlutterFlowTheme.of(context).primary,
+                            letterSpacing: 0,
+                          ),
+                    ),
+                  ),
+                
+                SizedBox(height: 16),
+                
+                // Bio
+                if (_model.isEditingProfile)
+                  Container(
+                    width: double.infinity,
+                    constraints: BoxConstraints(maxWidth: 500),
+                    child: TextField(
+                      controller: _model.bioController,
+                      maxLines: 3,
+                      textAlign: TextAlign.center,
+                      style: FlutterFlowTheme.of(context).bodyMedium.override(
+                            fontFamily: 'Inter',
+                            fontSize: 16,
+                            letterSpacing: 0,
+                          ).copyWith(height: 1.5),
+                      decoration: InputDecoration(
+                        hintText: 'Tell us about yourself...',
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: BorderSide(color: FlutterFlowTheme.of(context).alternate),
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: BorderSide(color: FlutterFlowTheme.of(context).primary, width: 2),
+                        ),
+                        contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+                      ),
+                    ),
+                  )
+                else if (user.bio.isNotEmpty)
+                  Container(
+                    constraints: BoxConstraints(maxWidth: 500),
+                    child: Text(
+                      user.bio,
+                      style: FlutterFlowTheme.of(context).bodyMedium.override(
+                            fontFamily: 'Inter',
+                            fontSize: 16,
+                            letterSpacing: 0,
+                            color: Color(0xFF6B7280),
+                          ).copyWith(height: 1.5),
+                      textAlign: TextAlign.center,
+                    ),
+                  ),
+                
+                SizedBox(height: 20),
+                
+                // Location
+                if (user.location.isNotEmpty || _model.isEditingProfile)
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(
+                        Icons.location_on_outlined,
+                        color: Color(0xFF6B7280),
+                        size: 20,
+                      ),
+                      SizedBox(width: 8),
+                      _model.isEditingProfile
+                          ? Container(
+                              width: 200,
+                              child: TextField(
+                                controller: _model.locationController,
+                                style: FlutterFlowTheme.of(context).bodyMedium.override(
+                                      fontFamily: 'Inter',
+                                      fontSize: 16,
+                                      letterSpacing: 0,
+                                      fontWeight: FontWeight.w500,
+                                    ),
+                                textAlign: TextAlign.center,
+                                decoration: InputDecoration(
+                                  hintText: 'Location',
+                                  border: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(8),
+                                    borderSide: BorderSide(color: FlutterFlowTheme.of(context).alternate),
+                                  ),
+                                  focusedBorder: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(8),
+                                    borderSide: BorderSide(color: FlutterFlowTheme.of(context).primary, width: 2),
+                                  ),
+                                  contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                ),
+                              ),
+                            )
+                          : Text(
+                              user.location,
+                              style: FlutterFlowTheme.of(context).bodyMedium.override(
+                                    fontFamily: 'Inter',
+                                    fontSize: 16,
+                                    letterSpacing: 0,
+                                    fontWeight: FontWeight.w500,
+                                    color: Color(0xFF374151),
+                                  ),
+                            ),
+                    ],
+                  ),
+                
+                SizedBox(height: 24),
+                
+                // Contact Information
+                _buildContactInfo(user),
+                
+                SizedBox(height: 32),
+                
+                // Action Buttons
+                _buildModernActionButtons(user),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Builds the modern profile picture
+  Widget _buildModernProfilePicture() {
+    return Center(
+      child: Stack(
+        children: [
+          Container(
+            width: 140,
+            height: 140,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              border: Border.all(
+                color: Colors.white,
+                width: 6,
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.15),
+                  blurRadius: 20,
+                  offset: Offset(0, 8),
+                ),
+              ],
+            ),
+            child: ClipOval(
+              child: CachedNetworkImage(
+                fadeInDuration: const Duration(milliseconds: 500),
+                fadeOutDuration: const Duration(milliseconds: 500),
+                imageUrl: valueOrDefault<String>(
+                  currentUserPhoto,
+                  'https://firebasestorage.googleapis.com/v0/b/linkedup-c3e29.firebasestorage.app/o/asset%2Fdefault-user.png?alt=media&token=35d4da12-13b0-4f43-8b8e-375e6e126683',
+                ),
+                fit: BoxFit.cover,
+                placeholder: (context, url) => Container(
+                  color: Color(0xFFF3F4F6),
+                  child: Icon(
+                    Icons.person,
+                    color: Color(0xFF9CA3AF),
+                    size: 50,
+                  ),
+                ),
+                errorWidget: (context, url, error) => Container(
+                  color: Color(0xFFF3F4F6),
+                  child: Icon(
+                    Icons.person,
+                    color: Color(0xFF9CA3AF),
+                    size: 50,
+                  ),
+                ),
+              ),
+            ),
+          ),
+          if (_model.isEditingProfile)
+            Positioned(
+              bottom: 8,
+              right: 8,
+              child: InkWell(
+                onTap: () => context.pushNamed(EditProfileWidget.routeName),
+                child: Container(
+                  width: 40,
+                  height: 40,
+                  decoration: BoxDecoration(
+                    color: FlutterFlowTheme.of(context).primary,
+                    shape: BoxShape.circle,
+                    border: Border.all(
+                      color: Colors.white,
+                      width: 3,
+                    ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.15),
+                        blurRadius: 8,
+                        offset: Offset(0, 2),
+                      ),
+                    ],
+                  ),
+                  child: Icon(
+                    Icons.camera_alt_rounded,
+                    color: Colors.white,
+                    size: 20,
+                  ),
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  /// Builds contact information section
+  Widget _buildContactInfo(UsersRecord user) {
+    return Column(
+      children: [
+        // Website (Optional)
+        if (_model.isEditingProfile || (_model.websiteController?.text.isNotEmpty ?? false))
+          Container(
+            margin: EdgeInsets.only(bottom: 12),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Container(
+                  padding: EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: Color(0xFFF3F4F6),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Icon(
+                    Icons.language,
+                    color: Color(0xFF6B7280),
+                    size: 18,
+                  ),
+                ),
+                SizedBox(width: 12),
+                Text(
+                  'Website:',
+                  style: FlutterFlowTheme.of(context).bodyMedium.override(
+                        fontFamily: 'Inter',
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                        color: Color(0xFF374151),
+                        letterSpacing: 0,
+                      ),
+                ),
+                SizedBox(width: 8),
+                _model.isEditingProfile
+                    ? Container(
+                        width: 250,
+                        child: TextField(
+                          controller: _model.websiteController,
+                          style: FlutterFlowTheme.of(context).bodyMedium.override(
+                                fontFamily: 'Inter',
+                                fontSize: 14,
+                                letterSpacing: 0,
+                              ),
+                          decoration: InputDecoration(
+                            hintText: 'www.example.com (Optional)',
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(8),
+                              borderSide: BorderSide(color: FlutterFlowTheme.of(context).alternate),
+                            ),
+                            focusedBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(8),
+                              borderSide: BorderSide(color: FlutterFlowTheme.of(context).primary, width: 2),
+                            ),
+                            contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                          ),
+                        ),
+                      )
+                    : Text(
+                        _model.websiteController?.text ?? '',
+                        style: FlutterFlowTheme.of(context).bodyMedium.override(
+                              fontFamily: 'Inter',
+                              fontSize: 14,
+                              letterSpacing: 0,
+                              color: FlutterFlowTheme.of(context).primary,
+                            ),
+                      ),
+              ],
+            ),
+          ),
+        
+        // Email (Optional)
+        Container(
+          margin: EdgeInsets.only(bottom: 12),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Container(
+                padding: EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: Color(0xFFF3F4F6),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Icon(
+                  Icons.email_outlined,
+                  color: Color(0xFF6B7280),
+                  size: 18,
+                ),
+              ),
+              SizedBox(width: 12),
+              Text(
+                'Email:',
+                style: FlutterFlowTheme.of(context).bodyMedium.override(
+                      fontFamily: 'Inter',
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      color: Color(0xFF374151),
+                      letterSpacing: 0,
+                    ),
+              ),
+              SizedBox(width: 8),
+              Text(
+                currentUserEmail,
+                style: FlutterFlowTheme.of(context).bodyMedium.override(
+                      fontFamily: 'Inter',
+                      fontSize: 14,
+                      letterSpacing: 0,
+                      color: Color(0xFF6B7280),
+                    ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  /// Builds modern action buttons
+  Widget _buildModernActionButtons(UsersRecord user) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        if (!_model.isEditingProfile)
+          FFButtonWidget(
+            onPressed: () {
+              setState(() {
+                _model.isEditingProfile = true;
+              });
+            },
+            text: 'Edit Profile',
+            icon: Icon(Icons.edit_outlined, size: 18),
+            options: FFButtonOptions(
+              height: 48,
+              padding: EdgeInsetsDirectional.fromSTEB(24, 0, 24, 0),
+              iconPadding: EdgeInsetsDirectional.fromSTEB(0, 0, 8, 0),
+              color: FlutterFlowTheme.of(context).primary,
+              textStyle: FlutterFlowTheme.of(context).titleSmall.override(
+                    fontFamily: 'Inter',
+                    color: Colors.white,
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                    letterSpacing: 0,
+                  ),
+              elevation: 0,
+              borderRadius: BorderRadius.circular(12),
+            ),
+          )
+        else ...[
+          FFButtonWidget(
+            onPressed: () {
+              setState(() {
+                _model.isEditingProfile = false;
+              });
+            },
+            text: 'Cancel',
+            options: FFButtonOptions(
+              height: 48,
+              padding: EdgeInsetsDirectional.fromSTEB(24, 0, 24, 0),
+              color: Color(0xFF6B7280),
+              textStyle: FlutterFlowTheme.of(context).titleSmall.override(
+                    fontFamily: 'Inter',
+                    color: Colors.white,
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                    letterSpacing: 0,
+                  ),
+              elevation: 0,
+              borderRadius: BorderRadius.circular(12),
+            ),
+          ),
+          SizedBox(width: 16),
+          FFButtonWidget(
+            onPressed: () async {
+              await _saveModernProfileChanges(user);
+            },
+            text: 'Save Changes',
+            icon: Icon(Icons.check, size: 18),
+            options: FFButtonOptions(
+              height: 48,
+              padding: EdgeInsetsDirectional.fromSTEB(24, 0, 24, 0),
+              iconPadding: EdgeInsetsDirectional.fromSTEB(0, 0, 8, 0),
+              color: Color(0xFF10B981),
+              textStyle: FlutterFlowTheme.of(context).titleSmall.override(
+                    fontFamily: 'Inter',
+                    color: Colors.white,
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                    letterSpacing: 0,
+                  ),
+              elevation: 0,
+              borderRadius: BorderRadius.circular(12),
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+
+  /// Saves profile changes to Firestore
+  Future<void> _saveProfileChanges(UsersRecord user) async {
+    try {
+      await user.reference.update({
+        'display_name': _model.displayNameController?.text ?? user.displayName,
+        'location': _model.locationController?.text ?? user.location,
+        'bio': _model.bioController?.text ?? user.bio,
+      });
+
+      // Exit edit mode first
+      if (mounted) {
+        setState(() {
+          _model.isEditingProfile = false;
+        });
+      }
+
+      // Show success message using the safe helper method
+      _showSuccessSnackBar('Profile updated successfully');
+    } catch (e) {
+      // Handle error and exit edit mode
+      if (mounted) {
+        setState(() {
+          _model.isEditingProfile = false;
+        });
+      }
+      
+      // Show error message using the safe helper method
+      _showErrorSnackBar('Failed to update profile. Please try again.');
+    }
+  }
+
+  /// Saves modern profile changes to Firestore
+  Future<void> _saveModernProfileChanges(UsersRecord user) async {
+    try {
+      await user.reference.update({
+        'display_name': _model.displayNameController?.text ?? user.displayName,
+        'location': _model.locationController?.text ?? user.location,
+        'bio': _model.bioController?.text ?? user.bio,
+        'website': _model.websiteController?.text ?? '',
+        'role': _model.roleController?.text ?? '',
+      });
+
+      // Exit edit mode first
+      if (mounted) {
+        setState(() {
+          _model.isEditingProfile = false;
+        });
+      }
+
+      // Show success message using the safe helper method
+      _showSuccessSnackBar('Profile updated successfully!');
+    } catch (e) {
+      // Handle error and exit edit mode
+      if (mounted) {
+        setState(() {
+          _model.isEditingProfile = false;
+        });
+      }
+      
+      // Show error message using the safe helper method
+      _showErrorSnackBar('Failed to update profile. Please try again.');
+    }
   }
 
   Widget _buildNotificationsContent() {
@@ -2288,94 +3799,6 @@ class _ProfileSettingsWidgetState extends State<ProfileSettingsWidget> {
   }
 
   // Helper widgets
-  Widget _buildEditableInfoField(
-      String title, TextEditingController controller, IconData icon,
-      {bool enabled = true}) {
-    return Container(
-      padding: EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: FlutterFlowTheme.of(context).primaryBackground,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(
-          color: FlutterFlowTheme.of(context).alternate,
-          width: 1,
-        ),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Icon(
-                icon,
-                color: FlutterFlowTheme.of(context).secondaryText,
-                size: 20,
-              ),
-              SizedBox(width: 8),
-              Text(
-                title,
-                style: FlutterFlowTheme.of(context).bodyMedium.override(
-                      fontFamily: 'Inter',
-                      fontSize: 14,
-                      fontWeight: FontWeight.w600,
-                      letterSpacing: 0,
-                    ),
-              ),
-            ],
-          ),
-          SizedBox(height: 8),
-          TextField(
-            controller: controller,
-            enabled: enabled,
-            decoration: InputDecoration(
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(8),
-                borderSide: BorderSide(
-                  color: enabled
-                      ? FlutterFlowTheme.of(context).alternate
-                      : FlutterFlowTheme.of(context)
-                          .secondaryText
-                          .withOpacity(0.3),
-                ),
-              ),
-              enabledBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(8),
-                borderSide: BorderSide(
-                  color: FlutterFlowTheme.of(context).alternate,
-                ),
-              ),
-              focusedBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(8),
-                borderSide: BorderSide(
-                  color: FlutterFlowTheme.of(context).primary,
-                  width: 2,
-                ),
-              ),
-              disabledBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(8),
-                borderSide: BorderSide(
-                  color: FlutterFlowTheme.of(context)
-                      .secondaryText
-                      .withOpacity(0.3),
-                ),
-              ),
-              contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-              hintText: enabled ? 'Enter $title' : 'Cannot be changed',
-            ),
-            style: FlutterFlowTheme.of(context).bodyMedium.override(
-                  fontFamily: 'Inter',
-                  fontSize: 14,
-                  fontWeight: FontWeight.w400,
-                  letterSpacing: 0,
-                  color: enabled
-                      ? FlutterFlowTheme.of(context).primaryText
-                      : FlutterFlowTheme.of(context).secondaryText,
-                ),
-          ),
-        ],
-      ),
-    );
-  }
 
   Widget _buildNotificationToggle(String label, bool value) {
     return Row(
@@ -2882,7 +4305,7 @@ class _ProfileSettingsWidgetState extends State<ProfileSettingsWidget> {
                           'workspaceId': workspace.reference.id,
                           'workspaceName': workspace.name,
                           'inviterUserId': currentUserUid,
-                          'inviterName': currentUserDisplayName ?? '',
+                          'inviterName': currentUserDisplayName,
                         });
 
                         final data = result.data as Map<String, dynamic>?;
@@ -4296,6 +5719,695 @@ class _ProfileSettingsWidgetState extends State<ProfileSettingsWidget> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Error joining workspace: $e')),
       );
+    }
+  }
+
+  /// Builds the modern cover photo edit button with dropdown menu
+  Widget _buildCoverPhotoEditButton() {
+    return PopupMenuButton<String>(
+      key: _coverPhotoDropdownKey,
+      tooltip: 'Edit cover photo',
+      elevation: 8,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+      ),
+      color: Colors.white,
+      offset: Offset(0, 50),
+      child: _buildCoverPhotoButtonContent(),
+      itemBuilder: (BuildContext context) => _buildCoverPhotoMenuItems(),
+      onSelected: _handleCoverPhotoMenuSelection,
+    );
+  }
+
+  /// Builds the cover photo button content
+  Widget _buildCoverPhotoButtonContent() {
+    return Container(
+      padding: EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(_coverPhotoButtonBorderRadius),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.1),
+            blurRadius: 8,
+            offset: Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            Icons.camera_alt_rounded,
+            color: FlutterFlowTheme.of(context).primary,
+            size: 18,
+          ),
+          SizedBox(width: 8),
+          Text(
+            'Edit Cover',
+            style: TextStyle(
+              fontFamily: 'Inter',
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+              color: FlutterFlowTheme.of(context).primary,
+            ),
+          ),
+          SizedBox(width: 4),
+          Icon(
+            Icons.keyboard_arrow_down_rounded,
+            color: FlutterFlowTheme.of(context).primary,
+            size: 18,
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Builds the cover photo menu items
+  List<PopupMenuItem<String>> _buildCoverPhotoMenuItems() {
+    return [
+      PopupMenuItem<String>(
+        value: 'template',
+        child: _buildMenuItemContent(
+          icon: Icons.palette_outlined,
+          text: 'Choose from Template',
+        ),
+      ),
+      PopupMenuItem<String>(
+        value: 'upload',
+        child: _buildMenuItemContent(
+          icon: Icons.upload_outlined,
+          text: 'Upload Photo',
+        ),
+      ),
+    ];
+  }
+
+  /// Builds menu item content with icon and text
+  Widget _buildMenuItemContent({
+    required IconData icon,
+    required String text,
+  }) {
+    return Row(
+      children: [
+        Icon(
+          icon,
+          color: FlutterFlowTheme.of(context).primary,
+          size: 20,
+        ),
+        SizedBox(width: 12),
+        Text(
+          text,
+          style: TextStyle(
+            fontFamily: 'Inter',
+            fontSize: 14,
+            fontWeight: FontWeight.w500,
+            color: _textColorPrimary,
+          ),
+        ),
+      ],
+    );
+  }
+
+  /// Handles cover photo menu selection
+  void _handleCoverPhotoMenuSelection(String value) {
+    if (value == 'upload') {
+      _pickCoverPhoto();
+    } else if (value == 'template') {
+      _showCoverPhotoTemplates();
+    }
+  }
+
+  /// Picks cover photo from device gallery
+  Future<void> _pickCoverPhoto() async {
+    try {
+      final ImagePicker picker = ImagePicker();
+      final XFile? image = await picker.pickImage(
+        source: ImageSource.gallery,
+        maxWidth: 1920,
+        maxHeight: 1080,
+        imageQuality: 85,
+      );
+
+      if (image != null && mounted) {
+        await _uploadCoverPhoto(image);
+      }
+    } catch (e) {
+      if (mounted) {
+        _showErrorSnackBar('Error picking image: $e');
+      }
+    }
+  }
+
+  /// Uploads cover photo to Firebase Storage
+  Future<void> _uploadCoverPhoto(XFile imageFile) async {
+    if (!mounted || !context.mounted) return;
+
+    // Check if currentUserReference is available
+    final currentUser = currentUserReference;
+    if (currentUser == null) {
+      if (mounted && context.mounted) {
+        _showErrorSnackBar('Error: User not found. Please log in again.');
+      }
+      return;
+    }
+
+    BuildContext? dialogContext;
+    try {
+      if (mounted && context.mounted) {
+        showDialog(
+          context: context,
+          barrierDismissible: false,
+          builder: (dialogBuildContext) {
+            dialogContext = dialogBuildContext;
+            return Center(
+              child: CircularProgressIndicator(
+                valueColor: AlwaysStoppedAnimation<Color>(
+                  FlutterFlowTheme.of(context).primary,
+                ),
+              ),
+            );
+          },
+        );
+      }
+
+      final downloadUrl = await _performImageUpload(imageFile);
+      await _updateCoverPhotoUrl(downloadUrl);
+
+      if (mounted && context.mounted && dialogContext != null) {
+        if (Navigator.canPop(dialogContext!)) {
+          Navigator.of(dialogContext!).pop();
+        }
+        _showSuccessSnackBar('Cover photo updated successfully');
+      }
+    } catch (e) {
+      if (mounted && context.mounted && dialogContext != null) {
+        if (Navigator.canPop(dialogContext!)) {
+          Navigator.of(dialogContext!).pop();
+        }
+        if (mounted && context.mounted) {
+          _showErrorSnackBar('Error uploading cover photo: $e');
+        }
+      }
+    }
+  }
+
+  /// Performs the image upload to Firebase Storage
+  Future<String> _performImageUpload(XFile imageFile) async {
+    final currentUser = currentUserReference;
+    if (currentUser == null) {
+      throw Exception('User not found');
+    }
+
+    try {
+      final fileName =
+          'cover_photos/${currentUser.id}_${DateTime.now().millisecondsSinceEpoch}.jpg';
+      final ref = FirebaseStorage.instance.ref().child(fileName);
+
+      UploadTask uploadTask;
+      if (kIsWeb) {
+        final bytes = await imageFile.readAsBytes();
+        uploadTask = ref.putData(
+          bytes,
+          SettableMetadata(contentType: 'image/jpeg'),
+        );
+      } else {
+        final file = File(imageFile.path);
+        if (!await file.exists()) {
+          throw Exception('Image file does not exist');
+        }
+        uploadTask = ref.putFile(
+          file,
+          SettableMetadata(contentType: 'image/jpeg'),
+        );
+      }
+
+      // Wait for upload to complete and check for errors
+      final snapshot = await uploadTask.whenComplete(() {});
+      
+      // Check if upload was successful
+      if (snapshot.state != TaskState.success) {
+        throw Exception('Upload failed with state: ${snapshot.state}');
+      }
+
+      // Get download URL
+      final downloadUrl = await snapshot.ref.getDownloadURL();
+      if (downloadUrl.isEmpty) {
+        throw Exception('Failed to get download URL');
+      }
+
+      return downloadUrl;
+    } catch (e) {
+      // Provide more detailed error information
+      print('Firebase Storage upload error: $e');
+      if (e is FirebaseException) {
+        throw Exception('Firebase Storage error: ${e.code} - ${e.message}');
+      }
+      rethrow;
+    }
+  }
+
+  /// Updates the cover photo URL in user document
+  Future<void> _updateCoverPhotoUrl(String downloadUrl) async {
+    final currentUser = currentUserReference;
+    if (currentUser == null) {
+      throw Exception('User not found');
+    }
+    
+    await currentUser.update({
+      'cover_photo_url': downloadUrl,
+      'cover_photo_template': '', // Clear template when uploading custom photo
+    });
+  }
+
+  /// Shows success snackbar
+  void _showSuccessSnackBar(String message) {
+    if (!mounted) return;
+    
+    // Use SchedulerBinding to ensure we're in a safe state
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted && context.mounted) {
+        try {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(message),
+              backgroundColor: _successColor,
+              behavior: SnackBarBehavior.floating,
+              duration: Duration(seconds: 3),
+            ),
+          );
+        } catch (e) {
+          // Silently fail if context is invalid
+          print('Error showing success snackbar: $e');
+        }
+      }
+    });
+  }
+
+  /// Shows error snackbar
+  void _showErrorSnackBar(String message) {
+    if (!mounted) return;
+    
+    // Use SchedulerBinding to ensure we're in a safe state
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted && context.mounted) {
+        try {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(message),
+              backgroundColor: _errorColor,
+              behavior: SnackBarBehavior.floating,
+              duration: Duration(seconds: 4),
+            ),
+          );
+        } catch (e) {
+          // Silently fail if context is invalid
+          print('Error showing error snackbar: $e');
+        }
+      }
+    });
+  }
+
+  /// Gets the list of cover photo templates
+  List<Map<String, dynamic>> _getCoverPhotoTemplates() {
+    return [
+      // Sober Templates - Black Gradients
+      {
+        'name': 'Black Deep',
+        'gradient': LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [Color(0xFF000000), Color(0xFF1A1A1A)],
+        ),
+      },
+      {
+        'name': 'Black Elegant',
+        'gradient': LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [Color(0xFF1A1A1A), Color(0xFF2D2D2D)],
+        ),
+      },
+      {
+        'name': 'Charcoal',
+        'gradient': LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [Color(0xFF2C2C2C), Color(0xFF4A4A4A)],
+        ),
+      },
+      // Sober Templates - White Gradients
+      {
+        'name': 'White Pure',
+        'gradient': LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [Color(0xFFFFFFFF), Color(0xFFF5F5F5)],
+        ),
+      },
+      {
+        'name': 'White Soft',
+        'gradient': LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [Color(0xFFF8F8F8), Color(0xFFE5E5E5)],
+        ),
+      },
+      {
+        'name': 'Pearl',
+        'gradient': LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [Color(0xFFF0F0F0), Color(0xFFD0D0D0)],
+        ),
+      },
+      // Sober Templates - Brown Gradients
+      {
+        'name': 'Brown Rich',
+        'gradient': LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [Color(0xFF5D4037), Color(0xFF3E2723)],
+        ),
+      },
+      {
+        'name': 'Brown Warm',
+        'gradient': LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [Color(0xFF8D6E63), Color(0xFF6D4C41)],
+        ),
+      },
+      {
+        'name': 'Brown Mocha',
+        'gradient': LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [Color(0xFF6F4E37), Color(0xFF4A3428)],
+        ),
+      },
+      // Sober Templates - Gray Gradients
+      {
+        'name': 'Gray Classic',
+        'gradient': LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [Color(0xFF616161), Color(0xFF424242)],
+        ),
+      },
+      {
+        'name': 'Gray Modern',
+        'gradient': LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [Color(0xFF757575), Color(0xFF616161)],
+        ),
+      },
+      {
+        'name': 'Gray Slate',
+        'gradient': LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [Color(0xFF546E7A), Color(0xFF37474F)],
+        ),
+      },
+      // Colorful Templates
+      {
+        'name': 'Gradient Blue',
+        'gradient': LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [Color(0xFF3B82F6), Color(0xFF1E40AF)],
+        ),
+      },
+      {
+        'name': 'Gradient Purple',
+        'gradient': LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [Color(0xFF8B5CF6), Color(0xFF6D28D9)],
+        ),
+      },
+      {
+        'name': 'Gradient Green',
+        'gradient': LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [Color(0xFF10B981), Color(0xFF059669)],
+        ),
+      },
+      {
+        'name': 'Gradient Orange',
+        'gradient': LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [Color(0xFFF59E0B), Color(0xFFD97706)],
+        ),
+      },
+      {
+        'name': 'Gradient Pink',
+        'gradient': LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [Color(0xFFEC4899), Color(0xFFDB2777)],
+        ),
+      },
+      {
+        'name': 'Gradient Teal',
+        'gradient': LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [Color(0xFF14B8A6), Color(0xFF0D9488)],
+        ),
+      },
+    ];
+  }
+
+  /// Shows cover photo template selection dialog
+  void _showCoverPhotoTemplates() {
+    if (mounted) {
+      final templates = _getCoverPhotoTemplates();
+
+      showDialog(
+        context: context,
+        builder: (context) => _buildTemplateSelectionDialog(templates),
+      );
+    }
+  }
+
+  /// Builds the template selection dialog
+  Widget _buildTemplateSelectionDialog(List<Map<String, dynamic>> templates) {
+    return Dialog(
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(_borderRadius),
+      ),
+      child: Container(
+        width: 600,
+        padding: EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _buildTemplateDialogHeader(),
+            SizedBox(height: 20),
+            _buildTemplateGrid(templates),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// Builds the template dialog header
+  Widget _buildTemplateDialogHeader() {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Text(
+          'Choose a Template',
+          style: TextStyle(
+            fontFamily: 'Inter',
+            fontSize: 20,
+            fontWeight: FontWeight.w600,
+            color: Color(0xFF111827),
+          ),
+        ),
+        IconButton(
+          icon: Icon(Icons.close_rounded),
+          onPressed: () => Navigator.pop(context),
+          color: Color(0xFF6B7280),
+        ),
+      ],
+    );
+  }
+
+  /// Builds the template grid
+  Widget _buildTemplateGrid(List<Map<String, dynamic>> templates) {
+    return GridView.builder(
+      shrinkWrap: true,
+      physics: NeverScrollableScrollPhysics(),
+      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: 3,
+        crossAxisSpacing: 12,
+        mainAxisSpacing: 12,
+        childAspectRatio: 1.8,
+      ),
+      itemCount: templates.length,
+      itemBuilder: (context, index) => _buildTemplateItem(templates[index]),
+    );
+  }
+
+  /// Builds a single template item
+  Widget _buildTemplateItem(Map<String, dynamic> template) {
+    final gradient = template['gradient'];
+    if (gradient is! LinearGradient) {
+      return Container(); // Return empty container if gradient is invalid
+    }
+    
+    final textColor = _getTextColorForGradient(gradient);
+    
+    return InkWell(
+      onTap: () async {
+        // Check if widget is still mounted before proceeding
+        if (!mounted) return;
+        
+        // Get the dialog context before closing
+        final dialogContext = context;
+        
+        try {
+          // Close the template dialog first
+          if (Navigator.canPop(dialogContext)) {
+            Navigator.of(dialogContext).pop();
+          }
+          
+          // Wait for the dialog to fully close
+          await Future.delayed(Duration(milliseconds: 300));
+          
+          // Check if widget is still mounted before proceeding
+          if (mounted) {
+            await _applyCoverPhotoTemplate(gradient);
+          }
+        } catch (e) {
+          // Handle any errors during template application
+          if (mounted && context.mounted) {
+            _showErrorSnackBar('Error selecting template: $e');
+          }
+        }
+      },
+      borderRadius: BorderRadius.circular(12),
+      child: Container(
+        decoration: BoxDecoration(
+          gradient: gradient,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: textColor == Colors.white 
+                ? Colors.white.withOpacity(0.3)
+                : Colors.black.withOpacity(0.2),
+            width: 1,
+          ),
+        ),
+        child: Center(
+          child: Text(
+            template['name'] as String,
+            style: TextStyle(
+              fontFamily: 'Inter',
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              color: textColor,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// Determines appropriate text color based on gradient brightness
+  Color _getTextColorForGradient(LinearGradient gradient) {
+    // Get the first color from the gradient
+    if (gradient.colors.isEmpty) {
+      return Colors.white; // Default to white if no colors
+    }
+    
+    final firstColor = gradient.colors.first;
+    
+    // Calculate luminance (brightness) of the color
+    // Formula: 0.299*R + 0.587*G + 0.114*B
+    final luminance = (0.299 * firstColor.red + 
+                      0.587 * firstColor.green + 
+                      0.114 * firstColor.blue) / 255;
+    
+    // If luminance is high (light color), use dark text, otherwise use white
+    return luminance > 0.5 ? Color(0xFF111827) : Colors.white;
+  }
+
+  /// Applies the selected cover photo template
+  Future<void> _applyCoverPhotoTemplate(LinearGradient gradient) async {
+    if (!mounted || !context.mounted) return;
+
+    // Check if currentUserReference is available
+    final currentUser = currentUserReference;
+    if (currentUser == null) {
+      if (mounted && context.mounted) {
+        _showErrorSnackBar('Error: User not found. Please log in again.');
+      }
+      return;
+    }
+
+    // Show loading dialog
+    BuildContext? dialogContext;
+    if (mounted && context.mounted) {
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (dialogBuildContext) {
+          dialogContext = dialogBuildContext;
+          return Center(
+            child: CircularProgressIndicator(
+              valueColor: AlwaysStoppedAnimation<Color>(
+                FlutterFlowTheme.of(context).primary,
+              ),
+            ),
+          );
+        },
+      );
+    }
+
+    try {
+      // Validate gradient has colors
+      if (gradient.colors.isEmpty) {
+        throw Exception('Invalid gradient: no colors found');
+      }
+
+      // Store gradient colors as a template identifier
+      // Convert gradient to a simple identifier based on first color
+      final firstColor = gradient.colors.first;
+      final secondColor = gradient.colors.length > 1 ? gradient.colors[1] : firstColor;
+      
+      // Create a template identifier from colors
+      final templateId = 'gradient_${firstColor.value}_${secondColor.value}';
+
+      // For template gradients, clear the URL and store template info
+      await currentUser.update({
+        'cover_photo_url': '', // Clear to show gradient
+        'cover_photo_template': templateId, // Store template identifier
+      });
+
+      // Close loading dialog if still mounted
+      if (mounted && context.mounted && dialogContext != null) {
+        if (Navigator.canPop(dialogContext!)) {
+          Navigator.of(dialogContext!).pop();
+        }
+        _showSuccessSnackBar('Cover photo template applied successfully');
+      }
+    } catch (e) {
+      // Close loading dialog if still mounted
+      if (mounted && context.mounted && dialogContext != null) {
+        if (Navigator.canPop(dialogContext!)) {
+          Navigator.of(dialogContext!).pop();
+        }
+        if (mounted && context.mounted) {
+          _showErrorSnackBar('Error applying template: $e');
+        }
+      }
     }
   }
 }

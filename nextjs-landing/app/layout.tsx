@@ -1,3 +1,5 @@
+import './globals.css'
+
 export const metadata = {
   title: 'Lona - Under Construction',
   description: 'Lona is under construction',

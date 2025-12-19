@@ -1,5 +1,6 @@
 import '/auth/firebase_auth/auth_util.dart';
 import '/backend/backend.dart';
+import '/components/invite_friends_button_widget.dart';
 import '/flutter_flow/flutter_flow_animations.dart';
 import '/flutter_flow/flutter_flow_util.dart';
 import '/pages/chat/chat_component/chat_thread_component/chat_thread_component_widget.dart';
@@ -8,6 +9,9 @@ import '/pages/desktop_chat/chat_controller.dart';
 import '/pages/chat/user_profile_detail/user_profile_detail_widget.dart';
 import '/pages/chat/group_chat_detail/group_chat_detail_widget.dart';
 import '/pages/chat/group_action_tasks/group_action_tasks_widget.dart';
+import '/pages/chat/all_pending_requests/all_pending_requests_widget.dart';
+import '/backend/push_notifications/push_notifications_util.dart';
+import 'dart:async';
 import 'dart:io';
 import 'dart:ui';
 import 'package:flutter/foundation.dart' show kIsWeb;
@@ -15,12 +19,17 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:easy_debounce/easy_debounce.dart';
 import 'package:ff_theme/flutter_flow/flutter_flow_theme.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/cupertino.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:get/get.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:timeago/timeago.dart' as timeago;
+import 'package:intl/intl.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:cloud_functions/cloud_functions.dart';
+import 'package:share_plus/share_plus.dart';
+import 'package:flutter/services.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 class DesktopChatWidget extends StatefulWidget {
   const DesktopChatWidget({Key? key}) : super(key: key);
@@ -36,6 +45,10 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
 
   final scaffoldKey = GlobalKey<ScaffoldState>();
   final animationsMap = <String, AnimationInfo>{};
+
+  // Track previous friends count for notifications
+  int _previousFriendsCount = 0;
+  StreamSubscription<DocumentSnapshot>? _userSubscription;
 
   @override
   void initState() {
@@ -100,10 +113,11 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
       width: sidebarWidth,
       height: double.infinity,
       decoration: BoxDecoration(
-        color: Color(0xFF374151),
+        color: Color.fromRGBO(
+            250, 252, 255, 1), // Very light cyan tint, close to white
         border: Border(
           right: BorderSide(
-            color: Color(0xFF4B5563),
+            color: Color.fromRGBO(230, 235, 245, 1), // Light border
             width: 1,
           ),
         ),
@@ -125,7 +139,8 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
       width: double.infinity,
       height: 80,
       decoration: BoxDecoration(
-        color: Color(0xFF374151),
+        color: Color.fromRGBO(
+            250, 252, 255, 1), // Very light cyan tint, close to white
       ),
       child: Padding(
         padding: EdgeInsetsDirectional.fromSTEB(16, 20, 16, 20),
@@ -138,7 +153,7 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
                 'Chat',
                 style: TextStyle(
                   fontFamily: 'Inter',
-                  color: Colors.white,
+                  color: Color(0xFF111827), // Dark text for light background
                   fontSize: 20,
                   fontWeight: FontWeight.w700,
                   letterSpacing: -0.5,
@@ -152,47 +167,137 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
             Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                GestureDetector(
-                  onTap: () {
-                    setState(() {
-                      _model.showGroupCreation = !_model.showGroupCreation;
-                      // Reset group creation state when opening
-                      if (_model.showGroupCreation) {
-                        // Clear selected chat to show group creation view
-                        _model.selectedChat = null;
-                        chatController.selectedChat.value = null;
-                        _model.groupName = '';
-                        _model.selectedMembers = [];
-                        _model.groupNameController?.clear();
-                        _model.groupImagePath = null;
-                        _model.groupImageUrl = null;
-                        _model.isUploadingImage = false;
-                      }
-                    });
-                  },
-                  child: Icon(
-                    Icons.add,
-                    color: _model.showGroupCreation
-                        ? Color(0xFF3B82F6)
-                        : Colors.white,
-                    size: 20,
+                Tooltip(
+                  message: 'DM',
+                  child: GestureDetector(
+                    onTap: () {
+                      setState(() {
+                        _model.showNewMessageView = !_model.showNewMessageView;
+                        // Clear selected chat when opening new message view
+                        if (_model.showNewMessageView) {
+                          _model.selectedChat = null;
+                          chatController.selectedChat.value = null;
+                          _model.newMessageSearchController?.clear();
+                        }
+                      });
+                    },
+                    child: Icon(
+                      Icons.add,
+                      color: _model.showNewMessageView
+                          ? Color(0xFF3B82F6)
+                          : Color(0xFF374151), // Dark icon for light background
+                      size: 20,
+                    ),
                   ),
                 ),
                 SizedBox(width: 12),
-                GestureDetector(
-                  onTap: () {
-                    setState(() {
-                      _model.showWorkspaceMembers =
-                          !_model.showWorkspaceMembers;
-                    });
-                  },
-                  child: Icon(
-                    Icons.person,
-                    color: _model.showWorkspaceMembers
-                        ? Color(0xFF3B82F6)
-                        : Colors.white,
-                    size: 20,
+                Tooltip(
+                  message: 'Group Chat',
+                  child: GestureDetector(
+                    onTap: () {
+                      setState(() {
+                        _model.showGroupCreation = !_model.showGroupCreation;
+                        // Reset group creation state when opening
+                        if (_model.showGroupCreation) {
+                          // Clear selected chat to show group creation view
+                          _model.selectedChat = null;
+                          chatController.selectedChat.value = null;
+                          _model.groupName = '';
+                          _model.selectedMembers = [];
+                          _model.groupNameController?.clear();
+                          _model.groupImagePath = null;
+                          _model.groupImageUrl = null;
+                          _model.isUploadingImage = false;
+                        }
+                      });
+                    },
+                    child: Icon(
+                      Icons.people,
+                      color: _model.showGroupCreation
+                          ? Color(0xFF3B82F6)
+                          : Color(0xFF374151), // Dark icon for light background
+                      size: 20,
+                    ),
                   ),
+                ),
+                SizedBox(width: 12),
+                // Connection Requests Badge
+                StreamBuilder<UsersRecord>(
+                  stream: UsersRecord.getDocument(currentUserReference!),
+                  builder: (context, snapshot) {
+                    if (!snapshot.hasData) {
+                      return SizedBox.shrink();
+                    }
+                    final currentUser = snapshot.data!;
+                    final pendingCount = currentUser.friendRequests.length;
+
+                    return Tooltip(
+                      message: pendingCount > 0
+                          ? 'Connection Requests ($pendingCount)'
+                          : 'Connection Requests',
+                      child: GestureDetector(
+                        onTap: () {
+                          setState(() {
+                            // Open connections view
+                            _model.showConnectionsView = true;
+                            // Clear other views
+                            _model.showNewMessageView = false;
+                            _model.showGroupCreation = false;
+                            _model.selectedChat = null;
+                            chatController.selectedChat.value = null;
+                            // Clear search state
+                            _model.showConnectionsSearch = false;
+                            _model.connectionsSearchController?.clear();
+                          });
+                        },
+                        child: Stack(
+                          clipBehavior: Clip.none,
+                          children: [
+                            Icon(
+                              Icons.person_add_alt_1,
+                              color: pendingCount > 0
+                                  ? Color(0xFF3B82F6)
+                                  : Color(0xFF374151),
+                              size: 20,
+                            ),
+                            if (pendingCount > 0)
+                              Positioned(
+                                right: -4,
+                                top: -4,
+                                child: Container(
+                                  padding: EdgeInsets.all(3),
+                                  decoration: BoxDecoration(
+                                    color: Color(0xFFEF4444),
+                                    shape: BoxShape.circle,
+                                    border: Border.all(
+                                      color: Color.fromRGBO(250, 252, 255, 1),
+                                      width: 1.5,
+                                    ),
+                                  ),
+                                  constraints: BoxConstraints(
+                                    minWidth: 16,
+                                    minHeight: 16,
+                                  ),
+                                  child: Center(
+                                    child: Text(
+                                      pendingCount > 99
+                                          ? '99+'
+                                          : '$pendingCount',
+                                      style: TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 9,
+                                        fontWeight: FontWeight.w700,
+                                      ),
+                                      textAlign: TextAlign.center,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                          ],
+                        ),
+                      ),
+                    );
+                  },
                 ),
               ],
             ),
@@ -209,8 +314,12 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
       child: Container(
         height: 40,
         decoration: BoxDecoration(
-          color: Color(0xFF4B5563),
+          color: Colors.white, // White search bar on light background
           borderRadius: BorderRadius.circular(8),
+          border: Border.all(
+            color: Color.fromRGBO(230, 235, 245, 1), // Light border
+            width: 1,
+          ),
         ),
         child: TextFormField(
           controller: _model.searchTextController,
@@ -233,7 +342,7 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
             contentPadding: EdgeInsetsDirectional.fromSTEB(16, 12, 16, 12),
             prefixIcon: Icon(
               Icons.search,
-              color: Colors.white,
+              color: Color(0xFF6B7280), // Dark icon for light background
               size: 18,
             ),
             suffixIcon: Obx(() {
@@ -245,7 +354,8 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
                       },
                       child: Icon(
                         Icons.close,
-                        color: Colors.white,
+                        color:
+                            Color(0xFF6B7280), // Dark icon for light background
                         size: 18,
                       ),
                     )
@@ -254,7 +364,7 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
           ),
           style: TextStyle(
             fontFamily: 'Inter',
-            color: Colors.white,
+            color: Color(0xFF111827), // Dark text for light background
             fontSize: 14,
           ),
         ),
@@ -267,7 +377,8 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
       width: double.infinity,
       height: 50,
       decoration: BoxDecoration(
-        color: Color(0xFF374151),
+        color: Color.fromRGBO(
+            250, 252, 255, 1), // Very light cyan tint, close to white
       ),
       child: Padding(
         padding: EdgeInsetsDirectional.fromSTEB(16, 0, 16, 0),
@@ -276,7 +387,7 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
           children: [
             Expanded(child: _buildTab('All', 0)),
             SizedBox(width: 8),
-            Expanded(child: _buildTab('Direct Message', 1)),
+            Expanded(child: _buildTab('DM', 1)),
             SizedBox(width: 8),
             Expanded(child: _buildTab('Groups', 2)),
           ],
@@ -294,14 +405,33 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
       child: Container(
         padding: EdgeInsets.symmetric(horizontal: 8, vertical: 8),
         decoration: BoxDecoration(
-          color: isSelected ? Colors.white : Colors.transparent,
+          color: isSelected
+              ? Colors.white
+              : Colors.transparent, // White background for selected
           borderRadius: BorderRadius.circular(6),
+          border: isSelected
+              ? Border.all(
+                  color: Color.fromRGBO(
+                      230, 235, 245, 1), // Light border for selected
+                  width: 1,
+                )
+              : null,
+          boxShadow: isSelected
+              ? [
+                  BoxShadow(
+                    color: Color.fromRGBO(0, 0, 0, 0.05), // Neutral gray shadow
+                    blurRadius: 4,
+                    offset: Offset(0, 1),
+                    spreadRadius: 0,
+                  ),
+                ]
+              : null,
         ),
         child: Text(
           text,
           style: TextStyle(
             fontFamily: 'Inter',
-            color: isSelected ? Color(0xFF374151) : Colors.white,
+            color: Color(0xFF374151), // Grey for both selected and unselected
             fontSize: 12,
             fontWeight: FontWeight.w500,
           ),
@@ -320,7 +450,7 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
           case ChatState.loading:
             return Center(
               child: CircularProgressIndicator(
-                color: Colors.white,
+                color: Color.fromARGB(255, 16, 184, 239), // Cyan color
               ),
             );
 
@@ -364,11 +494,6 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
             );
 
           case ChatState.success:
-            // If workspace members view is toggled, show workspace members
-            if (_model.showWorkspaceMembers) {
-              return _buildWorkspaceMembersList();
-            }
-
             final filteredChats = chatController.filteredChats;
 
             if (filteredChats.isEmpty &&
@@ -442,12 +567,14 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
                         isSelected: isSelected,
                         onTap: () {
                           setState(() {
+                            _clearAllViews();
                             _model.selectedChat = chat;
                           });
                           chatController.selectChat(chat);
                         },
                         hasUnreadMessages:
                             chatController.hasUnreadMessages(chat),
+                        chatController: chatController,
                         onPin: _handlePinChat,
                         onDelete: _handleDeleteChat,
                         onMute: _handleMuteNotifications,
@@ -462,11 +589,13 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
                   isSelected: isSelected,
                   onTap: () {
                     setState(() {
+                      _clearAllViews();
                       _model.selectedChat = chat;
                     });
                     chatController.selectChat(chat);
                   },
                   hasUnreadMessages: chatController.hasUnreadMessages(chat),
+                  chatController: chatController,
                   onPin: _handlePinChat,
                   onDelete: _handleDeleteChat,
                   onMute: _handleMuteNotifications,
@@ -486,261 +615,6 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
     return await UsersRecord.getDocumentOnce(otherUserRef);
   }
 
-  Widget _buildWorkspaceMembersList() {
-    return Column(
-      children: [
-        // Header for workspace members
-        Container(
-          width: double.infinity,
-          padding: EdgeInsetsDirectional.fromSTEB(16, 12, 16, 12),
-          decoration: BoxDecoration(
-            color: Color(0xFF4B5563),
-            border: Border(
-              bottom: BorderSide(
-                color: Color(0xFF374151),
-                width: 1,
-              ),
-            ),
-          ),
-          child: Row(
-            children: [
-              Icon(
-                Icons.group,
-                color: Colors.white,
-                size: 18,
-              ),
-              SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  'Workspace Members',
-                  style: TextStyle(
-                    fontFamily: 'Inter',
-                    color: Colors.white,
-                    fontSize: 14,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ),
-              if (_model.showWorkspaceMembers)
-                GestureDetector(
-                  onTap: () {
-                    setState(() {
-                      _model.showWorkspaceMembers = false;
-                    });
-                  },
-                  child: Icon(
-                    Icons.close,
-                    color: Colors.white,
-                    size: 18,
-                  ),
-                ),
-            ],
-          ),
-        ),
-        // Members list
-        Expanded(
-          child: StreamBuilder<List<WorkspaceMembersRecord>>(
-            stream: queryWorkspaceMembersRecord(
-              queryBuilder: (workspaceMembersRecord) =>
-                  workspaceMembersRecord.where('workspace_ref',
-                      isEqualTo: chatController.currentWorkspaceRef.value),
-            ),
-            builder: (context, membersSnapshot) {
-              if (!membersSnapshot.hasData) {
-                return Center(
-                  child: CircularProgressIndicator(
-                    color: Colors.white,
-                  ),
-                );
-              }
-
-              final members = membersSnapshot.data!;
-              final searchQuery =
-                  chatController.searchQuery.value.toLowerCase();
-
-              return ListView.builder(
-                padding: EdgeInsets.zero,
-                itemCount: members.length,
-                itemBuilder: (context, index) {
-                  final member = members[index];
-
-                  return StreamBuilder<UsersRecord>(
-                    stream: UsersRecord.getDocument(member.userRef!),
-                    builder: (context, userSnapshot) {
-                      if (!userSnapshot.hasData) {
-                        return SizedBox.shrink();
-                      }
-
-                      final user = userSnapshot.data!;
-                      final isCurrentUser =
-                          user.reference == currentUserReference;
-
-                      if (isCurrentUser) {
-                        return SizedBox.shrink();
-                      }
-
-                      // Check if search query matches
-                      if (searchQuery.isNotEmpty) {
-                        final displayName = user.displayName.toLowerCase();
-                        final email = user.email.toLowerCase();
-                        if (!displayName.contains(searchQuery) &&
-                            !email.contains(searchQuery)) {
-                          return SizedBox.shrink();
-                        }
-                      }
-
-                      return InkWell(
-                        onTap: () async {
-                          await _startNewChatWithUser(user);
-                        },
-                        child: Container(
-                          width: double.infinity,
-                          padding:
-                              EdgeInsetsDirectional.fromSTEB(16, 12, 16, 12),
-                          decoration: BoxDecoration(
-                            color: Colors.transparent,
-                            borderRadius: BorderRadius.circular(8),
-                            border: Border(
-                              bottom: BorderSide(
-                                color: Color(0xFF374151),
-                                width: 1,
-                              ),
-                            ),
-                          ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.max,
-                            children: [
-                              // Avatar
-                              Container(
-                                width: 48,
-                                height: 48,
-                                decoration: BoxDecoration(
-                                  color: Color(0xFF3B82F6),
-                                  shape: BoxShape.circle,
-                                ),
-                                child: ClipRRect(
-                                  borderRadius: BorderRadius.circular(24),
-                                  child: CachedNetworkImage(
-                                    imageUrl: user.photoUrl,
-                                    width: 48,
-                                    height: 48,
-                                    fit: BoxFit.cover,
-                                    placeholder: (context, url) => Container(
-                                      width: 48,
-                                      height: 48,
-                                      decoration: BoxDecoration(
-                                        color: Colors.white,
-                                        shape: BoxShape.circle,
-                                      ),
-                                      child: Icon(
-                                        Icons.person,
-                                        color: Color(0xFF6B7280),
-                                        size: 20,
-                                      ),
-                                    ),
-                                    errorWidget: (context, url, error) =>
-                                        Container(
-                                      width: 48,
-                                      height: 48,
-                                      decoration: BoxDecoration(
-                                        color: Colors.white,
-                                        shape: BoxShape.circle,
-                                      ),
-                                      child: Icon(
-                                        Icons.person,
-                                        color: Color(0xFF6B7280),
-                                        size: 20,
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                              ),
-                              SizedBox(width: 12),
-                              // User Info
-                              Expanded(
-                                child: Column(
-                                  mainAxisSize: MainAxisSize.min,
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Row(
-                                      children: [
-                                        Expanded(
-                                          child: Text(
-                                            user.displayName,
-                                            style: TextStyle(
-                                              fontFamily: 'Inter',
-                                              color: Colors.white,
-                                              fontSize: 14,
-                                              fontWeight: FontWeight.w500,
-                                            ),
-                                            maxLines: 1,
-                                            overflow: TextOverflow.ellipsis,
-                                          ),
-                                        ),
-                                        Container(
-                                          padding: EdgeInsets.symmetric(
-                                              horizontal: 6, vertical: 2),
-                                          decoration: BoxDecoration(
-                                            color: _getRoleColor(member.role),
-                                            borderRadius:
-                                                BorderRadius.circular(8),
-                                          ),
-                                          child: Text(
-                                            member.role.toUpperCase(),
-                                            style: TextStyle(
-                                              color: Colors.white,
-                                              fontSize: 8,
-                                              fontWeight: FontWeight.w600,
-                                            ),
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                    SizedBox(height: 2),
-                                    Text(
-                                      user.email,
-                                      style: TextStyle(
-                                        fontFamily: 'Inter',
-                                        color: Color(0xFF9CA3AF),
-                                        fontSize: 12,
-                                      ),
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                    ),
-                                    SizedBox(height: 2),
-                                    Text(
-                                      'Tap to start a chat',
-                                      style: TextStyle(
-                                        fontFamily: 'Inter',
-                                        color: Color(0xFF3B82F6),
-                                        fontSize: 11,
-                                        fontWeight: FontWeight.w500,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                              // Chat icon
-                              Icon(
-                                Icons.chat_bubble_outline,
-                                color: Color(0xFF3B82F6),
-                                size: 18,
-                              ),
-                            ],
-                          ),
-                        ),
-                      );
-                    },
-                  );
-                },
-              );
-            },
-          ),
-        ),
-      ],
-    );
-  }
-
   Widget _buildGroupCreationViewRight() {
     return Column(
       children: [
@@ -749,7 +623,7 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
           width: double.infinity,
           padding: EdgeInsetsDirectional.fromSTEB(20, 16, 20, 16),
           decoration: BoxDecoration(
-            color: Color(0xFFF9FAFB),
+            color: Color.fromRGBO(250, 252, 255, 1), // Match left sidebar color
             border: Border(
               bottom: BorderSide(
                 color: Color(0xFFE5E7EB),
@@ -759,12 +633,6 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
           ),
           child: Row(
             children: [
-              Icon(
-                Icons.group_add,
-                color: Color(0xFF374151),
-                size: 24,
-              ),
-              SizedBox(width: 12),
               Expanded(
                 child: Text(
                   'Create New Group',
@@ -819,7 +687,7 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
                 children: [
                   // Group name input
                   Text(
-                    'Group Name',
+                    'Group Name (Optional)',
                     style: TextStyle(
                       fontFamily: 'Inter',
                       color: Color(0xFF374151),
@@ -1043,18 +911,88 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
                     ],
                   ),
                   SizedBox(height: 24),
-                  // Selected members count
-                  Text(
-                    'Selected Members (${_model.selectedMembers.length})',
-                    style: TextStyle(
-                      fontFamily: 'Inter',
-                      color: Color(0xFF374151),
-                      fontSize: 14,
-                      fontWeight: FontWeight.w600,
-                    ),
+                  // Selected members header with search
+                  Row(
+                    children: [
+                      Text(
+                        'Selected Members (${_model.selectedMembers.length})',
+                        style: TextStyle(
+                          fontFamily: 'Inter',
+                          color: Color(0xFF374151),
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      Spacer(),
+                      Container(
+                        width: 250,
+                        height: 36,
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(20),
+                          border: Border.all(
+                            color: Color(0xFFD9D9D9),
+                            width: 1,
+                          ),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Color(0x1A000000),
+                              blurRadius: 4,
+                              offset: Offset(0, 2),
+                              spreadRadius: 0,
+                            ),
+                          ],
+                        ),
+                        child: TextFormField(
+                          controller: _model.groupMemberSearchController,
+                          onChanged: (_) => setState(() {}),
+                          decoration: InputDecoration(
+                            hintText: 'Search by name or email...',
+                            hintStyle: TextStyle(
+                              fontFamily: 'Inter',
+                              color: Color(0xFF808080),
+                              fontSize: 14,
+                              fontWeight: FontWeight.w400,
+                            ),
+                            prefixIcon: Icon(
+                              Icons.search,
+                              color: Color(0xFF4285F4),
+                              size: 20,
+                            ),
+                            suffixIcon: _model.groupMemberSearchController?.text
+                                        .isNotEmpty ==
+                                    true
+                                ? GestureDetector(
+                                    onTap: () {
+                                      setState(() {
+                                        _model.groupMemberSearchController
+                                            ?.clear();
+                                      });
+                                    },
+                                    child: Icon(
+                                      Icons.clear,
+                                      color: Color(0xFF9CA3AF),
+                                      size: 20,
+                                    ),
+                                  )
+                                : null,
+                            border: InputBorder.none,
+                            contentPadding: EdgeInsets.symmetric(
+                              horizontal: 16,
+                              vertical: 10,
+                            ),
+                          ),
+                          style: TextStyle(
+                            fontFamily: 'Inter',
+                            color: Color(0xFF1F2937),
+                            fontSize: 14,
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                   SizedBox(height: 8),
-                  // Workspace members list for selection
+                  // Connections list for selection
                   Container(
                     height: 350,
                     decoration: BoxDecoration(
@@ -1065,15 +1003,10 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
                         width: 1,
                       ),
                     ),
-                    child: StreamBuilder<List<WorkspaceMembersRecord>>(
-                      stream: queryWorkspaceMembersRecord(
-                        queryBuilder: (workspaceMembersRecord) =>
-                            workspaceMembersRecord.where('workspace_ref',
-                                isEqualTo:
-                                    chatController.currentWorkspaceRef.value),
-                      ),
-                      builder: (context, membersSnapshot) {
-                        if (!membersSnapshot.hasData) {
+                    child: StreamBuilder<UsersRecord>(
+                      stream: UsersRecord.getDocument(currentUserReference!),
+                      builder: (context, currentUserSnapshot) {
+                        if (!currentUserSnapshot.hasData) {
                           return Center(
                             child: CircularProgressIndicator(
                               color: Color(0xFF3B82F6),
@@ -1081,18 +1014,56 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
                           );
                         }
 
-                        final members = membersSnapshot.data!;
-                        final searchQuery =
-                            chatController.searchQuery.value.toLowerCase();
+                        final currentUser = currentUserSnapshot.data!;
+                        final connections = currentUser.friends;
+
+                        if (connections.isEmpty) {
+                          return Center(
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(
+                                  Icons.people_outline,
+                                  color: Color(0xFF9CA3AF),
+                                  size: 48,
+                                ),
+                                SizedBox(height: 16),
+                                Text(
+                                  'No connections',
+                                  style: TextStyle(
+                                    fontFamily: 'Inter',
+                                    color: Color(0xFF6B7280),
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                                SizedBox(height: 8),
+                                Text(
+                                  'Add connections to create a group',
+                                  style: TextStyle(
+                                    fontFamily: 'Inter',
+                                    color: Color(0xFF9CA3AF),
+                                    fontSize: 14,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          );
+                        }
+
+                        final searchQuery = _model
+                                .groupMemberSearchController?.text
+                                .toLowerCase() ??
+                            '';
 
                         return ListView.builder(
                           padding: EdgeInsets.all(12),
-                          itemCount: members.length,
+                          itemCount: connections.length,
                           itemBuilder: (context, index) {
-                            final member = members[index];
+                            final connectionRef = connections[index];
 
                             return StreamBuilder<UsersRecord>(
-                              stream: UsersRecord.getDocument(member.userRef!),
+                              stream: UsersRecord.getDocument(connectionRef),
                               builder: (context, userSnapshot) {
                                 if (!userSnapshot.hasData) {
                                   return SizedBox.shrink();
@@ -1148,52 +1119,76 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
                                     ),
                                     child: Row(
                                       children: [
-                                        Container(
-                                          width: 40,
-                                          height: 40,
-                                          decoration: BoxDecoration(
-                                            color: Color(0xFF3B82F6),
-                                            shape: BoxShape.circle,
-                                          ),
-                                          child: ClipRRect(
-                                            borderRadius:
-                                                BorderRadius.circular(20),
-                                            child: CachedNetworkImage(
-                                              imageUrl: user.photoUrl,
+                                        Stack(
+                                          clipBehavior: Clip.none,
+                                          children: [
+                                            Container(
                                               width: 40,
                                               height: 40,
-                                              fit: BoxFit.cover,
-                                              placeholder: (context, url) =>
-                                                  Container(
-                                                width: 40,
-                                                height: 40,
-                                                decoration: BoxDecoration(
-                                                  color: Colors.white,
-                                                  shape: BoxShape.circle,
-                                                ),
-                                                child: Icon(
-                                                  Icons.person,
-                                                  color: Color(0xFF6B7280),
-                                                  size: 20,
-                                                ),
+                                              decoration: BoxDecoration(
+                                                color: Color(0xFF3B82F6),
+                                                shape: BoxShape.circle,
                                               ),
-                                              errorWidget:
-                                                  (context, url, error) =>
+                                              child: ClipRRect(
+                                                borderRadius:
+                                                    BorderRadius.circular(20),
+                                                child: CachedNetworkImage(
+                                                  imageUrl: user.photoUrl,
+                                                  width: 40,
+                                                  height: 40,
+                                                  fit: BoxFit.cover,
+                                                  placeholder: (context, url) =>
                                                       Container(
-                                                width: 40,
-                                                height: 40,
-                                                decoration: BoxDecoration(
-                                                  color: Colors.white,
-                                                  shape: BoxShape.circle,
-                                                ),
-                                                child: Icon(
-                                                  Icons.person,
-                                                  color: Color(0xFF6B7280),
-                                                  size: 20,
+                                                    width: 40,
+                                                    height: 40,
+                                                    decoration: BoxDecoration(
+                                                      color: Colors.white,
+                                                      shape: BoxShape.circle,
+                                                    ),
+                                                    child: Icon(
+                                                      Icons.person,
+                                                      color: Color(0xFF6B7280),
+                                                      size: 20,
+                                                    ),
+                                                  ),
+                                                  errorWidget:
+                                                      (context, url, error) =>
+                                                          Container(
+                                                    width: 40,
+                                                    height: 40,
+                                                    decoration: BoxDecoration(
+                                                      color: Colors.white,
+                                                      shape: BoxShape.circle,
+                                                    ),
+                                                    child: Icon(
+                                                      Icons.person,
+                                                      color: Color(0xFF6B7280),
+                                                      size: 20,
+                                                    ),
+                                                  ),
                                                 ),
                                               ),
                                             ),
-                                          ),
+                                            // Green dot indicator for online status
+                                            if (user.isOnline)
+                                              Positioned(
+                                                right: 0,
+                                                bottom: 0,
+                                                child: Container(
+                                                  width: 12,
+                                                  height: 12,
+                                                  decoration: BoxDecoration(
+                                                    color: Color(
+                                                        0xFF10B981), // Green color
+                                                    shape: BoxShape.circle,
+                                                    border: Border.all(
+                                                      color: Colors.white,
+                                                      width: 2,
+                                                    ),
+                                                  ),
+                                                ),
+                                              ),
+                                          ],
                                         ),
                                         SizedBox(width: 12),
                                         Expanded(
@@ -1201,49 +1196,16 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
                                             crossAxisAlignment:
                                                 CrossAxisAlignment.start,
                                             children: [
-                                              Row(
-                                                children: [
-                                                  Expanded(
-                                                    child: Text(
-                                                      user.displayName,
-                                                      style: TextStyle(
-                                                        fontFamily: 'Inter',
-                                                        color:
-                                                            Color(0xFF1F2937),
-                                                        fontSize: 14,
-                                                        fontWeight:
-                                                            FontWeight.w600,
-                                                      ),
-                                                      maxLines: 1,
-                                                      overflow:
-                                                          TextOverflow.ellipsis,
-                                                    ),
-                                                  ),
-                                                  SizedBox(width: 6),
-                                                  Container(
-                                                    padding:
-                                                        EdgeInsets.symmetric(
-                                                            horizontal: 6,
-                                                            vertical: 2),
-                                                    decoration: BoxDecoration(
-                                                      color: _getRoleColor(
-                                                          member.role),
-                                                      borderRadius:
-                                                          BorderRadius.circular(
-                                                              4),
-                                                    ),
-                                                    child: Text(
-                                                      member.role.toUpperCase(),
-                                                      style: TextStyle(
-                                                        color: Colors.white,
-                                                        fontSize: 9,
-                                                        fontWeight:
-                                                            FontWeight.w700,
-                                                        letterSpacing: 0.5,
-                                                      ),
-                                                    ),
-                                                  ),
-                                                ],
+                                              Text(
+                                                user.displayName,
+                                                style: TextStyle(
+                                                  fontFamily: 'Inter',
+                                                  color: Color(0xFF1F2937),
+                                                  fontSize: 14,
+                                                  fontWeight: FontWeight.w600,
+                                                ),
+                                                maxLines: 1,
+                                                overflow: TextOverflow.ellipsis,
                                               ),
                                               SizedBox(height: 2),
                                               Text(
@@ -1288,13 +1250,11 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
                   SizedBox(
                     width: double.infinity,
                     child: ElevatedButton(
-                      onPressed: _model.groupName.isNotEmpty &&
-                              _model.selectedMembers.isNotEmpty
+                      onPressed: _model.selectedMembers.isNotEmpty
                           ? () => _createGroup()
                           : null,
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: _model.groupName.isNotEmpty &&
-                                _model.selectedMembers.isNotEmpty
+                        backgroundColor: _model.selectedMembers.isNotEmpty
                             ? Color(0xFF3B82F6)
                             : Color(0xFF9CA3AF),
                         padding: EdgeInsets.symmetric(vertical: 16),
@@ -1322,38 +1282,29 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
     );
   }
 
-  Color _getRoleColor(String role) {
-    switch (role.toLowerCase()) {
-      case 'owner':
-        return Color(0xFFDC2626); // Red
-      case 'moderator':
-        return Color(0xFF059669); // Green
-      case 'member':
-        return Color(0xFF6B7280); // Gray
-      default:
-        return Color(0xFF6B7280); // Default gray
-    }
+  void _clearAllViews() {
+    _model.showNewMessageView = false;
+    _model.showConnectionsView = false;
+    _model.showGroupCreation = false;
+    _model.showConnectionsSearch = false;
+    _model.connectionsSearchController?.clear();
   }
 
   Future<void> _startNewChatWithUser(UsersRecord user) async {
     try {
-      // Check if a chat already exists between current user and this user IN THE CURRENT WORKSPACE
-      final currentWorkspaceRef = chatController.currentWorkspaceRef.value;
-
+      // Check if a chat already exists between current user and this user
       final existingChats = await queryChatsRecordOnce(
         queryBuilder: (chatsRecord) => chatsRecord
             .where('members', arrayContains: currentUserReference)
-            .where('is_group', isEqualTo: false)
-            .where('workspace_ref', isEqualTo: currentWorkspaceRef),
+            .where('is_group', isEqualTo: false),
       );
 
-      // Find if there's already a direct chat with this user in the current workspace
+      // Find if there's already a direct chat with this user
       ChatsRecord? existingChat;
       for (final chat in existingChats) {
         if (chat.members.contains(user.reference) &&
             chat.members.length == 2 &&
-            !chat.isGroup &&
-            chat.workspaceRef?.path == currentWorkspaceRef?.path) {
+            !chat.isGroup) {
           existingChat = chat;
           break;
         }
@@ -1362,6 +1313,7 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
       if (existingChat != null) {
         // Chat already exists, select it
         setState(() {
+          _clearAllViews();
           _model.selectedChat = existingChat;
         });
         chatController.selectChat(existingChat);
@@ -1375,7 +1327,6 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
             lastMessageAt: getCurrentTimestamp,
             lastMessage: '',
             lastMessageSent: currentUserReference,
-            workspaceRef: chatController.currentWorkspaceRef.value,
           ),
           'members': [
             currentUserReference ??
@@ -1397,6 +1348,7 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
 
         // Select the new chat
         setState(() {
+          _clearAllViews();
           _model.selectedChat = newChat;
         });
         chatController.selectChat(newChat);
@@ -1500,11 +1452,10 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
 
   Future<void> _createGroup() async {
     try {
-      if (_model.groupName.isEmpty || _model.selectedMembers.isEmpty) {
+      if (_model.selectedMembers.isEmpty) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(
-                'Please enter a group name and select at least one member'),
+            content: Text('Please select at least one member'),
             backgroundColor: Color(0xFFEF4444),
           ),
         );
@@ -1518,17 +1469,53 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
         ..._model.selectedMembers
       ];
 
+      // Auto-generate group name from member names if not provided
+      String groupName = _model.groupName.trim();
+      if (groupName.isEmpty) {
+        // Fetch all member names
+        final List<String> memberNames = [];
+
+        // Get current user name
+        if (currentUserReference != null) {
+          try {
+            final currentUser =
+                await UsersRecord.getDocumentOnce(currentUserReference!);
+            memberNames.add(currentUser.displayName.isNotEmpty
+                ? currentUser.displayName
+                : currentUser.email.split('@')[0]);
+          } catch (e) {
+            memberNames.add('You');
+          }
+        }
+
+        // Get selected member names
+        for (final memberRef in _model.selectedMembers) {
+          try {
+            final user = await UsersRecord.getDocumentOnce(memberRef);
+            memberNames.add(user.displayName.isNotEmpty
+                ? user.displayName
+                : user.email.split('@')[0]);
+          } catch (e) {
+            // Skip if we can't fetch the user
+          }
+        }
+
+        // Join names with comma and space (like Slack)
+        groupName = memberNames.join(', ');
+      }
+
       // Create the group chat
       final newChatRef = await ChatsRecord.collection.add({
         ...createChatsRecordData(
-          title: _model.groupName,
+          title: groupName,
           isGroup: true,
           createdAt: getCurrentTimestamp,
+          createdBy: currentUserReference,
           lastMessageAt: getCurrentTimestamp,
           lastMessage: '',
           lastMessageSent: currentUserReference,
-          workspaceRef: chatController.currentWorkspaceRef.value,
           chatImageUrl: _model.groupImageUrl ?? '',
+          admin: currentUserReference,
         ),
         'members': allMembers,
         'last_message_seen': [
@@ -1542,8 +1529,8 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
 
       // Select the new group chat
       setState(() {
+        _clearAllViews();
         _model.selectedChat = newChat;
-        _model.showGroupCreation = false;
         _model.groupName = '';
         _model.selectedMembers = [];
         _model.groupNameController?.clear();
@@ -1556,7 +1543,7 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
       // Show success message
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Group "${_model.groupName}" created successfully!'),
+          content: Text('Group "$groupName" created successfully!'),
           backgroundColor: Color(0xFF10B981),
         ),
       );
@@ -1571,148 +1558,3126 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
     }
   }
 
-  Widget _buildRightPanel() {
-    return Expanded(
-      child: Container(
-        width: double.infinity,
-        height: double.infinity,
-        decoration: BoxDecoration(
-          color: Colors.white,
+  Widget _buildNewMessageView() {
+    return Container(
+      width: double.infinity,
+      height: double.infinity,
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            Colors.white,
+            Color(0xFFF0F4FF),
+            Color(0xFFE8F0FE),
+          ],
         ),
-        child: _model.showGroupCreation
-            ? _buildGroupCreationViewRight()
-            : _model.showGroupInfoPanel && _model.groupInfoChat != null
-                ? Stack(
-                    children: [
-                      // Group info displayed inline (keeps vertical navbar)
-                      Positioned.fill(
-                        child: GroupChatDetailWidget(
-                          chatDoc: _model.groupInfoChat,
-                        ),
-                      ),
-                      // Overlay back button to return to chat view
-                      // Positioned to avoid overlap with AppBar title
-                      Positioned(
-                        top: 12,
-                        left: 12,
-                        child: Material(
-                          color: Colors.transparent,
-                          child: InkWell(
-                            onTap: () {
-                              setState(() {
-                                _model.showGroupInfoPanel = false;
-                                _model.groupInfoChat = null;
-                              });
-                            },
-                            borderRadius: BorderRadius.circular(20),
-                            child: Container(
-                              width: 36,
-                              height: 36,
-                              decoration: BoxDecoration(
-                                color: Colors.white,
-                                shape: BoxShape.circle,
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: Color(0x1F000000),
-                                    blurRadius: 6,
-                                    offset: Offset(0, 2),
-                                  ),
-                                ],
-                              ),
-                              child: Icon(Icons.arrow_back,
-                                  size: 20, color: Color(0xFF374151)),
-                            ),
+      ),
+      child: Column(
+        children: [
+          // Header
+          Container(
+            width: double.infinity,
+            padding: EdgeInsetsDirectional.fromSTEB(32, 32, 32, 24),
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.topRight,
+                colors: [
+                  Colors.white,
+                  Color(0xFFF8FAFF),
+                ],
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: Color(0x0D000000),
+                  blurRadius: 8,
+                  offset: Offset(0, 2),
+                ),
+              ],
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    GestureDetector(
+                      onTap: () {
+                        setState(() {
+                          _model.showNewMessageView = false;
+                          _model.newMessageSearchController?.clear();
+                        });
+                      },
+                      child: Container(
+                        padding: EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(
+                            color: Color(0xFFE5E7EB),
+                            width: 1,
                           ),
                         ),
+                        child: Icon(
+                          Icons.close,
+                          color: Color(0xFF6B7280),
+                          size: 20,
+                        ),
                       ),
-                    ],
-                  )
-                : _model.selectedChat != null
-                    ? Column(
+                    ),
+                    SizedBox(width: 12),
+                    Container(
+                      padding: EdgeInsets.all(6),
+                      decoration: BoxDecoration(
+                        color: Color(0xFF3B82F6).withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Icon(
+                        Icons.chat_bubble_outline,
+                        color: Color(0xFF3B82F6),
+                        size: 20,
+                      ),
+                    ),
+                    SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          // Top panel with user info
-                          _buildChatHeader(),
-                          // Action Items Stats Section (only for group chats)
-                          if (_model.selectedChat!.isGroup)
-                            _buildActionItemsStats(_model.selectedChat!),
-                          // Tasks panel or Chat thread component
-                          Expanded(
-                            child: _model.showTasksPanel &&
-                                    _model.selectedChat!.isGroup
-                                ? Stack(
-                                    children: [
-                                      // Tasks displayed inline (keeps vertical navbar)
-                                      Positioned.fill(
-                                        child: GroupActionTasksWidget(
-                                          chatDoc: _model.selectedChat,
-                                        ),
+                          Text(
+                            'Start a New Direct Message',
+                            style: TextStyle(
+                              fontFamily: 'Inter',
+                              color: Color(0xFF1A1F36),
+                              fontSize: 20,
+                              fontWeight: FontWeight.w600,
+                              letterSpacing: -0.3,
+                            ),
+                          ),
+                          SizedBox(height: 6),
+                          Text(
+                            'Search for a colleague to begin a private conversation',
+                            style: TextStyle(
+                              fontFamily: 'Inter',
+                              color: Color(0xFF64748B),
+                              fontSize: 13,
+                              fontWeight: FontWeight.w400,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          // Search bar
+          Container(
+            width: double.infinity,
+            padding: EdgeInsetsDirectional.fromSTEB(32, 20, 32, 16),
+            decoration: BoxDecoration(
+              color: Colors.transparent,
+            ),
+            child: Container(
+              height: 44,
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color: Color(0xFFE2E8F0),
+                  width: 1.5,
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: Color(0xFF3B82F6).withOpacity(0.08),
+                    blurRadius: 12,
+                    offset: Offset(0, 4),
+                  ),
+                ],
+              ),
+              child: TextFormField(
+                controller: _model.newMessageSearchController,
+                onChanged: (value) {
+                  setState(() {});
+                },
+                decoration: InputDecoration(
+                  hintText: 'Search by name or email',
+                  hintStyle: TextStyle(
+                    fontFamily: 'Inter',
+                    color: Color(0xFF94A3B8),
+                    fontSize: 14,
+                    fontWeight: FontWeight.w400,
+                  ),
+                  border: InputBorder.none,
+                  contentPadding:
+                      EdgeInsetsDirectional.fromSTEB(16, 12, 16, 12),
+                  prefixIcon: Padding(
+                    padding: EdgeInsetsDirectional.only(start: 14, end: 10),
+                    child: Icon(
+                      Icons.search_rounded,
+                      color: Color(0xFF3B82F6),
+                      size: 20,
+                    ),
+                  ),
+                ),
+                style: TextStyle(
+                  fontFamily: 'Inter',
+                  color: Color(0xFF1A1F36),
+                  fontSize: 14,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ),
+          ),
+          // Invite friends button
+          Container(
+            width: double.infinity,
+            padding: EdgeInsetsDirectional.fromSTEB(32, 12, 32, 12),
+            child: Center(
+              child: InviteFriendsButtonWidget(),
+            ),
+          ),
+          // Suggested connections list
+          Expanded(
+            child: Container(
+              width: double.infinity,
+              padding: EdgeInsetsDirectional.fromSTEB(32, 8, 32, 32),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Padding(
+                    padding: EdgeInsetsDirectional.only(start: 4, bottom: 12),
+                    child: Row(
+                      children: [
+                        Container(
+                          width: 3,
+                          height: 14,
+                          decoration: BoxDecoration(
+                            color: Color(0xFF3B82F6),
+                            borderRadius: BorderRadius.circular(2),
+                          ),
+                        ),
+                        SizedBox(width: 8),
+                        Text(
+                          'SUGGESTED',
+                          style: TextStyle(
+                            fontFamily: 'Inter',
+                            color: Color(0xFF475569),
+                            fontSize: 11,
+                            fontWeight: FontWeight.w700,
+                            letterSpacing: 1.2,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Expanded(
+                    child: StreamBuilder<UsersRecord>(
+                      stream: UsersRecord.getDocument(currentUserReference!),
+                      builder: (context, currentUserSnapshot) {
+                        if (!currentUserSnapshot.hasData) {
+                          return Center(
+                            child: CircularProgressIndicator(
+                              color: Color.fromARGB(255, 16, 184, 239),
+                            ),
+                          );
+                        }
+
+                        final currentUser = currentUserSnapshot.data!;
+                        final connections = currentUser.friends;
+
+                        if (connections.isEmpty) {
+                          return Center(
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Container(
+                                  width: 80,
+                                  height: 80,
+                                  decoration: BoxDecoration(
+                                    color: Color(0xFF3B82F6).withOpacity(0.1),
+                                    shape: BoxShape.circle,
+                                  ),
+                                  child: Icon(
+                                    Icons.people_outline_rounded,
+                                    color: Color(0xFF3B82F6),
+                                    size: 40,
+                                  ),
+                                ),
+                                SizedBox(height: 24),
+                                Text(
+                                  'No connections',
+                                  style: TextStyle(
+                                    fontFamily: 'Inter',
+                                    color: Color(0xFF1A1F36),
+                                    fontSize: 18,
+                                    fontWeight: FontWeight.w600,
+                                    letterSpacing: -0.3,
+                                  ),
+                                ),
+                                SizedBox(height: 8),
+                                Text(
+                                  'Add connections to start chatting',
+                                  style: TextStyle(
+                                    fontFamily: 'Inter',
+                                    color: Color(0xFF64748B),
+                                    fontSize: 15,
+                                    fontWeight: FontWeight.w400,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          );
+                        }
+
+                        final searchQuery = _model
+                                .newMessageSearchController?.text
+                                .toLowerCase() ??
+                            '';
+
+                        return ListView.builder(
+                          itemCount: connections.length,
+                          itemBuilder: (context, index) {
+                            final connectionRef = connections[index];
+
+                            return StreamBuilder<UsersRecord>(
+                              stream: UsersRecord.getDocument(connectionRef),
+                              builder: (context, userSnapshot) {
+                                if (!userSnapshot.hasData) {
+                                  return SizedBox.shrink();
+                                }
+
+                                final user = userSnapshot.data!;
+                                final isCurrentUser =
+                                    user.reference == currentUserReference;
+
+                                if (isCurrentUser) {
+                                  return SizedBox.shrink();
+                                }
+
+                                // Filter by search query
+                                if (searchQuery.isNotEmpty) {
+                                  final displayName =
+                                      user.displayName.toLowerCase();
+                                  final email = user.email.toLowerCase();
+                                  if (!displayName.contains(searchQuery) &&
+                                      !email.contains(searchQuery)) {
+                                    return SizedBox.shrink();
+                                  }
+                                }
+
+                                return Container(
+                                  margin: EdgeInsets.only(bottom: 8),
+                                  decoration: BoxDecoration(
+                                    color: Colors.white,
+                                    borderRadius: BorderRadius.circular(8),
+                                    border: Border.all(
+                                      color: Color(0xFFE2E8F0),
+                                      width: 1,
+                                    ),
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color: Color(0x0A000000),
+                                        blurRadius: 8,
+                                        offset: Offset(0, 2),
                                       ),
-                                      // Overlay back button to return to chat view
-                                      Positioned(
-                                        top: 12,
-                                        left: 12,
-                                        child: Material(
-                                          color: Colors.transparent,
-                                          child: InkWell(
-                                            onTap: () {
-                                              setState(() {
-                                                _model.showTasksPanel = false;
-                                              });
-                                            },
-                                            borderRadius:
-                                                BorderRadius.circular(20),
-                                            child: Container(
-                                              width: 36,
-                                              height: 36,
+                                    ],
+                                  ),
+                                  child: Material(
+                                    color: Colors.transparent,
+                                    child: InkWell(
+                                      onTap: () async {
+                                        await _startNewChatWithUser(user);
+                                        setState(() {
+                                          _model.showNewMessageView = false;
+                                        });
+                                      },
+                                      borderRadius: BorderRadius.circular(8),
+                                      child: Container(
+                                        padding: EdgeInsetsDirectional.fromSTEB(
+                                            16, 12, 16, 12),
+                                        child: Row(
+                                          children: [
+                                            // Avatar with gradient border
+                                            Container(
+                                              width: 48,
+                                              height: 48,
                                               decoration: BoxDecoration(
-                                                color: Colors.white,
                                                 shape: BoxShape.circle,
+                                                gradient: LinearGradient(
+                                                  colors: [
+                                                    Color(0xFF3B82F6),
+                                                    Color(0xFF60A5FA),
+                                                  ],
+                                                ),
                                                 boxShadow: [
                                                   BoxShadow(
-                                                    color: Color(0x1F000000),
-                                                    blurRadius: 6,
+                                                    color: Color(0xFF3B82F6)
+                                                        .withOpacity(0.3),
+                                                    blurRadius: 8,
                                                     offset: Offset(0, 2),
                                                   ),
                                                 ],
                                               ),
-                                              child: Icon(Icons.arrow_back,
-                                                  size: 20,
-                                                  color: Color(0xFF374151)),
+                                              padding: EdgeInsets.all(2),
+                                              child: Container(
+                                                decoration: BoxDecoration(
+                                                  shape: BoxShape.circle,
+                                                  color: Colors.white,
+                                                ),
+                                                child: ClipRRect(
+                                                  borderRadius:
+                                                      BorderRadius.circular(22),
+                                                  child: CachedNetworkImage(
+                                                    imageUrl: user.photoUrl,
+                                                    width: 44,
+                                                    height: 44,
+                                                    fit: BoxFit.cover,
+                                                    placeholder:
+                                                        (context, url) =>
+                                                            Container(
+                                                      width: 44,
+                                                      height: 44,
+                                                      decoration: BoxDecoration(
+                                                        color:
+                                                            Color(0xFFF1F5F9),
+                                                        shape: BoxShape.circle,
+                                                      ),
+                                                      child: Icon(
+                                                        Icons.person_rounded,
+                                                        color:
+                                                            Color(0xFF64748B),
+                                                        size: 20,
+                                                      ),
+                                                    ),
+                                                    errorWidget:
+                                                        (context, url, error) =>
+                                                            Container(
+                                                      width: 44,
+                                                      height: 44,
+                                                      decoration: BoxDecoration(
+                                                        color:
+                                                            Color(0xFFF1F5F9),
+                                                        shape: BoxShape.circle,
+                                                      ),
+                                                      child: Icon(
+                                                        Icons.person_rounded,
+                                                        color:
+                                                            Color(0xFF64748B),
+                                                        size: 20,
+                                                      ),
+                                                    ),
+                                                  ),
+                                                ),
+                                              ),
                                             ),
-                                          ),
+                                            SizedBox(width: 12),
+                                            // User info
+                                            Expanded(
+                                              child: Column(
+                                                crossAxisAlignment:
+                                                    CrossAxisAlignment.start,
+                                                children: [
+                                                  Text(
+                                                    user.displayName,
+                                                    style: TextStyle(
+                                                      fontFamily: 'Inter',
+                                                      color: Color(0xFF111827),
+                                                      fontSize: 14,
+                                                      fontWeight:
+                                                          FontWeight.w500,
+                                                    ),
+                                                  ),
+                                                  SizedBox(height: 2),
+                                                  Text(
+                                                    user.email,
+                                                    style: TextStyle(
+                                                      fontFamily: 'Inter',
+                                                      color: Color(0xFF6B7280),
+                                                      fontSize: 12,
+                                                      fontWeight:
+                                                          FontWeight.w400,
+                                                    ),
+                                                  ),
+                                                ],
+                                              ),
+                                            ),
+                                            // Start Chat button
+                                            Container(
+                                              width: 36,
+                                              height: 36,
+                                              decoration: BoxDecoration(
+                                                color: Color(0xFF3B82F6)
+                                                    .withOpacity(0.1),
+                                                borderRadius:
+                                                    BorderRadius.circular(8),
+                                              ),
+                                              child: Icon(
+                                                Icons.arrow_forward_rounded,
+                                                color: Color(0xFF3B82F6),
+                                                size: 18,
+                                              ),
+                                            ),
+                                          ],
                                         ),
                                       ),
-                                    ],
-                                  )
-                                : ChatThreadComponentWidget(
-                                    chatReference: _model.selectedChat,
+                                    ),
                                   ),
+                                );
+                              },
+                            );
+                          },
+                        );
+                      },
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildConnectionsView() {
+    return Container(
+      width: double.infinity,
+      height: double.infinity,
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            Colors.white,
+            Color(0xFFF0F4FF),
+            Color(0xFFE8F0FE),
+          ],
+        ),
+      ),
+      child: Column(
+        children: [
+          // Header
+          Container(
+            width: double.infinity,
+            padding: EdgeInsetsDirectional.fromSTEB(32, 32, 32, 24),
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.topRight,
+                colors: [
+                  Colors.white,
+                  Color(0xFFF8FAFF),
+                ],
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: Color(0x0D000000),
+                  blurRadius: 8,
+                  offset: Offset(0, 2),
+                ),
+              ],
+            ),
+            child: Column(
+              children: [
+                Row(
+                  children: [
+                    // X button
+                    GestureDetector(
+                      onTap: () {
+                        setState(() {
+                          _model.showConnectionsView = false;
+                          _model.showNewMessageView = false;
+                          _model.showConnectionsSearch = false;
+                          _model.connectionsSearchController?.clear();
+                          _model.selectedConnectionProfile = null;
+                        });
+                      },
+                      child: Container(
+                        padding: EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(
+                            color: Color(0xFFE5E7EB),
+                            width: 1,
+                          ),
+                        ),
+                        child: Icon(
+                          Icons.close,
+                          color: Color(0xFF6B7280),
+                          size: 20,
+                        ),
+                      ),
+                    ),
+                    SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'My Connections',
+                            style: TextStyle(
+                              fontFamily: 'Inter',
+                              color: Color(0xFF1A1F36),
+                              fontSize: 20,
+                              fontWeight: FontWeight.w600,
+                              letterSpacing: -0.3,
+                            ),
+                          ),
+                          SizedBox(height: 6),
+                          Text(
+                            'View and manage your network connections',
+                            style: TextStyle(
+                              fontFamily: 'Inter',
+                              color: Color(0xFF64748B),
+                              fontSize: 13,
+                              fontWeight: FontWeight.w400,
+                            ),
                           ),
                         ],
-                      )
-                    : Center(
-                        child: Column(
+                      ),
+                    ),
+                    Material(
+                      color: Colors.transparent,
+                      child: InkWell(
+                        onTap: () {
+                          setState(() {
+                            _model.showConnectionsSearch =
+                                !_model.showConnectionsSearch;
+                            if (_model.showConnectionsSearch) {
+                              _model.connectionsSearchController?.clear();
+                            }
+                          });
+                        },
+                        borderRadius: BorderRadius.circular(8),
+                        hoverColor: Color(0xFF3B82F6).withOpacity(0.05),
+                        child: Container(
+                          padding: EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 8,
+                          ),
+                          decoration: BoxDecoration(
+                            color: Colors.transparent,
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(
+                              color: Color(0xFF3B82F6),
+                              width: 1.5,
+                            ),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(
+                                Icons.add,
+                                color: Color(0xFF3B82F6),
+                                size: 16,
+                              ),
+                              SizedBox(width: 6),
+                              Text(
+                                'Add new',
+                                style: TextStyle(
+                                  fontFamily: 'Inter',
+                                  color: Color(0xFF3B82F6),
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                // Tab buttons - separate row
+                SizedBox(height: 20),
+                Row(
+                  children: [
+                    _buildTabButton(
+                      'My Connections',
+                      _model.connectionsTab == 'connections',
+                      () {
+                        setState(() {
+                          _model.connectionsTab = 'connections';
+                        });
+                      },
+                    ),
+                    SizedBox(width: 8),
+                    _buildTabButton(
+                      'Requests',
+                      _model.connectionsTab == 'requests',
+                      () {
+                        setState(() {
+                          _model.connectionsTab = 'requests';
+                        });
+                      },
+                    ),
+                    SizedBox(width: 8),
+                    _buildTabButton(
+                      'Sent',
+                      _model.connectionsTab == 'sent',
+                      () {
+                        setState(() {
+                          _model.connectionsTab = 'sent';
+                        });
+                      },
+                    ),
+                  ],
+                ),
+                // Search box
+                if (_model.showConnectionsSearch) ...[
+                  SizedBox(height: 20),
+                  Container(
+                    height: 44,
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: Color(0xFFE2E8F0),
+                        width: 1.5,
+                      ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Color(0xFF3B82F6).withOpacity(0.08),
+                          blurRadius: 12,
+                          offset: Offset(0, 4),
+                        ),
+                      ],
+                    ),
+                    child: TextFormField(
+                      controller: _model.connectionsSearchController,
+                      autofocus: true,
+                      onChanged: (value) {
+                        setState(() {});
+                      },
+                      decoration: InputDecoration(
+                        hintText: 'Search by name or email...',
+                        hintStyle: TextStyle(
+                          fontFamily: 'Inter',
+                          color: Color(0xFF94A3B8),
+                          fontSize: 14,
+                          fontWeight: FontWeight.w400,
+                        ),
+                        border: InputBorder.none,
+                        contentPadding:
+                            EdgeInsetsDirectional.fromSTEB(16, 12, 16, 12),
+                        prefixIcon: Padding(
+                          padding:
+                              EdgeInsetsDirectional.only(start: 14, end: 10),
+                          child: Icon(
+                            Icons.search_rounded,
+                            color: Color(0xFF3B82F6),
+                            size: 20,
+                          ),
+                        ),
+                        suffixIcon: _model.connectionsSearchController?.text
+                                    .isNotEmpty ==
+                                true
+                            ? IconButton(
+                                icon: Icon(
+                                  Icons.clear,
+                                  color: Color(0xFF94A3B8),
+                                  size: 20,
+                                ),
+                                onPressed: () {
+                                  setState(() {
+                                    _model.connectionsSearchController?.clear();
+                                  });
+                                },
+                              )
+                            : null,
+                      ),
+                      style: TextStyle(
+                        fontFamily: 'Inter',
+                        color: Color(0xFF1A1F36),
+                        fontSize: 14,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+          // Invite friends button
+          Container(
+            width: double.infinity,
+            padding: EdgeInsetsDirectional.fromSTEB(32, 12, 32, 12),
+            child: Center(
+              child: InviteFriendsButtonWidget(),
+            ),
+          ),
+          // Connections or Requests list or Profile view
+          Expanded(
+            child: Container(
+              width: double.infinity,
+              padding: EdgeInsetsDirectional.fromSTEB(32, 24, 32, 32),
+              child: _model.selectedConnectionProfile != null
+                  ? _buildConnectionProfileView(
+                      _model.selectedConnectionProfile!)
+                  : StreamBuilder<UsersRecord>(
+                      stream: UsersRecord.getDocument(currentUserReference!),
+                      builder: (context, currentUserSnapshot) {
+                        if (!currentUserSnapshot.hasData) {
+                          return Center(
+                            child: CircularProgressIndicator(
+                              color: Color(0xFF3B82F6),
+                            ),
+                          );
+                        }
+
+                        final currentUser = currentUserSnapshot.data!;
+
+                        // Show requests tab
+                        if (_model.connectionsTab == 'requests') {
+                          final requests = currentUser.friendRequests;
+
+                          if (requests.isEmpty) {
+                            return Center(
+                              child: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Container(
+                                    width: 80,
+                                    height: 80,
+                                    decoration: BoxDecoration(
+                                      color: Color(0xFF3B82F6).withOpacity(0.1),
+                                      shape: BoxShape.circle,
+                                    ),
+                                    child: Icon(
+                                      Icons.person_add_outlined,
+                                      color: Color(0xFF3B82F6),
+                                      size: 40,
+                                    ),
+                                  ),
+                                  SizedBox(height: 24),
+                                  Text(
+                                    'No pending requests',
+                                    style: TextStyle(
+                                      fontFamily: 'Inter',
+                                      color: Color(0xFF1A1F36),
+                                      fontSize: 18,
+                                      fontWeight: FontWeight.w600,
+                                      letterSpacing: -0.3,
+                                    ),
+                                  ),
+                                  SizedBox(height: 8),
+                                  Text(
+                                    'You have no pending connection requests',
+                                    style: TextStyle(
+                                      fontFamily: 'Inter',
+                                      color: Color(0xFF64748B),
+                                      fontSize: 15,
+                                      fontWeight: FontWeight.w400,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            );
+                          }
+
+                          return ListView.separated(
+                            itemCount: requests.length,
+                            separatorBuilder: (context, index) =>
+                                SizedBox.shrink(),
+                            itemBuilder: (context, index) {
+                              final requestRef = requests[index];
+                              return StreamBuilder<UsersRecord>(
+                                stream: UsersRecord.getDocument(requestRef),
+                                builder: (context, userSnapshot) {
+                                  if (!userSnapshot.hasData) {
+                                    return SizedBox.shrink();
+                                  }
+                                  final user = userSnapshot.data!;
+                                  return _buildLinkedInStyleRequestCard(
+                                      user, currentUser);
+                                },
+                              );
+                            },
+                          );
+                        }
+
+                        // Show sent requests tab
+                        if (_model.connectionsTab == 'sent') {
+                          final sentRequests = currentUser.sentRequests
+                              .where(
+                                  (ref) => !currentUser.friends.contains(ref))
+                              .toList();
+
+                          if (sentRequests.isEmpty) {
+                            return Center(
+                              child: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Container(
+                                    width: 80,
+                                    height: 80,
+                                    decoration: BoxDecoration(
+                                      color: Color(0xFF3B82F6).withOpacity(0.1),
+                                      shape: BoxShape.circle,
+                                    ),
+                                    child: Icon(
+                                      Icons.send_outlined,
+                                      color: Color(0xFF3B82F6),
+                                      size: 40,
+                                    ),
+                                  ),
+                                  SizedBox(height: 24),
+                                  Text(
+                                    'No sent requests',
+                                    style: TextStyle(
+                                      fontFamily: 'Inter',
+                                      color: Color(0xFF1A1F36),
+                                      fontSize: 18,
+                                      fontWeight: FontWeight.w600,
+                                      letterSpacing: -0.3,
+                                    ),
+                                  ),
+                                  SizedBox(height: 8),
+                                  Text(
+                                    'You have no pending sent connection requests',
+                                    style: TextStyle(
+                                      fontFamily: 'Inter',
+                                      color: Color(0xFF64748B),
+                                      fontSize: 15,
+                                      fontWeight: FontWeight.w400,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            );
+                          }
+
+                          return ListView.separated(
+                            itemCount: sentRequests.length,
+                            separatorBuilder: (context, index) =>
+                                SizedBox.shrink(),
+                            itemBuilder: (context, index) {
+                              final requestRef = sentRequests[index];
+                              return StreamBuilder<UsersRecord>(
+                                stream: UsersRecord.getDocument(requestRef),
+                                builder: (context, userSnapshot) {
+                                  if (!userSnapshot.hasData) {
+                                    return SizedBox.shrink();
+                                  }
+                                  final user = userSnapshot.data!;
+                                  return _buildLinkedInStyleConnectionCardForSearch(
+                                      user, currentUser);
+                                },
+                              );
+                            },
+                          );
+                        }
+
+                        // Show search results if search is active - CHECK THIS FIRST!
+                        if (_model.showConnectionsSearch) {
+                          final searchQuery = _model
+                                  .connectionsSearchController?.text
+                                  .toLowerCase() ??
+                              '';
+
+                          return StreamBuilder<List<UsersRecord>>(
+                            stream: queryUsersRecord(limit: 100),
+                            builder: (context, allUsersSnapshot) {
+                              if (allUsersSnapshot.hasError) {
+                                return Center(
+                                  child: Column(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Icon(
+                                        Icons.error_outline,
+                                        color: Color(0xFFEF4444),
+                                        size: 48,
+                                      ),
+                                      SizedBox(height: 16),
+                                      Text(
+                                        'Error loading users',
+                                        style: TextStyle(
+                                          fontFamily: 'Inter',
+                                          color: Color(0xFF6B7280),
+                                          fontSize: 16,
+                                          fontWeight: FontWeight.w500,
+                                        ),
+                                      ),
+                                      SizedBox(height: 8),
+                                      Text(
+                                        allUsersSnapshot.error.toString(),
+                                        style: TextStyle(
+                                          fontFamily: 'Inter',
+                                          color: Color(0xFF9CA3AF),
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.w400,
+                                        ),
+                                        textAlign: TextAlign.center,
+                                      ),
+                                    ],
+                                  ),
+                                );
+                              }
+
+                              if (!allUsersSnapshot.hasData) {
+                                return Center(
+                                  child: CircularProgressIndicator(
+                                    color: Color(0xFF3B82F6),
+                                  ),
+                                );
+                              }
+
+                              final allUsers = allUsersSnapshot.data!;
+
+                              // Debug: Print user count
+                              print(
+                                  'DEBUG: Found ${allUsers.length} total users in database');
+                              if (allUsers.isEmpty) {
+                                print(
+                                    'DEBUG: No users found in database - this might indicate a permission issue');
+                              }
+
+                              // Filter users by search query and exclude current user
+                              // If search is empty, show all users (limited to first 50 for performance)
+                              final filteredUsers = allUsers
+                                  .where((user) {
+                                    if (user.reference ==
+                                        currentUserReference) {
+                                      return false;
+                                    }
+                                    // If search query is empty, show all users
+                                    if (searchQuery.isEmpty) {
+                                      return true;
+                                    }
+                                    // Otherwise filter by search query
+                                    final displayName =
+                                        user.displayName.isNotEmpty
+                                            ? user.displayName.toLowerCase()
+                                            : '';
+                                    final email = user.email.isNotEmpty
+                                        ? user.email.toLowerCase()
+                                        : '';
+                                    return (displayName.isNotEmpty &&
+                                            displayName
+                                                .contains(searchQuery)) ||
+                                        (email.isNotEmpty &&
+                                            email.contains(searchQuery));
+                                  })
+                                  .take(50)
+                                  .toList(); // Limit to 50 users for performance
+
+                              print(
+                                  'DEBUG: After filtering, found ${filteredUsers.length} users (search: "$searchQuery")');
+
+                              if (filteredUsers.isEmpty) {
+                                return Center(
+                                  child: Column(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Icon(
+                                        Icons.search_off_rounded,
+                                        color: Color(0xFF9CA3AF),
+                                        size: 48,
+                                      ),
+                                      SizedBox(height: 16),
+                                      Text(
+                                        searchQuery.isEmpty
+                                            ? allUsers.isEmpty
+                                                ? 'No users in database'
+                                                : 'No other users found'
+                                            : 'No users found matching "$searchQuery"',
+                                        style: TextStyle(
+                                          fontFamily: 'Inter',
+                                          color: Color(0xFF6B7280),
+                                          fontSize: 16,
+                                          fontWeight: FontWeight.w500,
+                                        ),
+                                      ),
+                                      if (searchQuery.isEmpty &&
+                                          allUsers.isNotEmpty) ...[
+                                        SizedBox(height: 8),
+                                        Text(
+                                          'You are the only user. Try searching by name or email when others join.',
+                                          style: TextStyle(
+                                            fontFamily: 'Inter',
+                                            color: Color(0xFF9CA3AF),
+                                            fontSize: 14,
+                                            fontWeight: FontWeight.w400,
+                                          ),
+                                          textAlign: TextAlign.center,
+                                        ),
+                                      ] else if (searchQuery.isEmpty &&
+                                          allUsers.isEmpty) ...[
+                                        SizedBox(height: 8),
+                                        Text(
+                                          'The database appears to be empty. Please check Firestore permissions.',
+                                          style: TextStyle(
+                                            fontFamily: 'Inter',
+                                            color: Color(0xFFEF4444),
+                                            fontSize: 14,
+                                            fontWeight: FontWeight.w400,
+                                          ),
+                                          textAlign: TextAlign.center,
+                                        ),
+                                      ],
+                                    ],
+                                  ),
+                                );
+                              }
+
+                              return ListView.separated(
+                                itemCount: filteredUsers.length,
+                                separatorBuilder: (context, index) =>
+                                    SizedBox.shrink(),
+                                itemBuilder: (context, index) {
+                                  final user = filteredUsers[index];
+                                  final isConnected = currentUser.friends
+                                      .contains(user.reference);
+                                  if (isConnected) {
+                                    return _buildLinkedInStyleConnectionCard(
+                                        user, currentUser);
+                                  } else {
+                                    return _buildLinkedInStyleConnectionCardForSearch(
+                                        user, currentUser);
+                                  }
+                                },
+                              );
+                            },
+                          );
+                        }
+
+                        // Show connections list (LinkedIn style) - only if not searching
+                        final connections = currentUser.friends;
+                        if (connections.isEmpty) {
+                          return Center(
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Container(
+                                  width: 80,
+                                  height: 80,
+                                  decoration: BoxDecoration(
+                                    color: Color(0xFF3B82F6).withOpacity(0.1),
+                                    shape: BoxShape.circle,
+                                  ),
+                                  child: Icon(
+                                    Icons.people_outline_rounded,
+                                    color: Color(0xFF3B82F6),
+                                    size: 40,
+                                  ),
+                                ),
+                                SizedBox(height: 24),
+                                Text(
+                                  'No connections',
+                                  style: TextStyle(
+                                    fontFamily: 'Inter',
+                                    color: Color(0xFF1A1F36),
+                                    fontSize: 18,
+                                    fontWeight: FontWeight.w600,
+                                    letterSpacing: -0.3,
+                                  ),
+                                ),
+                                SizedBox(height: 8),
+                                Text(
+                                  'Start connecting with people to build your network',
+                                  style: TextStyle(
+                                    fontFamily: 'Inter',
+                                    color: Color(0xFF64748B),
+                                    fontSize: 15,
+                                    fontWeight: FontWeight.w400,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          );
+                        }
+
+                        return ListView.separated(
+                          itemCount: connections.length,
+                          separatorBuilder: (context, index) =>
+                              SizedBox.shrink(),
+                          itemBuilder: (context, index) {
+                            final connectionRef = connections[index];
+
+                            return StreamBuilder<UsersRecord>(
+                              stream: UsersRecord.getDocument(connectionRef),
+                              builder: (context, userSnapshot) {
+                                if (!userSnapshot.hasData) {
+                                  return SizedBox.shrink();
+                                }
+
+                                final user = userSnapshot.data!;
+                                final isCurrentUser =
+                                    user.reference == currentUserReference;
+
+                                if (isCurrentUser) {
+                                  return SizedBox.shrink();
+                                }
+
+                                return _buildLinkedInStyleConnectionCard(
+                                    user, currentUser);
+                              },
+                            );
+                          },
+                        );
+                      },
+                    ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildConnectionProfileView(UsersRecord user) {
+    return StreamBuilder<UsersRecord>(
+      stream: UsersRecord.getDocument(currentUserReference!),
+      builder: (context, currentUserSnapshot) {
+        if (!currentUserSnapshot.hasData) {
+          return Center(
+            child: CircularProgressIndicator(
+              color: Color(0xFF3B82F6),
+            ),
+          );
+        }
+
+        final currentUser = currentUserSnapshot.data!;
+        final isConnected = currentUser.friends.contains(user.reference);
+        final isPending = currentUser.sentRequests.contains(user.reference);
+        final hasRequest = currentUser.friendRequests.contains(user.reference);
+
+        return SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Back button
+              Row(
+                children: [
+                  Material(
+                    color: Colors.transparent,
+                    child: InkWell(
+                      onTap: () {
+                        setState(() {
+                          _model.selectedConnectionProfile = null;
+                        });
+                      },
+                      borderRadius: BorderRadius.circular(8),
+                      child: Container(
+                        padding: EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(
+                            color: Color(0xFFE5E7EB),
+                            width: 1,
+                          ),
+                        ),
+                        child: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
                             Icon(
-                              Icons.chat_bubble_outline,
-                              color: Color(0xFF9CA3AF),
-                              size: 64,
+                              Icons.arrow_back,
+                              color: Color(0xFF6B7280),
+                              size: 20,
                             ),
-                            SizedBox(height: 16),
+                            SizedBox(width: 8),
                             Text(
-                              'Select a chat to start messaging',
+                              'Back',
                               style: TextStyle(
                                 fontFamily: 'Inter',
                                 color: Color(0xFF6B7280),
-                                fontSize: 18,
+                                fontSize: 14,
                                 fontWeight: FontWeight.w500,
                               ),
                             ),
                           ],
                         ),
                       ),
+                    ),
+                  ),
+                ],
+              ),
+              SizedBox(height: 24),
+              // Profile content
+              Container(
+                width: double.infinity,
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(
+                    color: Color(0xFFE5E7EB),
+                    width: 1,
+                  ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Color(0x0A000000),
+                      blurRadius: 8,
+                      offset: Offset(0, 2),
+                    ),
+                  ],
+                ),
+                child: Padding(
+                  padding: EdgeInsets.all(32),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    children: [
+                      // Profile picture
+                      Container(
+                        width: 120,
+                        height: 120,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          border: Border.all(
+                            color: Color(0xFF3B82F6),
+                            width: 3,
+                          ),
+                        ),
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(60),
+                          child: CachedNetworkImage(
+                            imageUrl: user.photoUrl,
+                            width: 120,
+                            height: 120,
+                            fit: BoxFit.cover,
+                            placeholder: (context, url) => Container(
+                              width: 120,
+                              height: 120,
+                              decoration: BoxDecoration(
+                                color: Color(0xFFF1F5F9),
+                                shape: BoxShape.circle,
+                              ),
+                              child: Icon(
+                                Icons.person_rounded,
+                                color: Color(0xFF64748B),
+                                size: 60,
+                              ),
+                            ),
+                            errorWidget: (context, url, error) => Container(
+                              width: 120,
+                              height: 120,
+                              decoration: BoxDecoration(
+                                color: Color(0xFFF1F5F9),
+                                shape: BoxShape.circle,
+                              ),
+                              child: Icon(
+                                Icons.person_rounded,
+                                color: Color(0xFF64748B),
+                                size: 60,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                      SizedBox(height: 24),
+                      // Name
+                      Text(
+                        user.displayName,
+                        style: TextStyle(
+                          fontFamily: 'Inter',
+                          color: Color(0xFF1A1F36),
+                          fontSize: 24,
+                          fontWeight: FontWeight.w700,
+                          letterSpacing: -0.3,
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                      SizedBox(height: 8),
+                      // Bio or email
+                      if (user.bio.isNotEmpty)
+                        Text(
+                          user.bio,
+                          style: TextStyle(
+                            fontFamily: 'Inter',
+                            color: Color(0xFF64748B),
+                            fontSize: 16,
+                            fontWeight: FontWeight.w400,
+                          ),
+                          textAlign: TextAlign.center,
+                        )
+                      else
+                        Text(
+                          user.email,
+                          style: TextStyle(
+                            fontFamily: 'Inter',
+                            color: Color(0xFF64748B),
+                            fontSize: 16,
+                            fontWeight: FontWeight.w400,
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
+                      SizedBox(height: 8),
+                      // Connection status
+                      if (isConnected)
+                        Container(
+                          padding:
+                              EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                          decoration: BoxDecoration(
+                            color: Color(0xFF10B981).withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                          child: Text(
+                            'Connected',
+                            style: TextStyle(
+                              fontFamily: 'Inter',
+                              color: Color(0xFF10B981),
+                              fontSize: 14,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        )
+                      else if (isPending)
+                        Container(
+                          padding:
+                              EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                          decoration: BoxDecoration(
+                            color: Color(0xFFF59E0B).withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                          child: Text(
+                            'Pending',
+                            style: TextStyle(
+                              fontFamily: 'Inter',
+                              color: Color(0xFFF59E0B),
+                              fontSize: 14,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                      SizedBox(height: 32),
+                      // Action buttons
+                      if (isConnected) ...[
+                        // Message button
+                        SizedBox(
+                          width: double.infinity,
+                          child: Material(
+                            color: Colors.transparent,
+                            child: InkWell(
+                              onTap: () async {
+                                await _startNewChatWithUser(user);
+                                setState(() {
+                                  _model.showConnectionsView = false;
+                                  _model.selectedConnectionProfile = null;
+                                });
+                              },
+                              borderRadius: BorderRadius.circular(8),
+                              child: Container(
+                                padding: EdgeInsets.symmetric(vertical: 12),
+                                decoration: BoxDecoration(
+                                  color: Color(0xFF2563EB),
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: Text(
+                                  'Message',
+                                  style: TextStyle(
+                                    fontFamily: 'Inter',
+                                    color: Colors.white,
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                  textAlign: TextAlign.center,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ] else if (hasRequest) ...[
+                        // Accept/Decline buttons
+                        Row(
+                          children: [
+                            Expanded(
+                              child: Material(
+                                color: Colors.transparent,
+                                child: InkWell(
+                                  onTap: () async {
+                                    try {
+                                      await currentUserReference!.update({
+                                        'friends': FieldValue.arrayUnion(
+                                            [user.reference]),
+                                        'friend_requests':
+                                            FieldValue.arrayRemove(
+                                                [user.reference]),
+                                      });
+                                      await user.reference.update({
+                                        'friends': FieldValue.arrayUnion(
+                                            [currentUserReference]),
+                                        'sent_requests': FieldValue.arrayRemove(
+                                            [currentUserReference]),
+                                      });
+                                      // Send notification to the person who sent the request
+                                      final currentUserDisplayName =
+                                          currentUser.displayName.isNotEmpty
+                                              ? currentUser.displayName
+                                              : 'Someone';
+                                      triggerPushNotification(
+                                        notificationTitle:
+                                            'Connection Request Accepted',
+                                        notificationText:
+                                            '$currentUserDisplayName accepted your connection request',
+                                        notificationSound: 'default',
+                                        userRefs: [user.reference],
+                                        initialPageName: 'DesktopChat',
+                                        parameterData: {
+                                          'userId':
+                                              currentUserReference?.path ?? '',
+                                        },
+                                      );
+                                      setState(() {});
+                                      ScaffoldMessenger.of(context)
+                                          .showSnackBar(
+                                        SnackBar(
+                                          content: Text(
+                                              'Connection request accepted!'),
+                                          backgroundColor: Color(0xFF10B981),
+                                        ),
+                                      );
+                                    } catch (e) {
+                                      print(
+                                          'ERROR accepting connection request: $e');
+                                      ScaffoldMessenger.of(context)
+                                          .showSnackBar(
+                                        SnackBar(
+                                          content: Text(
+                                              'Failed to accept request: ${e.toString()}'),
+                                          backgroundColor: Color(0xFFEF4444),
+                                          duration: Duration(seconds: 5),
+                                        ),
+                                      );
+                                    }
+                                  },
+                                  borderRadius: BorderRadius.circular(8),
+                                  child: Container(
+                                    padding: EdgeInsets.symmetric(vertical: 12),
+                                    decoration: BoxDecoration(
+                                      color: Color(0xFF2563EB),
+                                      borderRadius: BorderRadius.circular(8),
+                                    ),
+                                    child: Text(
+                                      'Accept',
+                                      style: TextStyle(
+                                        fontFamily: 'Inter',
+                                        color: Colors.white,
+                                        fontSize: 16,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                      textAlign: TextAlign.center,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                            SizedBox(width: 12),
+                            Expanded(
+                              child: Material(
+                                color: Colors.transparent,
+                                child: InkWell(
+                                  onTap: () async {
+                                    try {
+                                      await currentUserReference!.update({
+                                        'friend_requests':
+                                            FieldValue.arrayRemove(
+                                                [user.reference]),
+                                      });
+                                      await user.reference.update({
+                                        'sent_requests': FieldValue.arrayRemove(
+                                            [currentUserReference]),
+                                      });
+                                      setState(() {
+                                        _model.selectedConnectionProfile = null;
+                                      });
+                                    } catch (e) {
+                                      ScaffoldMessenger.of(context)
+                                          .showSnackBar(
+                                        SnackBar(
+                                          content:
+                                              Text('Failed to decline request'),
+                                          backgroundColor: Color(0xFFEF4444),
+                                        ),
+                                      );
+                                    }
+                                  },
+                                  borderRadius: BorderRadius.circular(8),
+                                  child: Container(
+                                    padding: EdgeInsets.symmetric(vertical: 12),
+                                    decoration: BoxDecoration(
+                                      border: Border.all(
+                                        color: Color(0xFFE5E7EB),
+                                        width: 1.5,
+                                      ),
+                                      borderRadius: BorderRadius.circular(8),
+                                    ),
+                                    child: Text(
+                                      'Decline',
+                                      style: TextStyle(
+                                        fontFamily: 'Inter',
+                                        color: Color(0xFF666666),
+                                        fontSize: 16,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                      textAlign: TextAlign.center,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ] else if (isPending) ...[
+                        // Cancel pending request button
+                        SizedBox(
+                          width: double.infinity,
+                          child: Material(
+                            color: Colors.transparent,
+                            child: InkWell(
+                              onTap: () async {
+                                try {
+                                  // Remove from current user's sent_requests
+                                  await currentUserReference!.update({
+                                    'sent_requests': FieldValue.arrayRemove(
+                                        [user.reference]),
+                                  });
+                                  // Remove from target user's friend_requests
+                                  await user.reference.update({
+                                    'friend_requests': FieldValue.arrayRemove(
+                                        [currentUserReference]),
+                                  });
+                                  setState(() {});
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(
+                                      content:
+                                          Text('Connection request cancelled'),
+                                      backgroundColor: Color(0xFF10B981),
+                                    ),
+                                  );
+                                } catch (e) {
+                                  print(
+                                      'ERROR cancelling connection request: $e');
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(
+                                      content: Text(
+                                          'Failed to cancel request: ${e.toString()}'),
+                                      backgroundColor: Color(0xFFEF4444),
+                                      duration: Duration(seconds: 5),
+                                    ),
+                                  );
+                                }
+                              },
+                              borderRadius: BorderRadius.circular(8),
+                              child: Container(
+                                padding: EdgeInsets.symmetric(vertical: 12),
+                                decoration: BoxDecoration(
+                                  border: Border.all(
+                                    color: Color(0xFFE5E7EB),
+                                    width: 1.5,
+                                  ),
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: Text(
+                                  'Cancel Request',
+                                  style: TextStyle(
+                                    fontFamily: 'Inter',
+                                    color: Color(0xFF6B7280),
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                  textAlign: TextAlign.center,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ] else ...[
+                        // Send connection request button
+                        SizedBox(
+                          width: double.infinity,
+                          child: Material(
+                            color: Colors.transparent,
+                            child: InkWell(
+                              onTap: () async {
+                                try {
+                                  await currentUserReference!.update({
+                                    'sent_requests':
+                                        FieldValue.arrayUnion([user.reference]),
+                                  });
+                                  await user.reference.update({
+                                    'friend_requests': FieldValue.arrayUnion(
+                                        [currentUserReference]),
+                                  });
+                                  // Send notification to the recipient
+                                  final currentUserDisplayName =
+                                      currentUser.displayName.isNotEmpty
+                                          ? currentUser.displayName
+                                          : 'Someone';
+                                  triggerPushNotification(
+                                    notificationTitle: 'New Connection Request',
+                                    notificationText:
+                                        '$currentUserDisplayName sent you a connection request',
+                                    notificationSound: 'default',
+                                    userRefs: [user.reference],
+                                    initialPageName: 'DesktopChat',
+                                    parameterData: {
+                                      'userId':
+                                          currentUserReference?.path ?? '',
+                                    },
+                                  );
+                                  setState(() {});
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(
+                                      content: Text('Connection request sent!'),
+                                      backgroundColor: Color(0xFF10B981),
+                                    ),
+                                  );
+                                } catch (e) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(
+                                      content: Text(
+                                          'Failed to send connection request'),
+                                      backgroundColor: Color(0xFFEF4444),
+                                    ),
+                                  );
+                                }
+                              },
+                              borderRadius: BorderRadius.circular(8),
+                              child: Container(
+                                padding: EdgeInsets.symmetric(vertical: 12),
+                                decoration: BoxDecoration(
+                                  color: Color(0xFF2563EB),
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: Text(
+                                  'Send Connection Request',
+                                  style: TextStyle(
+                                    fontFamily: 'Inter',
+                                    color: Colors.white,
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                  textAlign: TextAlign.center,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                      SizedBox(height: 32),
+                      // Additional info section
+                      Container(
+                        width: double.infinity,
+                        padding: EdgeInsets.all(24),
+                        decoration: BoxDecoration(
+                          color: Color(0xFFF9FAFB),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Contact Information',
+                              style: TextStyle(
+                                fontFamily: 'Inter',
+                                color: Color(0xFF1A1F36),
+                                fontSize: 18,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                            SizedBox(height: 16),
+                            Row(
+                              children: [
+                                Icon(
+                                  Icons.email_outlined,
+                                  color: Color(0xFF64748B),
+                                  size: 20,
+                                ),
+                                SizedBox(width: 12),
+                                Text(
+                                  user.email,
+                                  style: TextStyle(
+                                    fontFamily: 'Inter',
+                                    color: Color(0xFF64748B),
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w400,
+                                  ),
+                                ),
+                              ],
+                            ),
+                            if (user.location.isNotEmpty) ...[
+                              SizedBox(height: 12),
+                              Row(
+                                children: [
+                                  Icon(
+                                    Icons.location_on_outlined,
+                                    color: Color(0xFF64748B),
+                                    size: 20,
+                                  ),
+                                  SizedBox(width: 12),
+                                  Expanded(
+                                    child: Text(
+                                      user.location,
+                                      style: TextStyle(
+                                        fontFamily: 'Inter',
+                                        color: Color(0xFF64748B),
+                                        fontSize: 14,
+                                        fontWeight: FontWeight.w400,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildTabButton(String label, bool isSelected, VoidCallback onTap) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(8),
+        child: Container(
+          padding: EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+          decoration: BoxDecoration(
+            color: isSelected ? Colors.white : Colors.transparent,
+            borderRadius: BorderRadius.circular(8),
+            border: isSelected
+                ? Border.all(color: Color(0xFFE2E8F0), width: 1)
+                : null,
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                label,
+                style: TextStyle(
+                  fontFamily: 'Inter',
+                  color: isSelected ? Color(0xFF1A1F36) : Color(0xFF64748B),
+                  fontSize: 14,
+                  fontWeight: isSelected ? FontWeight.w600 : FontWeight.w400,
+                ),
+              ),
+              if (isSelected) ...[
+                SizedBox(height: 10),
+                Container(
+                  width: 120,
+                  height: 3,
+                  decoration: BoxDecoration(
+                    color: Color(0xFF2563EB),
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
       ),
+    );
+  }
+
+  Widget _buildLinkedInStyleConnectionCard(
+      UsersRecord user, UsersRecord currentUser) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: () {
+          setState(() {
+            _model.selectedConnectionProfile = user;
+          });
+        },
+        child: Container(
+          decoration: BoxDecoration(
+            color: Colors.white,
+            border: Border(
+              bottom: BorderSide(
+                color: Color(0xFFE5E7EB),
+                width: 1,
+              ),
+            ),
+          ),
+          child: Padding(
+            padding: EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Avatar
+                Container(
+                  width: 56,
+                  height: 56,
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(28),
+                    child: CachedNetworkImage(
+                      imageUrl: user.photoUrl,
+                      width: 56,
+                      height: 56,
+                      fit: BoxFit.cover,
+                      placeholder: (context, url) => Container(
+                        width: 56,
+                        height: 56,
+                        decoration: BoxDecoration(
+                          color: Color(0xFFF1F5F9),
+                          shape: BoxShape.circle,
+                        ),
+                        child: Icon(
+                          Icons.person_rounded,
+                          color: Color(0xFF64748B),
+                          size: 28,
+                        ),
+                      ),
+                      errorWidget: (context, url, error) => Container(
+                        width: 56,
+                        height: 56,
+                        decoration: BoxDecoration(
+                          color: Color(0xFFF1F5F9),
+                          shape: BoxShape.circle,
+                        ),
+                        child: Icon(
+                          Icons.person_rounded,
+                          color: Color(0xFF64748B),
+                          size: 28,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+                SizedBox(width: 12),
+                // User info
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        user.displayName,
+                        style: TextStyle(
+                          fontFamily: 'Inter',
+                          color: Color(0xFF000000),
+                          fontSize: 16,
+                          fontWeight: FontWeight.w600,
+                          letterSpacing: -0.2,
+                        ),
+                      ),
+                      SizedBox(height: 2),
+                      if (user.bio.isNotEmpty)
+                        Text(
+                          user.bio,
+                          style: TextStyle(
+                            fontFamily: 'Inter',
+                            color: Color(0xFF666666),
+                            fontSize: 14,
+                            fontWeight: FontWeight.w400,
+                          ),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                        )
+                      else
+                        Text(
+                          user.email,
+                          style: TextStyle(
+                            fontFamily: 'Inter',
+                            color: Color(0xFF666666),
+                            fontSize: 14,
+                            fontWeight: FontWeight.w400,
+                          ),
+                        ),
+                      SizedBox(height: 4),
+                      Text(
+                        'Connected',
+                        style: TextStyle(
+                          fontFamily: 'Inter',
+                          color: Color(0xFF10B981),
+                          fontSize: 12,
+                          fontWeight: FontWeight.w400,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                // Action buttons
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    // Message button
+                    Material(
+                      color: Colors.transparent,
+                      child: InkWell(
+                        onTap: () async {
+                          await _startNewChatWithUser(user);
+                          setState(() {
+                            _model.showConnectionsView = false;
+                          });
+                        },
+                        borderRadius: BorderRadius.circular(4),
+                        child: Container(
+                          padding:
+                              EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                          decoration: BoxDecoration(
+                            border: Border.all(
+                              color: Color(0xFF2563EB),
+                              width: 1.5,
+                            ),
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                          child: Text(
+                            'Message',
+                            style: TextStyle(
+                              fontFamily: 'Inter',
+                              color: Color(0xFF2563EB),
+                              fontSize: 14,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                    SizedBox(width: 8),
+                    // More options dropdown
+                    PopupMenuButton<String>(
+                      offset: Offset(0, 8),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                        side: BorderSide(
+                          color: Color(0xFFE5E7EB),
+                          width: 1,
+                        ),
+                      ),
+                      color: Colors.white,
+                      elevation: 8,
+                      shadowColor: Color(0x1A000000),
+                      onSelected: (String value) async {
+                        if (value == 'remove') {
+                          try {
+                            // Remove connection from both users
+                            await currentUserReference!.update({
+                              'friends':
+                                  FieldValue.arrayRemove([user.reference]),
+                            });
+                            await user.reference.update({
+                              'friends': FieldValue.arrayRemove(
+                                  [currentUserReference]),
+                            });
+                            setState(() {});
+                          } catch (e) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text('Failed to remove connection'),
+                                backgroundColor: Color(0xFFEF4444),
+                              ),
+                            );
+                          }
+                        }
+                      },
+                      itemBuilder: (BuildContext context) =>
+                          <PopupMenuEntry<String>>[
+                        PopupMenuItem<String>(
+                          value: 'remove',
+                          padding: EdgeInsets.symmetric(
+                              horizontal: 16, vertical: 12),
+                          child: Text(
+                            'Remove connection',
+                            style: TextStyle(
+                              fontFamily: 'Inter',
+                              color: Color(0xFFDC2626),
+                              fontSize: 14,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ),
+                      ],
+                      child: Material(
+                        color: Colors.transparent,
+                        child: InkWell(
+                          borderRadius: BorderRadius.circular(4),
+                          hoverColor: Color(0xFFF3F4F6),
+                          child: Padding(
+                            padding: EdgeInsets.all(8),
+                            child: Icon(
+                              Icons.more_horiz,
+                              color: Color(0xFF6B7280),
+                              size: 20,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildLinkedInStyleRequestCard(
+      UsersRecord user, UsersRecord currentUser) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: () {
+          setState(() {
+            _model.selectedConnectionProfile = user;
+          });
+        },
+        child: Container(
+          decoration: BoxDecoration(
+            color: Colors.white,
+            border: Border(
+              bottom: BorderSide(
+                color: Color(0xFFE5E7EB),
+                width: 1,
+              ),
+            ),
+          ),
+          child: Padding(
+            padding: EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Avatar
+                Container(
+                  width: 56,
+                  height: 56,
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(28),
+                    child: CachedNetworkImage(
+                      imageUrl: user.photoUrl,
+                      width: 56,
+                      height: 56,
+                      fit: BoxFit.cover,
+                      placeholder: (context, url) => Container(
+                        width: 56,
+                        height: 56,
+                        decoration: BoxDecoration(
+                          color: Color(0xFFF1F5F9),
+                          shape: BoxShape.circle,
+                        ),
+                        child: Icon(
+                          Icons.person_rounded,
+                          color: Color(0xFF64748B),
+                          size: 28,
+                        ),
+                      ),
+                      errorWidget: (context, url, error) => Container(
+                        width: 56,
+                        height: 56,
+                        decoration: BoxDecoration(
+                          color: Color(0xFFF1F5F9),
+                          shape: BoxShape.circle,
+                        ),
+                        child: Icon(
+                          Icons.person_rounded,
+                          color: Color(0xFF64748B),
+                          size: 28,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+                SizedBox(width: 12),
+                // User info
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        user.displayName,
+                        style: TextStyle(
+                          fontFamily: 'Inter',
+                          color: Color(0xFF000000),
+                          fontSize: 16,
+                          fontWeight: FontWeight.w600,
+                          letterSpacing: -0.2,
+                        ),
+                      ),
+                      SizedBox(height: 2),
+                      if (user.bio.isNotEmpty)
+                        Text(
+                          user.bio,
+                          style: TextStyle(
+                            fontFamily: 'Inter',
+                            color: Color(0xFF666666),
+                            fontSize: 14,
+                            fontWeight: FontWeight.w400,
+                          ),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                        )
+                      else
+                        Text(
+                          user.email,
+                          style: TextStyle(
+                            fontFamily: 'Inter',
+                            color: Color(0xFF666666),
+                            fontSize: 14,
+                            fontWeight: FontWeight.w400,
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+                // Action buttons
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    // Ignore button
+                    Material(
+                      color: Colors.transparent,
+                      child: InkWell(
+                        onTap: () async {
+                          try {
+                            // Remove from friend_requests
+                            await currentUserReference!.update({
+                              'friend_requests':
+                                  FieldValue.arrayRemove([user.reference]),
+                            });
+                            // Remove from their sent_requests
+                            await user.reference.update({
+                              'sent_requests': FieldValue.arrayRemove(
+                                  [currentUserReference]),
+                            });
+                            setState(() {});
+                          } catch (e) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text('Failed to ignore request'),
+                                backgroundColor: Color(0xFFEF4444),
+                              ),
+                            );
+                          }
+                        },
+                        borderRadius: BorderRadius.circular(4),
+                        child: Container(
+                          padding:
+                              EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                          decoration: BoxDecoration(
+                            border: Border.all(
+                              color: Color(0xFFE5E7EB),
+                              width: 1,
+                            ),
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                          child: Text(
+                            'Ignore',
+                            style: TextStyle(
+                              fontFamily: 'Inter',
+                              color: Color(0xFF666666),
+                              fontSize: 14,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                    SizedBox(width: 8),
+                    // Accept button
+                    Material(
+                      color: Colors.transparent,
+                      child: InkWell(
+                        onTap: () async {
+                          try {
+                            // Add to friends for both users
+                            await currentUserReference!.update({
+                              'friends':
+                                  FieldValue.arrayUnion([user.reference]),
+                              'friend_requests':
+                                  FieldValue.arrayRemove([user.reference]),
+                            });
+                            await user.reference.update({
+                              'friends':
+                                  FieldValue.arrayUnion([currentUserReference]),
+                              'sent_requests': FieldValue.arrayRemove(
+                                  [currentUserReference]),
+                            });
+                            // Send notification to the person who sent the request
+                            final currentUserDisplayName =
+                                currentUser.displayName.isNotEmpty
+                                    ? currentUser.displayName
+                                    : 'Someone';
+                            triggerPushNotification(
+                              notificationTitle: 'Connection Request Accepted',
+                              notificationText:
+                                  '$currentUserDisplayName accepted your connection request',
+                              notificationSound: 'default',
+                              userRefs: [user.reference],
+                              initialPageName: 'DesktopChat',
+                              parameterData: {
+                                'userId': currentUserReference?.path ?? '',
+                              },
+                            );
+                            setState(() {});
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text('Connection request accepted!'),
+                                backgroundColor: Color(0xFF10B981),
+                              ),
+                            );
+                          } catch (e) {
+                            print('ERROR accepting connection request: $e');
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text(
+                                    'Failed to accept request: ${e.toString()}'),
+                                backgroundColor: Color(0xFFEF4444),
+                                duration: Duration(seconds: 5),
+                              ),
+                            );
+                          }
+                        },
+                        borderRadius: BorderRadius.circular(4),
+                        child: Container(
+                          padding:
+                              EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                          decoration: BoxDecoration(
+                            color: Color(0xFF2563EB),
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                          child: Text(
+                            'Accept',
+                            style: TextStyle(
+                              fontFamily: 'Inter',
+                              color: Colors.white,
+                              fontSize: 14,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildLinkedInStyleConnectionCardForSearch(
+      UsersRecord user, UsersRecord currentUser) {
+    final isConnected = currentUser.friends.contains(user.reference);
+    final isPending = currentUser.sentRequests.contains(user.reference);
+
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: () {
+          setState(() {
+            _model.selectedConnectionProfile = user;
+          });
+        },
+        child: Container(
+          decoration: BoxDecoration(
+            color: Colors.white,
+            border: Border(
+              bottom: BorderSide(
+                color: Color(0xFFE5E7EB),
+                width: 1,
+              ),
+            ),
+          ),
+          child: Padding(
+            padding: EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Avatar
+                Container(
+                  width: 56,
+                  height: 56,
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(28),
+                    child: CachedNetworkImage(
+                      imageUrl: user.photoUrl,
+                      width: 56,
+                      height: 56,
+                      fit: BoxFit.cover,
+                      placeholder: (context, url) => Container(
+                        width: 56,
+                        height: 56,
+                        decoration: BoxDecoration(
+                          color: Color(0xFFF1F5F9),
+                          shape: BoxShape.circle,
+                        ),
+                        child: Icon(
+                          Icons.person_rounded,
+                          color: Color(0xFF64748B),
+                          size: 28,
+                        ),
+                      ),
+                      errorWidget: (context, url, error) => Container(
+                        width: 56,
+                        height: 56,
+                        decoration: BoxDecoration(
+                          color: Color(0xFFF1F5F9),
+                          shape: BoxShape.circle,
+                        ),
+                        child: Icon(
+                          Icons.person_rounded,
+                          color: Color(0xFF64748B),
+                          size: 28,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+                SizedBox(width: 12),
+                // User info
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        user.displayName,
+                        style: TextStyle(
+                          fontFamily: 'Inter',
+                          color: Color(0xFF000000),
+                          fontSize: 16,
+                          fontWeight: FontWeight.w600,
+                          letterSpacing: -0.2,
+                        ),
+                      ),
+                      SizedBox(height: 2),
+                      if (user.bio.isNotEmpty)
+                        Text(
+                          user.bio,
+                          style: TextStyle(
+                            fontFamily: 'Inter',
+                            color: Color(0xFF666666),
+                            fontSize: 14,
+                            fontWeight: FontWeight.w400,
+                          ),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                        )
+                      else
+                        Text(
+                          user.email,
+                          style: TextStyle(
+                            fontFamily: 'Inter',
+                            color: Color(0xFF666666),
+                            fontSize: 14,
+                            fontWeight: FontWeight.w400,
+                          ),
+                        ),
+                      SizedBox(height: 4),
+                      if (isConnected)
+                        Text(
+                          'Connected',
+                          style: TextStyle(
+                            fontFamily: 'Inter',
+                            color: Color(0xFF10B981),
+                            fontSize: 12,
+                            fontWeight: FontWeight.w400,
+                          ),
+                        )
+                      else if (isPending)
+                        Text(
+                          'Pending',
+                          style: TextStyle(
+                            fontFamily: 'Inter',
+                            color: Color(0xFFF59E0B),
+                            fontSize: 12,
+                            fontWeight: FontWeight.w400,
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+                // Action buttons
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (isConnected)
+                      // Message button for connected users
+                      Material(
+                        color: Colors.transparent,
+                        child: InkWell(
+                          onTap: () async {
+                            await _startNewChatWithUser(user);
+                            setState(() {
+                              _model.showConnectionsView = false;
+                            });
+                          },
+                          borderRadius: BorderRadius.circular(4),
+                          child: Container(
+                            padding: EdgeInsets.symmetric(
+                                horizontal: 16, vertical: 8),
+                            decoration: BoxDecoration(
+                              border: Border.all(
+                                color: Color(0xFF2563EB),
+                                width: 1.5,
+                              ),
+                              borderRadius: BorderRadius.circular(4),
+                            ),
+                            child: Text(
+                              'Message',
+                              style: TextStyle(
+                                fontFamily: 'Inter',
+                                color: Color(0xFF2563EB),
+                                fontSize: 14,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ),
+                        ),
+                      )
+                    else if (isPending)
+                      // Cancel pending request button
+                      Material(
+                        color: Colors.transparent,
+                        child: InkWell(
+                          onTap: () async {
+                            try {
+                              // Remove from current user's sent_requests
+                              await currentUserReference!.update({
+                                'sent_requests':
+                                    FieldValue.arrayRemove([user.reference]),
+                              });
+                              // Remove from target user's friend_requests
+                              await user.reference.update({
+                                'friend_requests': FieldValue.arrayRemove(
+                                    [currentUserReference]),
+                              });
+                              setState(() {});
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text('Connection request cancelled'),
+                                  backgroundColor: Color(0xFF10B981),
+                                ),
+                              );
+                            } catch (e) {
+                              print('ERROR cancelling connection request: $e');
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text(
+                                      'Failed to cancel request: ${e.toString()}'),
+                                  backgroundColor: Color(0xFFEF4444),
+                                  duration: Duration(seconds: 5),
+                                ),
+                              );
+                            }
+                          },
+                          borderRadius: BorderRadius.circular(4),
+                          child: Container(
+                            padding: EdgeInsets.symmetric(
+                                horizontal: 16, vertical: 8),
+                            decoration: BoxDecoration(
+                              border: Border.all(
+                                color: Color(0xFFE5E7EB),
+                                width: 1.5,
+                              ),
+                              borderRadius: BorderRadius.circular(4),
+                            ),
+                            child: Text(
+                              'Cancel',
+                              style: TextStyle(
+                                fontFamily: 'Inter',
+                                color: Color(0xFF6B7280),
+                                fontSize: 14,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ),
+                        ),
+                      )
+                    else
+                      // Send Connection Request button
+                      Material(
+                        color: Colors.transparent,
+                        child: InkWell(
+                          onTap: () async {
+                            try {
+                              // Update current user's sent_requests
+                              await currentUserReference!.update({
+                                'sent_requests':
+                                    FieldValue.arrayUnion([user.reference]),
+                              });
+
+                              // Update target user's friend_requests
+                              await user.reference.update({
+                                'friend_requests': FieldValue.arrayUnion(
+                                    [currentUserReference]),
+                              });
+
+                              // Send notification to the recipient
+                              final currentUserDisplayName =
+                                  currentUser.displayName.isNotEmpty
+                                      ? currentUser.displayName
+                                      : 'Someone';
+                              triggerPushNotification(
+                                notificationTitle: 'New Connection Request',
+                                notificationText:
+                                    '$currentUserDisplayName sent you a connection request',
+                                notificationSound: 'default',
+                                userRefs: [user.reference],
+                                initialPageName: 'DesktopChat',
+                                parameterData: {
+                                  'userId': currentUserReference?.path ?? '',
+                                },
+                              );
+
+                              // Refresh the UI
+                              setState(() {});
+                            } catch (e) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content:
+                                      Text('Failed to send connection request'),
+                                  backgroundColor: Color(0xFFEF4444),
+                                ),
+                              );
+                            }
+                          },
+                          borderRadius: BorderRadius.circular(4),
+                          child: Container(
+                            padding: EdgeInsets.symmetric(
+                                horizontal: 16, vertical: 8),
+                            decoration: BoxDecoration(
+                              border: Border.all(
+                                color: Color(0xFF2563EB),
+                                width: 1.5,
+                              ),
+                              borderRadius: BorderRadius.circular(4),
+                            ),
+                            child: Text(
+                              'Send Connection Request',
+                              style: TextStyle(
+                                fontFamily: 'Inter',
+                                color: Color(0xFF2563EB),
+                                fontSize: 14,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildConnectionCard(UsersRecord user, UsersRecord currentUser) {
+    final isConnected = currentUser.friends.contains(user.reference);
+    final isPending = currentUser.sentRequests.contains(user.reference);
+
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: Color(0xFFE2E8F0),
+          width: 1,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Color(0x0A000000),
+            blurRadius: 8,
+            offset: Offset(0, 2),
+            spreadRadius: 0,
+          ),
+        ],
+      ),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          // Avatar with gradient border
+          Container(
+            width: 64,
+            height: 64,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              gradient: LinearGradient(
+                colors: [
+                  Color(0xFF3B82F6),
+                  Color(0xFF60A5FA),
+                ],
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: Color(0xFF3B82F6).withOpacity(0.3),
+                  blurRadius: 8,
+                  offset: Offset(0, 2),
+                ),
+              ],
+            ),
+            padding: EdgeInsets.all(2.5),
+            child: Container(
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: Colors.white,
+              ),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(29.5),
+                child: CachedNetworkImage(
+                  imageUrl: user.photoUrl,
+                  width: 59,
+                  height: 59,
+                  fit: BoxFit.cover,
+                  placeholder: (context, url) => Container(
+                    width: 59,
+                    height: 59,
+                    decoration: BoxDecoration(
+                      color: Color(0xFFF1F5F9),
+                      shape: BoxShape.circle,
+                    ),
+                    child: Icon(
+                      Icons.person_rounded,
+                      color: Color(0xFF64748B),
+                      size: 26,
+                    ),
+                  ),
+                  errorWidget: (context, url, error) => Container(
+                    width: 59,
+                    height: 59,
+                    decoration: BoxDecoration(
+                      color: Color(0xFFF1F5F9),
+                      shape: BoxShape.circle,
+                    ),
+                    child: Icon(
+                      Icons.person_rounded,
+                      color: Color(0xFF64748B),
+                      size: 26,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+          SizedBox(height: 12),
+          // Name
+          Padding(
+            padding: EdgeInsets.symmetric(horizontal: 10),
+            child: Text(
+              user.displayName,
+              style: TextStyle(
+                fontFamily: 'Inter',
+                color: Color(0xFF1A1F36),
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                letterSpacing: -0.1,
+              ),
+              textAlign: TextAlign.center,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+          SizedBox(height: 8),
+          // Connection status or button
+          if (isConnected)
+            Padding(
+              padding: EdgeInsets.symmetric(horizontal: 10),
+              child: Container(
+                padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: Color(0xFF10B981).withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: Text(
+                  'Connected',
+                  style: TextStyle(
+                    fontFamily: 'Inter',
+                    color: Color(0xFF10B981),
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            )
+          else if (isPending)
+            Padding(
+              padding: EdgeInsets.symmetric(horizontal: 10),
+              child: Material(
+                color: Colors.transparent,
+                child: InkWell(
+                  onTap: () async {
+                    try {
+                      // Remove from current user's sent_requests
+                      await currentUserReference!.update({
+                        'sent_requests':
+                            FieldValue.arrayRemove([user.reference]),
+                      });
+                      // Remove from target user's friend_requests
+                      await user.reference.update({
+                        'friend_requests':
+                            FieldValue.arrayRemove([currentUserReference]),
+                      });
+                      setState(() {});
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text('Connection request cancelled'),
+                          backgroundColor: Color(0xFF10B981),
+                        ),
+                      );
+                    } catch (e) {
+                      print('ERROR cancelling connection request: $e');
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content:
+                              Text('Failed to cancel request: ${e.toString()}'),
+                          backgroundColor: Color(0xFFEF4444),
+                          duration: Duration(seconds: 5),
+                        ),
+                      );
+                    }
+                  },
+                  borderRadius: BorderRadius.circular(6),
+                  child: Container(
+                    padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: Color(0xFFF59E0B).withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          Icons.schedule,
+                          size: 12,
+                          color: Color(0xFFF59E0B),
+                        ),
+                        SizedBox(width: 4),
+                        Text(
+                          'Cancel',
+                          style: TextStyle(
+                            fontFamily: 'Inter',
+                            color: Color(0xFFF59E0B),
+                            fontSize: 11,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            )
+          else
+            Padding(
+              padding: EdgeInsets.symmetric(horizontal: 10),
+              child: Material(
+                color: Colors.transparent,
+                child: InkWell(
+                  onTap: () async {
+                    try {
+                      // Update current user's sent_requests
+                      await currentUserReference!.update({
+                        'sent_requests':
+                            FieldValue.arrayUnion([user.reference]),
+                      });
+
+                      // Update target user's friend_requests
+                      await user.reference.update({
+                        'friend_requests':
+                            FieldValue.arrayUnion([currentUserReference]),
+                      });
+
+                      // Send notification to the recipient
+                      final currentUserDisplayName =
+                          currentUser.displayName.isNotEmpty
+                              ? currentUser.displayName
+                              : 'Someone';
+                      triggerPushNotification(
+                        notificationTitle: 'New Connection Request',
+                        notificationText:
+                            '$currentUserDisplayName sent you a connection request',
+                        notificationSound: 'default',
+                        userRefs: [user.reference],
+                        initialPageName: 'DesktopChat',
+                        parameterData: {
+                          'userId': currentUserReference?.path ?? '',
+                        },
+                      );
+
+                      // Refresh the UI
+                      setState(() {});
+                    } catch (e) {
+                      print('ERROR sending connection request: $e');
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text(
+                              'Failed to send connection request: ${e.toString()}'),
+                          backgroundColor: Color(0xFFEF4444),
+                          duration: Duration(seconds: 5),
+                        ),
+                      );
+                    }
+                  },
+                  borderRadius: BorderRadius.circular(8),
+                  child: Container(
+                    width: double.infinity,
+                    padding: EdgeInsets.symmetric(vertical: 8),
+                    decoration: BoxDecoration(
+                      color: Color(0xFF2563EB),
+                      borderRadius: BorderRadius.circular(8),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Color(0xFF2563EB).withOpacity(0.3),
+                          blurRadius: 4,
+                          offset: Offset(0, 2),
+                        ),
+                      ],
+                    ),
+                    child: Text(
+                      'Send Connection Request',
+                      style: TextStyle(
+                        fontFamily: 'Inter',
+                        color: Colors.white,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildRightPanel() {
+    // Determine if any right-side panel should be shown
+    final showAnyPanel = _model.showGroupCreation ||
+        _model.showNewMessageView ||
+        _model.showConnectionsView ||
+        (_model.showGroupInfoPanel && _model.groupInfoChat != null) ||
+        (_model.showUserProfilePanel && _model.userProfileUser != null);
+
+    return Expanded(
+      child: Container(
+        width: double.infinity,
+        height: double.infinity,
+        decoration: BoxDecoration(
+          color: Color.fromRGBO(250, 252, 255, 1), // Match left sidebar color
+        ),
+        child: showAnyPanel
+            ? Stack(
+                children: [
+                  // Show default chat view behind the overlay
+                  _buildDefaultChatView(),
+                  // Semi-transparent overlay background
+                  Positioned.fill(
+                    child: GestureDetector(
+                      onTap: () {
+                        setState(() {
+                          _model.showGroupCreation = false;
+                          _model.showNewMessageView = false;
+                          _model.showConnectionsView = false;
+                          _model.showGroupInfoPanel = false;
+                          _model.groupInfoChat = null;
+                          _model.showUserProfilePanel = false;
+                          _model.userProfileUser = null;
+                        });
+                      },
+                      child: Container(
+                        color: Colors.black.withOpacity(0.3),
+                      ),
+                    ),
+                  ),
+                  // Right-side panels
+                  if (_model.showGroupCreation)
+                    _buildRightSidePanel(_buildGroupCreationViewRight(), () {
+                      setState(() {
+                        _model.showGroupCreation = false;
+                        _model.groupName = '';
+                        _model.selectedMembers = [];
+                        _model.groupNameController?.clear();
+                        _model.groupImagePath = null;
+                        _model.groupImageUrl = null;
+                        _model.isUploadingImage = false;
+                      });
+                    }),
+                  if (_model.showNewMessageView)
+                    _buildRightSidePanel(_buildNewMessageView(), () {
+                      setState(() {
+                        _model.showNewMessageView = false;
+                        _model.newMessageSearchController?.clear();
+                      });
+                    }),
+                  if (_model.showConnectionsView)
+                    _buildRightSidePanel(_buildConnectionsView(), () {
+                      setState(() {
+                        _model.showConnectionsView = false;
+                        _model.showConnectionsSearch = false;
+                        _model.connectionsSearchController?.clear();
+                      });
+                    }),
+                  if (_model.showGroupInfoPanel && _model.groupInfoChat != null)
+                    _buildRightSidePanel(
+                      GroupChatDetailWidget(
+                        chatDoc: _model.groupInfoChat,
+                        onClose: () {
+                          setState(() {
+                            _model.showGroupInfoPanel = false;
+                            _model.groupInfoChat = null;
+                          });
+                        },
+                      ),
+                      () {
+                        setState(() {
+                          _model.showGroupInfoPanel = false;
+                          _model.groupInfoChat = null;
+                        });
+                      },
+                    ),
+                  if (_model.showUserProfilePanel &&
+                      _model.userProfileUser != null)
+                    _buildRightSidePanel(
+                      UserProfileDetailWidget(
+                        user: _model.userProfileUser,
+                      ),
+                      () {
+                        setState(() {
+                          _model.showUserProfilePanel = false;
+                          _model.userProfileUser = null;
+                        });
+                      },
+                      width: 0.3,
+                      maxWidth: 400,
+                    ),
+                ],
+              )
+            : _buildDefaultChatView(),
+      ),
+    );
+  }
+
+  Widget _buildDefaultChatView() {
+    return _model.selectedChat != null
+        ? Column(
+            children: [
+              // Top panel with user info
+              _buildChatHeader(),
+              // Action Items Stats Section (only for group chats)
+              if (_model.selectedChat!.isGroup)
+                _buildActionItemsStats(_model.selectedChat!),
+              // Tasks panel or Chat thread component
+              Expanded(
+                child: _model.showTasksPanel && _model.selectedChat!.isGroup
+                    ? Stack(
+                        children: [
+                          // Show chat thread behind
+                          ChatThreadComponentWidget(
+                            chatReference: _model.selectedChat,
+                          ),
+                          // Semi-transparent overlay background
+                          Positioned.fill(
+                            child: GestureDetector(
+                              onTap: () {
+                                setState(() {
+                                  _model.showTasksPanel = false;
+                                });
+                              },
+                              child: Container(
+                                color: Colors.black.withOpacity(0.3),
+                              ),
+                            ),
+                          ),
+                          // Tasks panel on the right (30% width)
+                          Positioned(
+                            right: 0,
+                            top: 0,
+                            bottom: 0,
+                            child: Container(
+                              width: MediaQuery.of(context).size.width * 0.4,
+                              constraints: BoxConstraints(
+                                minWidth: 300,
+                                maxWidth: 500,
+                              ),
+                              decoration: BoxDecoration(
+                                color: FlutterFlowTheme.of(context)
+                                    .secondaryBackground,
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: Colors.black.withOpacity(0.2),
+                                    blurRadius: 10,
+                                    offset: Offset(-2, 0),
+                                  ),
+                                ],
+                              ),
+                              child: GroupActionTasksWidget(
+                                chatDoc: _model.selectedChat,
+                              ),
+                            ).animate().slideX(
+                                  begin: 1.0,
+                                  end: 0.0,
+                                  duration: Duration(milliseconds: 300),
+                                  curve: Curves.easeOut,
+                                ),
+                          ),
+                        ],
+                      )
+                    : ChatThreadComponentWidget(
+                        chatReference: _model.selectedChat,
+                      ),
+              ),
+            ],
+          )
+        : Center(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  Icons.chat_bubble_outline,
+                  color: Color(0xFF9CA3AF),
+                  size: 64,
+                ),
+                SizedBox(height: 16),
+                Text(
+                  'Select a chat to start messaging',
+                  style: TextStyle(
+                    fontFamily: 'Inter',
+                    color: Color(0xFF6B7280),
+                    fontSize: 18,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ],
+            ),
+          );
+  }
+
+  Widget _buildRightSidePanel(Widget content, VoidCallback onClose,
+      {double width = 0.4, double maxWidth = 500}) {
+    return Positioned(
+      right: 0,
+      top: 0,
+      bottom: 0,
+      child: Container(
+        width: MediaQuery.of(context).size.width * width,
+        constraints: BoxConstraints(
+          minWidth: 300,
+          maxWidth: maxWidth,
+        ),
+        decoration: BoxDecoration(
+          color: FlutterFlowTheme.of(context).secondaryBackground,
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.2),
+              blurRadius: 10,
+              offset: Offset(-2, 0),
+            ),
+          ],
+        ),
+        child: content,
+      ).animate().slideX(
+            begin: 1.0,
+            end: 0.0,
+            duration: Duration(milliseconds: 300),
+            curve: Curves.easeOut,
+          ),
     );
   }
 
@@ -1723,7 +4688,7 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
       width: double.infinity,
       padding: EdgeInsetsDirectional.fromSTEB(20, 16, 20, 16),
       decoration: BoxDecoration(
-        color: Color(0xFFF9FAFB),
+        color: Color.fromRGBO(250, 252, 255, 1), // Match left sidebar color
         border: Border(
           bottom: BorderSide(
             color: Color(0xFFE5E7EB),
@@ -2168,11 +5133,8 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
           if (otherUserRef.path.contains('ai_agent_summerai')) {
             imageUrl =
                 'https://firebasestorage.googleapis.com/v0/b/linkedup-c3e29.firebasestorage.app/o/asset%2Fsoftware-agent.png?alt=media&token=99761584-999d-4f8e-b3d1-f9d1baf86120';
-            print('DEBUG: Setting Summer photo');
           } else if (userSnapshot.hasData && userSnapshot.data != null) {
             imageUrl = userSnapshot.data?.photoUrl ?? '';
-            print(
-                'DEBUG: Setting regular user photo: ${userSnapshot.data?.photoUrl}');
           }
 
           return Container(
@@ -2252,17 +5214,14 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
         future: UsersRecord.getDocumentOnce(otherUserRef),
         builder: (context, userSnapshot) {
           String displayName = 'Direct Chat';
-          print('DEBUG: otherUserRef.path = ${otherUserRef.path}');
 
           // Check if this is Summer first, regardless of userSnapshot
           if (otherUserRef.path.contains('ai_agent_summerai')) {
             displayName = 'Summer';
-            print('DEBUG: Found Summer user, setting displayName to Summer');
           } else if (userSnapshot.hasData && userSnapshot.data != null) {
             final user = userSnapshot.data!;
             displayName =
                 user.displayName.isNotEmpty ? user.displayName : 'Unknown User';
-            print('DEBUG: Regular user: ${user.displayName}');
           }
 
           return Text(
@@ -2382,7 +5341,7 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
       return;
     }
 
-    // For direct chats, get the other user and navigate to their profile
+    // For direct chats, get the other user and show profile inline
     final otherUserRef = chat.members.firstWhere(
       (member) => member != currentUserReference,
       orElse: () => chat.members.first,
@@ -2391,13 +5350,11 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
     try {
       final user = await UsersRecord.getDocumentOnce(otherUserRef);
       if (context.mounted) {
-        context.pushNamed(
-          UserProfileDetailWidget.routeName,
-          queryParameters: {
-            'user': serializeParam(user, ParamType.Document),
-          }.withoutNulls,
-          extra: <String, dynamic>{'user': user},
-        );
+        // Show user profile inline in the right panel (macOS)
+        setState(() {
+          _model.userProfileUser = user;
+          _model.showUserProfilePanel = true;
+        });
       }
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -2648,6 +5605,7 @@ class _ChatListItem extends StatefulWidget {
   final bool isSelected;
   final VoidCallback onTap;
   final bool hasUnreadMessages;
+  final ChatController chatController;
   final Function(ChatsRecord) onPin;
   final Function(ChatsRecord) onDelete;
   final Function(ChatsRecord) onMute;
@@ -2658,6 +5616,7 @@ class _ChatListItem extends StatefulWidget {
     required this.isSelected,
     required this.onTap,
     required this.hasUnreadMessages,
+    required this.chatController,
     required this.onPin,
     required this.onDelete,
     required this.onMute,
@@ -2682,14 +5641,32 @@ class _ChatListItemState extends State<_ChatListItem>
         width: double.infinity,
         padding: EdgeInsetsDirectional.fromSTEB(16, 12, 16, 12),
         decoration: BoxDecoration(
-          color: widget.isSelected ? Color(0xFFF3F4F6) : Colors.transparent,
+          color: widget.isSelected
+              ? Colors.white
+              : Colors.transparent, // White for selected
           borderRadius: BorderRadius.circular(8),
-          border: Border(
-            bottom: BorderSide(
-              color: Color(0xFF374151),
-              width: 1,
-            ),
-          ),
+          border: widget.isSelected
+              ? Border.all(
+                  color: Color.fromRGBO(
+                      230, 235, 245, 1), // Light border for selected
+                  width: 1,
+                )
+              : Border(
+                  bottom: BorderSide(
+                    color: Color.fromRGBO(230, 235, 245, 1), // Light border
+                    width: 1,
+                  ),
+                ),
+          boxShadow: widget.isSelected
+              ? [
+                  BoxShadow(
+                    color: Color.fromRGBO(0, 0, 0, 0.05), // Neutral gray shadow
+                    blurRadius: 8,
+                    offset: Offset(0, 2),
+                    spreadRadius: 0,
+                  ),
+                ]
+              : null,
         ),
         child: Row(
           mainAxisSize: MainAxisSize.max,
@@ -2709,10 +5686,8 @@ class _ChatListItemState extends State<_ChatListItem>
                       if (widget.chat.isPin) ...[
                         Icon(
                           Icons.push_pin,
-                          color: widget.isSelected
-                              ? Color(0xFF3B82F6)
-                              : Color(0xFF9CA3AF),
-                          size: 14,
+                          color: Color(0xFF000000), // Black
+                          size: 16,
                         ),
                         SizedBox(width: 4),
                       ],
@@ -2728,30 +5703,68 @@ class _ChatListItemState extends State<_ChatListItem>
                 ],
               ),
             ),
-            // Timestamp and notification dot
+            // Timestamp and unread count badge
             Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.end,
               children: [
                 Row(
                   mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
-                    // Notification dot for unread messages
+                    // Unread message count badge
                     if (widget.hasUnreadMessages)
-                      Container(
-                        width: 8,
-                        height: 8,
-                        margin: EdgeInsets.only(right: 8),
-                        decoration: BoxDecoration(
-                          color:
-                              Color(0xFFEF4444), // Red dot for unread messages
-                          shape: BoxShape.circle,
-                        ),
+                      StreamBuilder<int>(
+                        stream: widget.chatController
+                            .getUnreadMessageCount(widget.chat),
+                        builder: (context, snapshot) {
+                          final unreadCount = snapshot.data ?? 0;
+                          if (unreadCount == 0) {
+                            return SizedBox.shrink();
+                          }
+                          return Container(
+                            margin: EdgeInsets.only(right: 8),
+                            padding: EdgeInsets.symmetric(
+                                horizontal: 6, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: Color(0xFF3B82F6), // Blue background
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                            constraints: BoxConstraints(
+                              minWidth: 18,
+                              minHeight: 18,
+                            ),
+                            child: Center(
+                              child: Text(
+                                unreadCount > 99 ? '99+' : '$unreadCount',
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                                textAlign: TextAlign.center,
+                              ),
+                            ),
+                          );
+                        },
                       ),
                     // Timestamp
                     Text(
                       widget.chat.lastMessageAt != null
-                          ? timeago.format(widget.chat.lastMessageAt!)
+                          ? () {
+                              final now = DateTime.now();
+                              final messageTime = widget.chat.lastMessageAt!;
+                              final difference = now.difference(messageTime);
+
+                              // If within 24 hours, show time only
+                              if (difference.inHours < 24) {
+                                return DateFormat('h:mm a').format(messageTime);
+                              } else {
+                                // Otherwise show date in MM/DD/YYYY format
+                                return DateFormat('MM/dd/yyyy')
+                                    .format(messageTime);
+                              }
+                            }()
                           : 'Unknown',
                       style: TextStyle(
                         fontFamily: 'Inter',
@@ -2926,69 +5939,98 @@ class _ChatListItemState extends State<_ChatListItem>
         orElse: () => chat.members.first,
       );
 
-      return FutureBuilder<UsersRecord>(
-        future: UsersRecord.getDocumentOnce(otherUserRef),
+      return StreamBuilder<UsersRecord>(
+        stream: UsersRecord.getDocument(otherUserRef),
         builder: (context, userSnapshot) {
           String imageUrl = '';
+          bool isOnline = false;
 
           // Check if this is Summer first, regardless of userSnapshot
           if (otherUserRef.path.contains('ai_agent_summerai')) {
             imageUrl =
                 'https://firebasestorage.googleapis.com/v0/b/linkedup-c3e29.firebasestorage.app/o/asset%2Fsoftware-agent.png?alt=media&token=99761584-999d-4f8e-b3d1-f9d1baf86120';
-            print('DEBUG: Setting Summer photo');
           } else if (userSnapshot.hasData && userSnapshot.data != null) {
             imageUrl = userSnapshot.data?.photoUrl ?? '';
-            print(
-                'DEBUG: Setting regular user photo: ${userSnapshot.data?.photoUrl}');
+            isOnline = userSnapshot.data?.isOnline ?? false;
           }
 
-          return Container(
-            width: 48,
-            height: 48,
-            decoration: BoxDecoration(
-              color: Color(0xFF3B82F6),
-              shape: BoxShape.circle,
-            ),
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(24),
-              child: CachedNetworkImage(
-                imageUrl: imageUrl,
+          return Stack(
+            clipBehavior: Clip.none,
+            children: [
+              Container(
                 width: 48,
                 height: 48,
-                fit: BoxFit.cover,
-                memCacheWidth: 96,
-                memCacheHeight: 96,
-                maxWidthDiskCache: 96,
-                maxHeightDiskCache: 96,
-                filterQuality: FilterQuality.high,
-                placeholder: (context, url) => Container(
-                  width: 48,
-                  height: 48,
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    shape: BoxShape.circle,
-                  ),
-                  child: Icon(
-                    Icons.person,
-                    color: Color(0xFF6B7280),
-                    size: 20,
-                  ),
+                decoration: BoxDecoration(
+                  color: Color(0xFF3B82F6),
+                  shape: BoxShape.circle,
                 ),
-                errorWidget: (context, url, error) => Container(
-                  width: 48,
-                  height: 48,
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    shape: BoxShape.circle,
-                  ),
-                  child: Icon(
-                    Icons.person,
-                    color: Color(0xFF6B7280),
-                    size: 20,
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(24),
+                  child: CachedNetworkImage(
+                    imageUrl: imageUrl,
+                    width: 48,
+                    height: 48,
+                    fit: BoxFit.cover,
+                    memCacheWidth: 96,
+                    memCacheHeight: 96,
+                    maxWidthDiskCache: 96,
+                    maxHeightDiskCache: 96,
+                    filterQuality: FilterQuality.high,
+                    placeholder: (context, url) => Container(
+                      width: 48,
+                      height: 48,
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        shape: BoxShape.circle,
+                      ),
+                      child: Icon(
+                        Icons.person,
+                        color: Color(0xFF6B7280),
+                        size: 20,
+                      ),
+                    ),
+                    errorWidget: (context, url, error) => Container(
+                      width: 48,
+                      height: 48,
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        shape: BoxShape.circle,
+                      ),
+                      child: Icon(
+                        Icons.person,
+                        color: Color(0xFF6B7280),
+                        size: 20,
+                      ),
+                    ),
                   ),
                 ),
               ),
-            ),
+              // Green dot indicator for online status (like Slack)
+              if (isOnline && !otherUserRef.path.contains('ai_agent_summerai'))
+                Positioned(
+                  right: -1,
+                  bottom: -1,
+                  child: Container(
+                    width: 16,
+                    height: 16,
+                    decoration: BoxDecoration(
+                      color: Color(0xFF10B981), // Green color
+                      shape: BoxShape.circle,
+                      border: Border.all(
+                        color: Colors.white,
+                        width: 3,
+                      ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Color(0xFF10B981).withOpacity(0.3),
+                          blurRadius: 4,
+                          spreadRadius: 1,
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+            ],
           );
         },
       );
@@ -3001,7 +6043,8 @@ class _ChatListItemState extends State<_ChatListItem>
         chat.title.isNotEmpty ? chat.title : 'Group Chat',
         style: TextStyle(
           fontFamily: 'Inter',
-          color: isSelected ? Color(0xFF111827) : Colors.white,
+          color:
+              Color(0xFF111827), // Dark text for both selected and unselected
           fontSize: 14,
           fontWeight: FontWeight.w500,
         ),
@@ -3019,27 +6062,22 @@ class _ChatListItemState extends State<_ChatListItem>
         future: UsersRecord.getDocumentOnce(otherUserRef),
         builder: (context, userSnapshot) {
           String displayName = 'Direct Chat';
-          print('DEBUG: otherUserRef.path in chat list = ${otherUserRef.path}');
 
           // Check if this is Summer first, regardless of userSnapshot
           if (otherUserRef.path.contains('ai_agent_summerai')) {
             displayName = 'Summer';
-            print(
-                'DEBUG: Found Summer user in chat list, setting displayName to Summer');
           } else if (userSnapshot.hasData && userSnapshot.data != null) {
             final user = userSnapshot.data!;
             displayName =
                 user.displayName.isNotEmpty ? user.displayName : 'Unknown User';
-            print('DEBUG: Regular user in chat list: ${user.displayName}');
-
-            // Note: Search filtering is handled at the ListView level
           }
 
           return Text(
             displayName,
             style: TextStyle(
               fontFamily: 'Inter',
-              color: isSelected ? Color(0xFF111827) : Colors.white,
+              color: Color(
+                  0xFF111827), // Dark text for both selected and unselected
               fontSize: 14,
               fontWeight: FontWeight.w500,
             ),
