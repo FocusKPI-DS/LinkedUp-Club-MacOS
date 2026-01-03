@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
-import 'package:google_fonts/google_fonts.dart';
 
 class ExpandableSummaryBubble extends StatefulWidget {
   const ExpandableSummaryBubble({
@@ -96,7 +95,7 @@ class _ExpandableSummaryBubbleState extends State<ExpandableSummaryBubble>
               children: [
                 Text(
                   'SummerAI',
-                  style: GoogleFonts.inter(
+                  style: TextStyle(
                     color: Colors.black,
                     fontSize: 12.0,
                     fontWeight: FontWeight.w600,
@@ -192,7 +191,7 @@ class _ExpandableSummaryBubbleState extends State<ExpandableSummaryBubble>
                         alignment: Alignment.bottomRight,
                         child: Padding(
                           padding: const EdgeInsets.only(top: 8.0),
-                          child: InkWell(
+                          child: GestureDetector(
                             onTap: _toggleExpanded,
                             child: Container(
                               padding: const EdgeInsets.symmetric(
@@ -210,7 +209,7 @@ class _ExpandableSummaryBubbleState extends State<ExpandableSummaryBubble>
                                     _isExpanded
                                         ? widget.collapseText
                                         : widget.expandText,
-                                    style: GoogleFonts.inter(
+                                    style: TextStyle(
                                       color: Colors.black,
                                       fontSize: 12.0,
                                       fontWeight: FontWeight.w500,

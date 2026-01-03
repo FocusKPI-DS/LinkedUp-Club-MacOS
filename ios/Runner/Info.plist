@@ -99,5 +99,7 @@
     <true/>
     <key>UIApplicationSupportsIndirectInputEvents</key>
     <true/>
+    <key>UIUserInterfaceStyle</key>
+    <string>Light</string>
   </dict>
 </plist>

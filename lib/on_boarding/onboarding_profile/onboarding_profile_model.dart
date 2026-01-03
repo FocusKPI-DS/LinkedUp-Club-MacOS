@@ -74,6 +74,12 @@ class OnboardingProfileModel extends FlutterFlowModel<OnboardingProfileWidget> {
   bool? newMessageValue;
   // State field(s) for ConnectionRequests widget.
   bool? connectionRequestsValue;
+  // State field(s) for Search widget.
+  FocusNode? searchFocusNode;
+  TextEditingController? searchTextController;
+  String? Function(BuildContext, String?)? searchTextControllerValidator;
+  // Track loading states for connection requests
+  Set<String> loadingConnectionOperations = <String>{};
 
   @override
   void initState(BuildContext context) {}
@@ -82,5 +88,7 @@ class OnboardingProfileModel extends FlutterFlowModel<OnboardingProfileWidget> {
   void dispose() {
     bioFocusNode?.dispose();
     bioTextController?.dispose();
+    searchFocusNode?.dispose();
+    searchTextController?.dispose();
   }
 }

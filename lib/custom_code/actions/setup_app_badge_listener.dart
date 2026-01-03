@@ -28,14 +28,23 @@ Future<void> setupAppBadgeListener() async {
 
     // Listen to notification changes from ff_user_push_notifications
     // This collection is managed by FlutterFlow for push notifications
+    // Note: user_refs is stored as a comma-separated string, not an array
     final userPath = currentUserReference!.path;
+    final userId = currentUserReference!.id;
+    
+    // Listen to all succeeded notifications and filter client-side
     FirebaseFirestore.instance
         .collection('ff_user_push_notifications')
-        .where('user_refs', arrayContains: userPath)
         .where('status', isEqualTo: 'succeeded')
         .snapshots()
         .listen((snapshot) async {
-      int unreadCount = snapshot.docs.length;
+      // Filter client-side to check if user_refs string contains the user path
+      final filteredDocs = snapshot.docs.where((doc) {
+        final userRefs = doc.data()['user_refs'] as String? ?? '';
+        return userRefs.contains(userPath) || userRefs.contains(userId);
+      }).toList();
+      
+      int unreadCount = filteredDocs.length;
 
       // Update the app badge with the count
       await AppBadgePlus.updateBadge(unreadCount);

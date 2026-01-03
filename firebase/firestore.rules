@@ -41,7 +41,9 @@ service cloud.firestore {
       allow create: if true;
       allow read: if true;
       allow write: if false;
-      allow delete: if false;
+      // Allow users to delete their own memos
+      allow delete: if request.auth != null && 
+                    resource.data.owner_ref == /databases/$(database)/documents/users/$(request.auth.uid);
     }
 
     match /invitation_code/{document} {
@@ -55,7 +57,9 @@ service cloud.firestore {
       allow create: if request.auth != null;
       allow read: if request.auth != null;
       allow update: if request.auth != null;
-      allow delete: if false;
+      // Allow users to delete chats they're members of
+      allow delete: if request.auth != null && 
+                    resource.data.members.hasAny([/databases/$(database)/documents/users/$(request.auth.uid)]);
     }
 
     match /chats/{parent}/messages/{document} {
@@ -71,9 +75,27 @@ service cloud.firestore {
 
     match /users/{document} {
       allow create: if request.auth.uid == document;
-      allow read: if request.auth != null; // Allow authenticated users to read any user (for chat names)
-      allow update: if request.auth.uid == document;
+      // Allow authenticated users to read any user document and query the collection
+      allow read: if request.auth != null;
+      allow update: if request.auth.uid == document || 
+        // Allow connection-related updates from other authenticated users
+        (request.auth != null && 
+         isConnectionUpdate(request.resource.data, resource.data));
       allow delete: if request.auth.uid == document;
+    }
+
+    // SIMPLIFIED: Allow any update that touches connection fields
+    // This allows connection requests to work for all users (new and old)
+    function isConnectionUpdate(newData, oldData) {
+      // Check if any connection field exists in the new data or is being changed
+      // This works for both adding (arrayUnion) and removing (arrayRemove) connections
+      // Check both newData and request.resource.data to catch FieldValue operations
+      return ('friend_requests' in newData) ||
+             ('sent_requests' in newData) ||
+             ('friends' in newData) ||
+             ('friend_requests' in request.resource.data) ||
+             ('sent_requests' in request.resource.data) ||
+             ('friends' in request.resource.data);
     }
 
     // Gmail cache - users can only access their own cache
@@ -83,6 +105,11 @@ service cloud.firestore {
 
     // Gmail watch - users can only access their own watch settings
     match /users/{userId}/gmail_watch/{document} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+
+    // FCM tokens - users can only access their own FCM tokens
+    match /users/{userId}/fcm_tokens/{document} {
       allow read, write: if request.auth != null && request.auth.uid == userId;
     }
 

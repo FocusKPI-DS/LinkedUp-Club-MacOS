@@ -1140,6 +1140,7 @@ Stream<List<T>> queryCollection<T>(
   }
   return query.snapshots().asyncMap((s) async {
     try {
+      print('DEBUG queryCollection: Got ${s.docs.length} documents from query');
       return s.docs
           .map(
             (d) => safeGet(
@@ -1152,8 +1153,19 @@ Stream<List<T>> queryCollection<T>(
           .toList();
     } catch (e) {
       print('Error processing query results: $e');
+      print('Error type: ${e.runtimeType}');
+      if (e.toString().contains('permission-denied')) {
+        print('PERMISSION DENIED ERROR in queryCollection!');
+      }
       return <T>[];
     }
+  }).handleError((error) {
+    print('Stream error in queryCollection: $error');
+    print('Error type: ${error.runtimeType}');
+    if (error.toString().contains('permission-denied')) {
+      print('PERMISSION DENIED ERROR in stream!');
+    }
+    throw error; // Re-throw so StreamBuilder can catch it
   });
 }
 

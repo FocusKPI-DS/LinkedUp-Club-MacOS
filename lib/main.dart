@@ -2,7 +2,9 @@ import 'dart:async';
 import 'dart:io' show Platform;
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/gestures.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_web_plugins/url_strategy.dart';
@@ -25,6 +27,7 @@ import '/pages/desktop_chat/desktop_chat_widget.dart';
 import '/pages/desktop_chat/chat_controller.dart';
 import '/pages/gmail/gmail_widget.dart';
 import '/pages/gmail/gmail_mobile_widget.dart';
+import '/pages/connections/connections_widget.dart';
 import 'package:get/get.dart';
 import 'auth/firebase_auth/firebase_user_provider.dart';
 import 'auth/firebase_auth/auth_util.dart';
@@ -32,7 +35,6 @@ import 'backend/backend.dart';
 import 'backend/firebase/firebase_config.dart';
 import 'flutter_flow/flutter_flow_util.dart';
 import 'flutter_flow/nav/nav.dart';
-import 'flutter_flow/revenue_cat_util.dart' as revenue_cat;
 import 'index.dart';
 
 import 'package:branchio_dynamic_linking_akp5u6/custom_code/actions/index.dart'
@@ -41,6 +43,8 @@ import 'package:branchio_dynamic_linking_akp5u6/library_values.dart'
     as branchio_dynamic_linking_akp5u6_library_values;
 import 'package:linkedup/backend/schema/structs/index.dart';
 import 'package:linkedup/custom_code/services/web_notification_service.dart';
+import 'package:adaptive_platform_ui/adaptive_platform_ui.dart';
+import 'package:share_plus/share_plus.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -72,19 +76,6 @@ void main() async {
     // Initialize app state
     final appState = FFAppState();
     await appState.initializePersistedState();
-
-    // Initialize RevenueCat with error handling (disabled on macOS for App Store review)
-    if (!kIsWeb && !Platform.isMacOS) {
-      try {
-        await revenue_cat.initialize(
-          "appl_gYrKTEbjDTBkjDuoTAZxGQtSKMW",
-          "goog_JKqkobkHgNHXsFahQSZcGrElrkO",
-          loadDataAfterLaunch: true,
-        );
-      } catch (e) {
-        // RevenueCat initialization failed
-      }
-    }
 
     // Handle app badge (only on mobile platforms)
     if (!kIsWeb && (Platform.isIOS || Platform.isAndroid)) {
@@ -168,7 +159,6 @@ void _triggerGmailPrefetchIfConnected() async {
 
     // Check if user is authenticated
     if (currentUser == null || currentUserUid.isEmpty) {
-      print('📧 Gmail prefetch: User not authenticated, skipping');
       return;
     }
 
@@ -180,13 +170,11 @@ void _triggerGmailPrefetchIfConnected() async {
           .get();
 
       if (!userDoc.exists) {
-        print('📧 Gmail prefetch: User document not found, skipping');
         return;
       }
 
       final userData = userDoc.data();
       if (userData == null || userData['gmail_connected'] != true) {
-        print('📧 Gmail prefetch: Gmail not connected, skipping');
         return;
       }
 
@@ -194,24 +182,20 @@ void _triggerGmailPrefetchIfConnected() async {
       _gmailPrefetchTriggered = true;
 
       // Trigger priority prefetch (top 10 emails) - fire and forget
-      print('📧 Gmail prefetch: Triggering priority fetch...');
       actions.gmailPrefetchPriority().then((result) {
-        if (result != null && result['success'] == true) {
-          print('✅ Gmail prefetch: Priority emails cached successfully');
-        } else {
-          print('⚠️ Gmail prefetch: Priority fetch failed (non-critical)');
+        // Reset flag on error so it can retry on next auth event
+        if (result == null || result['success'] != true) {
+          _gmailPrefetchTriggered = false;
         }
       }).catchError((error) {
-        print('⚠️ Gmail prefetch: Error (non-critical): $error');
         // Reset flag on error so it can retry on next auth event
         _gmailPrefetchTriggered = false;
       });
     } catch (e) {
-      print(
-          '⚠️ Gmail prefetch: Error checking Gmail connection (non-critical): $e');
+      // Error checking Gmail connection (non-critical)
     }
   } catch (e) {
-    print('⚠️ Gmail prefetch: Initialization error (non-critical): $e');
+    // Initialization error (non-critical)
   }
 }
 
@@ -287,9 +271,64 @@ void _initializePushNotificationsAsync() async {
 
         print('✅ Foreground notification presentation options set!');
 
-        // ❌ REMOVED: Don't interfere with APNS registration
-        // The fcmTokenUserStream (line 298) and ensureFcmToken() handle this properly
-        // await _getFCMTokenWithRetry(messaging);
+        // Explicitly register for remote notifications on iOS
+        if (Platform.isIOS) {
+          // Register for remote notifications after permission is granted
+          try {
+            // Use method channel to explicitly register for remote notifications
+            // Delay to ensure method channel is ready
+            Future.delayed(const Duration(milliseconds: 500), () async {
+              try {
+                const platform = MethodChannel('com.linkedup.notifications');
+                await platform.invokeMethod('registerForRemoteNotifications');
+                print('✅ iOS: Explicitly registered for remote notifications');
+              } catch (e) {
+                print('⚠️ iOS: Method channel call failed (non-critical): $e');
+              }
+            });
+            
+            // Force registration by getting FCM token (this triggers APNS registration)
+            final fcmToken = await messaging.getToken();
+            if (fcmToken != null) {
+              print('✅ iOS: FCM token obtained: ${fcmToken.substring(0, 20)}...');
+              
+              // CRITICAL: Save FCM token to Firestore if user is logged in
+              // This ensures notifications can be sent to this device
+              if (currentUserReference != null) {
+                try {
+                  await actions.ensureFcmToken(currentUserReference!);
+                  print('✅ iOS: FCM token saved to Firestore');
+                } catch (e) {
+                  print('⚠️ iOS: Failed to save FCM token to Firestore: $e');
+                }
+              } else {
+                print('⚠️ iOS: User not logged in, FCM token not saved (will be saved on login)');
+              }
+            }
+            
+            // Also check for APNS token - this helps trigger registration
+            final apnsToken = await messaging.getAPNSToken();
+            if (apnsToken != null) {
+              print('✅ iOS: APNS token available: ${apnsToken.substring(0, apnsToken.length > 20 ? 20 : apnsToken.length)}...');
+            } else {
+              print('⚠️ iOS: APNS token not yet available (check Xcode console for native logs)');
+              // Retry after a short delay
+              Future.delayed(const Duration(seconds: 2), () async {
+                try {
+                  final retryApnsToken = await messaging.getAPNSToken();
+                  if (retryApnsToken != null) {
+                    print('✅ iOS: APNS token available after retry: ${retryApnsToken.substring(0, 20)}...');
+                  }
+                } catch (e) {
+                  print('⚠️ iOS: APNS token retry failed: $e');
+                }
+              });
+            }
+          } catch (e) {
+            print('⚠️ iOS: Token check failed: $e');
+            print('   Note: Native iOS logs appear in Xcode console, not Flutter console');
+          }
+        }
 
         // Listen for foreground messages
         FirebaseMessaging.onMessage.listen((RemoteMessage message) {
@@ -297,17 +336,41 @@ void _initializePushNotificationsAsync() async {
           print('   Title: ${message.notification?.title}');
           print('   Body: ${message.notification?.body}');
           print('   Data: ${message.data}');
+          print('   Message ID: ${message.messageId}');
+          print('   Sent Time: ${message.sentTime}');
           // Note: With setForegroundNotificationPresentationOptions, system will show notification
         });
 
-        // Listen for notification taps
+        // Listen for notification taps (when app is opened from notification)
         FirebaseMessaging.onMessageOpenedApp.listen((RemoteMessage message) {
-          // Notification tapped
+          print('📱 NOTIFICATION TAPPED - App opened from notification');
+          print('   Title: ${message.notification?.title}');
+          print('   Body: ${message.notification?.body}');
+          print('   Data: ${message.data}');
         });
+
+        // Check if app was opened from a notification (when app was terminated)
+        final initialMessage = await messaging.getInitialMessage();
+        if (initialMessage != null) {
+          print('📱 APP OPENED FROM NOTIFICATION (terminated state)');
+          print('   Title: ${initialMessage.notification?.title}');
+          print('   Data: ${initialMessage.data}');
+        }
 
         // Listen for token refresh
         FirebaseMessaging.instance.onTokenRefresh.listen((newToken) {
           print('🔄 FCM token refreshed: ${newToken.substring(0, 10)}...');
+          // Save new token to Firestore if user is logged in
+          if (currentUserReference != null) {
+            Future.delayed(const Duration(seconds: 1), () async {
+              try {
+                await actions.ensureFcmToken(currentUserReference!);
+                print('✅ Refreshed FCM token saved to Firestore');
+              } catch (e) {
+                print('⚠️ Failed to save refreshed FCM token: $e');
+              }
+            });
+          }
         });
       } else {
         print(
@@ -404,7 +467,7 @@ class MyAppScrollBehavior extends MaterialScrollBehavior {
 }
 
 class _MyAppState extends State<MyApp> {
-  ThemeMode _themeMode = ThemeMode.system;
+  ThemeMode _themeMode = ThemeMode.light; // Force light mode - never use dark mode
 
   late AppStateNotifier _appStateNotifier;
   late GoRouter _router;
@@ -424,14 +487,22 @@ class _MyAppState extends State<MyApp> {
   late Stream<BaseAuthUser> userStream;
 
   final authUserSub = authenticatedUserStream.listen((user) {
-    // RevenueCat disabled on macOS for App Store compliance
-    if (!kIsWeb && !Platform.isMacOS) {
-      revenue_cat.login(user?.uid);
-    }
-
     // Trigger Gmail prefetch when user is authenticated
     if (user != null && user.uid.isNotEmpty) {
       _triggerGmailPrefetchIfConnected();
+      
+      // Ensure FCM token is saved when user logs in
+      // This handles the case where token was obtained before login
+      Future.delayed(const Duration(seconds: 1), () async {
+        try {
+          if (currentUserReference != null) {
+            await actions.ensureFcmToken(currentUserReference!);
+            print('✅ FCM token ensured after user login');
+          }
+        } catch (e) {
+          print('⚠️ Failed to ensure FCM token after login: $e');
+        }
+      });
     }
   });
   // ❌ DISABLED: Causes race condition with ensureFcmToken() called from home/discover
@@ -464,7 +535,8 @@ class _MyAppState extends State<MyApp> {
   }
 
   void setThemeMode(ThemeMode mode) => safeSetState(() {
-        _themeMode = mode;
+        // Always force light mode - ignore any attempts to change to dark or system mode
+        _themeMode = ThemeMode.light;
       });
 
   /// Optimize app initialization to show loading page immediately
@@ -550,7 +622,9 @@ class NavBarPage extends StatefulWidget {
 class _NavBarPageState extends State<NavBarPage> with WidgetsBindingObserver {
   String _currentPageName = 'Home';
   late Widget? _currentPage;
-  bool _isChatOpen = false;
+
+  // Persistent MobileChatWidget to preserve state across parent rebuilds
+  late final Widget _mobileChatWidget;
 
   // Presence system for online status (like Slack)
   Timer? _inactivityTimer;
@@ -562,7 +636,12 @@ class _NavBarPageState extends State<NavBarPage> with WidgetsBindingObserver {
     WidgetsBinding.instance.addObserver(this);
     _currentPageName = widget.initialPage ?? _currentPageName;
     _currentPage = widget.page;
-    
+
+    // Initialize MobileChatWidget once to preserve its state
+    _mobileChatWidget = const MobileChatWidget(
+      key: ValueKey('mobile_chat_widget'),
+    );
+
     // Initialize presence system after a delay to ensure user is loaded
     WidgetsBinding.instance.addPostFrameCallback((_) {
       Future.delayed(Duration(milliseconds: 500), () {
@@ -644,7 +723,7 @@ class _NavBarPageState extends State<NavBarPage> with WidgetsBindingObserver {
     // Ensure the page name exists in tabs, fallback to 'Home' if not
     if (tabs.containsKey(pageName)) {
       _currentPageName = pageName;
-      // Clear news indicator when Announcements page is opened
+      // Clear news indicator when Announcements page is opened (desktop only)
       if (pageName == 'Announcements') {
         FFAppState().newsPageLastOpened = DateTime.now();
       }
@@ -663,24 +742,19 @@ class _NavBarPageState extends State<NavBarPage> with WidgetsBindingObserver {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _trackActivity();
     });
-    
+
     final tabs = {
       'Home': const HomeWidget(),
       // 'Chat': const ChatWidget(), // Commented out - using MobileChat (now called Chat) instead
-      'MobileChat': MobileChatWidget(
-        onChatStateChanged: (isChatOpen) {
-          setState(() {
-            _isChatOpen = isChatOpen;
-          });
-        },
-      ),
+      'MobileChat': _mobileChatWidget, // Use stored instance to preserve state
       'DesktopChat': DesktopChatWidget(), // Desktop chat for macOS
       'Gmail': const GmailWidget(), // Gmail page for macOS
       'GmailMobile': const GmailMobileWidget(), // Gmail mobile page for iOS
       'AIAssistant': const AIAssistantWidget(),
       'MobileAssistant': const MobileAssistantWidget(), // Mobile AI Assistant
       // 'Discover': const DiscoverWidget(), // Commented out since Home serves the same purpose
-      'Announcements': const FeedWidget(),
+      'Announcements': const FeedWidget(), // Keep for desktop
+      'Connections': const ConnectionsWidget(), // Connections page for iOS
       // 'Settings': const ProfileWidget(),
       'ProfileSettings': const ProfileSettingsWidget(),
       'MobileSettings': const MobileSettingsWidget(),
@@ -697,9 +771,10 @@ class _NavBarPageState extends State<NavBarPage> with WidgetsBindingObserver {
       'AIAssistant': 3, // Desktop AI Assistant
       'MobileAssistant': 3, // Mobile AI Assistant - for iOS
       // 'Discover': 3, // Commented out
-      'Announcements': 4, // Updated indices
-      'ProfileSettings': 5, // Settings
-      'MobileSettings': 5, // Mobile Settings
+      'Announcements': 3, // News - for desktop (keep for desktop)
+      'Connections': 3, // Connections - for iOS (updated to index 3)
+      'ProfileSettings': 4, // Settings - for macOS
+      'MobileSettings': 4, // Settings - for iOS (updated to index 4)
     };
 
     final currentIndex = navItemToIndex[_currentPageName] ?? 0;
@@ -708,12 +783,67 @@ class _NavBarPageState extends State<NavBarPage> with WidgetsBindingObserver {
     // Web and macOS use desktop layout with vertical sidebar
     // iOS uses mobile layout with bottom navigation
     if (!kIsWeb && Platform.isIOS) {
-      return Scaffold(
-        resizeToAvoidBottomInset: !widget.disableResizeToAvoidBottomInset,
-        body: _currentPage ?? tabs[_currentPageName] ?? tabs['Home']!,
-        bottomNavigationBar: _isChatOpen
-            ? null
-            : _buildHorizontalNavBar(tabs, currentIndex, navItemToIndex),
+      return StreamBuilder<UsersRecord?>(
+        stream: currentUserReference != null 
+            ? UsersRecord.getDocument(currentUserReference!)
+            : Stream.value(null),
+        builder: (context, userSnapshot) {
+          int connectionRequestCount = 0;
+          if (userSnapshot.hasData && userSnapshot.data != null) {
+            connectionRequestCount = userSnapshot.data!.friendRequests.length;
+          }
+
+          // Map tab indices to page names (5 items: Home, Chat, Mail, Connections, Settings)
+          final pageNames = [
+            'Home',
+            'MobileChat',
+            'GmailMobile',
+            'Connections',
+            'MobileSettings'
+          ];
+
+          // Build items with dynamic label for Connections
+          final items = <AdaptiveNavigationDestination>[
+            AdaptiveNavigationDestination(
+              icon: 'house.fill',
+              label: 'Home',
+            ),
+            AdaptiveNavigationDestination(
+              icon: 'message.fill',
+              label: 'Chat',
+            ),
+            AdaptiveNavigationDestination(
+              icon: 'envelope.fill',
+              label: 'Mail',
+            ),
+            AdaptiveNavigationDestination(
+              icon: 'person.2.fill',
+              label: connectionRequestCount > 0 
+                  ? 'Connections (${connectionRequestCount > 99 ? '99+' : connectionRequestCount})'
+                  : 'Connections',
+              addSpacerAfter: true,
+            ),
+            AdaptiveNavigationDestination(
+              icon: 'gearshape.fill',
+              label: 'Settings',
+            ),
+          ];
+
+          return AdaptiveScaffold(
+            body: _currentPage ?? tabs[_currentPageName] ?? tabs['Home']!,
+            bottomNavigationBar: AdaptiveBottomNavigationBar(
+              useNativeBottomBar: true,
+              items: items,
+              selectedIndex: currentIndex,
+              selectedItemColor: const Color.fromARGB(255, 2, 156, 252),
+              unselectedItemColor: CupertinoColors.systemGrey, // Lighter gray for unselected icons
+              onTap: (i) => safeSetState(() {
+                _currentPage = null;
+                _setCurrentPageName(pageNames[i], tabs);
+              }),
+            ),
+          );
+        },
       );
     } else {
       // Web and macOS - Use desktop layout with vertical sidebar
@@ -798,7 +928,7 @@ class _NavBarPageState extends State<NavBarPage> with WidgetsBindingObserver {
     // Try to use ChatController if available, otherwise fall back to chat-level counting
     try {
       final chatController = Get.find<ChatController>();
-      
+
       return StreamBuilder<int>(
         stream: chatController.getTotalUnreadMessageCount(),
         builder: (context, snapshot) {
@@ -817,7 +947,8 @@ class _NavBarPageState extends State<NavBarPage> with WidgetsBindingObserver {
             right: -4,
             top: -4,
             child: Container(
-              padding: EdgeInsets.symmetric(horizontal: unreadCount > 99 ? 4 : 3, vertical: 3),
+              padding: EdgeInsets.symmetric(
+                  horizontal: unreadCount > 99 ? 4 : 3, vertical: 3),
               decoration: BoxDecoration(
                 color: Color(0xFF3B82F6),
                 shape: BoxShape.circle,
@@ -1001,10 +1132,10 @@ class _NavBarPageState extends State<NavBarPage> with WidgetsBindingObserver {
                 child: StreamBuilder<UsersRecord>(
                   stream: UsersRecord.getDocument(currentUserReference!),
                   builder: (context, userSnapshot) {
-                    final isOnline = userSnapshot.hasData && 
-                                    userSnapshot.data != null && 
-                                    userSnapshot.data!.isOnline;
-                    
+                    final isOnline = userSnapshot.hasData &&
+                        userSnapshot.data != null &&
+                        userSnapshot.data!.isOnline;
+
                     return Stack(
                       clipBehavior: Clip.none,
                       children: [
@@ -1025,14 +1156,16 @@ class _NavBarPageState extends State<NavBarPage> with WidgetsBindingObserver {
                                       size: 24,
                                     ),
                                   ),
-                                  errorWidget: (context, url, error) => Container(
+                                  errorWidget: (context, url, error) =>
+                                      Container(
                                     width: 48,
                                     height: 48,
                                     color: Color(0xFF2563EB),
                                     child: Center(
                                       child: Text(
                                         currentUserDisplayName.isNotEmpty
-                                            ? currentUserDisplayName[0].toUpperCase()
+                                            ? currentUserDisplayName[0]
+                                                .toUpperCase()
                                             : 'U',
                                         style: TextStyle(
                                           color: Colors.white,
@@ -1054,7 +1187,8 @@ class _NavBarPageState extends State<NavBarPage> with WidgetsBindingObserver {
                                 child: Center(
                                   child: Text(
                                     currentUserDisplayName.isNotEmpty
-                                        ? currentUserDisplayName[0].toUpperCase()
+                                        ? currentUserDisplayName[0]
+                                            .toUpperCase()
                                         : 'U',
                                     style: TextStyle(
                                       color: Colors.white,
@@ -1356,149 +1490,256 @@ class _NavBarPageState extends State<NavBarPage> with WidgetsBindingObserver {
     );
   }
 
-  Widget _buildHorizontalNavBar(Map<String, Widget> tabs, int currentIndex,
-      Map<String, int> navItemToIndex) {
-    final navItems = [
-      {
-        'icon': Icons.home_rounded,
-        'label': 'Home',
-        'page': 'Home',
-      },
-      // {
-      //   'icon': Icons.chat_rounded,
-      //   'label': 'Chat',
-      //   'page': 'Chat',
-      // }, // Commented out - using MobileChat (now called Chat) instead
-      {
-        'icon': Icons.chat_bubble_outline_rounded,
-        'label': 'Chat',
-        'page': 'MobileChat',
-      },
-      {
-        'icon': Icons.mail_outline_rounded,
-        'label': 'Gmail',
-        'page': 'GmailMobile',
-      },
-      // {
-      //   'icon': 'assets/images/67b27b2cda06e9c69e5d000615c1153f80b09576.png',
-      //   'label': 'LonaAI',
-      //   'page': 'MobileAssistant',
-      // }, // Commented out - hiding LonaAI button on iOS
-      {
-        'icon': Icons.campaign_rounded,
-        'label': 'News',
-        'page': 'Announcements',
-      },
-      {
-        'icon': Icons.settings_outlined,
-        'label': 'Settings',
-        'page': 'MobileSettings',
-      },
-    ];
-
-    return Container(
-      height: 76,
-      decoration: BoxDecoration(
-        color: Color(0xFF2D3142),
-        border: Border(
-          top: BorderSide(
-            color: Color(0xFF374151),
-            width: 1,
-          ),
-        ),
+  Widget _buildUnderConstructionPage() {
+    return AdaptiveScaffold(
+      appBar: AdaptiveAppBar(
+        useNativeToolbar:
+            true, // Enable native iOS 26 UIToolbar with Liquid Glass effects
       ),
-      child: SafeArea(
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-          children: navItems.map((item) {
-            final isSelected = navItemToIndex[item['page']] == currentIndex;
-
-            return Expanded(
-              child: Container(
-                margin: EdgeInsets.symmetric(horizontal: 2),
-                child: Material(
-                  color: Colors.transparent,
-                  child: InkWell(
-                    onTap: () => safeSetState(() {
-                      _currentPage = null;
-                      _setCurrentPageName(item['page'] as String, tabs);
-                    }),
-                    borderRadius: BorderRadius.circular(8),
-                    child: Container(
-                      height: 56,
-                      decoration: BoxDecoration(
-                        color:
-                            isSelected ? Color(0xFF1F2937) : Colors.transparent,
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          // Icon with unread indicator
-                          Stack(
-                            clipBehavior: Clip.none,
-                            children: [
-                              item['icon'] is String
-                                  ? Container(
-                                      width: 24,
-                                      height: 24,
-                                      child: Image.asset(
-                                        item['icon'] as String,
-                                        width: 24,
-                                        height: 24,
-                                        fit: BoxFit.contain,
-                                      ),
-                                    )
-                                  : item['icon'] is IconData
-                                      ? Icon(
-                                          item['icon'] as IconData,
-                                          color: isSelected
-                                              ? Colors.white
-                                              : Color(0xFFD1D5DB),
-                                          size: 24,
-                                        )
-                                      : FaIcon(
-                                          item['icon'] as IconData,
-                                          color: isSelected
-                                              ? Colors.white
-                                              : Color(0xFFD1D5DB),
-                                          size: 22,
-                                        ),
-                              // Red dot indicator for News button
-                              if (item['page'] == 'Announcements')
-                                _buildNewsUnreadIndicator(),
-                              // Red dot indicator for Chat button
-                              if (item['page'] == 'MobileChat')
-                                _buildChatUnreadIndicator(),
-                            ],
-                          ),
-                          SizedBox(height: 4),
-                          // Label
-                          Text(
-                            item['label'] as String,
-                            style: TextStyle(
-                              fontFamily: 'Inter',
-                              color:
-                                  isSelected ? Colors.white : Color(0xFFD1D5DB),
-                              fontSize: 10,
-                              fontWeight: isSelected
-                                  ? FontWeight.w600
-                                  : FontWeight.w500,
-                            ),
-                            textAlign: TextAlign.center,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ],
+      body: SafeArea(
+        child: Stack(
+          clipBehavior: Clip.none,
+          children: [
+            // Home heading in top left
+            Positioned(
+              top: 16,
+              left: 16,
+              child: Text(
+                'Home',
+                style: TextStyle(
+                  fontSize: 34,
+                  fontWeight: FontWeight.bold,
+                  color: CupertinoColors.label,
+                ),
+              ),
+            ),
+            // Main content centered
+            Center(
+              child: Padding(
+                padding: const EdgeInsets.all(32.0),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(
+                      CupertinoIcons.hammer_fill,
+                      size: 80,
+                      color: CupertinoColors.systemGrey,
+                    ),
+                    const SizedBox(height: 24),
+                    Text(
+                      'Under Construction',
+                      style: TextStyle(
+                        fontSize: 28,
+                        fontWeight: FontWeight.bold,
+                        color: CupertinoColors.label,
                       ),
                     ),
+                    const SizedBox(height: 16),
+                    Text(
+                      'This page is currently being built.\nPlease check back soon!',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        fontSize: 16,
+                        color: CupertinoColors.secondaryLabel,
+                        height: 1.5,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            // Small round invite button in top right
+            Positioned(
+              top: 60,
+              right: 16,
+              child: GestureDetector(
+                onTap: () {
+                  print('🔘 Invite button tapped!');
+                  _showInviteDialog(context);
+                },
+                behavior: HitTestBehavior.opaque,
+                child: Container(
+                  width: 44,
+                  height: 44,
+                  decoration: BoxDecoration(
+                    color: const Color.fromARGB(255, 234, 237,
+                        239), // Grey background matching unselected tab bar items
+                    shape: BoxShape.circle,
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.1),
+                        blurRadius: 8,
+                        offset: Offset(0, 2),
+                      ),
+                    ],
+                  ),
+                  child: Icon(
+                    Icons.person_add_rounded,
+                    color: const Color.fromARGB(255, 2, 156,
+                        252), // Blue icon matching selected tab bar color
+                    size: 20,
                   ),
                 ),
               ),
-            );
-          }).toList(),
+            ),
+          ],
         ),
       ),
+    );
+  }
+
+  void _showInviteDialog(BuildContext context) async {
+    print('🔘 Invite button tapped!');
+    try {
+      // Show iOS 26+ adaptive dialog with invite options (iOS 26+ liquid glass effect)
+      await AdaptiveAlertDialog.show(
+        context: context,
+        title: 'Invite Friends',
+        message:
+            'Share Lona with your friends and boost your team\'s productivity together!',
+        icon: 'person.2.fill',
+        actions: [
+          AlertAction(
+            title: 'Cancel',
+            style: AlertActionStyle.cancel,
+            onPressed: () {
+              print('❌ Cancel pressed');
+            },
+          ),
+          AlertAction(
+            title: 'Share',
+            style: AlertActionStyle.primary,
+            onPressed: () {
+              print('✅ Share pressed');
+              _shareInviteMessage(context);
+            },
+          ),
+        ],
+      );
+    } catch (e) {
+      print('❌ Error showing invite dialog: $e');
+    }
+  }
+
+  Future<void> _shareInviteMessage(BuildContext context) async {
+    // Open native iOS share sheet (like WhatsApp)
+    final size = MediaQuery.of(context).size;
+    final sharePositionOrigin = Rect.fromLTWH(
+      size.width / 2 - 100,
+      size.height / 2,
+      200,
+      100,
+    );
+
+    await Share.share(
+      'Hey! I\'ve been using this app named Lona for communication, and it\'s amazing! It really boosts productivity and makes team collaboration so much easier. You should check it out!\n\nDownload here: https://apps.apple.com/us/app/lona-club/id6747595642',
+      sharePositionOrigin: sharePositionOrigin,
+    );
+  }
+
+  AdaptiveBottomNavigationBar _buildHorizontalNavBar(Map<String, Widget> tabs,
+      int currentIndex, Map<String, int> navItemToIndex) {
+    // Map tab indices to page names (5 items: Home, Chat, Mail, Connections, Settings)
+    final pageNames = [
+      'Home',
+      'MobileChat',
+      'GmailMobile',
+      'Connections',
+      'MobileSettings'
+    ];
+
+    return AdaptiveBottomNavigationBar(
+      useNativeBottomBar:
+          true, // Enable native iOS 26 UITabBar with Liquid Glass effects
+      items: [
+        AdaptiveNavigationDestination(
+          icon: 'house.fill',
+          label: 'Home',
+        ),
+        AdaptiveNavigationDestination(
+          icon: 'message.fill',
+          label: 'Chat',
+        ),
+        AdaptiveNavigationDestination(
+          icon: 'envelope.fill',
+          label: 'Mail',
+        ),
+        AdaptiveNavigationDestination(
+          icon: 'person.2.fill',
+          label: 'Connections',
+          addSpacerAfter:
+              true, // Add spacing to separate Settings from other items
+        ),
+        AdaptiveNavigationDestination(
+          icon: 'gearshape.fill',
+          label: 'Settings',
+        ),
+      ],
+      selectedIndex: currentIndex,
+      selectedItemColor: const Color.fromARGB(255, 2, 156, 252),
+      unselectedItemColor: CupertinoColors.systemGrey, // Lighter gray for unselected icons
+      onTap: (i) => safeSetState(() {
+        _currentPage = null;
+        _setCurrentPageName(pageNames[i], tabs);
+      }),
+    );
+  }
+
+  AdaptiveBottomNavigationBar _buildHorizontalNavBarWithBadge(Map<String, Widget> tabs,
+      int currentIndex, Map<String, int> navItemToIndex) {
+    // Map tab indices to page names (5 items: Home, Chat, Mail, Connections, Settings)
+    final pageNames = [
+      'Home',
+      'MobileChat',
+      'GmailMobile',
+      'Connections',
+      'MobileSettings'
+    ];
+
+    // Get connection request count - use a default value for now
+    int connectionRequestCount = 0;
+    if (currentUserReference != null) {
+      // We'll use a StreamBuilder wrapper instead
+      // For now, return the nav bar without count, we'll wrap it in the build method
+    }
+
+    // Build items - show count in label if there are requests
+    final items = <AdaptiveNavigationDestination>[
+      AdaptiveNavigationDestination(
+        icon: 'house.fill',
+        label: 'Home',
+      ),
+      AdaptiveNavigationDestination(
+        icon: 'message.fill',
+        label: 'Chat',
+      ),
+      AdaptiveNavigationDestination(
+        icon: 'envelope.fill',
+        label: 'Mail',
+      ),
+      AdaptiveNavigationDestination(
+        icon: 'person.2.fill',
+        label: connectionRequestCount > 0 
+            ? 'Connections (${connectionRequestCount > 99 ? '99+' : connectionRequestCount})'
+            : 'Connections',
+        addSpacerAfter: true,
+      ),
+      AdaptiveNavigationDestination(
+        icon: 'gearshape.fill',
+        label: 'Settings',
+      ),
+    ];
+
+    return AdaptiveBottomNavigationBar(
+      useNativeBottomBar: true,
+      items: items,
+      selectedIndex: currentIndex,
+      selectedItemColor: const Color.fromARGB(255, 2, 156, 252),
+      unselectedItemColor: CupertinoColors.systemGrey, // Lighter gray for unselected icons
+      onTap: (i) => safeSetState(() {
+        _currentPage = null;
+        _setCurrentPageName(pageNames[i], tabs);
+      }),
     );
   }
 }

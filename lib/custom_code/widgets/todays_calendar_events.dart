@@ -1,5 +1,4 @@
-import 'package:flutter/material.dart';
-import 'package:ff_theme/flutter_flow/flutter_flow_theme.dart';
+import 'package:flutter/cupertino.dart';
 import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart'
     show canLaunchUrl, launchUrl, LaunchMode;
@@ -426,25 +425,25 @@ class _TodaysCalendarEventsState extends State<TodaysCalendarEvents> {
     // Video call icon if meeting link exists
     if (meetingLink != null) {
       return Icon(
-        Icons.videocam,
-        size: 20,
-        color: Color(0xFF2563EB),
+        CupertinoIcons.videocam_fill,
+        size: 18,
+        color: CupertinoColors.white,
       );
     }
     // Location icon if location exists
     else if (location.isNotEmpty) {
       return Icon(
-        Icons.location_on,
-        size: 20,
-        color: Color(0xFF2563EB),
+        CupertinoIcons.location_fill,
+        size: 18,
+        color: CupertinoColors.white,
       );
     }
     // Default group/people icon
     else {
       return Icon(
-        Icons.people,
-        size: 20,
-        color: Color(0xFF2563EB),
+        CupertinoIcons.person_3_fill,
+        size: 18,
+        color: CupertinoColors.white,
       );
     }
   }
@@ -494,34 +493,24 @@ class _TodaysCalendarEventsState extends State<TodaysCalendarEvents> {
     final location = event['location'] ?? '';
     final platform = _getEventPlatform(event);
 
-    // Get start time for display - format as "1:00" and "PM" on separate lines
-    String timeHour = '';
-    String timePeriod = '';
+    // Get start time for display - format as "09:00 AM" or "11:30 AM"
+    String timeDisplay = '';
     final start = event['start'];
     if (start != null && start['dateTime'] != null) {
       try {
         final startTime = DateTime.parse(start['dateTime']).toLocal();
-        final formatted = DateFormat('h:mm a').format(startTime);
-        final parts = formatted.split(' ');
-        if (parts.length == 2) {
-          timeHour = parts[0]; // "1:00"
-          timePeriod = parts[1]; // "PM"
-        }
+        timeDisplay = DateFormat('hh:mm a').format(startTime);
       } catch (e) {}
     }
-    if (timeHour.isEmpty) {
+    if (timeDisplay.isEmpty) {
       final firstPart = timeStr.split(' - ')[0]; // Get first part of time range
-      final parts = firstPart.split(' ');
-      if (parts.length >= 2) {
-        timeHour = parts[0];
-        timePeriod = parts[1];
-      } else {
-        timeHour = firstPart;
-      }
+      timeDisplay = firstPart;
     }
 
-    return InkWell(
-      onTap: meetingLink != null
+    return CupertinoButton(
+      padding: EdgeInsets.zero,
+      minSize: 0,
+      onPressed: meetingLink != null
           ? () async {
               final uri = Uri.parse(meetingLink);
               if (await canLaunchUrl(uri)) {
@@ -529,123 +518,83 @@ class _TodaysCalendarEventsState extends State<TodaysCalendarEvents> {
               }
             }
           : null,
-      child: Container(
-        margin: EdgeInsets.only(bottom: 8),
-        padding: EdgeInsets.all(12),
-        decoration: BoxDecoration(
-          color: Color(0xFFF8F9FA), // Light grey background
-          borderRadius: BorderRadius.circular(12),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.05),
-              blurRadius: 4,
-              offset: Offset(0, 2),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Time on the left
+          SizedBox(
+            width: 80,
+            child: Text(
+              timeDisplay,
+              style: TextStyle(
+                fontFamily: '.SF Pro Text',
+                fontSize: 15,
+                fontWeight: FontWeight.w400,
+                color: CupertinoColors.label,
+                letterSpacing: -0.2,
+              ),
             ),
-          ],
-        ),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Time on the left - stacked format
-            SizedBox(
-              width: 80,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    timeHour,
-                    style: TextStyle(
-                      fontFamily: 'Inter',
-                      fontSize: 20,
-                      fontWeight: FontWeight.w600, // Less bold
-                      color: Color(0xFF1E293B),
-                    ),
+          ),
+          // Vertical separator line - light blue
+          Container(
+            width: 2,
+            height: 50,
+            margin: EdgeInsets.only(right: 16, left: 8),
+            decoration: BoxDecoration(
+              color: CupertinoColors.systemBlue.withOpacity(0.3),
+              borderRadius: BorderRadius.circular(1),
+            ),
+          ),
+          // Content in the middle
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Event title
+                Text(
+                  summary,
+                  style: TextStyle(
+                    fontFamily: '.SF Pro Text',
+                    fontSize: 17,
+                    fontWeight: FontWeight.w600,
+                    color: CupertinoColors.label,
+                    letterSpacing: -0.3,
                   ),
-                  if (timePeriod.isNotEmpty)
-                    Text(
-                      timePeriod,
-                      style: TextStyle(
-                        fontFamily: 'Inter',
-                        fontSize: 14,
-                        fontWeight: FontWeight.w400, // Less bold
-                        color: Color(0xFF1E293B),
-                      ),
-                    ),
-                ],
-              ),
-            ),
-            // Vertical blue line
-            Container(
-              width: 3,
-              height: 45,
-              margin: EdgeInsets.only(right: 16),
-              decoration: BoxDecoration(
-                color: Color(0xFF2563EB),
-                borderRadius: BorderRadius.circular(2),
-              ),
-            ),
-            // Content in the middle
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Event title
-                  Text(
-                    summary,
-                    style: TextStyle(
-                      fontFamily: 'Inter',
-                      fontSize: 16,
-                      fontWeight: FontWeight.w500,
-                      color: Color(0xFF1E293B),
-                    ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                SizedBox(height: 4),
+                // Description
+                Text(
+                  description.isNotEmpty
+                      ? description
+                      : (location.isNotEmpty ? location : platform),
+                  style: TextStyle(
+                    fontFamily: '.SF Pro Text',
+                    fontSize: 15,
+                    fontWeight: FontWeight.w400,
+                    color: CupertinoColors.secondaryLabel,
+                    letterSpacing: -0.2,
                   ),
-                  SizedBox(height: 2),
-                  // Platform indicator
-                  Text(
-                    platform,
-                    style: TextStyle(
-                      fontFamily: 'Inter',
-                      fontSize: 12,
-                      fontWeight: FontWeight.w400,
-                      color: Color(0xFF94A3B8),
-                    ),
-                  ),
-                  if (description.isNotEmpty || location.isNotEmpty) ...[
-                    SizedBox(height: 2),
-                    // Description or location
-                    Text(
-                      description.isNotEmpty
-                          ? description
-                          : (location.isNotEmpty ? location : ''),
-                      style: TextStyle(
-                        fontFamily: 'Inter',
-                        fontSize: 14,
-                        fontWeight: FontWeight.w400,
-                        color: Color(0xFF64748B),
-                      ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ],
-                ],
-              ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ],
             ),
-            // Icon on the right
-            Container(
-              width: 40,
-              height: 40,
-              decoration: BoxDecoration(
-                color: Color(0xFFE3F2FD), // Light blue background
-                shape: BoxShape.circle,
-              ),
-              child: Center(
-                child: _getEventIcon(event),
-              ),
+          ),
+          // Icon on the right - light purple circle
+          Container(
+            width: 40,
+            height: 40,
+            decoration: BoxDecoration(
+              color: CupertinoColors.systemPurple.withOpacity(0.15),
+              shape: BoxShape.circle,
             ),
-          ],
-        ),
+            child: Center(
+              child: _getEventIcon(event),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -657,69 +606,59 @@ class _TodaysCalendarEventsState extends State<TodaysCalendarEvents> {
       return SizedBox.shrink();
     }
 
-    return Container(
-      padding: EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: Color(0xFFE8EAED),
-          width: 1,
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: Color(0xFF1E293B).withOpacity(0.05),
-            blurRadius: 10,
-            offset: Offset(0, 2),
-          ),
-        ],
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 4),
+          child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              const Text(
+              Text(
                 "Today's Schedule",
                 style: TextStyle(
-                  fontFamily: 'Inter',
-                  fontSize: 18,
-                  fontWeight: FontWeight.w600,
-                  color: Color(0xFF1E293B),
+                  fontFamily: '.SF Pro Display',
+                  fontSize: 28,
+                  fontWeight: FontWeight.w700,
+                  color: CupertinoColors.label,
+                  letterSpacing: -0.8,
+                  height: 1.1,
                 ),
               ),
               if (_isLoading)
-                SizedBox(
-                  width: 20,
-                  height: 20,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2,
-                    valueColor:
-                        AlwaysStoppedAnimation<Color>(Color(0xFF2563EB)),
-                  ),
+                CupertinoActivityIndicator(
+                  radius: 10,
                 )
-              else
-                IconButton(
-                  icon: const Icon(Icons.add, size: 20),
-                  color: const Color(0xFF64748B),
-                  onPressed: () {
-                    // TODO: Implement add event
-                  },
-                  tooltip: 'Add Event',
+              else if (!_isLoading && _todayEvents.isNotEmpty)
+                CupertinoButton(
                   padding: EdgeInsets.zero,
-                  constraints: const BoxConstraints(),
+                  minSize: 0,
+                  onPressed: () {
+                    // TODO: Navigate to full schedule view
+                  },
+                  child: Text(
+                    'View all',
+                    style: TextStyle(
+                      fontFamily: '.SF Pro Text',
+                      fontSize: 17,
+                      fontWeight: FontWeight.w400,
+                      color: CupertinoColors.systemBlue,
+                      letterSpacing: -0.2,
+                    ),
+                  ),
                 ),
             ],
           ),
-          SizedBox(height: 12),
-          if (_isLoading && _todayEvents.isEmpty)
+        ),
+        SizedBox(height: 16),
+        if (_isLoading && _todayEvents.isEmpty)
             Center(
               child: Padding(
                 padding: EdgeInsets.all(20),
-                child: CircularProgressIndicator(
-                  valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF2563EB)),
+                child: CupertinoActivityIndicator(
+                  radius: 12,
                 ),
               ),
             )
@@ -730,18 +669,19 @@ class _TodaysCalendarEventsState extends State<TodaysCalendarEvents> {
                 child: Column(
                   children: [
                     Icon(
-                      Icons.error_outline_rounded,
-                      color: Color(0xFFEF4444),
+                      CupertinoIcons.exclamationmark_triangle,
+                      color: CupertinoColors.systemRed,
                       size: 32,
                     ),
                     SizedBox(height: 8),
                     Text(
                       'Failed to load events',
-                      style: FlutterFlowTheme.of(context).bodyMedium.override(
-                            fontFamily: 'Inter',
-                            fontSize: 14,
-                            color: Color(0xFF64748B),
-                          ),
+                      style: TextStyle(
+                        fontFamily: '.SF Pro Text',
+                        fontSize: 15,
+                        color: CupertinoColors.secondaryLabel,
+                        letterSpacing: -0.2,
+                      ),
                     ),
                   ],
                 ),
@@ -750,35 +690,46 @@ class _TodaysCalendarEventsState extends State<TodaysCalendarEvents> {
           else if (_todayEvents.isEmpty)
             const SizedBox.shrink() // Hide completely if no events
           else ...[
-            // Meeting cards - show up to 3, then "View all" link
-            ...List.generate(
-              _todayEvents.length > 3 ? 3 : _todayEvents.length,
-              (index) => _buildMeetingCard(_todayEvents[index], index),
-            ),
-            // View all link if more than 3 events
-            if (_todayEvents.length > 3)
-              Padding(
-                padding: EdgeInsets.only(top: 8),
-                child: Center(
-                  child: InkWell(
-                    onTap: () {
-                      // TODO: Navigate to full schedule view
-                    },
-                    child: Text(
-                      'View all',
-                      style: TextStyle(
-                        fontFamily: 'Inter',
-                        fontSize: 14,
-                        fontWeight: FontWeight.w500,
-                        color: Color(0xFF2563EB),
-                      ),
-                    ),
+            // White card container for schedule items
+            Container(
+              padding: EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: CupertinoColors.systemBackground,
+                borderRadius: BorderRadius.circular(14),
+                boxShadow: [
+                  BoxShadow(
+                    color: CupertinoColors.black.withOpacity(0.05),
+                    blurRadius: 10,
+                    offset: const Offset(0, 2),
+                    spreadRadius: 0,
                   ),
-                ),
+                ],
               ),
+              child: Column(
+                children: [
+                  // Meeting cards - show up to 3
+                  ...List.generate(
+                    _todayEvents.length > 3 ? 3 : _todayEvents.length,
+                    (index) {
+                      final isLast = index == (_todayEvents.length > 3 ? 2 : _todayEvents.length - 1);
+                      return Column(
+                        children: [
+                          _buildMeetingCard(_todayEvents[index], index),
+                          if (!isLast && _todayEvents.length > 1)
+                            Container(
+                              height: 1,
+                              margin: EdgeInsets.symmetric(vertical: 8),
+                              color: CupertinoColors.separator.withOpacity(0.3),
+                            ),
+                        ],
+                      );
+                    },
+                  ),
+                ],
+              ),
+            ),
           ],
-        ],
-      ),
+      ],
     );
   }
 }

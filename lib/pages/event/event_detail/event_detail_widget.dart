@@ -1329,10 +1329,10 @@ class _EventDetailWidgetState extends State<EventDetailWidget>
                                               width: double.infinity,
                                               height: 50.0,
                                               child: custom_widgets
-                                                  .EventTicketPurchaseButton(
+                                                  .EnhancedJoinButton(
                                                 width: double.infinity,
                                                 height: 50.0,
-                                                event: _model.eventDoc!,
+                                                eventDoc: _model.eventDoc!,
                                                 onSuccess: () async {
                                                   _model.allParticipantsUpdated =
                                                       await queryParticipantRecordOnce(

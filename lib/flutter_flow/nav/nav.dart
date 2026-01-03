@@ -105,13 +105,21 @@ GoRouter createRouter(AppStateNotifier appStateNotifier) {
     refreshListenable: appStateNotifier,
     navigatorKey: appNavigatorKey,
     errorBuilder: (context, state) =>
-        appStateNotifier.loggedIn ? NavBarPage() : const WelcomeWidget(),
+        appStateNotifier.loggedIn
+            ? (!kIsWeb && Platform.isIOS
+                ? NavBarPage(initialPage: 'MobileChat')
+                : NavBarPage())
+            : const WelcomeWidget(),
     routes: [
       FFRoute(
         name: '_initialize',
         path: '/',
         builder: (context, _) =>
-            appStateNotifier.loggedIn ? NavBarPage() : const WelcomeWidget(),
+            appStateNotifier.loggedIn
+                ? (!kIsWeb && Platform.isIOS
+                    ? NavBarPage(initialPage: 'MobileChat')
+                    : NavBarPage())
+                : const WelcomeWidget(),
       ),
       FFRoute(
         name: LoginWidget.routeName,

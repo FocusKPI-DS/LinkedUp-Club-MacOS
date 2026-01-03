@@ -44,11 +44,21 @@ class MobileChatModel extends FlutterFlowModel {
   String? groupImageUrl;
   bool isUploadingImage = false;
 
+  // Group member search
+  TextEditingController? groupMemberSearchController;
+
+  // New Chat screen (WhatsApp-style)
+  bool showNewChatScreen = false;
+  TextEditingController? newChatSearchController;
+  List<DocumentReference> selectedContactsForNewChat = [];
+
   @override
   void initState(BuildContext context) {
     searchFocusNode = FocusNode();
     searchTextController = TextEditingController();
     groupNameController = TextEditingController();
+    groupMemberSearchController = TextEditingController();
+    newChatSearchController = TextEditingController();
     chatThreadComponentModel =
         createModel(context, () => ChatThreadComponentModel());
   }
@@ -59,6 +69,8 @@ class MobileChatModel extends FlutterFlowModel {
     searchFocusNode?.dispose();
     searchTextController?.dispose();
     groupNameController?.dispose();
+    groupMemberSearchController?.dispose();
+    newChatSearchController?.dispose();
     tabController?.dispose();
     chatThreadComponentModel.dispose();
   }

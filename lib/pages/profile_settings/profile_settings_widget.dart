@@ -3,6 +3,7 @@ import '/backend/backend.dart';
 import '/flutter_flow/flutter_flow_util.dart';
 import '/flutter_flow/flutter_flow_widgets.dart';
 import '/backend/push_notifications/push_notifications_util.dart';
+import '/custom_code/services/web_notification_service.dart';
 import 'package:ff_theme/flutter_flow/flutter_flow_theme.dart';
 import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
@@ -11,6 +12,8 @@ import 'package:cloud_functions/cloud_functions.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:permission_handler/permission_handler.dart';
 import 'dart:io';
 import 'dart:math';
 import '/index.dart';
@@ -28,11 +31,9 @@ class _ProfileSettingsWidgetState extends State<ProfileSettingsWidget> {
 
   final scaffoldKey = GlobalKey<ScaffoldState>();
 
-  // Notification settings state
-  bool _notificationsEnabled = true;
-  bool _newMessageEnabled = true;
-  bool _emailNotificationsEnabled = true;
-  bool _eventRemindersEnabled = false;
+  // Notification settings state - synced with system
+  bool _notificationsEnabled = false;
+  bool _isLoadingNotificationStatus = true;
 
   // Cover photo dropdown state
   final GlobalKey _coverPhotoDropdownKey = GlobalKey();
@@ -61,14 +62,44 @@ class _ProfileSettingsWidgetState extends State<ProfileSettingsWidget> {
   }
 
   Future<void> _loadNotificationSettings() async {
-    if (currentUserDocument != null) {
-      setState(() {
-        _notificationsEnabled = currentUserDocument!.notificationsEnabled;
-        _newMessageEnabled = currentUserDocument!.newMessageEnabled;
-        // Email notifications default to true (field doesn't exist yet in schema)
-        _emailNotificationsEnabled = true;
-        // Event reminders uses notifications_enabled
-        _eventRemindersEnabled = currentUserDocument!.notificationsEnabled;
+    setState(() {
+      _isLoadingNotificationStatus = true;
+    });
+
+    // Check actual system notification permission status
+    bool systemNotificationEnabled = false;
+
+    if (kIsWeb) {
+      // For web, check browser notification permission
+      try {
+        final permission = WebNotificationService.instance.permissionStatus;
+        systemNotificationEnabled = permission == 'granted';
+      } catch (e) {
+        print('Error checking web notification permission: $e');
+      }
+    } else if (Platform.isMacOS || Platform.isIOS) {
+      // For macOS/iOS, check Firebase Messaging permission
+      try {
+        final messaging = FirebaseMessaging.instance;
+        final settings = await messaging.getNotificationSettings();
+        systemNotificationEnabled =
+            settings.authorizationStatus == AuthorizationStatus.authorized ||
+                settings.authorizationStatus == AuthorizationStatus.provisional;
+      } catch (e) {
+        print('Error checking notification permission: $e');
+      }
+    }
+
+    // Update state to match system permission
+    setState(() {
+      _notificationsEnabled = systemNotificationEnabled;
+      _isLoadingNotificationStatus = false;
+    });
+
+    // Also update Firestore to match system permission
+    if (currentUserReference != null) {
+      await currentUserReference!.update({
+        'notifications_enabled': systemNotificationEnabled,
       });
     }
   }
@@ -371,7 +402,8 @@ class _ProfileSettingsWidgetState extends State<ProfileSettingsWidget> {
           _model.emailController?.text = currentUserEmail;
         }
         if (_model.websiteController?.text.isEmpty ?? true) {
-          _model.websiteController?.text = user.snapshotData['website']?.toString() ?? '';
+          _model.websiteController?.text =
+              user.snapshotData['website']?.toString() ?? '';
         }
         if (_model.roleController?.text.isEmpty ?? true) {
           _model.roleController?.text = '';
@@ -430,7 +462,8 @@ class _ProfileSettingsWidgetState extends State<ProfileSettingsWidget> {
             ),
             // Profile picture positioned to overlap cover photo - CENTERED
             Positioned(
-              top: 140, // Position at bottom of 200px cover photo minus half of profile picture
+              top:
+                  140, // Position at bottom of 200px cover photo minus half of profile picture
               left: 0,
               right: 0,
               child: Center(
@@ -442,7 +475,8 @@ class _ProfileSettingsWidgetState extends State<ProfileSettingsWidget> {
                         bottom: 4,
                         right: 4,
                         child: InkWell(
-                          onTap: () => context.pushNamed(EditProfileWidget.routeName),
+                          onTap: () =>
+                              context.pushNamed(EditProfileWidget.routeName),
                           child: Container(
                             width: 32,
                             height: 32,
@@ -736,12 +770,14 @@ class _ProfileSettingsWidgetState extends State<ProfileSettingsWidget> {
   /// Builds LinkedIn-style profile info section
   Widget _buildLinkedInProfileInfoSection(UsersRecord user, String role) {
     return Container(
-      padding: EdgeInsets.fromLTRB(24, 40, 24, 24), // Reduced top padding for overlapping profile picture
+      padding: EdgeInsets.fromLTRB(24, 40, 24,
+          24), // Reduced top padding for overlapping profile picture
       child: Column(
         children: [
           // Profile picture space (handled by positioned widget)
-          SizedBox(height: 30), // Reduced space for the overlapping profile picture
-          
+          SizedBox(
+              height: 30), // Reduced space for the overlapping profile picture
+
           // Name - Centered and Bigger
           if (_model.isEditingProfile)
             Container(
@@ -759,18 +795,18 @@ class _ProfileSettingsWidgetState extends State<ProfileSettingsWidget> {
                 decoration: InputDecoration(
                   labelText: 'Full Name',
                   labelStyle: FlutterFlowTheme.of(context).bodyMedium.override(
-                    fontFamily: 'Inter',
-                    fontSize: 14,
-                    color: Color(0xFF6B7280),
-                    fontWeight: FontWeight.w500,
-                  ),
+                        fontFamily: 'Inter',
+                        fontSize: 14,
+                        color: Color(0xFF6B7280),
+                        fontWeight: FontWeight.w500,
+                      ),
                   hintText: 'Enter your full name',
                   hintStyle: FlutterFlowTheme.of(context).bodyMedium.override(
-                    fontFamily: 'Inter',
-                    fontSize: 18,
-                    color: Color(0xFF999999),
-                    fontWeight: FontWeight.w400,
-                  ),
+                        fontFamily: 'Inter',
+                        fontSize: 18,
+                        color: Color(0xFF999999),
+                        fontWeight: FontWeight.w400,
+                      ),
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(8),
                     borderSide: BorderSide(color: Color(0xFFDDDDDD)),
@@ -779,7 +815,8 @@ class _ProfileSettingsWidgetState extends State<ProfileSettingsWidget> {
                     borderRadius: BorderRadius.circular(8),
                     borderSide: BorderSide(color: Color(0xFF0077B5), width: 2),
                   ),
-                  contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  contentPadding:
+                      EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                 ),
               ),
             )
@@ -795,9 +832,9 @@ class _ProfileSettingsWidgetState extends State<ProfileSettingsWidget> {
                   ),
               textAlign: TextAlign.center,
             ),
-          
+
           SizedBox(height: 16),
-          
+
           // Bio/About Section - Multiple lines, centered
           if (_model.isEditingProfile)
             Container(
@@ -806,28 +843,34 @@ class _ProfileSettingsWidgetState extends State<ProfileSettingsWidget> {
               child: TextField(
                 controller: _model.bioController,
                 maxLines: 4,
-                style: FlutterFlowTheme.of(context).bodyLarge.override(
+                style: FlutterFlowTheme.of(context)
+                    .bodyLarge
+                    .override(
                       fontFamily: 'Inter',
                       fontSize: 16,
                       letterSpacing: 0,
                       color: Color(0xFF374151),
-                    ).copyWith(height: 1.5),
+                    )
+                    .copyWith(height: 1.5),
                 textAlign: TextAlign.center,
                 decoration: InputDecoration(
                   labelText: 'Bio',
                   labelStyle: FlutterFlowTheme.of(context).bodyMedium.override(
-                    fontFamily: 'Inter',
-                    fontSize: 14,
-                    color: Color(0xFF6B7280),
-                    fontWeight: FontWeight.w500,
-                  ),
+                        fontFamily: 'Inter',
+                        fontSize: 14,
+                        color: Color(0xFF6B7280),
+                        fontWeight: FontWeight.w500,
+                      ),
                   hintText: 'Tell us about yourself...',
-                  hintStyle: FlutterFlowTheme.of(context).bodyMedium.override(
-                    fontFamily: 'Inter',
-                    fontSize: 14,
-                    color: Color(0xFF999999),
-                    fontWeight: FontWeight.w400,
-                  ).copyWith(height: 1.5),
+                  hintStyle: FlutterFlowTheme.of(context)
+                      .bodyMedium
+                      .override(
+                        fontFamily: 'Inter',
+                        fontSize: 14,
+                        color: Color(0xFF999999),
+                        fontWeight: FontWeight.w400,
+                      )
+                      .copyWith(height: 1.5),
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(8),
                     borderSide: BorderSide(color: Color(0xFFDDDDDD)),
@@ -845,18 +888,21 @@ class _ProfileSettingsWidgetState extends State<ProfileSettingsWidget> {
               constraints: BoxConstraints(maxWidth: 600),
               child: Text(
                 user.bio,
-                style: FlutterFlowTheme.of(context).bodyLarge.override(
+                style: FlutterFlowTheme.of(context)
+                    .bodyLarge
+                    .override(
                       fontFamily: 'Inter',
                       fontSize: 16,
                       letterSpacing: 0,
                       color: Color(0xFF374151),
-                    ).copyWith(height: 1.5),
+                    )
+                    .copyWith(height: 1.5),
                 textAlign: TextAlign.center,
               ),
             ),
-          
+
           SizedBox(height: 20),
-          
+
           // Location - Centered with bold label
           if (user.location.isNotEmpty || _model.isEditingProfile)
             if (_model.isEditingProfile)
@@ -874,28 +920,31 @@ class _ProfileSettingsWidgetState extends State<ProfileSettingsWidget> {
                   textAlign: TextAlign.center,
                   decoration: InputDecoration(
                     labelText: 'Location',
-                    labelStyle: FlutterFlowTheme.of(context).bodyMedium.override(
-                      fontFamily: 'Inter',
-                      fontSize: 14,
-                      color: Color(0xFF6B7280),
-                      fontWeight: FontWeight.w500,
-                    ),
+                    labelStyle:
+                        FlutterFlowTheme.of(context).bodyMedium.override(
+                              fontFamily: 'Inter',
+                              fontSize: 14,
+                              color: Color(0xFF6B7280),
+                              fontWeight: FontWeight.w500,
+                            ),
                     hintText: 'Enter your location (e.g., New York, NY, USA)',
                     hintStyle: FlutterFlowTheme.of(context).bodyMedium.override(
-                      fontFamily: 'Inter',
-                      fontSize: 16,
-                      color: Color(0xFF999999),
-                      fontWeight: FontWeight.w400,
-                    ),
+                          fontFamily: 'Inter',
+                          fontSize: 16,
+                          color: Color(0xFF999999),
+                          fontWeight: FontWeight.w400,
+                        ),
                     border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(8),
                       borderSide: BorderSide(color: Color(0xFFDDDDDD)),
                     ),
                     focusedBorder: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(8),
-                      borderSide: BorderSide(color: Color(0xFF0077B5), width: 2),
+                      borderSide:
+                          BorderSide(color: Color(0xFF0077B5), width: 2),
                     ),
-                    contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                    contentPadding:
+                        EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                   ),
                 ),
               )
@@ -915,14 +964,14 @@ class _ProfileSettingsWidgetState extends State<ProfileSettingsWidget> {
                   ),
                 ],
               ),
-          
+
           SizedBox(height: 24),
-          
+
           // Contact Information
           _buildLinkedInContactInfo(user),
-          
+
           SizedBox(height: 24),
-          
+
           // Action Buttons
           if (_model.isEditingProfile)
             Row(
@@ -1062,7 +1111,8 @@ class _ProfileSettingsWidgetState extends State<ProfileSettingsWidget> {
       child: Column(
         children: [
           // Website
-          if (_model.isEditingProfile || (_model.websiteController?.text.isNotEmpty ?? false))
+          if (_model.isEditingProfile ||
+              (_model.websiteController?.text.isNotEmpty ?? false))
             Container(
               margin: EdgeInsets.only(bottom: 12),
               child: Row(
@@ -1081,28 +1131,32 @@ class _ProfileSettingsWidgetState extends State<ProfileSettingsWidget> {
                         textAlign: TextAlign.left,
                         decoration: InputDecoration(
                           labelText: 'Website',
-                          labelStyle: FlutterFlowTheme.of(context).bodyMedium.override(
-                            fontFamily: 'Inter',
-                            fontSize: 14,
-                            color: Color(0xFF6B7280),
-                            fontWeight: FontWeight.w500,
-                          ),
+                          labelStyle:
+                              FlutterFlowTheme.of(context).bodyMedium.override(
+                                    fontFamily: 'Inter',
+                                    fontSize: 14,
+                                    color: Color(0xFF6B7280),
+                                    fontWeight: FontWeight.w500,
+                                  ),
                           hintText: 'https://www.example.com',
-                          hintStyle: FlutterFlowTheme.of(context).bodyMedium.override(
-                            fontFamily: 'Inter',
-                            fontSize: 16,
-                            color: Color(0xFF999999),
-                            fontWeight: FontWeight.w400,
-                          ),
+                          hintStyle:
+                              FlutterFlowTheme.of(context).bodyMedium.override(
+                                    fontFamily: 'Inter',
+                                    fontSize: 16,
+                                    color: Color(0xFF999999),
+                                    fontWeight: FontWeight.w400,
+                                  ),
                           border: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(4),
                             borderSide: BorderSide(color: Color(0xFFDDDDDD)),
                           ),
                           focusedBorder: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(4),
-                            borderSide: BorderSide(color: Color(0xFF0077B5), width: 2),
+                            borderSide:
+                                BorderSide(color: Color(0xFF0077B5), width: 2),
                           ),
-                          contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                          contentPadding:
+                              EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                         ),
                       ),
                     )
@@ -1112,30 +1166,32 @@ class _ProfileSettingsWidgetState extends State<ProfileSettingsWidget> {
                       children: [
                         Text(
                           'Website:',
-                          style: FlutterFlowTheme.of(context).bodyLarge.override(
-                                fontFamily: 'Inter',
-                                fontSize: 16,
-                                fontWeight: FontWeight.w600,
-                                letterSpacing: 0,
-                                color: Color(0xFF000000),
-                              ),
+                          style:
+                              FlutterFlowTheme.of(context).bodyLarge.override(
+                                    fontFamily: 'Inter',
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.w600,
+                                    letterSpacing: 0,
+                                    color: Color(0xFF000000),
+                                  ),
                         ),
                         SizedBox(width: 16),
                         Text(
                           _model.websiteController?.text ?? '',
-                          style: FlutterFlowTheme.of(context).bodyMedium.override(
-                                fontFamily: 'Inter',
-                                fontSize: 16,
-                                letterSpacing: 0,
-                                color: Color(0xFF000000),
-                              ),
+                          style:
+                              FlutterFlowTheme.of(context).bodyMedium.override(
+                                    fontFamily: 'Inter',
+                                    fontSize: 16,
+                                    letterSpacing: 0,
+                                    color: Color(0xFF000000),
+                                  ),
                         ),
                       ],
                     ),
                 ],
               ),
             ),
-          
+
           // Email
           Container(
             margin: EdgeInsets.only(bottom: 12),
@@ -1560,7 +1616,7 @@ class _ProfileSettingsWidgetState extends State<ProfileSettingsWidget> {
             offset: Offset(0, -70),
             child: _buildModernProfilePicture(),
           ),
-          
+
           // Name
           Transform.translate(
             offset: Offset(0, -50),
@@ -1571,23 +1627,28 @@ class _ProfileSettingsWidgetState extends State<ProfileSettingsWidget> {
                     width: 300,
                     child: TextField(
                       controller: _model.displayNameController,
-                      style: FlutterFlowTheme.of(context).headlineMedium.override(
-                            fontFamily: 'Inter',
-                            fontSize: 28,
-                            fontWeight: FontWeight.w700,
-                            letterSpacing: 0,
-                          ),
+                      style:
+                          FlutterFlowTheme.of(context).headlineMedium.override(
+                                fontFamily: 'Inter',
+                                fontSize: 28,
+                                fontWeight: FontWeight.w700,
+                                letterSpacing: 0,
+                              ),
                       textAlign: TextAlign.center,
                       decoration: InputDecoration(
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(12),
-                          borderSide: BorderSide(color: FlutterFlowTheme.of(context).alternate),
+                          borderSide: BorderSide(
+                              color: FlutterFlowTheme.of(context).alternate),
                         ),
                         focusedBorder: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(12),
-                          borderSide: BorderSide(color: FlutterFlowTheme.of(context).primary, width: 2),
+                          borderSide: BorderSide(
+                              color: FlutterFlowTheme.of(context).primary,
+                              width: 2),
                         ),
-                        contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                        contentPadding:
+                            EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                       ),
                     ),
                   )
@@ -1603,9 +1664,9 @@ class _ProfileSettingsWidgetState extends State<ProfileSettingsWidget> {
                         ),
                     textAlign: TextAlign.center,
                   ),
-                
+
                 SizedBox(height: 12),
-                
+
                 // Role (Optional)
                 if (_model.isEditingProfile)
                   Container(
@@ -1623,29 +1684,39 @@ class _ProfileSettingsWidgetState extends State<ProfileSettingsWidget> {
                         hintText: 'Role (Optional)',
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(20),
-                          borderSide: BorderSide(color: FlutterFlowTheme.of(context).alternate),
+                          borderSide: BorderSide(
+                              color: FlutterFlowTheme.of(context).alternate),
                         ),
                         focusedBorder: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(20),
-                          borderSide: BorderSide(color: FlutterFlowTheme.of(context).primary, width: 2),
+                          borderSide: BorderSide(
+                              color: FlutterFlowTheme.of(context).primary,
+                              width: 2),
                         ),
-                        contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                        contentPadding:
+                            EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                       ),
                     ),
                   )
-                else if (role.isNotEmpty || (_model.roleController?.text.isNotEmpty ?? false))
+                else if (role.isNotEmpty ||
+                    (_model.roleController?.text.isNotEmpty ?? false))
                   Container(
                     padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                     decoration: BoxDecoration(
-                      color: FlutterFlowTheme.of(context).primary.withOpacity(0.1),
+                      color:
+                          FlutterFlowTheme.of(context).primary.withOpacity(0.1),
                       borderRadius: BorderRadius.circular(20),
                       border: Border.all(
-                        color: FlutterFlowTheme.of(context).primary.withOpacity(0.3),
+                        color: FlutterFlowTheme.of(context)
+                            .primary
+                            .withOpacity(0.3),
                         width: 1,
                       ),
                     ),
                     child: Text(
-                      _model.roleController?.text.isNotEmpty == true ? _model.roleController!.text : role,
+                      _model.roleController?.text.isNotEmpty == true
+                          ? _model.roleController!.text
+                          : role,
                       style: FlutterFlowTheme.of(context).bodyMedium.override(
                             fontFamily: 'Inter',
                             fontSize: 14,
@@ -1655,9 +1726,9 @@ class _ProfileSettingsWidgetState extends State<ProfileSettingsWidget> {
                           ),
                     ),
                   ),
-                
+
                 SizedBox(height: 16),
-                
+
                 // Bio
                 if (_model.isEditingProfile)
                   Container(
@@ -1667,22 +1738,29 @@ class _ProfileSettingsWidgetState extends State<ProfileSettingsWidget> {
                       controller: _model.bioController,
                       maxLines: 3,
                       textAlign: TextAlign.center,
-                      style: FlutterFlowTheme.of(context).bodyMedium.override(
+                      style: FlutterFlowTheme.of(context)
+                          .bodyMedium
+                          .override(
                             fontFamily: 'Inter',
                             fontSize: 16,
                             letterSpacing: 0,
-                          ).copyWith(height: 1.5),
+                          )
+                          .copyWith(height: 1.5),
                       decoration: InputDecoration(
                         hintText: 'Tell us about yourself...',
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(12),
-                          borderSide: BorderSide(color: FlutterFlowTheme.of(context).alternate),
+                          borderSide: BorderSide(
+                              color: FlutterFlowTheme.of(context).alternate),
                         ),
                         focusedBorder: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(12),
-                          borderSide: BorderSide(color: FlutterFlowTheme.of(context).primary, width: 2),
+                          borderSide: BorderSide(
+                              color: FlutterFlowTheme.of(context).primary,
+                              width: 2),
                         ),
-                        contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+                        contentPadding:
+                            EdgeInsets.symmetric(horizontal: 16, vertical: 16),
                       ),
                     ),
                   )
@@ -1691,18 +1769,21 @@ class _ProfileSettingsWidgetState extends State<ProfileSettingsWidget> {
                     constraints: BoxConstraints(maxWidth: 500),
                     child: Text(
                       user.bio,
-                      style: FlutterFlowTheme.of(context).bodyMedium.override(
+                      style: FlutterFlowTheme.of(context)
+                          .bodyMedium
+                          .override(
                             fontFamily: 'Inter',
                             fontSize: 16,
                             letterSpacing: 0,
                             color: Color(0xFF6B7280),
-                          ).copyWith(height: 1.5),
+                          )
+                          .copyWith(height: 1.5),
                       textAlign: TextAlign.center,
                     ),
                   ),
-                
+
                 SizedBox(height: 20),
-                
+
                 // Location
                 if (user.location.isNotEmpty || _model.isEditingProfile)
                   Row(
@@ -1719,7 +1800,9 @@ class _ProfileSettingsWidgetState extends State<ProfileSettingsWidget> {
                               width: 200,
                               child: TextField(
                                 controller: _model.locationController,
-                                style: FlutterFlowTheme.of(context).bodyMedium.override(
+                                style: FlutterFlowTheme.of(context)
+                                    .bodyMedium
+                                    .override(
                                       fontFamily: 'Inter',
                                       fontSize: 16,
                                       letterSpacing: 0,
@@ -1730,19 +1813,27 @@ class _ProfileSettingsWidgetState extends State<ProfileSettingsWidget> {
                                   hintText: 'Location',
                                   border: OutlineInputBorder(
                                     borderRadius: BorderRadius.circular(8),
-                                    borderSide: BorderSide(color: FlutterFlowTheme.of(context).alternate),
+                                    borderSide: BorderSide(
+                                        color: FlutterFlowTheme.of(context)
+                                            .alternate),
                                   ),
                                   focusedBorder: OutlineInputBorder(
                                     borderRadius: BorderRadius.circular(8),
-                                    borderSide: BorderSide(color: FlutterFlowTheme.of(context).primary, width: 2),
+                                    borderSide: BorderSide(
+                                        color: FlutterFlowTheme.of(context)
+                                            .primary,
+                                        width: 2),
                                   ),
-                                  contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                  contentPadding: EdgeInsets.symmetric(
+                                      horizontal: 12, vertical: 8),
                                 ),
                               ),
                             )
                           : Text(
                               user.location,
-                              style: FlutterFlowTheme.of(context).bodyMedium.override(
+                              style: FlutterFlowTheme.of(context)
+                                  .bodyMedium
+                                  .override(
                                     fontFamily: 'Inter',
                                     fontSize: 16,
                                     letterSpacing: 0,
@@ -1752,14 +1843,14 @@ class _ProfileSettingsWidgetState extends State<ProfileSettingsWidget> {
                             ),
                     ],
                   ),
-                
+
                 SizedBox(height: 24),
-                
+
                 // Contact Information
                 _buildContactInfo(user),
-                
+
                 SizedBox(height: 32),
-                
+
                 // Action Buttons
                 _buildModernActionButtons(user),
               ],
@@ -1862,7 +1953,8 @@ class _ProfileSettingsWidgetState extends State<ProfileSettingsWidget> {
     return Column(
       children: [
         // Website (Optional)
-        if (_model.isEditingProfile || (_model.websiteController?.text.isNotEmpty ?? false))
+        if (_model.isEditingProfile ||
+            (_model.websiteController?.text.isNotEmpty ?? false))
           Container(
             margin: EdgeInsets.only(bottom: 12),
             child: Row(
@@ -1897,22 +1989,28 @@ class _ProfileSettingsWidgetState extends State<ProfileSettingsWidget> {
                         width: 250,
                         child: TextField(
                           controller: _model.websiteController,
-                          style: FlutterFlowTheme.of(context).bodyMedium.override(
-                                fontFamily: 'Inter',
-                                fontSize: 14,
-                                letterSpacing: 0,
-                              ),
+                          style:
+                              FlutterFlowTheme.of(context).bodyMedium.override(
+                                    fontFamily: 'Inter',
+                                    fontSize: 14,
+                                    letterSpacing: 0,
+                                  ),
                           decoration: InputDecoration(
                             hintText: 'www.example.com (Optional)',
                             border: OutlineInputBorder(
                               borderRadius: BorderRadius.circular(8),
-                              borderSide: BorderSide(color: FlutterFlowTheme.of(context).alternate),
+                              borderSide: BorderSide(
+                                  color:
+                                      FlutterFlowTheme.of(context).alternate),
                             ),
                             focusedBorder: OutlineInputBorder(
                               borderRadius: BorderRadius.circular(8),
-                              borderSide: BorderSide(color: FlutterFlowTheme.of(context).primary, width: 2),
+                              borderSide: BorderSide(
+                                  color: FlutterFlowTheme.of(context).primary,
+                                  width: 2),
                             ),
-                            contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                            contentPadding: EdgeInsets.symmetric(
+                                horizontal: 12, vertical: 8),
                           ),
                         ),
                       )
@@ -1928,7 +2026,7 @@ class _ProfileSettingsWidgetState extends State<ProfileSettingsWidget> {
               ],
             ),
           ),
-        
+
         // Email (Optional)
         Container(
           margin: EdgeInsets.only(bottom: 12),
@@ -2081,7 +2179,7 @@ class _ProfileSettingsWidgetState extends State<ProfileSettingsWidget> {
           _model.isEditingProfile = false;
         });
       }
-      
+
       // Show error message using the safe helper method
       _showErrorSnackBar('Failed to update profile. Please try again.');
     }
@@ -2114,7 +2212,7 @@ class _ProfileSettingsWidgetState extends State<ProfileSettingsWidget> {
           _model.isEditingProfile = false;
         });
       }
-      
+
       // Show error message using the safe helper method
       _showErrorSnackBar('Failed to update profile. Please try again.');
     }
@@ -2145,7 +2243,7 @@ class _ProfileSettingsWidgetState extends State<ProfileSettingsWidget> {
           ),
           SizedBox(height: 16),
           Text(
-            'Customize how you receive notifications.',
+            'Enable or disable notifications. This setting syncs with your system notification preferences.',
             style: FlutterFlowTheme.of(context).bodyMedium.override(
                   fontFamily: 'Inter',
                   fontSize: 14,
@@ -2155,14 +2253,15 @@ class _ProfileSettingsWidgetState extends State<ProfileSettingsWidget> {
                 ),
           ),
           SizedBox(height: 24),
-          _buildNotificationToggle('Push Notifications', _notificationsEnabled),
-          SizedBox(height: 16),
-          _buildNotificationToggle(
-              'Email Notifications', _emailNotificationsEnabled),
-          SizedBox(height: 16),
-          _buildNotificationToggle('New Message Alerts', _newMessageEnabled),
-          SizedBox(height: 16),
-          _buildNotificationToggle('Event Reminders', _eventRemindersEnabled),
+          _isLoadingNotificationStatus
+              ? Center(
+                  child: Padding(
+                    padding: EdgeInsets.all(24),
+                    child: CircularProgressIndicator(),
+                  ),
+                )
+              : _buildNotificationToggle(
+                  'Notifications', _notificationsEnabled),
           SizedBox(height: 24),
           FFButtonWidget(
             onPressed: () async {
@@ -3804,47 +3903,206 @@ class _ProfileSettingsWidgetState extends State<ProfileSettingsWidget> {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        Text(
-          label,
-          style: FlutterFlowTheme.of(context).bodyMedium.override(
-                fontFamily: 'Inter',
-                fontSize: 14,
-                fontWeight: FontWeight.w500,
-                letterSpacing: 0,
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                label,
+                style: FlutterFlowTheme.of(context).bodyMedium.override(
+                      fontFamily: 'Inter',
+                      fontSize: 14,
+                      fontWeight: FontWeight.w500,
+                      letterSpacing: 0,
+                    ),
               ),
+              SizedBox(height: 4),
+              Text(
+                value
+                    ? 'Notifications are enabled in system settings'
+                    : 'Notifications are disabled in system settings',
+                style: FlutterFlowTheme.of(context).bodySmall.override(
+                      fontFamily: 'Inter',
+                      fontSize: 12,
+                      color: FlutterFlowTheme.of(context).secondaryText,
+                    ),
+              ),
+            ],
+          ),
         ),
         Switch(
           value: value,
           onChanged: (newValue) async {
-            // Map label to Firestore field and state variable
-            String field = '';
-            if (label == 'Push Notifications') {
-              field = 'notifications_enabled';
-              setState(() => _notificationsEnabled = newValue);
-            } else if (label == 'Event Reminders') {
-              field = 'notifications_enabled';
-              setState(() => _eventRemindersEnabled = newValue);
-            } else if (label == 'New Message Alerts') {
-              field = 'new_message_enabled';
-              setState(() => _newMessageEnabled = newValue);
-            } else if (label == 'Email Notifications') {
-              field = 'email_notifications_enabled';
-              setState(() => _emailNotificationsEnabled = newValue);
+            if (newValue) {
+              // Turning ON - Request system notification permission
+              bool permissionGranted = false;
+
+              if (kIsWeb) {
+                // For web, request browser notification permission (will show browser dialog)
+                try {
+                  final permission =
+                      await WebNotificationService.instance.requestPermission();
+                  permissionGranted = permission == 'granted';
+
+                  if (mounted && context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text(
+                          permissionGranted
+                              ? '✅ Notifications enabled'
+                              : '❌ Permission denied. Please allow notifications in your browser.',
+                        ),
+                        backgroundColor: permissionGranted
+                            ? Color(0xFF10B981)
+                            : Color(0xFFEF4444),
+                        duration: Duration(seconds: 3),
+                      ),
+                    );
+                  }
+                } catch (e) {
+                  print('Error requesting web notification permission: $e');
+                  permissionGranted = false;
+                }
+              } else if (Platform.isMacOS || Platform.isIOS) {
+                // For macOS/iOS, check current status first
+                try {
+                  final messaging = FirebaseMessaging.instance;
+                  final currentSettings =
+                      await messaging.getNotificationSettings();
+
+                  // If already authorized, just enable
+                  if (currentSettings.authorizationStatus ==
+                          AuthorizationStatus.authorized ||
+                      currentSettings.authorizationStatus ==
+                          AuthorizationStatus.provisional) {
+                    permissionGranted = true;
+                  }
+                  // If not determined, request permission (will show system dialog)
+                  else if (currentSettings.authorizationStatus ==
+                      AuthorizationStatus.notDetermined) {
+                    final settings = await messaging.requestPermission(
+                      alert: true,
+                      badge: true,
+                      sound: true,
+                      provisional: false,
+                      announcement: false,
+                      carPlay: false,
+                      criticalAlert: false,
+                    );
+                    permissionGranted = settings.authorizationStatus ==
+                            AuthorizationStatus.authorized ||
+                        settings.authorizationStatus ==
+                            AuthorizationStatus.provisional;
+                  }
+                  // If denied, open system settings
+                  else {
+                    // Permission was denied, open system settings
+                    final settingsOpened = await openAppSettings();
+                    if (mounted && context.mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text(
+                            settingsOpened
+                                ? 'Opening system settings... Please enable notifications there.'
+                                : 'Please enable notifications in System Settings > Notifications.',
+                          ),
+                          backgroundColor: Color(0xFFEF4444),
+                          duration: Duration(seconds: 4),
+                        ),
+                      );
+                    }
+                    permissionGranted = false;
+                  }
+                } catch (e) {
+                  print('Error requesting notification permission: $e');
+                  permissionGranted = false;
+                }
+              }
+
+              // Update state based on actual permission result
+              setState(() {
+                _notificationsEnabled = permissionGranted;
+              });
+
+              // Update Firestore
+              if (currentUserReference != null) {
+                await currentUserReference!.update({
+                  'notifications_enabled': permissionGranted,
+                });
+              }
+
+              // Show success feedback if permission was granted
+              if (permissionGranted && mounted && context.mounted && !kIsWeb) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text('✅ Notifications enabled'),
+                    backgroundColor: Color(0xFF10B981),
+                    duration: Duration(seconds: 2),
+                  ),
+                );
+              }
+            } else {
+              // Turning OFF - Open system settings to disable
+              setState(() {
+                _notificationsEnabled = false;
+              });
+
+              // Update Firestore first
+              if (currentUserReference != null) {
+                await currentUserReference!.update({
+                  'notifications_enabled': false,
+                });
+              }
+
+              // Open system settings so user can disable notifications
+              bool settingsOpened = false;
+
+              if (kIsWeb) {
+                // For web, show message (can't programmatically revoke)
+                if (mounted && context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text(
+                        'Please disable notifications in your browser settings.',
+                      ),
+                      backgroundColor: Color(0xFFEF4444),
+                      duration: Duration(seconds: 4),
+                    ),
+                  );
+                }
+              } else {
+                // For macOS/iOS, open system settings
+                try {
+                  settingsOpened = await openAppSettings();
+                } catch (e) {
+                  print('Error opening system settings: $e');
+                }
+
+                // Show feedback
+                if (mounted && context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text(
+                        settingsOpened
+                            ? 'Opening system settings... Please disable notifications there.'
+                            : 'Please disable notifications in System Settings > Notifications.',
+                      ),
+                      backgroundColor: Color(0xFFEF4444),
+                      duration: Duration(seconds: 4),
+                    ),
+                  );
+                }
+              }
             }
 
-            if (field.isNotEmpty && currentUserReference != null) {
-              await currentUserReference!.update({field: newValue});
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content:
-                      Text('✅ $label ${newValue ? 'enabled' : 'disabled'}'),
-                  backgroundColor: Color(0xFF10B981),
-                  duration: Duration(seconds: 2),
-                ),
-              );
-            }
+            // Reload to sync with system after a delay
+            Future.delayed(Duration(seconds: 2), () {
+              if (mounted) {
+                _loadNotificationSettings();
+              }
+            });
           },
-          activeColor: FlutterFlowTheme.of(context).secondaryText,
+          activeThumbColor: const Color(0xFF2563EB),
         ),
       ],
     );
@@ -5944,7 +6202,7 @@ class _ProfileSettingsWidgetState extends State<ProfileSettingsWidget> {
 
       // Wait for upload to complete and check for errors
       final snapshot = await uploadTask.whenComplete(() {});
-      
+
       // Check if upload was successful
       if (snapshot.state != TaskState.success) {
         throw Exception('Upload failed with state: ${snapshot.state}');
@@ -5973,7 +6231,7 @@ class _ProfileSettingsWidgetState extends State<ProfileSettingsWidget> {
     if (currentUser == null) {
       throw Exception('User not found');
     }
-    
+
     await currentUser.update({
       'cover_photo_url': downloadUrl,
       'cover_photo_template': '', // Clear template when uploading custom photo
@@ -5983,7 +6241,7 @@ class _ProfileSettingsWidgetState extends State<ProfileSettingsWidget> {
   /// Shows success snackbar
   void _showSuccessSnackBar(String message) {
     if (!mounted) return;
-    
+
     // Use SchedulerBinding to ensure we're in a safe state
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted && context.mounted) {
@@ -6007,7 +6265,7 @@ class _ProfileSettingsWidgetState extends State<ProfileSettingsWidget> {
   /// Shows error snackbar
   void _showErrorSnackBar(String message) {
     if (!mounted) return;
-    
+
     // Use SchedulerBinding to ensure we're in a safe state
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted && context.mounted) {
@@ -6262,26 +6520,26 @@ class _ProfileSettingsWidgetState extends State<ProfileSettingsWidget> {
     if (gradient is! LinearGradient) {
       return Container(); // Return empty container if gradient is invalid
     }
-    
+
     final textColor = _getTextColorForGradient(gradient);
-    
+
     return InkWell(
       onTap: () async {
         // Check if widget is still mounted before proceeding
         if (!mounted) return;
-        
+
         // Get the dialog context before closing
         final dialogContext = context;
-        
+
         try {
           // Close the template dialog first
           if (Navigator.canPop(dialogContext)) {
             Navigator.of(dialogContext).pop();
           }
-          
+
           // Wait for the dialog to fully close
           await Future.delayed(Duration(milliseconds: 300));
-          
+
           // Check if widget is still mounted before proceeding
           if (mounted) {
             await _applyCoverPhotoTemplate(gradient);
@@ -6299,7 +6557,7 @@ class _ProfileSettingsWidgetState extends State<ProfileSettingsWidget> {
           gradient: gradient,
           borderRadius: BorderRadius.circular(12),
           border: Border.all(
-            color: textColor == Colors.white 
+            color: textColor == Colors.white
                 ? Colors.white.withOpacity(0.3)
                 : Colors.black.withOpacity(0.2),
             width: 1,
@@ -6326,15 +6584,16 @@ class _ProfileSettingsWidgetState extends State<ProfileSettingsWidget> {
     if (gradient.colors.isEmpty) {
       return Colors.white; // Default to white if no colors
     }
-    
+
     final firstColor = gradient.colors.first;
-    
+
     // Calculate luminance (brightness) of the color
     // Formula: 0.299*R + 0.587*G + 0.114*B
-    final luminance = (0.299 * firstColor.red + 
-                      0.587 * firstColor.green + 
-                      0.114 * firstColor.blue) / 255;
-    
+    final luminance = (0.299 * firstColor.red +
+            0.587 * firstColor.green +
+            0.114 * firstColor.blue) /
+        255;
+
     // If luminance is high (light color), use dark text, otherwise use white
     return luminance > 0.5 ? Color(0xFF111827) : Colors.white;
   }
@@ -6380,8 +6639,9 @@ class _ProfileSettingsWidgetState extends State<ProfileSettingsWidget> {
       // Store gradient colors as a template identifier
       // Convert gradient to a simple identifier based on first color
       final firstColor = gradient.colors.first;
-      final secondColor = gradient.colors.length > 1 ? gradient.colors[1] : firstColor;
-      
+      final secondColor =
+          gradient.colors.length > 1 ? gradient.colors[1] : firstColor;
+
       // Create a template identifier from colors
       final templateId = 'gradient_${firstColor.value}_${secondColor.value}';
 

@@ -1,23 +1,22 @@
 import '/auth/base_auth_user_provider.dart';
 import '/auth/firebase_auth/auth_util.dart';
 import '/backend/backend.dart';
-import '/backend/schema/structs/index.dart';
 import '/components/invite_friends_button_widget.dart';
 import '/flutter_flow/flutter_flow_animations.dart';
 import '/flutter_flow/flutter_flow_util.dart';
 import '/custom_code/widgets/summerai_todos.dart';
 import '/custom_code/widgets/todays_calendar_events.dart';
-import '/custom_code/widgets/task_stats.dart';
 import 'dart:async';
 import 'dart:ui';
 import '/actions/actions.dart' as action_blocks;
 import '/custom_code/actions/index.dart' as actions;
 import '/flutter_flow/permissions_util.dart';
 import 'package:flutter/gestures.dart';
-import 'package:flutter/material.dart';
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:provider/provider.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import 'home_model.dart';
 export 'home_model.dart';
 
@@ -36,8 +35,6 @@ class HomeWidget extends StatefulWidget {
 
 class _HomeWidgetState extends State<HomeWidget> with TickerProviderStateMixin {
   late HomeModel _model;
-
-  final scaffoldKey = GlobalKey<ScaffoldState>();
 
   final animationsMap = <String, AnimationInfo>{};
 
@@ -151,78 +148,48 @@ class _HomeWidgetState extends State<HomeWidget> with TickerProviderStateMixin {
   Widget build(BuildContext context) {
     context.watch<FFAppState>();
 
-    return GestureDetector(
-      onTap: () => FocusScope.of(context).unfocus(),
-      child: Scaffold(
-        key: scaffoldKey,
-        backgroundColor: Color(
-            0xFFF8FAFF), // Subtle white tinted with blue (Color(0xFF2563EB))
-        body: SafeArea(
-          top: true,
-          child: Stack(
-            clipBehavior: Clip.none,
-            children: [
-              SingleChildScrollView(
-                child: Padding(
-                  padding: const EdgeInsetsDirectional.fromSTEB(
-                      32.0, 32.0, 32.0, 32.0),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      // Header Section
-                      _buildHeaderSection(context),
+    return CupertinoPageScaffold(
+      backgroundColor: CupertinoColors.systemGroupedBackground,
+      child: SafeArea(
+        top: true,
+        child: Stack(
+          clipBehavior: Clip.none,
+          children: [
+            SingleChildScrollView(
+              physics: const BouncingScrollPhysics(),
+              child: Padding(
+                padding: const EdgeInsetsDirectional.fromSTEB(
+                    16.0, 8.0, 16.0, 100.0),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Header Section with profile icon and notification bell
+                    _buildHeaderSection(context),
 
-                      const SizedBox(height: 32),
+                    const SizedBox(height: 32),
 
-                      // Two-column layout with equal heights
-                      IntrinsicHeight(
-                        child: Row(
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
-                          children: [
-                            // Left Column
-                            Expanded(
-                              child: Column(
-                                mainAxisSize: MainAxisSize.min,
-                                crossAxisAlignment: CrossAxisAlignment.stretch,
-                                children: [
-                                  // Today's Schedule Card
-                                  _buildTodaysCalendarSection(context),
+                    // Today's Schedule Section
+                    _buildTodaysCalendarSection(context),
 
-                                  const SizedBox(height: 24),
+                    const SizedBox(height: 24),
 
-                                  // Task Stats Section - will expand to match right column
-                                  const Expanded(
-                                    child: TaskStats(),
-                                  ),
-                                ],
-                              ),
-                            ),
+                    // Action Items Section
+                    _buildSummerAITasksSection(context),
 
-                            const SizedBox(width: 24),
-
-                            // Right Column
-                            Expanded(
-                              child: _buildSummerAITasksSection(context),
-                            ),
-                          ],
-                        ),
-                      ),
-
-                      // Bottom spacing
-                      const SizedBox(height: 40),
-                    ],
-                  ),
+                    // Bottom spacing
+                    const SizedBox(height: 40),
+                  ],
                 ),
               ),
-              // Invite friends button in top right
-              Positioned(
-                top: 32,
-                right: 32,
-                child: InviteFriendsButtonWidget(),
-              ),
-            ],
-          ),
+            ),
+            // Invite friends button in top right
+            Positioned(
+              top: 8,
+              right: 16,
+              child: InviteFriendsButtonWidget(),
+            ),
+          ],
         ),
       ),
     );
@@ -256,46 +223,164 @@ class _HomeWidgetState extends State<HomeWidget> with TickerProviderStateMixin {
                 greeting = 'Good Evening';
               }
 
-              return Column(
+              return Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text.rich(
-                    TextSpan(
+                  // Profile Avatar
+                  Container(
+                    width: 64,
+                    height: 64,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      boxShadow: [
+                        BoxShadow(
+                          color: CupertinoColors.systemBlue.withOpacity(0.3),
+                          blurRadius: 8,
+                          offset: const Offset(0, 2),
+                        ),
+                      ],
+                    ),
+                    child: user.photoUrl.isNotEmpty
+                        ? ClipOval(
+                            child: CachedNetworkImage(
+                              imageUrl: user.photoUrl,
+                              width: 64,
+                              height: 64,
+                              fit: BoxFit.cover,
+                              placeholder: (context, url) => Container(
+                                width: 64,
+                                height: 64,
+                                color: CupertinoColors.systemBlue,
+                                child: Center(
+                                  child: Text(
+                                    userName.isNotEmpty
+                                        ? userName[0].toUpperCase()
+                                        : 'U',
+                                    style: const TextStyle(
+                                      color: CupertinoColors.white,
+                                      fontSize: 28,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                              errorWidget: (context, url, error) => Container(
+                                width: 64,
+                                height: 64,
+                                color: CupertinoColors.systemBlue,
+                                child: Center(
+                                  child: Text(
+                                    userName.isNotEmpty
+                                        ? userName[0].toUpperCase()
+                                        : 'U',
+                                    style: const TextStyle(
+                                      color: CupertinoColors.white,
+                                      fontSize: 28,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          )
+                        : Container(
+                            width: 64,
+                            height: 64,
+                            decoration: BoxDecoration(
+                              color: CupertinoColors.systemBlue,
+                              shape: BoxShape.circle,
+                            ),
+                            child: Center(
+                              child: Text(
+                                userName.isNotEmpty
+                                    ? userName[0].toUpperCase()
+                                    : 'U',
+                                style: const TextStyle(
+                                  color: CupertinoColors.white,
+                                  fontSize: 28,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ),
+                          ),
+                  ),
+                  const SizedBox(width: 16),
+                  // Greeting and Name
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        TextSpan(
-                          text: '$greeting, ',
+                        // Greeting
+                        Text(
+                          greeting,
                           style: const TextStyle(
-                            fontFamily: 'Inter',
-                            color: Color(0xFF1E293B),
-                            fontSize: 40, // Increased from 28
+                            fontFamily: '.SF Pro Display',
+                            color: CupertinoColors.label,
+                            fontSize: 28,
                             fontWeight: FontWeight.w700,
+                            letterSpacing: -0.8,
+                            height: 1.1,
                           ),
                         ),
-                        TextSpan(
-                          text: userName,
+                        const SizedBox(height: 2),
+                        // Name in blue
+                        Text(
+                          userName,
                           style: const TextStyle(
-                            fontFamily: 'Inter',
-                            color: Color(0xFF2563EB),
-                            fontSize: 40, // Increased from 28
+                            fontFamily: '.SF Pro Display',
+                            color: CupertinoColors.systemBlue,
+                            fontSize: 28,
                             fontWeight: FontWeight.w700,
+                            letterSpacing: -0.8,
+                            height: 1.1,
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        // Command center text
+                        Text(
+                          "Here's your command center for today.",
+                          style: TextStyle(
+                            fontFamily: '.SF Pro Text',
+                            color: CupertinoColors.secondaryLabel,
+                            fontSize: 15,
+                            fontWeight: FontWeight.w400,
+                            letterSpacing: -0.2,
                           ),
                         ),
                       ],
                     ),
                   ),
-                  const SizedBox(height: 12), // Increased spacing
-                  const Text(
-                    "Here's your command center for today.",
-                    style: TextStyle(
-                      fontFamily: 'Inter',
-                      color: Color(0xFF64748B),
-                      fontSize: 20, // Increased from 16
-                      fontWeight: FontWeight.w400,
-                    ),
-                  ),
                 ],
               );
             },
+          )
+        else
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Greetings',
+                style: TextStyle(
+                  fontFamily: '.SF Pro Display',
+                  color: CupertinoColors.label,
+                  fontSize: 28,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: -0.8,
+                  height: 1.1,
+                ),
+              ),
+              const SizedBox(height: 12),
+              Text(
+                "Here's your command center",
+                style: TextStyle(
+                  fontFamily: '.SF Pro Text',
+                  color: CupertinoColors.secondaryLabel,
+                  fontSize: 15,
+                  fontWeight: FontWeight.w400,
+                  letterSpacing: -0.2,
+                ),
+              ),
+            ],
           ),
       ],
     ).animateOnPageLoad(animationsMap['heroOnPageLoadAnimation']!);

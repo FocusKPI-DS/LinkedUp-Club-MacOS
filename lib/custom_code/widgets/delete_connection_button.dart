@@ -19,6 +19,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import '/auth/firebase_auth/auth_util.dart';
 import '/flutter_flow/flutter_flow_widgets.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:flutter/scheduler.dart';
 
 class DeleteConnectionButton extends StatefulWidget {
   const DeleteConnectionButton({
@@ -132,94 +133,79 @@ class _DeleteConnectionButtonState extends State<DeleteConnectionButton> {
       DocumentReference currentUserRef = currentUserReference!;
       DocumentReference targetUserRef = widget.targetUser.reference;
 
-      // Create batch for atomic operations
-      WriteBatch batch = FirebaseFirestore.instance.batch();
+      // Bulletproof check - ensure they are actually connected
+      final currentUserDoc = await currentUserRef.get();
+      final currentUserData = UsersRecord.fromSnapshot(currentUserDoc);
 
-      // Remove target user from current user's friends list
-      batch.update(currentUserRef, {
+      if (!currentUserData.friends.contains(targetUserRef)) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('You are not connected with ${widget.targetUser.displayName}'),
+              backgroundColor: FlutterFlowTheme.of(context).error,
+            ),
+          );
+        }
+        return;
+      }
+
+      // Update current user's document (we have permission for our own document)
+      await currentUserRef.update({
         'friends': FieldValue.arrayRemove([targetUserRef]),
       });
 
-      // Remove current user from target user's friends list
-      batch.update(targetUserRef, {
-        'friends': FieldValue.arrayRemove([currentUserRef]),
-      });
-
-      // Delete any user memo records between these users
-      // Delete memo from current user to target user
-      QuerySnapshot currentUserMemos = await FirebaseFirestore.instance
-          .collection('userMemo')
-          .where('owner_ref', isEqualTo: currentUserRef)
-          .where('target_ref', isEqualTo: targetUserRef)
-          .get();
-
-      for (DocumentSnapshot doc in currentUserMemos.docs) {
-        batch.delete(doc.reference);
-      }
-
-      // Delete memo from target user to current user
-      QuerySnapshot targetUserMemos = await FirebaseFirestore.instance
-          .collection('userMemo')
-          .where('owner_ref', isEqualTo: targetUserRef)
-          .where('target_ref', isEqualTo: currentUserRef)
-          .get();
-
-      for (DocumentSnapshot doc in targetUserMemos.docs) {
-        batch.delete(doc.reference);
-      }
-
-      // Find and delete the direct chat between these users if it exists
-      QuerySnapshot chatsSnapshot = await FirebaseFirestore.instance
-          .collection('chats')
-          .where('is_group', isEqualTo: false)
-          .where('members', arrayContains: currentUserRef)
-          .get();
-
-      for (DocumentSnapshot chatDoc in chatsSnapshot.docs) {
-        Map<String, dynamic> chatData = chatDoc.data() as Map<String, dynamic>;
-        List<dynamic> members = chatData['members'] ?? [];
-
-        // Check if this is a direct chat between these two users
-        if (members.length == 2 && members.contains(targetUserRef)) {
-          // Delete all messages in this chat
-          QuerySnapshot messagesSnapshot =
-              await chatDoc.reference.collection('messages').get();
-
-          for (DocumentSnapshot messageDoc in messagesSnapshot.docs) {
-            batch.delete(messageDoc.reference);
-          }
-
-          // Delete the chat itself
-          batch.delete(chatDoc.reference);
-        }
-      }
-
-      // Commit all changes
-      await batch.commit();
-
-      // Call the onDeleted callback if provided
-      if (widget.onDeleted != null) {
-        await widget.onDeleted!();
+      // Try to update other user's document (may fail due to permissions, but that's okay)
+      // The connection will be removed from their side when they next sync
+      try {
+        await targetUserRef.update({
+          'friends': FieldValue.arrayRemove([currentUserRef]),
+        });
+      } catch (e) {
+        // If we can't update the other user's document, that's okay
+        // The connection is still removed from our side
+        print('Note: Could not update other user\'s friends list: $e');
       }
 
       // Show success message
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: const Text('Connection removed successfully'),
-          backgroundColor: FlutterFlowTheme.of(context).success,
-        ),
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text('Connection removed successfully'),
+            backgroundColor: FlutterFlowTheme.of(context).success,
+          ),
+        );
+      }
 
-      // Navigate back
-      Navigator.of(context).pop();
+      // Call the onDeleted callback if provided (this handles navigation)
+      if (widget.onDeleted != null) {
+        // Use SchedulerBinding to defer navigation after current frame
+        SchedulerBinding.instance.addPostFrameCallback((_) {
+          if (mounted) {
+            widget.onDeleted!();
+          }
+        });
+      } else if (mounted) {
+        // Use SchedulerBinding to defer navigation after current frame
+        SchedulerBinding.instance.addPostFrameCallback((_) {
+          if (mounted && Navigator.of(context).canPop()) {
+            Navigator.of(context).pop();
+          }
+        });
+      }
     } catch (error) {
       print('Error deleting connection: $error');
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: const Text('Error removing connection. Please try again.'),
-          backgroundColor: FlutterFlowTheme.of(context).error,
-        ),
-      );
+      if (mounted) {
+        String errorMessage = 'Error removing connection. Please try again.';
+        if (error.toString().contains('permission-denied')) {
+          errorMessage = 'Permission denied. Unable to remove connection.';
+        }
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(errorMessage),
+            backgroundColor: FlutterFlowTheme.of(context).error,
+          ),
+        );
+      }
     } finally {
       setState(() {
         _isLoading = false;

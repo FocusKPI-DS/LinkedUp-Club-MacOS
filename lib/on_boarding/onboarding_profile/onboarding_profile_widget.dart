@@ -102,6 +102,13 @@ class _OnboardingProfileWidgetState extends State<OnboardingProfileWidget>
 
     _model.bioTextController ??= TextEditingController();
     _model.bioFocusNode ??= FocusNode();
+    _model.searchTextController ??= TextEditingController();
+    _model.searchFocusNode ??= FocusNode();
+    
+    // Add listener to search controller to trigger rebuilds
+    _model.searchTextController?.addListener(() {
+      setState(() {});
+    });
 
     _model.eventUpdateValue = false;
     _model.newMessageValue = false;
@@ -2920,6 +2927,384 @@ class _OnboardingProfileWidgetState extends State<OnboardingProfileWidget>
                                         ],
                                       ),
                                     ),
+                                    Padding(
+                                      padding: const EdgeInsets.all(24.0),
+                                      child: Column(
+                                        mainAxisSize: MainAxisSize.max,
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          // Header with icon
+                                          Row(
+                                            mainAxisSize: MainAxisSize.max,
+                                            children: [
+                                              Container(
+                                                width: 48.0,
+                                                height: 48.0,
+                                                decoration: BoxDecoration(
+                                                  color: FlutterFlowTheme.of(
+                                                          context)
+                                                      .primary
+                                                      .withOpacity(0.1),
+                                                  shape: BoxShape.circle,
+                                                ),
+                                                child: Icon(
+                                                  Icons.people_rounded,
+                                                  color: FlutterFlowTheme.of(
+                                                          context)
+                                                      .primary,
+                                                  size: 24.0,
+                                                ),
+                                              ),
+                                              Expanded(
+                                                child: Padding(
+                                                  padding: const EdgeInsetsDirectional
+                                                      .fromSTEB(12.0, 0.0, 0.0, 0.0),
+                                                  child: Column(
+                                                    crossAxisAlignment:
+                                                        CrossAxisAlignment.start,
+                                                    children: [
+                                                      Text(
+                                                        'Start Connecting!',
+                                                        textAlign:
+                                                            TextAlign.start,
+                                                        style: FlutterFlowTheme
+                                                                .of(context)
+                                                            .headlineMedium
+                                                            .override(
+                                                              font: GoogleFonts
+                                                                  .inter(
+                                                                fontWeight:
+                                                                    FontWeight
+                                                                        .bold,
+                                                                fontStyle:
+                                                                    FlutterFlowTheme.of(
+                                                                            context)
+                                                                        .headlineMedium
+                                                                        .fontStyle,
+                                                              ),
+                                                              color: const Color(
+                                                                  0xFF111827),
+                                                              fontSize: 22.0,
+                                                              letterSpacing:
+                                                                  -0.5,
+                                                              fontWeight:
+                                                                  FontWeight
+                                                                      .bold,
+                                                              fontStyle:
+                                                                  FlutterFlowTheme.of(
+                                                                          context)
+                                                                      .headlineMedium
+                                                                      .fontStyle,
+                                                            ),
+                                                      ),
+                                                      Padding(
+                                                        padding:
+                                                            const EdgeInsetsDirectional
+                                                                .fromSTEB(
+                                                                    0.0,
+                                                                    4.0,
+                                                                    0.0,
+                                                                    0.0),
+                                                        child: Text(
+                                                          'Connect with people and build your network',
+                                                          textAlign:
+                                                              TextAlign.start,
+                                                          style: FlutterFlowTheme
+                                                                  .of(context)
+                                                              .bodyMedium
+                                                              .override(
+                                                                font: GoogleFonts
+                                                                    .inter(
+                                                                  fontWeight:
+                                                                      FontWeight
+                                                                          .normal,
+                                                                  fontStyle:
+                                                                      FlutterFlowTheme.of(
+                                                                              context)
+                                                                          .bodyMedium
+                                                                          .fontStyle,
+                                                                ),
+                                                                color: const Color(
+                                                                    0xFF6B7280),
+                                                                fontSize: 13.0,
+                                                                letterSpacing:
+                                                                    0.0,
+                                                                fontWeight:
+                                                                    FontWeight
+                                                                        .normal,
+                                                                fontStyle:
+                                                                    FlutterFlowTheme.of(
+                                                                            context)
+                                                                        .bodyMedium
+                                                                        .fontStyle,
+                                                              ),
+                                                        ),
+                                                      ),
+                                                    ],
+                                                  ),
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                          Padding(
+                                            padding: const EdgeInsetsDirectional
+                                                .fromSTEB(0.0, 20.0, 0.0, 16.0),
+                                            child: Container(),
+                                          ),
+                                          // Search bar
+                                          Container(
+                                            decoration: BoxDecoration(
+                                              color: const Color(0xFFF9FAFB),
+                                              borderRadius:
+                                                  BorderRadius.circular(12.0),
+                                            ),
+                                            child: TextFormField(
+                                              controller:
+                                                  _model.searchTextController,
+                                              focusNode: _model.searchFocusNode,
+                                              autofocus: false,
+                                              obscureText: false,
+                                              decoration: InputDecoration(
+                                                hintText: 'Search by name...',
+                                                hintStyle:
+                                                    FlutterFlowTheme.of(context)
+                                                        .bodyMedium
+                                                        .override(
+                                                          font: GoogleFonts
+                                                              .inter(
+                                                            fontWeight:
+                                                                FontWeight
+                                                                    .normal,
+                                                          ),
+                                                          color: const Color(
+                                                              0xFF9CA3AF),
+                                                          fontSize: 14.0,
+                                                          letterSpacing: 0.0,
+                                                        ),
+                                                enabledBorder: OutlineInputBorder(
+                                                  borderSide: const BorderSide(
+                                                    color: Color(0xFFE5E7EB),
+                                                    width: 1.0,
+                                                  ),
+                                                  borderRadius:
+                                                      BorderRadius.circular(
+                                                          12.0),
+                                                ),
+                                                focusedBorder: OutlineInputBorder(
+                                                  borderSide: BorderSide(
+                                                    color: FlutterFlowTheme.of(
+                                                            context)
+                                                        .primary,
+                                                    width: 1.0,
+                                                  ),
+                                                  borderRadius:
+                                                      BorderRadius.circular(
+                                                          12.0),
+                                                ),
+                                                errorBorder: OutlineInputBorder(
+                                                  borderSide: BorderSide(
+                                                    color: FlutterFlowTheme.of(
+                                                            context)
+                                                        .error,
+                                                    width: 1.0,
+                                                  ),
+                                                  borderRadius:
+                                                      BorderRadius.circular(
+                                                          12.0),
+                                                ),
+                                                focusedErrorBorder:
+                                                    OutlineInputBorder(
+                                                  borderSide: BorderSide(
+                                                    color: FlutterFlowTheme.of(
+                                                            context)
+                                                        .error,
+                                                    width: 1.0,
+                                                  ),
+                                                  borderRadius:
+                                                      BorderRadius.circular(
+                                                          12.0),
+                                                ),
+                                                filled: true,
+                                                fillColor:
+                                                    const Color(0xFFF9FAFB),
+                                                contentPadding:
+                                                    const EdgeInsetsDirectional
+                                                        .fromSTEB(16.0, 16.0,
+                                                            16.0, 16.0),
+                                                prefixIcon: const Icon(
+                                                  Icons.search_rounded,
+                                                  color: Color(0xFF9CA3AF),
+                                                  size: 20.0,
+                                                ),
+                                              ),
+                                              style: FlutterFlowTheme.of(
+                                                      context)
+                                                  .bodyMedium
+                                                  .override(
+                                                    font: GoogleFonts.inter(
+                                                      fontWeight:
+                                                          FontWeight.normal,
+                                                    ),
+                                                    fontSize: 14.0,
+                                                    letterSpacing: 0.0,
+                                                  ),
+                                              validator: _model
+                                                  .searchTextControllerValidator
+                                                  ?.asValidator(context),
+                                            ),
+                                          ),
+                                          // Users grid
+                                          Expanded(
+                                            child: currentUserReference != null
+                                                ? StreamBuilder<
+                                                        List<UsersRecord>>(
+                                                    stream: queryUsersRecord(),
+                                                    builder: (context,
+                                                        snapshot) {
+                                                      if (snapshot.hasError) {
+                                                        return Center(
+                                                          child: Text(
+                                                            'Error loading users',
+                                                            style: FlutterFlowTheme
+                                                                    .of(context)
+                                                                .bodyMedium,
+                                                          ),
+                                                        );
+                                                      }
+
+                                                      if (!snapshot.hasData) {
+                                                        return const Center(
+                                                          child:
+                                                              CircularProgressIndicator(),
+                                                        );
+                                                      }
+
+                                                      final allUsers =
+                                                          snapshot.data!;
+                                                      final searchQuery =
+                                                          _model.searchTextController
+                                                                  ?.text
+                                                                  .toLowerCase() ??
+                                                              '';
+
+                                                      // Filter users
+                                                      final filteredUsers =
+                                                          allUsers.where((user) {
+                                                        // Exclude current user
+                                                        if (user.reference ==
+                                                            currentUserReference) {
+                                                          return false;
+                                                        }
+                                                        // Filter by search query
+                                                        if (searchQuery
+                                                            .isNotEmpty) {
+                                                          final displayName =
+                                                              user.displayName
+                                                                  .toLowerCase();
+                                                          final email = user
+                                                              .email
+                                                              .toLowerCase();
+                                                          return displayName
+                                                                  .contains(
+                                                                      searchQuery) ||
+                                                              email.contains(
+                                                                  searchQuery);
+                                                        }
+                                                        return true;
+                                                      }).toList();
+
+                                                      if (filteredUsers.isEmpty) {
+                                                        return Center(
+                                                          child: Column(
+                                                            mainAxisAlignment:
+                                                                MainAxisAlignment
+                                                                    .center,
+                                                            children: [
+                                                              Icon(
+                                                                Icons
+                                                                    .people_outline,
+                                                                size: 64.0,
+                                                                color: FlutterFlowTheme.of(
+                                                                        context)
+                                                                    .secondaryText,
+                                                              ),
+                                                              Padding(
+                                                                padding:
+                                                                    const EdgeInsetsDirectional
+                                                                        .fromSTEB(
+                                                                            0.0,
+                                                                            16.0,
+                                                                            0.0,
+                                                                            0.0),
+                                                                child: Text(
+                                                                  searchQuery
+                                                                          .isNotEmpty
+                                                                      ? 'No users found'
+                                                                      : 'No users available',
+                                                                  style: FlutterFlowTheme.of(
+                                                                          context)
+                                                                      .bodyMedium
+                                                                      .override(
+                                                                        font:
+                                                                            GoogleFonts.inter(
+                                                                          fontWeight:
+                                                                              FontWeight
+                                                                                  .normal,
+                                                                        ),
+                                                                        color: FlutterFlowTheme.of(
+                                                                                context)
+                                                                            .secondaryText,
+                                                                        fontSize:
+                                                                            16.0,
+                                                                        letterSpacing:
+                                                                            0.0,
+                                                                      ),
+                                                                ),
+                                                              ),
+                                                            ],
+                                                          ),
+                                                        );
+                                                      }
+
+                                                      return GridView.builder(
+                                                        padding:
+                                                            const EdgeInsetsDirectional
+                                                                .fromSTEB(
+                                                                    0.0,
+                                                                    16.0,
+                                                                    0.0,
+                                                                    0.0),
+                                                        gridDelegate:
+                                                            const SliverGridDelegateWithFixedCrossAxisCount(
+                                                          crossAxisCount: 2,
+                                                          crossAxisSpacing:
+                                                              12.0,
+                                                          mainAxisSpacing:
+                                                              12.0,
+                                                          childAspectRatio: 0.85,
+                                                        ),
+                                                        itemCount:
+                                                            filteredUsers.length,
+                                                        itemBuilder: (context,
+                                                            index) {
+                                                          final user =
+                                                              filteredUsers[
+                                                                  index];
+                                                          return _buildUserCard(
+                                                              context, user);
+                                                        },
+                                                      );
+                                                    },
+                                                  )
+                                                : const Center(
+                                                    child:
+                                                        CircularProgressIndicator(),
+                                                  ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
                                   ],
                                 ),
                               ),
@@ -2932,7 +3317,7 @@ class _OnboardingProfileWidgetState extends State<OnboardingProfileWidget>
                                       smooth_page_indicator.SmoothPageIndicator(
                                     controller: _model.pageViewController ??=
                                         PageController(initialPage: 0),
-                                    count: 3,
+                                    count: 4,
                                     axisDirection: Axis.horizontal,
                                     onDotClicked: (i) async {
                                       await _model.pageViewController!
@@ -2969,7 +3354,7 @@ class _OnboardingProfileWidgetState extends State<OnboardingProfileWidget>
                             16.0, 32.0, 16.0, 27.0),
                         child: FFButtonWidget(
                           onPressed: () async {
-                            if (_model.pageViewCurrentIndex <= 1) {
+                            if (_model.pageViewCurrentIndex <= 2) {
                               await _model.pageViewController?.nextPage(
                                 duration: const Duration(milliseconds: 300),
                                 curve: Curves.ease,
@@ -3025,7 +3410,7 @@ class _OnboardingProfileWidgetState extends State<OnboardingProfileWidget>
                               }
                             }
                           },
-                          text: _model.pageViewCurrentIndex == 2
+                          text: _model.pageViewCurrentIndex == 3
                               ? 'Get Started'
                               : 'Next',
                           options: FFButtonOptions(
@@ -3078,5 +3463,368 @@ class _OnboardingProfileWidgetState extends State<OnboardingProfileWidget>
         ),
       ),
     );
+  }
+
+  // Helper method to check if operation is in progress
+  bool _isOperationInProgress(String userId) {
+    return _model.loadingConnectionOperations.contains(userId);
+  }
+
+  // Helper method to start tracking an operation
+  void _startOperation(String userId) {
+    setState(() {
+      _model.loadingConnectionOperations.add(userId);
+    });
+  }
+
+  // Helper method to stop tracking an operation
+  void _stopOperation(String userId) {
+    setState(() {
+      _model.loadingConnectionOperations.remove(userId);
+    });
+  }
+
+  // Helper method to show success message
+  void _showSuccessMessage(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: const Color(0xFF10B981),
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+  }
+
+  // Helper method to show error message
+  void _showErrorMessage(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: const Color(0xFFEF4444),
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+  }
+
+  // Build user card widget
+  Widget _buildUserCard(BuildContext context, UsersRecord user) {
+    final isLoading = _isOperationInProgress(user.reference.id);
+    
+    return StreamBuilder<UsersRecord>(
+      stream: UsersRecord.getDocument(currentUserReference!),
+      builder: (context, currentUserSnapshot) {
+        if (!currentUserSnapshot.hasData) {
+          return const SizedBox.shrink();
+        }
+
+        final currentUser = currentUserSnapshot.data!;
+        final isConnected = currentUser.friends.contains(user.reference);
+        final hasSentRequest = currentUser.sentRequests.contains(user.reference);
+
+        return Container(
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(16.0),
+            border: Border.all(
+              color: const Color(0xFFE5E7EB),
+              width: 1.0,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.04),
+                blurRadius: 8.0,
+                offset: const Offset(0.0, 2.0),
+              ),
+            ],
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.max,
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              // Profile picture
+              Padding(
+                padding: const EdgeInsetsDirectional.fromSTEB(16.0, 20.0, 16.0, 12.0),
+                child: Container(
+                  width: 90.0,
+                  height: 90.0,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    border: Border.all(
+                      color: const Color(0xFFE5E7EB),
+                      width: 2.5,
+                    ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.05),
+                        blurRadius: 8.0,
+                        offset: const Offset(0.0, 2.0),
+                      ),
+                    ],
+                  ),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(45.0),
+                    child: user.photoUrl.isNotEmpty
+                        ? CachedNetworkImage(
+                            imageUrl: user.photoUrl,
+                            width: 90.0,
+                            height: 90.0,
+                            fit: BoxFit.cover,
+                            placeholder: (context, url) => Container(
+                              width: 90.0,
+                              height: 90.0,
+                              decoration: const BoxDecoration(
+                                color: Color(0xFFF1F5F9),
+                                shape: BoxShape.circle,
+                              ),
+                              child: const Icon(
+                                Icons.person,
+                                color: Color(0xFF64748B),
+                                size: 45.0,
+                              ),
+                            ),
+                            errorWidget: (context, url, error) =>
+                                _buildInitialsAvatar(user),
+                          )
+                        : _buildInitialsAvatar(user),
+                  ),
+                ),
+              ),
+              // User name
+              Padding(
+                padding: const EdgeInsetsDirectional.fromSTEB(12.0, 0.0, 12.0, 12.0),
+                child: Text(
+                  user.displayName.isNotEmpty ? user.displayName : 'Unknown User',
+                  textAlign: TextAlign.center,
+                  style: FlutterFlowTheme.of(context).bodyMedium.override(
+                        font: GoogleFonts.inter(
+                          fontWeight: FontWeight.w600,
+                        ),
+                        fontSize: 15.0,
+                        letterSpacing: -0.2,
+                        color: const Color(0xFF111827),
+                      ),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              // Connect button
+              Expanded(
+                child: Padding(
+                  padding: const EdgeInsetsDirectional.fromSTEB(12.0, 0.0, 12.0, 16.0),
+                  child: SizedBox(
+                    width: double.infinity,
+                    child: isConnected
+                        ? Container(
+                            padding: const EdgeInsets.symmetric(vertical: 8.0),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFF3F4F6),
+                              borderRadius: BorderRadius.circular(6.0),
+                            ),
+                            child: Text(
+                              'Connected',
+                              textAlign: TextAlign.center,
+                              style: FlutterFlowTheme.of(context)
+                                  .bodyMedium
+                                  .override(
+                                    font: GoogleFonts.inter(
+                                      fontWeight: FontWeight.w500,
+                                    ),
+                                    fontSize: 12.0,
+                                    letterSpacing: 0.0,
+                                    color: const Color(0xFF6B7280),
+                                  ),
+                            ),
+                          )
+                        : hasSentRequest
+                            ? Container(
+                                padding: const EdgeInsets.symmetric(vertical: 8.0),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFFF3F4F6),
+                                  borderRadius: BorderRadius.circular(6.0),
+                                ),
+                                child: Text(
+                                  'Request Sent',
+                                  textAlign: TextAlign.center,
+                                  style: FlutterFlowTheme.of(context)
+                                      .bodyMedium
+                                      .override(
+                                        font: GoogleFonts.inter(
+                                          fontWeight: FontWeight.w500,
+                                        ),
+                                        fontSize: 12.0,
+                                        letterSpacing: 0.0,
+                                        color: const Color(0xFF6B7280),
+                                      ),
+                                ),
+                              )
+                            : Material(
+                                color: Colors.transparent,
+                                child: InkWell(
+                                  onTap: isLoading
+                                      ? null
+                                      : () => _sendConnectionRequest(user, currentUser),
+                                  borderRadius: BorderRadius.circular(4.0),
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 16.0, vertical: 8.0),
+                                    decoration: BoxDecoration(
+                                      color: isLoading
+                                          ? const Color(0xFF9CA3AF)
+                                          : const Color(0xFF2563EB),
+                                      borderRadius: BorderRadius.circular(4.0),
+                                    ),
+                                    child: isLoading
+                                        ? const SizedBox(
+                                            width: 16.0,
+                                            height: 16.0,
+                                            child: CircularProgressIndicator(
+                                              strokeWidth: 2.0,
+                                              valueColor:
+                                                  AlwaysStoppedAnimation<Color>(
+                                                Colors.white,
+                                              ),
+                                            ),
+                                          )
+                                        : Text(
+                                            'Connect',
+                                            textAlign: TextAlign.center,
+                                            style: TextStyle(
+                                              fontFamily: 'Inter',
+                                              fontSize: 14.0,
+                                              fontWeight: FontWeight.w600,
+                                              color: Colors.white,
+                                            ),
+                                          ),
+                                  ),
+                                ),
+                              ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  // Build initials avatar
+  Widget _buildInitialsAvatar(UsersRecord user) {
+    final initials = user.displayName.isNotEmpty
+        ? user.displayName
+            .split(' ')
+            .take(2)
+            .map((n) => n.isNotEmpty ? n[0].toUpperCase() : '')
+            .join()
+        : user.email.isNotEmpty
+            ? user.email[0].toUpperCase()
+            : '?';
+
+    return Container(
+      width: 90.0,
+      height: 90.0,
+      decoration: BoxDecoration(
+        color: FlutterFlowTheme.of(context).primary.withOpacity(0.1),
+        shape: BoxShape.circle,
+      ),
+      child: Center(
+        child: Text(
+          initials.length > 2 ? initials.substring(0, 2) : initials,
+          style: FlutterFlowTheme.of(context).bodyMedium.override(
+                font: GoogleFonts.inter(
+                  fontWeight: FontWeight.w600,
+                ),
+                fontSize: 28.0,
+                letterSpacing: 0.0,
+                color: FlutterFlowTheme.of(context).primary,
+              ),
+        ),
+      ),
+    );
+  }
+
+  // Send connection request
+  Future<void> _sendConnectionRequest(
+      UsersRecord user, UsersRecord currentUser) async {
+    final userId = user.reference.id;
+
+    // Prevent multiple operations
+    if (_isOperationInProgress(userId)) return;
+
+    _startOperation(userId);
+
+    try {
+      // Check if already connected
+      if (currentUser.friends.contains(user.reference)) {
+        _showErrorMessage('You are already connected with ${user.displayName}');
+        return;
+      }
+
+      // Check if request already sent
+      if (currentUser.sentRequests.contains(user.reference)) {
+        _showErrorMessage(
+            'Connection request already sent to ${user.displayName}');
+        return;
+      }
+
+      // Check if they already sent us a request (auto-accept scenario)
+      if (currentUser.friendRequests.contains(user.reference)) {
+        // Auto-accept the connection
+        final batch = FirebaseFirestore.instance.batch();
+
+        // Update current user: add to friends, remove from friend_requests
+        batch.update(currentUserReference!, {
+          'friends': FieldValue.arrayUnion([user.reference]),
+          'friend_requests': FieldValue.arrayRemove([user.reference]),
+          'sent_requests': FieldValue.arrayRemove([user.reference]),
+        });
+
+        // Update other user: add to friends, remove from sent_requests
+        batch.update(user.reference, {
+          'friends': FieldValue.arrayUnion([currentUserReference]),
+          'sent_requests': FieldValue.arrayRemove([currentUserReference]),
+        });
+
+        await batch.commit();
+
+        if (mounted) {
+          _showSuccessMessage('Connected with ${user.displayName}!');
+        }
+        return;
+      }
+
+      // Use a batch write for better performance and atomicity
+      final batch = FirebaseFirestore.instance.batch();
+
+      // Update current user's sent requests
+      batch.update(currentUserReference!, {
+        'sent_requests': FieldValue.arrayUnion([user.reference]),
+      });
+
+      // Update target user's friend requests
+      batch.update(user.reference, {
+        'friend_requests': FieldValue.arrayUnion([currentUserReference]),
+      });
+
+      await batch.commit();
+
+      if (mounted) {
+        _showSuccessMessage('Connection request sent to ${user.displayName}');
+      }
+    } catch (e) {
+      print('Error sending connection request: $e');
+      if (mounted) {
+        // Check if it's a permission error and provide specific guidance
+        if (e.toString().contains('permission-denied')) {
+          _showErrorMessage(
+              'Unable to send connection request. This feature requires updated permissions.');
+        } else {
+          _showErrorMessage(
+              'Failed to send connection request. Please check your internet connection and try again.');
+        }
+      }
+    } finally {
+      _stopOperation(userId);
+    }
   }
 }

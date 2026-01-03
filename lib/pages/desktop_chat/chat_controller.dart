@@ -14,30 +14,16 @@ class ChatController extends GetxController {
   final Rx<ChatsRecord?> selectedChat = Rx<ChatsRecord?>(null);
   final RxString searchQuery = ''.obs;
   final RxInt selectedTabIndex = 0.obs;
+  final RxString chatFilter = 'All'.obs; // Filter: All, Unread, DM, Groups
   final RxSet<String> locallySeenChats = <String>{}.obs;
-  final Rx<DocumentReference?> currentWorkspaceRef =
-      Rx<DocumentReference?>(null);
 
   // Error message
   final RxString errorMessage = ''.obs;
-
-  // Method to update current workspace (called from main.dart when switching)
-  void updateCurrentWorkspace(DocumentReference? workspaceRef) {
-    print('🔄 ChatController: Updating workspace to ${workspaceRef?.path}');
-    currentWorkspaceRef.value = workspaceRef;
-  }
 
   @override
   void onInit() {
     super.onInit();
     loadChats();
-
-    // Listen for workspace changes
-    ever(currentWorkspaceRef, (workspaceRef) {
-      print('🔄 Workspace changed to: ${workspaceRef?.path}');
-      // Refresh the filtered chats when workspace changes
-      update();
-    });
   }
 
   StreamSubscription? _chatsSubscription;
@@ -63,20 +49,6 @@ class ChatController extends GetxController {
         return;
       }
 
-      // Get current user's workspace using UsersRecord
-      final currentUserDoc =
-          await UsersRecord.getDocumentOnce(currentUserReference!);
-      final userWorkspaceRef = currentUserDoc.currentWorkspaceRef;
-
-      print('🔍 DEBUG: Current workspace ref: $userWorkspaceRef');
-      print('🔍 DEBUG: Current workspace path: ${userWorkspaceRef?.path}');
-
-      // Store current workspace for filtering (can be null)
-      currentWorkspaceRef.value = userWorkspaceRef;
-
-      // Load chats even if workspace_ref is null (for backward compatibility)
-      print('🔍 DEBUG: Starting chat query...');
-
       // Use queryChatsRecord stream which handles errors better
       final chatsStream = queryChatsRecord(
         queryBuilder: (chatsRecord) => chatsRecord
@@ -86,19 +58,15 @@ class ChatController extends GetxController {
 
       _chatsSubscription = chatsStream.listen(
         (chatsList) {
-          print('🔍 DEBUG: Query returned ${chatsList.length} chats');
           chats.value = chatsList;
           chatState.value = ChatState.success;
-          print('✅ DEBUG: Chat state set to success');
         },
         onError: (error) {
-          print('❌ DEBUG: Query error: $error');
           errorMessage.value = 'Error loading chats: $error';
           chatState.value = ChatState.error;
         },
       );
     } catch (e) {
-      print('❌ DEBUG: Exception in loadChats: $e');
       errorMessage.value = 'Error loading chats: $e';
       chatState.value = ChatState.error;
     }
@@ -118,6 +86,11 @@ class ChatController extends GetxController {
   // Update selected tab
   void updateSelectedTab(int index) {
     selectedTabIndex.value = index;
+  }
+
+  // Update chat filter
+  void updateChatFilter(String filter) {
+    chatFilter.value = filter;
   }
 
   // Check if chat has unread messages
@@ -187,14 +160,21 @@ class ChatController extends GetxController {
         // Only count messages at/after lastMessageAt that are:
         // 1. Not sent by current user
         // 2. Not system messages
-        // 3. Not in isReadBy (truly unread)
-        if (message.senderRef != currentUserReference &&
+        // 3. Not in isReadBy (truly unread) - if isReadBy is null/empty, message is unread
+        final isUnread = message.senderRef != currentUserReference &&
             !message.isSystemMessage &&
-            !message.isReadBy.contains(currentUserReference) &&
+            !message.isReadBy.contains(currentUserReference);
+        
+        if (isUnread &&
             (message.createdAt!.isAfter(lastMessageAt) ||
              message.createdAt!.isAtSameMomentAs(lastMessageAt))) {
           count++;
+          print('DEBUG: Found unread message in chat ${chat.reference.id}: ${message.content.substring(0, message.content.length > 20 ? 20 : message.content.length)}... (isReadBy: ${message.isReadBy.length}, sender: ${message.senderRef?.id})');
         }
+      }
+      
+      if (count > 0) {
+        print('DEBUG: Chat ${chat.reference.id} has $count unread messages');
       }
       
       return count;
@@ -399,16 +379,31 @@ class ChatController extends GetxController {
       }).toList();
     }
 
-    // Filter by selected tab
-    if (selectedTabIndex.value == 0) {
-      // All - show both direct messages and groups (no filtering)
-      // filteredChats remains unchanged
-    } else if (selectedTabIndex.value == 1) {
+    // Filter by chat filter (All, Unread, DM, Groups) - takes precedence over tab
+    if (chatFilter.value == 'Unread') {
+      // Show only chats with unread messages
+      filteredChats = filteredChats.where((chat) => hasUnreadMessages(chat)).toList();
+    } else if (chatFilter.value == 'DM') {
       // Direct messages only
       filteredChats = filteredChats.where((chat) => !chat.isGroup).toList();
-    } else if (selectedTabIndex.value == 2) {
+    } else if (chatFilter.value == 'Groups') {
       // Groups only
       filteredChats = filteredChats.where((chat) => chat.isGroup).toList();
+    } else if (chatFilter.value == 'All') {
+      // All - show both direct messages and groups (no additional filtering)
+      // filteredChats remains unchanged
+    } else {
+      // Fallback to selected tab (for backward compatibility)
+      if (selectedTabIndex.value == 0) {
+        // All - show both direct messages and groups (no filtering)
+        // filteredChats remains unchanged
+      } else if (selectedTabIndex.value == 1) {
+        // Direct messages only
+        filteredChats = filteredChats.where((chat) => !chat.isGroup).toList();
+      } else if (selectedTabIndex.value == 2) {
+        // Groups only
+        filteredChats = filteredChats.where((chat) => chat.isGroup).toList();
+      }
     }
 
     // Sort chats: Pinned chats at the top, then by last message time

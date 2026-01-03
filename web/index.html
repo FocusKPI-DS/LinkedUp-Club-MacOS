@@ -111,30 +111,5 @@
     // Also check periodically
     setInterval(forceTitle, 1000);
   </script>
-  
-  <!-- Download helper function for Flutter web -->
-  <script>
-    window.downloadFileFromBytes = function(bytesArray, fileName) {
-      try {
-        var bytes = new Uint8Array(bytesArray);
-        var blob = new Blob([bytes]);
-        var url = window.URL.createObjectURL(blob);
-        var a = document.createElement('a');
-        a.href = url;
-        a.download = fileName;
-        a.style.display = 'none';
-        document.body.appendChild(a);
-        a.click();
-        setTimeout(function() {
-          document.body.removeChild(a);
-          window.URL.revokeObjectURL(url);
-        }, 100);
-        return true;
-      } catch (e) {
-        console.error('Download error:', e);
-        return false;
-      }
-    };
-  </script>
 </body>
 </html>

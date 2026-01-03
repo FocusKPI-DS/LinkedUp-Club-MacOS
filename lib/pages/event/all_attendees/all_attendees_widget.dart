@@ -171,10 +171,8 @@ class _AllAttendeesWidgetState extends State<AllAttendeesWidget> {
                         safeSetState(() {});
                       },
                       onUpdateTicketingMode: (useEventbrite) async {
-                        _model.success = await actions.updateEventTicketingMode(
-                          widget.event!.reference.id,
-                          widget.event!.useEventbriteTicketing,
-                        );
+                        // Ticketing mode update removed
+                        _model.success = false;
                         if (_model.success == true) {
                           ScaffoldMessenger.of(context).showSnackBar(
                             SnackBar(

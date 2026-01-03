@@ -19,7 +19,6 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:linkedup/auth/firebase_auth/auth_util.dart';
 import 'package:intl/intl.dart';
-import 'event_ticket_receipt.dart';
 
 class PaymentHistory extends StatefulWidget {
   const PaymentHistory({
@@ -244,10 +243,13 @@ class _PaymentHistoryState extends State<PaymentHistory> {
                 ),
               ),
             ),
-            // Ticket receipt
+            // Payment details
             Expanded(
-              child: EventTicketReceipt(
-                paymentId: paymentId,
+              child: Center(
+                child: Text(
+                  'Payment ID: $paymentId',
+                  style: FlutterFlowTheme.of(context).bodyMedium,
+                ),
               ),
             ),
           ],

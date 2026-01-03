@@ -10,10 +10,8 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:firebase_storage/firebase_storage.dart';
-import 'package:firebase_messaging/firebase_messaging.dart';
-import 'package:permission_handler/permission_handler.dart';
-import 'package:flutter/foundation.dart' show kIsWeb;
 import 'dart:io';
+import 'dart:math';
 
 class MobileSettingsWidget extends StatefulWidget {
   const MobileSettingsWidget({
@@ -37,13 +35,6 @@ class _MobileSettingsWidgetState extends State<MobileSettingsWidget> {
   String _selectedSetting = '';
   String _searchQuery = '';
 
-  // Notification settings state - synced with system
-  bool _pushNotificationsEnabled = false;
-  bool _emailNotificationsEnabled = false;
-  bool _chatMessagesEnabled = true;
-  bool _workspaceUpdatesEnabled = false;
-  bool _isLoadingNotificationStatus = true;
-
   // Controllers
   final TextEditingController _displayNameController = TextEditingController();
   final TextEditingController _emailController = TextEditingController();
@@ -54,7 +45,6 @@ class _MobileSettingsWidgetState extends State<MobileSettingsWidget> {
   void initState() {
     super.initState();
     _loadUserData();
-    _loadNotificationSettings();
 
     // Set initial section if provided
     if (widget.initialSection != null) {
@@ -80,60 +70,6 @@ class _MobileSettingsWidgetState extends State<MobileSettingsWidget> {
     _displayNameController.text = userDoc.displayName;
     _emailController.text = userDoc.email;
     _locationController.text = userDoc.location;
-  }
-
-  Future<void> _loadNotificationSettings() async {
-    setState(() {
-      _isLoadingNotificationStatus = true;
-    });
-
-    // Check actual system notification permission status
-    bool systemNotificationEnabled = false;
-
-    if (kIsWeb) {
-      // For web, we'll assume false for now
-      systemNotificationEnabled = false;
-    } else if (Platform.isMacOS || Platform.isIOS) {
-      // For macOS/iOS, check Firebase Messaging permission
-      try {
-        final messaging = FirebaseMessaging.instance;
-        final settings = await messaging.getNotificationSettings();
-        systemNotificationEnabled =
-            settings.authorizationStatus == AuthorizationStatus.authorized ||
-                settings.authorizationStatus == AuthorizationStatus.provisional;
-      } catch (e) {
-        print('Error checking notification permission: $e');
-      }
-    }
-
-    // Load user preferences from Firestore
-    if (currentUserReference != null) {
-      try {
-        final userDoc =
-            await UsersRecord.getDocumentOnce(currentUserReference!);
-        // Use notifications_enabled field combined with system status
-        setState(() {
-          _pushNotificationsEnabled =
-              systemNotificationEnabled && userDoc.notificationsEnabled;
-          // For now, use defaults for other notification types
-          // These can be stored in a separate document or added to UsersRecord later
-          _emailNotificationsEnabled = true; // Default
-          _chatMessagesEnabled = true; // Default
-          _workspaceUpdatesEnabled = false; // Default
-          _isLoadingNotificationStatus = false;
-        });
-      } catch (e) {
-        setState(() {
-          _pushNotificationsEnabled = systemNotificationEnabled;
-          _isLoadingNotificationStatus = false;
-        });
-      }
-    } else {
-      setState(() {
-        _pushNotificationsEnabled = systemNotificationEnabled;
-        _isLoadingNotificationStatus = false;
-      });
-    }
   }
 
   String _getInviteMessage() {
@@ -232,10 +168,6 @@ class _MobileSettingsWidgetState extends State<MobileSettingsWidget> {
       case 'Personal Information':
         return _buildPersonalInformationContent();
       case 'Notifications':
-        // Refresh notification settings when opening notifications page
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          _loadNotificationSettings();
-        });
         return _buildNotificationsContent();
       case 'Privacy & Security':
         return _buildPrivacySecurityContent();
@@ -1085,17 +1017,20 @@ class _MobileSettingsWidgetState extends State<MobileSettingsWidget> {
     return SingleChildScrollView(
       child: Column(
         children: [
-          // Back Button Header - iOS style
+          // Back Button Header
           Container(
             width: double.infinity,
             padding: EdgeInsets.only(
               top: MediaQuery.of(context).padding.top + 8,
               left: 16,
               right: 16,
-              bottom: 16,
+              bottom: 12,
             ),
             decoration: BoxDecoration(
-              color: CupertinoColors.systemGroupedBackground,
+              color: Colors.white,
+              border: Border(
+                bottom: BorderSide(color: Color(0xFFE5E7EB), width: 0.5),
+              ),
             ),
             child: Row(
               children: [
@@ -1106,22 +1041,15 @@ class _MobileSettingsWidgetState extends State<MobileSettingsWidget> {
                     });
                   },
                   child: Container(
-                    width: 36,
-                    height: 36,
+                    width: 40,
+                    height: 40,
                     decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(18),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withOpacity(0.05),
-                          blurRadius: 4,
-                          offset: Offset(0, 2),
-                        ),
-                      ],
+                      color: Color(0xFFF2F2F7),
+                      borderRadius: BorderRadius.circular(20),
                     ),
                     child: Icon(
-                      CupertinoIcons.chevron_left,
-                      color: Color(0xFF007AFF),
+                      Icons.arrow_back_ios_new,
+                      color: Color(0xFF1D1D1F),
                       size: 18,
                     ),
                   ),
@@ -1132,104 +1060,44 @@ class _MobileSettingsWidgetState extends State<MobileSettingsWidget> {
                     'Notifications',
                     style: TextStyle(
                       fontFamily: 'System',
-                      fontSize: 28,
-                      fontWeight: FontWeight.bold,
-                      color: Color(0xFF000000),
-                      letterSpacing: -0.5,
+                      fontSize: 20,
+                      fontWeight: FontWeight.w600,
+                      color: Color(0xFF1D1D1F),
                     ),
                   ),
                 ),
               ],
             ),
           ),
-          SizedBox(height: 8),
           // Content
           Padding(
-            padding: EdgeInsets.symmetric(horizontal: 16),
+            padding: EdgeInsets.all(16),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                if (_isLoadingNotificationStatus)
-                  Container(
-                    height: 400,
-                    child: Center(
-                      child: CupertinoActivityIndicator(
-                        radius: 16,
-                      ),
-                    ),
-                  )
-                else ...[
-                  // Notification Options Group
-                  Container(
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(16),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withOpacity(0.03),
-                          blurRadius: 10,
-                          offset: Offset(0, 2),
-                        ),
-                      ],
-                    ),
-                    child: Column(
-                      children: [
-                        _buildNotificationOption(
-                          'Push Notifications',
-                          'Receive notifications on your device',
-                          _pushNotificationsEnabled,
-                          onChanged: (value) =>
-                              _handlePushNotificationsToggle(value),
-                          isFirst: true,
-                        ),
-                        Divider(
-                          height: 1,
-                          thickness: 0.5,
-                          color: Color(0xFFE5E7EB),
-                          indent: 16,
-                          endIndent: 16,
-                        ),
-                        _buildNotificationOption(
-                          'Email Notifications',
-                          'Receive notifications via email',
-                          _emailNotificationsEnabled,
-                          onChanged: (value) =>
-                              _handleEmailNotificationsToggle(value),
-                        ),
-                        Divider(
-                          height: 1,
-                          thickness: 0.5,
-                          color: Color(0xFFE5E7EB),
-                          indent: 16,
-                          endIndent: 16,
-                        ),
-                        _buildNotificationOption(
-                          'Chat Messages',
-                          'Get notified about new messages',
-                          _chatMessagesEnabled,
-                          onChanged: (value) =>
-                              _handleChatMessagesToggle(value),
-                        ),
-                        Divider(
-                          height: 1,
-                          thickness: 0.5,
-                          color: Color(0xFFE5E7EB),
-                          indent: 16,
-                          endIndent: 16,
-                        ),
-                        _buildNotificationOption(
-                          'Workspace Updates',
-                          'Get notified about workspace changes',
-                          _workspaceUpdatesEnabled,
-                          onChanged: (value) =>
-                              _handleWorkspaceUpdatesToggle(value),
-                          isLast: true,
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-                SizedBox(height: 32),
+                _buildNotificationOption(
+                  'Push Notifications',
+                  'Receive notifications on your device',
+                  true,
+                ),
+                SizedBox(height: 16),
+                _buildNotificationOption(
+                  'Email Notifications',
+                  'Receive notifications via email',
+                  true,
+                ),
+                SizedBox(height: 16),
+                _buildNotificationOption(
+                  'Chat Messages',
+                  'Get notified about new messages',
+                  true,
+                ),
+                SizedBox(height: 16),
+                _buildNotificationOption(
+                  'Workspace Updates',
+                  'Get notified about workspace changes',
+                  false,
+                ),
               ],
             ),
           ),
@@ -1238,202 +1106,51 @@ class _MobileSettingsWidgetState extends State<MobileSettingsWidget> {
     );
   }
 
-  Widget _buildNotificationOption(
-    String title,
-    String subtitle,
-    bool value, {
-    required ValueChanged<bool> onChanged,
-    bool isFirst = false,
-    bool isLast = false,
-  }) {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: () => onChanged(!value),
-        borderRadius: BorderRadius.only(
-          topLeft: Radius.circular(isFirst ? 16 : 0),
-          topRight: Radius.circular(isFirst ? 16 : 0),
-          bottomLeft: Radius.circular(isLast ? 16 : 0),
-          bottomRight: Radius.circular(isLast ? 16 : 0),
-        ),
-        child: Container(
-          padding: EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-          child: Row(
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      title,
-                      style: TextStyle(
-                        fontFamily: 'System',
-                        fontSize: 17,
-                        fontWeight: FontWeight.w600,
-                        color: Color(0xFF000000),
-                        letterSpacing: -0.3,
-                      ),
-                    ),
-                    SizedBox(height: 2),
-                    Text(
-                      subtitle,
-                      style: TextStyle(
-                        fontFamily: 'System',
-                        fontSize: 15,
-                        color: Color(0xFF8E8E93),
-                        letterSpacing: -0.2,
-                      ),
-                    ),
-                  ],
+  Widget _buildNotificationOption(String title, String subtitle, bool value) {
+    return Container(
+      padding: EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Color(0xFFE5E7EB)),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: TextStyle(
+                    fontFamily: 'System',
+                    fontSize: 16,
+                    fontWeight: FontWeight.w500,
+                    color: Color(0xFF1D1D1F),
+                  ),
                 ),
-              ),
-              SizedBox(width: 12),
-              CupertinoSwitch(
-                value: value,
-                onChanged: onChanged,
-                activeColor: Color(0xFF007AFF),
-              ),
-            ],
+                SizedBox(height: 4),
+                Text(
+                  subtitle,
+                  style: TextStyle(
+                    fontFamily: 'System',
+                    fontSize: 14,
+                    color: Color(0xFF8E8E93),
+                  ),
+                ),
+              ],
+            ),
           ),
-        ),
+          Switch(
+            value: value,
+            onChanged: (newValue) {
+              // TODO: Implement notification toggle
+            },
+            activeColor: Color(0xFF007AFF),
+          ),
+        ],
       ),
     );
-  }
-
-  Future<void> _handlePushNotificationsToggle(bool newValue) async {
-    if (newValue) {
-      // Turning ON - Request system notification permission
-      bool permissionGranted = false;
-
-      if (kIsWeb) {
-        // For web, we can't request permissions here
-        permissionGranted = false;
-      } else if (Platform.isMacOS || Platform.isIOS) {
-        // For macOS/iOS, check current status first
-        try {
-          final messaging = FirebaseMessaging.instance;
-          final currentSettings = await messaging.getNotificationSettings();
-
-          // If already authorized, just enable
-          if (currentSettings.authorizationStatus ==
-                  AuthorizationStatus.authorized ||
-              currentSettings.authorizationStatus ==
-                  AuthorizationStatus.provisional) {
-            permissionGranted = true;
-          }
-          // If not determined, request permission (will show system dialog)
-          else if (currentSettings.authorizationStatus ==
-              AuthorizationStatus.notDetermined) {
-            final settings = await messaging.requestPermission(
-              alert: true,
-              badge: true,
-              sound: true,
-              provisional: false,
-              announcement: false,
-              carPlay: false,
-              criticalAlert: false,
-            );
-            permissionGranted = settings.authorizationStatus ==
-                    AuthorizationStatus.authorized ||
-                settings.authorizationStatus == AuthorizationStatus.provisional;
-          }
-          // If denied, open system settings
-          else {
-            await openAppSettings();
-            if (mounted) {
-              showCupertinoDialog(
-                context: context,
-                builder: (context) => CupertinoAlertDialog(
-                  title: Text('Enable Notifications'),
-                  content: Text(
-                    'Please enable notifications in System Settings > Notifications.',
-                  ),
-                  actions: [
-                    CupertinoDialogAction(
-                      child: Text('OK'),
-                      onPressed: () => Navigator.pop(context),
-                    ),
-                  ],
-                ),
-              );
-            }
-            permissionGranted = false;
-          }
-        } catch (e) {
-          print('Error requesting notification permission: $e');
-          permissionGranted = false;
-        }
-      }
-
-      // Update state based on actual permission result
-      setState(() {
-        _pushNotificationsEnabled = permissionGranted;
-      });
-
-      // Update Firestore
-      if (currentUserReference != null) {
-        await currentUserReference!.update({
-          'notifications_enabled': permissionGranted,
-        });
-      }
-
-      // Show success feedback if permission was granted
-      if (permissionGranted && mounted) {
-        showCupertinoDialog(
-          context: context,
-          builder: (context) => CupertinoAlertDialog(
-            content: Text('✅ Notifications enabled'),
-            actions: [
-              CupertinoDialogAction(
-                child: Text('OK'),
-                onPressed: () => Navigator.pop(context),
-              ),
-            ],
-          ),
-        );
-      }
-    } else {
-      // Turning OFF - Just update local state and Firestore
-      setState(() {
-        _pushNotificationsEnabled = false;
-      });
-
-      if (currentUserReference != null) {
-        await currentUserReference!.update({
-          'notifications_enabled': false,
-        });
-      }
-    }
-  }
-
-  Future<void> _handleEmailNotificationsToggle(bool newValue) async {
-    setState(() {
-      _emailNotificationsEnabled = newValue;
-    });
-
-    // Store in local preferences or Firestore if field exists
-    // For now, just update local state
-    // TODO: Add email_notifications_enabled field to UsersRecord if needed
-  }
-
-  Future<void> _handleChatMessagesToggle(bool newValue) async {
-    setState(() {
-      _chatMessagesEnabled = newValue;
-    });
-
-    // Store in local preferences or Firestore if field exists
-    // For now, just update local state
-    // TODO: Add chat_notifications_enabled field to UsersRecord if needed
-  }
-
-  Future<void> _handleWorkspaceUpdatesToggle(bool newValue) async {
-    setState(() {
-      _workspaceUpdatesEnabled = newValue;
-    });
-
-    // Store in local preferences or Firestore if field exists
-    // For now, just update local state
-    // TODO: Add workspace_notifications_enabled field to UsersRecord if needed
   }
 
   Widget _buildPrivacySecurityContent() {
@@ -1871,5 +1588,655 @@ class _MobileSettingsWidgetState extends State<MobileSettingsWidget> {
         ],
       ),
     );
+  }
+
+  // Action Methods
+
+  Future<void> _createWorkspace() async {
+    if (_workspaceNameController.text.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Please enter a workspace name')),
+      );
+      return;
+    }
+
+    try {
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => Center(
+          child: CircularProgressIndicator(),
+        ),
+      );
+
+      final workspaceData = {
+        'name': _workspaceNameController.text.trim(),
+        'description': _workspaceDescriptionController.text.trim(),
+        'created_time': getCurrentTimestamp,
+        'owner_ref': currentUserReference,
+        'logo_url': '',
+        'member_count': 1,
+      };
+
+      final workspaceRef = await FirebaseFirestore.instance
+          .collection('workspaces')
+          .add(workspaceData);
+
+      final memberData = {
+        'user_ref': currentUserReference,
+        'workspace_ref': workspaceRef,
+        'role': 'owner',
+        'joined_time': getCurrentTimestamp,
+      };
+
+      await FirebaseFirestore.instance
+          .collection('workspace_members')
+          .add(memberData);
+
+      await currentUserReference!.update({
+        'current_workspace_ref': workspaceRef,
+      });
+
+      _workspaceNameController.clear();
+      _workspaceDescriptionController.clear();
+
+      Navigator.pop(context);
+      setState(() {
+        _isCreatingWorkspace = false;
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Workspace created successfully')),
+      );
+    } catch (e) {
+      Navigator.pop(context);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error creating workspace: $e')),
+      );
+    }
+  }
+
+  Future<void> _deleteWorkspace() async {
+    if (_deleteConfirmationController.text != 'DELETE') {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Please type "DELETE" to confirm')),
+      );
+      return;
+    }
+
+    try {
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => Center(
+          child: CircularProgressIndicator(),
+        ),
+      );
+
+      final userDoc = await UsersRecord.getDocumentOnce(currentUserReference!);
+      if (userDoc.currentWorkspaceRef == null) {
+        Navigator.pop(context);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('No workspace selected')),
+        );
+        return;
+      }
+
+      final workspaceRef = userDoc.currentWorkspaceRef!;
+
+      // Delete all workspace members
+      final membersQuery = await FirebaseFirestore.instance
+          .collection('workspace_members')
+          .where('workspace_ref', isEqualTo: workspaceRef)
+          .get();
+
+      for (var memberDoc in membersQuery.docs) {
+        await memberDoc.reference.delete();
+      }
+
+      // Delete all chats in this workspace
+      final chatsQuery = await FirebaseFirestore.instance
+          .collection('chats')
+          .where('workspace_ref', isEqualTo: workspaceRef)
+          .get();
+
+      for (var chatDoc in chatsQuery.docs) {
+        await chatDoc.reference.delete();
+      }
+
+      // Clear current workspace reference from users
+      final usersQuery = await FirebaseFirestore.instance
+          .collection('users')
+          .where('current_workspace_ref', isEqualTo: workspaceRef)
+          .get();
+
+      for (var userDoc in usersQuery.docs) {
+        await userDoc.reference.update({
+          'current_workspace_ref': null,
+        });
+      }
+
+      // Delete the workspace itself
+      await workspaceRef.delete();
+
+      _deleteConfirmationController.clear();
+
+      Navigator.pop(context);
+      setState(() {
+        _isDeletingWorkspace = false;
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Workspace deleted successfully')),
+      );
+    } catch (e) {
+      Navigator.pop(context);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error deleting workspace: $e')),
+      );
+    }
+  }
+
+  Future<void> _joinWorkspace() async {
+    if (_inviteCodeController.text.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Please enter an invite code')),
+      );
+      return;
+    }
+
+    try {
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => Center(
+          child: CircularProgressIndicator(),
+        ),
+      );
+
+      // Find workspace by invite code
+      final workspaceQuery = await FirebaseFirestore.instance
+          .collection('workspaces')
+          .where('invite_code', isEqualTo: _inviteCodeController.text.trim())
+          .limit(1)
+          .get();
+
+      if (workspaceQuery.docs.isEmpty) {
+        Navigator.pop(context);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Invalid invite code')),
+        );
+        return;
+      }
+
+      final workspaceDoc = workspaceQuery.docs.first;
+      final workspaceRef = workspaceDoc.reference;
+
+      // Check if user is already a member
+      final memberQuery = await FirebaseFirestore.instance
+          .collection('workspace_members')
+          .where('user_ref', isEqualTo: currentUserReference)
+          .where('workspace_ref', isEqualTo: workspaceRef)
+          .limit(1)
+          .get();
+
+      if (memberQuery.docs.isNotEmpty) {
+        Navigator.pop(context);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('You are already a member of this workspace')),
+        );
+        return;
+      }
+
+      // Add user as member
+      final memberData = {
+        'user_ref': currentUserReference,
+        'workspace_ref': workspaceRef,
+        'role': 'member',
+        'joined_time': getCurrentTimestamp,
+      };
+
+      await FirebaseFirestore.instance
+          .collection('workspace_members')
+          .add(memberData);
+
+      // Update user's current workspace
+      await currentUserReference!.update({
+        'current_workspace_ref': workspaceRef,
+      });
+
+      // Update workspace member count
+      await workspaceRef.update({
+        'member_count': FieldValue.increment(1),
+      });
+
+      _inviteCodeController.clear();
+
+      Navigator.pop(context);
+      setState(() {
+        _isJoiningWorkspace = false;
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Successfully joined workspace')),
+      );
+    } catch (e) {
+      Navigator.pop(context);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error joining workspace: $e')),
+      );
+    }
+  }
+
+  Future<void> _generateAndCopyInviteCode() async {
+    try {
+      final userDoc = await UsersRecord.getDocumentOnce(currentUserReference!);
+      if (userDoc.currentWorkspaceRef == null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('No workspace selected')),
+        );
+        return;
+      }
+
+      final workspaceRef = userDoc.currentWorkspaceRef!;
+      final workspaceDoc = await workspaceRef.get();
+      final workspaceData = workspaceDoc.data() as Map<String, dynamic>;
+
+      String inviteCode = workspaceData['invite_code'] ?? '';
+
+      if (inviteCode.isEmpty) {
+        // Generate new invite code
+        inviteCode = _generateInviteCode();
+        await workspaceRef.update({
+          'invite_code': inviteCode,
+        });
+      }
+
+      await Clipboard.setData(ClipboardData(text: inviteCode));
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Invite code copied to clipboard: $inviteCode')),
+      );
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error generating invite code: $e')),
+      );
+    }
+  }
+
+  String _generateInviteCode() {
+    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+    final random = Random();
+    return String.fromCharCodes(
+      Iterable.generate(
+          8, (_) => chars.codeUnitAt(random.nextInt(chars.length))),
+    );
+  }
+
+  // Member Management Actions
+  Future<void> _upgradeMemberToModerator(WorkspaceMembersRecord member) async {
+    try {
+      await member.reference.update({
+        'role': 'moderator',
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Member upgraded to Moderator')),
+      );
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error upgrading member: $e')),
+      );
+    }
+  }
+
+  Future<void> _upgradeMemberToOwner(WorkspaceMembersRecord member) async {
+    try {
+      await member.reference.update({
+        'role': 'owner',
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Member upgraded to Owner')),
+      );
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error upgrading member: $e')),
+      );
+    }
+  }
+
+  Future<void> _downgradeMemberToMember(WorkspaceMembersRecord member) async {
+    try {
+      await member.reference.update({
+        'role': 'member',
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Member downgraded to Member')),
+      );
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error downgrading member: $e')),
+      );
+    }
+  }
+
+  Future<void> _removeMember(
+      WorkspaceMembersRecord member, UsersRecord user) async {
+    // Show confirmation dialog
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: Text(
+            'Remove Member',
+            style: TextStyle(
+              fontFamily: 'System',
+              fontSize: 18,
+              fontWeight: FontWeight.w600,
+              color: Color(0xFF1D1D1F),
+            ),
+          ),
+          content: Text(
+            'Are you sure you want to remove ${user.displayName} from this workspace?',
+            style: TextStyle(
+              fontFamily: 'System',
+              fontSize: 16,
+              color: Color(0xFF1D1D1F),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: Text(
+                'Cancel',
+                style: TextStyle(
+                  fontFamily: 'System',
+                  fontSize: 16,
+                  color: Color(0xFF8E8E93),
+                ),
+              ),
+            ),
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(true),
+              child: Text(
+                'Remove',
+                style: TextStyle(
+                  fontFamily: 'System',
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                  color: Color(0xFFFF3B30),
+                ),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (confirmed == true) {
+      try {
+        // Remove the member from workspace
+        await member.reference.delete();
+
+        // If this was their current workspace, clear it
+        if (user.currentWorkspaceRef == member.workspaceRef) {
+          await user.reference.update({
+            'current_workspace_ref': null,
+          });
+        }
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Member removed from workspace')),
+        );
+      } catch (e) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error removing member: $e')),
+        );
+      }
+    }
+  }
+
+  Widget _buildWorkspaceMenuItem({
+    required WorkspacesRecord workspace,
+    required bool isCurrent,
+  }) {
+    return Row(
+      children: [
+        Container(
+          width: 24,
+          height: 24,
+          decoration: BoxDecoration(
+            color: isCurrent ? Color(0xFF007AFF) : Color(0xFF8E8E93),
+            borderRadius: BorderRadius.circular(4),
+          ),
+          child: workspace.logoUrl.isNotEmpty
+              ? ClipRRect(
+                  borderRadius: BorderRadius.circular(4),
+                  child: CachedNetworkImage(
+                    imageUrl: workspace.logoUrl,
+                    width: 24,
+                    height: 24,
+                    fit: BoxFit.cover,
+                    placeholder: (context, url) => Center(
+                      child: Text(
+                        workspace.name.isNotEmpty
+                            ? workspace.name[0].toUpperCase()
+                            : 'W',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 12,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                    errorWidget: (context, url, error) => Center(
+                      child: Text(
+                        workspace.name.isNotEmpty
+                            ? workspace.name[0].toUpperCase()
+                            : 'W',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 12,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                  ),
+                )
+              : Center(
+                  child: Text(
+                    workspace.name.isNotEmpty
+                        ? workspace.name[0].toUpperCase()
+                        : 'W',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 12,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+        ),
+        SizedBox(width: 8),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                workspace.name,
+                style: TextStyle(
+                  fontFamily: 'System',
+                  fontSize: 14,
+                  fontWeight: isCurrent ? FontWeight.w600 : FontWeight.w500,
+                  color: Color(0xFF1D1D1F),
+                ),
+              ),
+              if (isCurrent)
+                Text(
+                  'Current',
+                  style: TextStyle(
+                    fontFamily: 'System',
+                    fontSize: 12,
+                    color: Color(0xFF007AFF),
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Future<void> _switchWorkspace(String workspaceId) async {
+    try {
+      // Update the current user's workspace reference
+      await currentUserReference!.update({
+        'current_workspace_ref':
+            FirebaseFirestore.instance.doc('workspaces/$workspaceId'),
+      });
+
+      // Show success message
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Workspace switched successfully'),
+          backgroundColor: Color(0xFF34C759),
+        ),
+      );
+
+      // Refresh the UI
+      setState(() {});
+    } catch (e) {
+      // Show error message
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Failed to switch workspace: $e'),
+          backgroundColor: Color(0xFFFF3B30),
+        ),
+      );
+    }
+  }
+
+  void _showEmailInviteDialog() {
+    final emailController = TextEditingController();
+
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: Text(
+            'Email Invite',
+            style: TextStyle(
+              fontFamily: 'System',
+              fontSize: 18,
+              fontWeight: FontWeight.w600,
+              color: Color(0xFF1D1D1F),
+            ),
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Enter the email address of the person you want to invite to this workspace:',
+                style: TextStyle(
+                  fontFamily: 'System',
+                  fontSize: 14,
+                  color: Color(0xFF8E8E93),
+                ),
+              ),
+              SizedBox(height: 16),
+              TextField(
+                controller: emailController,
+                decoration: InputDecoration(
+                  labelText: 'Email Address',
+                  hintText: 'user@example.com',
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  prefixIcon: Icon(Icons.email_outlined),
+                ),
+                keyboardType: TextInputType.emailAddress,
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: Text(
+                'Cancel',
+                style: TextStyle(
+                  fontFamily: 'System',
+                  fontSize: 16,
+                  color: Color(0xFF8E8E93),
+                ),
+              ),
+            ),
+            ElevatedButton(
+              onPressed: () async {
+                if (emailController.text.isNotEmpty &&
+                    emailController.text.contains('@')) {
+                  Navigator.pop(context);
+                  await _sendEmailInvite(emailController.text);
+                } else {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text('Please enter a valid email address'),
+                      backgroundColor: Colors.red,
+                    ),
+                  );
+                }
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Color(0xFF007AFF),
+                foregroundColor: Colors.white,
+              ),
+              child: Text(
+                'Send Invite',
+                style: TextStyle(
+                  fontFamily: 'System',
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Future<void> _sendEmailInvite(String email) async {
+    try {
+      // Show loading indicator
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => Center(
+          child: CircularProgressIndicator(),
+        ),
+      );
+
+      // TODO: Implement actual email invitation logic
+      await Future.delayed(Duration(seconds: 2)); // Simulate API call
+
+      Navigator.pop(context); // Close loading dialog
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Invitation sent to $email'),
+          backgroundColor: Color(0xFF34C759),
+        ),
+      );
+    } catch (e) {
+      Navigator.pop(context); // Close loading dialog
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error sending invitation: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
   }
 }

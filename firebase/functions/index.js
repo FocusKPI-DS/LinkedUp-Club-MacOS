@@ -677,6 +677,188 @@ exports.sendReactionNotificationTrigger = functions
 //     }
 //   });
 
+// Trigger for connection request notifications
+exports.sendConnectionRequestNotificationTrigger = functions
+  .runWith({
+    timeoutSeconds: 60,
+    memory: "256MB",
+  })
+  .firestore.document('users/{userId}')
+  .onUpdate(async (change, context) => {
+    try {
+      console.log(`🔔 Connection request trigger fired for user: ${context.params.userId}`);
+      
+      const beforeData = change.before.data();
+      const afterData = change.after.data();
+      
+      // Check if friend_requests field exists and changed
+      const beforeFriendRequests = beforeData.friend_requests || [];
+      const afterFriendRequests = afterData.friend_requests || [];
+      
+      // Better comparison for DocumentReference arrays
+      const beforeCount = Array.isArray(beforeFriendRequests) ? beforeFriendRequests.length : 0;
+      const afterCount = Array.isArray(afterFriendRequests) ? afterFriendRequests.length : 0;
+      
+      console.log(`friend_requests - Before count: ${beforeCount}, After count: ${afterCount}`);
+      
+      // Early return if friend_requests didn't change or is empty
+      if (beforeCount === afterCount && afterCount === 0) {
+        console.log(`friend_requests is empty and didn't change, skipping notification`);
+        return;
+      }
+      
+      // If count didn't increase, no new requests
+      if (afterCount <= beforeCount) {
+        console.log(`friend_requests count didn't increase (${beforeCount} -> ${afterCount}), skipping notification`);
+        return;
+      }
+      
+      // friend_requests arrays already retrieved above
+      console.log(`Before friend_requests type: ${Array.isArray(beforeFriendRequests) ? 'array' : typeof beforeFriendRequests}`);
+      console.log(`After friend_requests type: ${Array.isArray(afterFriendRequests) ? 'array' : typeof afterFriendRequests}`);
+      
+      // Debug: Log the actual data structure
+      if (beforeFriendRequests.length > 0) {
+        console.log(`Before first item type:`, typeof beforeFriendRequests[0]);
+        console.log(`Before first item:`, beforeFriendRequests[0]);
+      }
+      if (afterFriendRequests.length > 0) {
+        console.log(`After first item type:`, typeof afterFriendRequests[0]);
+        console.log(`After first item:`, afterFriendRequests[0]);
+      }
+      
+      // Convert to IDs for comparison (DocumentReference objects have .id property)
+      const beforeIds = beforeFriendRequests.map(ref => {
+        if (ref && typeof ref === 'object' && ref.id) {
+          return ref.id;
+        } else if (ref && typeof ref === 'object' && ref.path) {
+          return ref.path.split('/').pop();
+        } else if (typeof ref === 'string') {
+          return ref.split('/').pop();
+        }
+        return null;
+      }).filter(Boolean);
+      
+      const afterIds = afterFriendRequests.map(ref => {
+        if (ref && typeof ref === 'object' && ref.id) {
+          return ref.id;
+        } else if (ref && typeof ref === 'object' && ref.path) {
+          return ref.path.split('/').pop();
+        } else if (typeof ref === 'string') {
+          return ref.split('/').pop();
+        }
+        return null;
+      }).filter(Boolean);
+      
+      console.log(`Before IDs:`, beforeIds);
+      console.log(`After IDs:`, afterIds);
+      
+      // Find new connection requests (users added to friend_requests array)
+      const newRequestIds = afterIds.filter(
+        (afterId) => !beforeIds.includes(afterId)
+      );
+      
+      console.log(`New request IDs:`, newRequestIds);
+      
+      // Convert back to DocumentReference objects from afterFriendRequests
+      const newRequests = afterFriendRequests.filter((ref) => {
+        let refId = null;
+        if (ref && typeof ref === 'object' && ref.id) {
+          refId = ref.id;
+        } else if (ref && typeof ref === 'object' && ref.path) {
+          refId = ref.path.split('/').pop();
+        } else if (typeof ref === 'string') {
+          refId = ref.split('/').pop();
+        }
+        return refId && newRequestIds.includes(refId);
+      });
+      
+      // If no new requests, skip
+      if (newRequests.length === 0) {
+        console.log(`No new connection requests detected for user ${context.params.userId}`);
+        return;
+      }
+      
+      console.log(`Found ${newRequests.length} new connection request(s) for user ${context.params.userId}`);
+      
+      // Get the recipient user (the one who received the request)
+      const recipientUserId = context.params.userId;
+      const recipientUserRef = firestore.doc(`users/${recipientUserId}`);
+      
+      // Check if recipient has connection request notifications enabled
+      const recipientUserDoc = await recipientUserRef.get();
+      if (!recipientUserDoc.exists) {
+        console.log('Recipient user document not found');
+        return;
+      }
+      
+      const recipientData = recipientUserDoc.data();
+      // Connection request notifications are always enabled (important notifications)
+      // We don't check connection_requests_enabled setting - connection requests are always notified
+      console.log(`✅ Processing connection request notification for user ${recipientUserId}`);
+      
+      // Process each new connection request
+      for (const senderRef of newRequests) {
+        try {
+          // Handle DocumentReference - get path and ID
+          let senderRefPath, senderRefId;
+          if (senderRef && typeof senderRef === 'object') {
+            senderRefPath = senderRef.path || (senderRef.id ? `users/${senderRef.id}` : null);
+            senderRefId = senderRef.id || (senderRefPath ? senderRefPath.split('/').pop() : null);
+          } else if (typeof senderRef === 'string') {
+            senderRefPath = senderRef;
+            senderRefId = senderRef.split('/').pop();
+          } else {
+            console.log('Invalid senderRef format:', senderRef);
+            continue;
+          }
+          
+          // Get sender's display name
+          let senderName = "Someone";
+          try {
+            // Use the path to get the document
+            const senderDocRef = senderRefPath ? firestore.doc(senderRefPath) : null;
+            if (senderDocRef) {
+              const senderDoc = await senderDocRef.get();
+              if (senderDoc.exists) {
+                const senderData = senderDoc.data();
+                senderName = senderData.display_name || senderData.name || "Someone";
+              }
+            }
+          } catch (e) {
+            console.log('Error getting sender name:', e);
+          }
+          
+          // Create notification data
+          const notificationData = {
+            notification_title: senderName,
+            notification_text: "wants to Connect",
+            notification_image_url: "",
+            notification_sound: "default",
+            user_refs: recipientUserRef.path,
+            initial_page_name: "Connections",
+            parameter_data: JSON.stringify({
+              senderId: senderRefId,
+              senderRef: senderRefPath,
+            }),
+            sender: senderRefPath ? firestore.doc(senderRefPath) : null,
+            timestamp: admin.firestore.FieldValue.serverTimestamp(),
+          };
+          
+          // Add to notifications collection to trigger the existing notification system
+          await firestore.collection(kUserPushNotificationsCollection).add(notificationData);
+          
+          console.log(`✅ Connection request notification sent: ${senderName} -> ${recipientUserId}`);
+        } catch (e) {
+          console.log(`❌ Error sending connection request notification:`, e);
+          console.log(`   SenderRef:`, senderRef);
+        }
+      }
+    } catch (e) {
+      console.log(`Error in connection request notification trigger: ${e}`);
+    }
+  });
+
 async function sendPushNotifications(snapshot) {
   const notificationData = snapshot.data();
   const title = notificationData.notification_title || "";
@@ -700,47 +882,9 @@ async function sendPushNotifications(snapshot) {
   const numBatches = notificationData.num_batches || 0;
   const status = notificationData.status || "";
 
-  // Add workspace context to notification text for chat messages and reactions
+  // Use the original title and body - no workspace logic needed
   let formattedBody = body;
   let formattedTitle = title;
-  if (initialPageName === "ChatDetail" || initialPageName === "chatdetail") {
-    // Extract workspace name from parameter data if available
-    let workspaceName = "Unknown Workspace";
-    try {
-      const parsedData = JSON.parse(parameterData || "{}");
-      console.log("🔍 DEBUG: Parsed parameter data:", JSON.stringify(parsedData));
-      
-      if (parsedData.workspaceName) {
-        workspaceName = parsedData.workspaceName;
-        console.log("🔍 DEBUG: Using workspaceName from parameter:", workspaceName);
-      } else if (parsedData.workspace_ref) {
-        console.log("🔍 DEBUG: Fetching workspace document for:", parsedData.workspace_ref);
-        // Fetch workspace document to get the actual name
-        try {
-          const workspaceDoc = await firestore.doc(parsedData.workspace_ref).get();
-          if (workspaceDoc.exists) {
-            const workspaceData = workspaceDoc.data();
-            workspaceName = workspaceData.name || workspaceData.title || "Unknown Workspace";
-            console.log("🔍 DEBUG: Found workspace name:", workspaceName);
-          } else {
-            console.log("🔍 DEBUG: Workspace document does not exist");
-          }
-        } catch (e) {
-          console.log('🔍 DEBUG: Error getting workspace name from document:', e);
-          // Fallback to using the workspace ID
-          workspaceName = parsedData.workspace_ref.split('/').pop() || "Unknown Workspace";
-        }
-      } else {
-        console.log("🔍 DEBUG: No workspaceName or workspace_ref found in parameter data");
-      }
-    } catch (e) {
-      console.log("🔍 DEBUG: Could not parse parameter data for workspace name:", e);
-    }
-    
-    // Set title to workspace name and format body
-    formattedTitle = workspaceName;
-    formattedBody = body; // Keep original body without "Workspace:" prefix
-  }
 
   if (status !== "" && status !== "started") {
     console.log(`Already processed ${snapshot.ref.path}. Skipping...`);

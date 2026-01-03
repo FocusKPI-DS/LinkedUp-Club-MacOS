@@ -65,53 +65,40 @@ class _EnhancedJoinButtonState extends State<EnhancedJoinButton> {
     });
 
     try {
-      // Get the price (in cents)
-      int priceInCents =
-          widget.eventDoc.price * 100; // Convert dollars to cents
+      // Simple join - add user to event participants
+      await widget.eventDoc.reference.update({
+        'participants': FieldValue.arrayUnion([currentUserReference]),
+      });
 
-      // Call the purchase action
-      final result = await purchaseEventTicket(
-        widget.eventDoc.eventId,
-        widget.eventDoc.title,
-        priceInCents,
-        widget.eventDoc.reference,
-        widget.eventDoc.eventType, // Add the 5th required parameter
-      );
+      // Create participant record
+      await widget.eventDoc.reference.collection('participant').add({
+        'user_ref': currentUserReference,
+        'userId': currentUserUid,
+        'name': currentUserDisplayName,
+        'image': currentUserPhoto,
+        'bio': '',
+        'joined_at': FieldValue.serverTimestamp(),
+        'status': 'joined',
+      });
 
-      if (result.success == true) {
-        setState(() {
-          _hasJoined = true;
-        });
-        if (widget.onSuccess != null) {
-          await widget.onSuccess!();
-        }
-
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              result.message ?? 'Successfully joined event!',
-              style: const TextStyle(color: Colors.white),
-            ),
-            backgroundColor: FlutterFlowTheme.of(context).success,
-            duration: const Duration(seconds: 3),
-          ),
-        );
-      } else {
-        if (widget.onError != null) {
-          await widget.onError!(result.message ?? 'Failed to join event');
-        }
-
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              result.message ?? 'Failed to purchase ticket',
-              style: const TextStyle(color: Colors.white),
-            ),
-            backgroundColor: FlutterFlowTheme.of(context).error,
-            duration: const Duration(seconds: 4),
-          ),
-        );
+      setState(() {
+        _hasJoined = true;
+      });
+      
+      if (widget.onSuccess != null) {
+        await widget.onSuccess!();
       }
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Successfully joined event!',
+            style: const TextStyle(color: Colors.white),
+          ),
+          backgroundColor: FlutterFlowTheme.of(context).success,
+          duration: const Duration(seconds: 3),
+        ),
+      );
     } catch (e) {
       if (widget.onError != null) {
         await widget.onError!(e.toString());

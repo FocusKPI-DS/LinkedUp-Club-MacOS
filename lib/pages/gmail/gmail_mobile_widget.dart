@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/cupertino.dart';
 import 'dart:ui';
 import 'package:ff_theme/flutter_flow/flutter_flow_theme.dart';
 import '/auth/firebase_auth/auth_util.dart';
@@ -8,6 +9,7 @@ import 'package:intl/intl.dart';
 import 'package:flutter_widget_from_html/flutter_widget_from_html.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:adaptive_platform_ui/adaptive_platform_ui.dart';
 
 class GmailMobileWidget extends StatefulWidget {
   const GmailMobileWidget({Key? key}) : super(key: key);
@@ -70,9 +72,11 @@ class _GmailMobileWidgetState extends State<GmailMobileWidget> {
   }
 
   Future<void> _connectGmail() async {
-    setState(() {
-      _isConnecting = true;
-    });
+    if (mounted) {
+      setState(() {
+        _isConnecting = true;
+      });
+    }
 
     try {
       final success = await actions.gmailOAuthConnect(context);
@@ -115,15 +119,17 @@ class _GmailMobileWidgetState extends State<GmailMobileWidget> {
   Future<void> _loadEmails({bool refresh = false}) async {
     if (_isLoading) return;
 
-    setState(() {
-      _isLoading = true;
-      if (refresh) {
-        _emails = [];
-        _allEmails = [];
-        _nextPageToken = null;
-        _selectedEmail = null;
-      }
-    });
+    if (mounted) {
+      setState(() {
+        _isLoading = true;
+        if (refresh) {
+          _emails = [];
+          _allEmails = [];
+          _nextPageToken = null;
+          _selectedEmail = null;
+        }
+      });
+    }
 
     try {
       final result = await actions.gmailListEmails(
@@ -143,27 +149,33 @@ class _GmailMobileWidgetState extends State<GmailMobileWidget> {
           }
         }
 
-        setState(() {
-          if (refresh) {
-            _emails = newEmails;
-            _allEmails = newEmails;
-          } else {
-            _emails.addAll(newEmails);
-            _allEmails.addAll(newEmails);
-          }
-          _nextPageToken = result['nextPageToken']?.toString();
-          _isLoading = false;
-        });
+        if (mounted) {
+          setState(() {
+            if (refresh) {
+              _emails = newEmails;
+              _allEmails = newEmails;
+            } else {
+              _emails.addAll(newEmails);
+              _allEmails.addAll(newEmails);
+            }
+            _nextPageToken = result['nextPageToken']?.toString();
+            _isLoading = false;
+          });
+        }
       } else {
-        setState(() {
-          _isLoading = false;
-        });
+        if (mounted) {
+          setState(() {
+            _isLoading = false;
+          });
+        }
         _showError(result?['error'] ?? 'Failed to load emails');
       }
     } catch (e) {
-      setState(() {
-        _isLoading = false;
-      });
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
       _showError('Error loading emails: $e');
     }
   }
@@ -171,28 +183,32 @@ class _GmailMobileWidgetState extends State<GmailMobileWidget> {
   Future<void> _loadEmailDetail(String messageId) async {
     if (_isLoadingEmail) return;
 
-    setState(() {
-      _selectedEmail = null;
-      _isLoadingEmail = true;
-    });
+    if (mounted) {
+      setState(() {
+        _selectedEmail = null;
+        _isLoadingEmail = true;
+      });
+    }
 
     try {
       // Mark as read when opened
       await actions.gmailMarkAsRead(messageId);
 
       // Update local state
-      setState(() {
-        final emailIndex =
-            _emails.indexWhere((email) => email['id']?.toString() == messageId);
-        if (emailIndex != -1) {
-          final labels = List<String>.from(_emails[emailIndex]['labels'] ?? []);
-          labels.remove('UNREAD');
-          _emails[emailIndex] = {
-            ..._emails[emailIndex],
-            'labels': labels,
-          };
-        }
-      });
+      if (mounted) {
+        setState(() {
+          final emailIndex =
+              _emails.indexWhere((email) => email['id']?.toString() == messageId);
+          if (emailIndex != -1) {
+            final labels = List<String>.from(_emails[emailIndex]['labels'] ?? []);
+            labels.remove('UNREAD');
+            _emails[emailIndex] = {
+              ..._emails[emailIndex],
+              'labels': labels,
+            };
+          }
+        });
+      }
 
       final result = await actions.gmailGetEmail(messageId);
 
@@ -204,20 +220,26 @@ class _GmailMobileWidgetState extends State<GmailMobileWidget> {
           emailMap = _convertMap(emailData);
         }
 
-        setState(() {
-          _selectedEmail = emailMap;
-          _isLoadingEmail = false;
-        });
+        if (mounted) {
+          setState(() {
+            _selectedEmail = emailMap;
+            _isLoadingEmail = false;
+          });
+        }
       } else {
-        setState(() {
-          _isLoadingEmail = false;
-        });
+        if (mounted) {
+          setState(() {
+            _isLoadingEmail = false;
+          });
+        }
         _showError(result?['error'] ?? 'Failed to load email');
       }
     } catch (e) {
-      setState(() {
-        _isLoadingEmail = false;
-      });
+      if (mounted) {
+        setState(() {
+          _isLoadingEmail = false;
+        });
+      }
       _showError('Error loading email: $e');
     }
   }
@@ -533,11 +555,13 @@ class _GmailMobileWidgetState extends State<GmailMobileWidget> {
           'gmail_connected_at': FieldValue.delete(),
         });
 
-        setState(() {
-          _emails = [];
-          _allEmails = [];
-          _selectedEmail = null;
-        });
+        if (mounted) {
+          setState(() {
+            _emails = [];
+            _allEmails = [];
+            _selectedEmail = null;
+          });
+        }
 
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
@@ -734,11 +758,12 @@ class _GmailMobileWidgetState extends State<GmailMobileWidget> {
 
   Widget _buildEmailListView() {
     return Scaffold(
-      backgroundColor: Color(0xFFF5F5F7),
+      backgroundColor: CupertinoColors.systemGroupedBackground,
       body: Column(
         children: [
-          // iOS-style header with liquid glass
+          // iOS-style header matching Connections/Chat style
           _buildIOSHeader(),
+          SizedBox(height: 20),
           // Search bar with liquid glass (only when visible)
           if (_isSearchVisible) _buildSearchBar(),
           // Navigation tabs with blue gradient
@@ -953,124 +978,73 @@ class _GmailMobileWidgetState extends State<GmailMobileWidget> {
   }
 
   Widget _buildIOSHeader() {
-    return ClipRRect(
-      child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
-        child: Container(
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [
-                Color(0xFF1A1D29).withOpacity(0.95),
-                Color(0xFF2D3142).withOpacity(0.95),
-              ],
-            ),
-            border: Border(
-              bottom: BorderSide(
-                color: Colors.white.withOpacity(0.1),
-                width: 0.5,
+    return Container(
+      color: CupertinoColors.systemGroupedBackground,
+      child: SafeArea(
+        bottom: false,
+        child: Padding(
+          padding: EdgeInsets.fromLTRB(16, 16, 16, 0),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                'Mail',
+                style: CupertinoTheme.of(context)
+                    .textTheme
+                    .navLargeTitleTextStyle
+                    .copyWith(
+                      fontSize: 34,
+                      fontWeight: FontWeight.bold,
+                    ),
               ),
-            ),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withOpacity(0.1),
-                blurRadius: 20,
-                offset: Offset(0, 2),
-              ),
-            ],
-          ),
-          child: SafeArea(
-            child: Container(
-              height: 56,
-              padding: EdgeInsets.symmetric(horizontal: 20),
-              child: Row(
+              Row(
+                mainAxisSize: MainAxisSize.min,
                 children: [
-                  Expanded(
-                    child: Row(
-                      children: [
-                        Image.asset(
-                          'assets/images/google.png',
-                          width: 28,
-                          height: 28,
-                          fit: BoxFit.contain,
-                        ),
-                        SizedBox(width: 12),
-                        Text(
-                          'Gmail',
-                          style: TextStyle(
-                            fontFamily: 'SF Pro Text',
-                            color: Colors.white,
-                            fontSize: 28,
-                            fontWeight: FontWeight.w700,
-                            letterSpacing: -0.5,
-                          ),
-                        ),
-                      ],
+                  AdaptiveFloatingActionButton(
+                    mini: true,
+                    backgroundColor: Colors.white,
+                    foregroundColor: Color(0xFF007AFF),
+                    onPressed: () {
+                      setState(() {
+                        _isSearchVisible = !_isSearchVisible;
+                        if (!_isSearchVisible) {
+                          _searchController.clear();
+                        }
+                      });
+                    },
+                    child: Icon(
+                      _isSearchVisible
+                          ? CupertinoIcons.search
+                          : CupertinoIcons.search,
+                      size: 20,
                     ),
                   ),
-                  Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      _buildHeaderButton(
-                        icon: Icons.search_rounded,
-                        isActive: _isSearchVisible,
-                        onTap: () {
-                          setState(() {
-                            _isSearchVisible = !_isSearchVisible;
-                            if (!_isSearchVisible) {
-                              _searchController.clear();
-                            }
-                          });
-                        },
-                      ),
-                      SizedBox(width: 12),
-                      _buildHeaderButton(
-                        icon: Icons.refresh_rounded,
-                        onTap: () => _loadEmails(refresh: true),
-                      ),
-                      SizedBox(width: 12),
-                      _buildHeaderButton(
-                        icon: Icons.more_vert,
-                        onTap: () => _showDisconnectMenu(),
-                      ),
-                    ],
+                  SizedBox(width: 8),
+                  AdaptiveFloatingActionButton(
+                    mini: true,
+                    backgroundColor: Colors.white,
+                    foregroundColor: Color(0xFF007AFF),
+                    onPressed: () => _loadEmails(refresh: true),
+                    child: Icon(
+                      CupertinoIcons.arrow_clockwise,
+                      size: 20,
+                    ),
+                  ),
+                  SizedBox(width: 8),
+                  AdaptiveFloatingActionButton(
+                    mini: true,
+                    backgroundColor: Colors.white,
+                    foregroundColor: Color(0xFF007AFF),
+                    onPressed: () => _showDisconnectMenu(),
+                    child: Icon(
+                      CupertinoIcons.ellipsis,
+                      size: 20,
+                    ),
                   ),
                 ],
               ),
-            ),
+            ],
           ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildHeaderButton({
-    required IconData icon,
-    required VoidCallback onTap,
-    bool isActive = false,
-  }) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        width: 44,
-        height: 44,
-        decoration: BoxDecoration(
-          color: isActive
-              ? Color(0xFF007AFF).withOpacity(0.2)
-              : Colors.white.withOpacity(0.1),
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(
-            color: isActive
-                ? Color(0xFF007AFF).withOpacity(0.3)
-                : Colors.white.withOpacity(0.2),
-            width: 1,
-          ),
-        ),
-        child: Icon(
-          icon,
-          color: isActive ? Color(0xFF007AFF) : Colors.white,
-          size: 22,
         ),
       ),
     );

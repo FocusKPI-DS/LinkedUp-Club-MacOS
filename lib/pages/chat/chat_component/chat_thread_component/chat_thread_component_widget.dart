@@ -28,10 +28,11 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:easy_debounce/easy_debounce.dart';
 import 'package:ff_theme/flutter_flow/flutter_flow_theme.dart';
 import 'package:flutter/material.dart';
+import 'package:adaptive_platform_ui/adaptive_platform_ui.dart';
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_animate/flutter_animate.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:record/record.dart';
 import 'package:file_picker/file_picker.dart';
 import 'chat_thread_component_model.dart';
@@ -143,10 +144,10 @@ class _ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget>
     }
 
     final chat = widget.chatReference!;
-    
+
     // Mark individual messages as read first
     await _markIndividualMessagesAsRead(chat);
-    
+
     // Then update chat-level lastMessageSeen
     if (!chat.lastMessageSeen.contains(currentUserReference) &&
         chat.lastMessage.isNotEmpty &&
@@ -161,7 +162,8 @@ class _ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget>
         chat.reference.update({
           'last_message_seen': updatedSeenList.map((ref) => ref).toList(),
         }).then((_) {
-          print('✅ Successfully marked messages as read for chat: ${chat.reference.id}');
+          print(
+              '✅ Successfully marked messages as read for chat: ${chat.reference.id}');
         }).catchError((e) {
           print('❌ Error marking messages as read: $e');
         });
@@ -192,19 +194,19 @@ class _ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget>
         if (message.senderRef != currentUserReference &&
             !message.isSystemMessage &&
             !message.isReadBy.contains(currentUserReference)) {
-          final updatedReadBy =
-              List<DocumentReference>.from(message.isReadBy);
+          final updatedReadBy = List<DocumentReference>.from(message.isReadBy);
           if (!updatedReadBy.contains(currentUserReference)) {
             updatedReadBy.add(currentUserReference!);
             batch.update(message.reference, {
               'is_read_by': updatedReadBy.map((ref) => ref).toList(),
             });
             updateCount++;
-            
+
             // Commit batch if we reach the limit
             if (updateCount >= maxBatchSize) {
               await batch.commit();
-              print('✅ Marked $updateCount messages as read in chat ${chat.reference.id} (batch)');
+              print(
+                  '✅ Marked $updateCount messages as read in chat ${chat.reference.id} (batch)');
               break;
             }
           }
@@ -214,7 +216,8 @@ class _ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget>
       // Commit batch update if there are changes
       if (updateCount > 0 && updateCount < maxBatchSize) {
         await batch.commit();
-        print('✅ Marked $updateCount messages as read in chat ${chat.reference.id}');
+        print(
+            '✅ Marked $updateCount messages as read in chat ${chat.reference.id}');
       }
     } catch (e) {
       print('❌ Error marking individual messages as read: $e');
@@ -455,11 +458,7 @@ class _ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget>
       _markMessagesAsRead();
     });
 
-    return InkWell(
-      splashColor: Colors.transparent,
-      focusColor: Colors.transparent,
-      hoverColor: Colors.transparent,
-      highlightColor: Colors.transparent,
+    return GestureDetector(
       onTap: () async {
         _model.select = false;
         safeSetState(() {});
@@ -506,7 +505,7 @@ class _ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget>
                       final chat = widget.chatReference;
                       int unreadCount = 0;
                       int? unreadSeparatorIndex;
-                      
+
                       if (chat != null && currentUserReference != null) {
                         // Find unread messages and determine separator position
                         // Messages are in descending order (newest first, index 0 = newest)
@@ -514,22 +513,26 @@ class _ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget>
                         // - Index 0 (newest) appears at bottom of screen
                         // - Last index (oldest) appears at top of screen
                         // We want separator above unread messages (which are at bottom)
-                        
-                        int? firstUnreadIndex; // Index of the newest unread message
-                        
+
+                        int?
+                            firstUnreadIndex; // Index of the newest unread message
+
                         // Iterate through messages from newest to oldest
                         // Count ALL unread messages and find where to place the separator
-                        for (int i = 0; i < listViewMessagesRecordList.length; i++) {
+                        for (int i = 0;
+                            i < listViewMessagesRecordList.length;
+                            i++) {
                           final message = listViewMessagesRecordList[i];
-                          
+
                           // Message is unread if:
                           // 1. Current user is NOT in the isReadBy list
                           // 2. It wasn't sent by the current user (don't count own messages)
                           // 3. It's not a system message
-                          final isUnread = message.senderRef != currentUserReference &&
+                          final isUnread = message.senderRef !=
+                                  currentUserReference &&
                               !message.isSystemMessage &&
                               !message.isReadBy.contains(currentUserReference);
-                          
+
                           if (isUnread) {
                             unreadCount++;
                             // Track the first (newest) unread message index
@@ -538,7 +541,7 @@ class _ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget>
                             }
                           }
                         }
-                        
+
                         // The separator should appear right before the first (newest) unread message
                         // Since ListView has reverse: true, this will appear above unread messages
                         // Insert separator at firstUnreadIndex (right before first unread)
@@ -547,11 +550,7 @@ class _ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget>
                         }
                       }
 
-                      return InkWell(
-                        splashColor: Colors.transparent,
-                        focusColor: Colors.transparent,
-                        hoverColor: Colors.transparent,
-                        highlightColor: Colors.transparent,
+                      return GestureDetector(
                         onTap: () async {
                           await actions.closekeyboard();
                         },
@@ -561,34 +560,44 @@ class _ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget>
                           reverse: true,
                           shrinkWrap: true,
                           scrollDirection: Axis.vertical,
-                          itemCount: listViewMessagesRecordList.length + (unreadSeparatorIndex != null ? 1 : 0),
+                          itemCount: listViewMessagesRecordList.length +
+                              (unreadSeparatorIndex != null ? 1 : 0),
                           itemBuilder: (context, listViewIndex) {
                             // Calculate the actual message index accounting for separator
                             // The separator is inserted right before the first (newest) unread message
                             int messageIndex = listViewIndex;
-                            
+
                             // Insert separator right before first unread message
-                            if (unreadSeparatorIndex != null && listViewIndex == unreadSeparatorIndex) {
+                            if (unreadSeparatorIndex != null &&
+                                listViewIndex == unreadSeparatorIndex) {
                               return Container(
                                 margin: EdgeInsets.symmetric(vertical: 16.0),
                                 child: Center(
                                   child: Container(
-                                    padding: EdgeInsets.symmetric(horizontal: 12.0, vertical: 6.0),
+                                    padding: EdgeInsets.symmetric(
+                                        horizontal: 12.0, vertical: 6.0),
                                     decoration: BoxDecoration(
-                                      color: FlutterFlowTheme.of(context).primary.withOpacity(0.1),
+                                      color: FlutterFlowTheme.of(context)
+                                          .primary
+                                          .withOpacity(0.1),
                                       borderRadius: BorderRadius.circular(20.0),
                                       border: Border.all(
-                                        color: FlutterFlowTheme.of(context).primary.withOpacity(0.3),
+                                        color: FlutterFlowTheme.of(context)
+                                            .primary
+                                            .withOpacity(0.3),
                                         width: 1.0,
                                       ),
                                     ),
                                     child: Text(
-                                      unreadCount == 1 
+                                      unreadCount == 1
                                           ? '1 unread message'
                                           : '$unreadCount unread messages',
-                                      style: FlutterFlowTheme.of(context).bodySmall.override(
+                                      style: FlutterFlowTheme.of(context)
+                                          .bodySmall
+                                          .override(
                                             fontFamily: 'Inter',
-                                            color: FlutterFlowTheme.of(context).primary,
+                                            color: FlutterFlowTheme.of(context)
+                                                .primary,
                                             fontSize: 12.0,
                                             fontWeight: FontWeight.w600,
                                             letterSpacing: 0.0,
@@ -598,16 +607,19 @@ class _ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget>
                                 ),
                               );
                             }
-                            
+
                             // Adjust message index if separator was inserted before this position
-                            if (unreadSeparatorIndex != null && listViewIndex > unreadSeparatorIndex) {
+                            if (unreadSeparatorIndex != null &&
+                                listViewIndex > unreadSeparatorIndex) {
                               messageIndex = listViewIndex - 1;
                             }
-                            
-                            if (messageIndex < 0 || messageIndex >= listViewMessagesRecordList.length) {
+
+                            if (messageIndex < 0 ||
+                                messageIndex >=
+                                    listViewMessagesRecordList.length) {
                               return SizedBox.shrink();
                             }
-                            
+
                             final listViewMessagesRecord =
                                 listViewMessagesRecordList[messageIndex];
                             return Container(
@@ -648,6 +660,7 @@ class _ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget>
                                   },
                                   isHighlighted: _model.highlightedMessageId ==
                                       listViewMessagesRecord.reference.id,
+                                  isGroup: widget.chatReference?.isGroup ?? false,
                                 ),
                               ),
                             );
@@ -673,11 +686,7 @@ class _ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget>
                       child: Padding(
                         padding: const EdgeInsetsDirectional.fromSTEB(
                             0.0, 0.0, 0.0, 16.0),
-                        child: InkWell(
-                          splashColor: Colors.transparent,
-                          focusColor: Colors.transparent,
-                          hoverColor: Colors.transparent,
-                          highlightColor: Colors.transparent,
+                        child: GestureDetector(
                           onTap: () async {
                             _model.select = false;
                             safeSetState(() {});
@@ -709,132 +718,165 @@ class _ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget>
                                                     _model.images.toList();
 
                                                 return Column(
-                                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                                  crossAxisAlignment:
+                                                      CrossAxisAlignment.start,
                                                   children: [
-                                                    if (uploadedImages.length > 1)
+                                                    if (uploadedImages.length >
+                                                        1)
                                                       Padding(
-                                                        padding: const EdgeInsets.only(left: 8.0, bottom: 8.0),
+                                                        padding:
+                                                            const EdgeInsets
+                                                                .only(
+                                                                left: 8.0,
+                                                                bottom: 8.0),
                                                         child: Container(
-                                                          padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 4.0),
-                                                          decoration: BoxDecoration(
-                                                            color: FlutterFlowTheme.of(context).primary.withOpacity(0.1),
-                                                            borderRadius: BorderRadius.circular(12.0),
+                                                          padding:
+                                                              const EdgeInsets
+                                                                  .symmetric(
+                                                                  horizontal:
+                                                                      8.0,
+                                                                  vertical:
+                                                                      4.0),
+                                                          decoration:
+                                                              BoxDecoration(
+                                                            color: FlutterFlowTheme
+                                                                    .of(context)
+                                                                .primary
+                                                                .withOpacity(
+                                                                    0.1),
+                                                            borderRadius:
+                                                                BorderRadius
+                                                                    .circular(
+                                                                        12.0),
                                                             border: Border.all(
-                                                              color: FlutterFlowTheme.of(context).primary,
+                                                              color: FlutterFlowTheme
+                                                                      .of(context)
+                                                                  .primary,
                                                               width: 1.0,
                                                             ),
                                                           ),
                                                           child: Text(
                                                             '${uploadedImages.length} images selected',
                                                             style: TextStyle(
-                                                              color: FlutterFlowTheme.of(context).primary,
+                                                              color: FlutterFlowTheme
+                                                                      .of(context)
+                                                                  .primary,
                                                               fontSize: 12.0,
-                                                              fontWeight: FontWeight.w600,
+                                                              fontWeight:
+                                                                  FontWeight
+                                                                      .w600,
                                                             ),
                                                           ),
                                                         ),
                                                       ),
                                                     SingleChildScrollView(
-                                                      scrollDirection: Axis.horizontal,
+                                                      scrollDirection:
+                                                          Axis.horizontal,
                                                       child: Row(
                                                         mainAxisSize:
                                                             MainAxisSize.min,
                                                         children: List.generate(
-                                                      uploadedImages.length,
-                                                      (uploadedImagesIndex) {
-                                                    final uploadedImagesItem =
-                                                        uploadedImages[
-                                                            uploadedImagesIndex];
-                                                    return SizedBox(
-                                                      width: 140.0,
-                                                      height: 120.0,
-                                                      child: Stack(
-                                                        alignment:
-                                                            const AlignmentDirectional(
-                                                                0.0, 0.0),
-                                                        children: [
-                                                          FlutterFlowMediaDisplay(
-                                                              path:
-                                                                  uploadedImagesItem,
-                                                              imageBuilder:
-                                                                  (path) =>
-                                                                      ClipRRect(
-                                                                borderRadius:
-                                                                    BorderRadius
-                                                                        .circular(
+                                                            uploadedImages
+                                                                .length,
+                                                            (uploadedImagesIndex) {
+                                                          final uploadedImagesItem =
+                                                              uploadedImages[
+                                                                  uploadedImagesIndex];
+                                                          return SizedBox(
+                                                            width: 140.0,
+                                                            height: 120.0,
+                                                            child: Stack(
+                                                              alignment:
+                                                                  const AlignmentDirectional(
+                                                                      0.0, 0.0),
+                                                              children: [
+                                                                FlutterFlowMediaDisplay(
+                                                                  path:
+                                                                      uploadedImagesItem,
+                                                                  imageBuilder:
+                                                                      (path) =>
+                                                                          ClipRRect(
+                                                                    borderRadius:
+                                                                        BorderRadius.circular(
                                                                             8.0),
-                                                                child:
-                                                                    CachedNetworkImage(
-                                                                  fadeInDuration:
-                                                                      const Duration(
-                                                                          milliseconds:
-                                                                              500),
-                                                                  fadeOutDuration:
-                                                                      const Duration(
-                                                                          milliseconds:
-                                                                              500),
-                                                                  imageUrl: path,
-                                                                  width: 120.0,
-                                                                  height: 100.0,
-                                                                  fit: BoxFit
-                                                                      .cover,
+                                                                    child:
+                                                                        CachedNetworkImage(
+                                                                      fadeInDuration:
+                                                                          const Duration(
+                                                                              milliseconds: 500),
+                                                                      fadeOutDuration:
+                                                                          const Duration(
+                                                                              milliseconds: 500),
+                                                                      imageUrl:
+                                                                          path,
+                                                                      width:
+                                                                          120.0,
+                                                                      height:
+                                                                          100.0,
+                                                                      fit: BoxFit
+                                                                          .cover,
+                                                                    ),
+                                                                  ),
+                                                                  videoPlayerBuilder:
+                                                                      (path) =>
+                                                                          FlutterFlowVideoPlayer(
+                                                                    path: path,
+                                                                    width:
+                                                                        300.0,
+                                                                    autoPlay:
+                                                                        false,
+                                                                    looping:
+                                                                        true,
+                                                                    showControls:
+                                                                        true,
+                                                                    allowFullScreen:
+                                                                        true,
+                                                                    allowPlaybackSpeedMenu:
+                                                                        false,
+                                                                  ),
                                                                 ),
-                                                              ),
-                                                              videoPlayerBuilder:
-                                                                  (path) =>
-                                                                      FlutterFlowVideoPlayer(
-                                                                path: path,
-                                                                width: 300.0,
-                                                                autoPlay: false,
-                                                                looping: true,
-                                                                showControls:
-                                                                    true,
-                                                                allowFullScreen:
-                                                                    true,
-                                                                allowPlaybackSpeedMenu:
-                                                                    false,
-                                                              ),
+                                                                Align(
+                                                                  alignment:
+                                                                      const AlignmentDirectional(
+                                                                          1.12,
+                                                                          -0.95),
+                                                                  child:
+                                                                      FlutterFlowIconButton(
+                                                                    borderColor:
+                                                                        FlutterFlowTheme.of(context)
+                                                                            .error,
+                                                                    borderRadius:
+                                                                        20.0,
+                                                                    borderWidth:
+                                                                        2.0,
+                                                                    buttonSize:
+                                                                        40.0,
+                                                                    fillColor: FlutterFlowTheme.of(
+                                                                            context)
+                                                                        .primaryBackground,
+                                                                    icon: Icon(
+                                                                      Icons
+                                                                          .delete_outline_rounded,
+                                                                      color: Colors
+                                                                          .black,
+                                                                      size:
+                                                                          24.0,
+                                                                    ),
+                                                                    onPressed:
+                                                                        () async {
+                                                                      _model.removeFromImages(
+                                                                          uploadedImagesItem);
+                                                                      safeSetState(
+                                                                          () {});
+                                                                    },
+                                                                  ),
+                                                                ),
+                                                              ],
                                                             ),
-                                                          Align(
-                                                            alignment:
-                                                                const AlignmentDirectional(
-                                                                    1.12,
-                                                                    -0.95),
-                                                            child:
-                                                                FlutterFlowIconButton(
-                                                              borderColor:
-                                                                  FlutterFlowTheme.of(
-                                                                          context)
-                                                                      .error,
-                                                              borderRadius:
-                                                                  20.0,
-                                                              borderWidth: 2.0,
-                                                              buttonSize: 40.0,
-                                                              fillColor: FlutterFlowTheme
-                                                                      .of(context)
-                                                                  .primaryBackground,
-                                                              icon: Icon(
-                                                                Icons
-                                                                    .delete_outline_rounded,
-                                                                color: Colors
-                                                                    .black,
-                                                                size: 24.0,
-                                                              ),
-                                                              onPressed:
-                                                                  () async {
-                                                                _model.removeFromImages(
-                                                                    uploadedImagesItem);
-                                                                safeSetState(
-                                                                    () {});
-                                                              },
-                                                            ),
-                                                          ),
-
-                                                        ],
-                                                      ),
-                                                    );
-                                                  }).divide(const SizedBox(
-                                                      width: 5.0)),
+                                                          );
+                                                        }).divide(
+                                                            const SizedBox(
+                                                                width: 5.0)),
                                                       ),
                                                     ),
                                                   ],
@@ -922,7 +964,8 @@ class _ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget>
                                                                             []));
                                                                 _model.uploadedFileUrl_uploadDataFile =
                                                                     '';
-                                                                _model.file = '';
+                                                                _model.file =
+                                                                    '';
                                                               });
                                                             },
                                                           ),
@@ -982,7 +1025,6 @@ class _ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget>
                                                                         TextOverflow
                                                                             .ellipsis,
                                                                   ),
-
                                                                 ],
                                                               ),
                                                             ),
@@ -1022,7 +1064,8 @@ class _ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget>
                                                                             []));
                                                                 _model.uploadedFileUrl_uploadDataFile =
                                                                     '';
-                                                                _model.file = '';
+                                                                _model.file =
+                                                                    '';
                                                               });
                                                             },
                                                           ),
@@ -1108,39 +1151,39 @@ class _ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget>
                                                         0.0, 0.0),
                                                 children: [
                                                   FlutterFlowMediaDisplay(
-                                                      path: _model.image!,
-                                                      imageBuilder: (path) =>
-                                                          ClipRRect(
-                                                        borderRadius:
-                                                            BorderRadius.circular(
-                                                                8.0),
-                                                        child: CachedNetworkImage(
-                                                          fadeInDuration:
-                                                              const Duration(
-                                                                  milliseconds:
-                                                                      500),
-                                                          fadeOutDuration:
-                                                              const Duration(
-                                                                  milliseconds:
-                                                                      500),
-                                                          imageUrl: path,
-                                                          width: 120.0,
-                                                          height: 100.0,
-                                                          fit: BoxFit.cover,
-                                                        ),
-                                                      ),
-                                                      videoPlayerBuilder: (path) =>
-                                                          FlutterFlowVideoPlayer(
-                                                        path: path,
-                                                        width: 300.0,
-                                                        autoPlay: false,
-                                                        looping: true,
-                                                        showControls: true,
-                                                        allowFullScreen: true,
-                                                        allowPlaybackSpeedMenu:
-                                                          false,
+                                                    path: _model.image!,
+                                                    imageBuilder: (path) =>
+                                                        ClipRRect(
+                                                      borderRadius:
+                                                          BorderRadius.circular(
+                                                              8.0),
+                                                      child: CachedNetworkImage(
+                                                        fadeInDuration:
+                                                            const Duration(
+                                                                milliseconds:
+                                                                    500),
+                                                        fadeOutDuration:
+                                                            const Duration(
+                                                                milliseconds:
+                                                                    500),
+                                                        imageUrl: path,
+                                                        width: 120.0,
+                                                        height: 100.0,
+                                                        fit: BoxFit.cover,
                                                       ),
                                                     ),
+                                                    videoPlayerBuilder: (path) =>
+                                                        FlutterFlowVideoPlayer(
+                                                      path: path,
+                                                      width: 300.0,
+                                                      autoPlay: false,
+                                                      looping: true,
+                                                      showControls: true,
+                                                      allowFullScreen: true,
+                                                      allowPlaybackSpeedMenu:
+                                                          false,
+                                                    ),
+                                                  ),
                                                   Align(
                                                     alignment:
                                                         const AlignmentDirectional(
@@ -1182,7 +1225,6 @@ class _ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget>
                                                       },
                                                     ),
                                                   ),
-
                                                 ],
                                               ),
                                             ),
@@ -1332,16 +1374,20 @@ class _ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget>
                                 mainAxisSize: MainAxisSize.max,
                                 children: [
                                   // Group member mention overlay
-                                  if (_model.showMentionOverlay && _model.filteredMembers.isNotEmpty)
+                                  if (_model.showMentionOverlay &&
+                                      _model.filteredMembers.isNotEmpty)
                                     Container(
                                       constraints: BoxConstraints(
                                         maxHeight: 200.0,
                                       ),
                                       decoration: BoxDecoration(
-                                        color: FlutterFlowTheme.of(context).secondaryBackground,
-                                        borderRadius: BorderRadius.circular(8.0),
+                                        color: FlutterFlowTheme.of(context)
+                                            .secondaryBackground,
+                                        borderRadius:
+                                            BorderRadius.circular(8.0),
                                         border: Border.all(
-                                          color: FlutterFlowTheme.of(context).alternate,
+                                          color: FlutterFlowTheme.of(context)
+                                              .alternate,
                                           width: 1.0,
                                         ),
                                         boxShadow: [
@@ -1355,38 +1401,59 @@ class _ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget>
                                       child: ListView.builder(
                                         shrinkWrap: true,
                                         padding: EdgeInsets.zero,
-                                        itemCount: _model.filteredMembers.length,
+                                        itemCount:
+                                            _model.filteredMembers.length,
                                         itemBuilder: (context, index) {
-                                          final member = _model.filteredMembers[index];
-                                          return InkWell(
+                                          final member =
+                                              _model.filteredMembers[index];
+                                          return GestureDetector(
                                             onTap: () async {
                                               // Replace the @query with @username
-                                              final currentText = _model.messageTextController?.text ?? '';
-                                              final lastAtIndex = currentText.lastIndexOf('@');
+                                              final currentText = _model
+                                                      .messageTextController
+                                                      ?.text ??
+                                                  '';
+                                              final lastAtIndex =
+                                                  currentText.lastIndexOf('@');
                                               if (lastAtIndex != -1) {
-                                                final beforeAt = currentText.substring(0, lastAtIndex);
-                                                final mention = '@${member.displayName} ';
-                                                _model.messageTextController?.text = beforeAt + mention;
-                                                _model.messageTextController?.selection = TextSelection.fromPosition(
-                                                  TextPosition(offset: (beforeAt + mention).length),
+                                                final beforeAt = currentText
+                                                    .substring(0, lastAtIndex);
+                                                final mention =
+                                                    '@${member.displayName} ';
+                                                _model.messageTextController
+                                                    ?.text = beforeAt + mention;
+                                                _model.messageTextController
+                                                        ?.selection =
+                                                    TextSelection.fromPosition(
+                                                  TextPosition(
+                                                      offset:
+                                                          (beforeAt + mention)
+                                                              .length),
                                                 );
                                               }
-                                              
+
                                               // Hide overlay
                                               _model.showMentionOverlay = false;
                                               _model.filteredMembers = [];
                                               safeSetState(() {});
-                                              
+
                                               // Refocus on text field
-                                              _model.messageFocusNode?.requestFocus();
+                                              _model.messageFocusNode
+                                                  ?.requestFocus();
                                             },
                                             child: Container(
-                                              padding: EdgeInsetsDirectional.fromSTEB(12.0, 8.0, 12.0, 8.0),
+                                              padding: EdgeInsetsDirectional
+                                                  .fromSTEB(
+                                                      12.0, 8.0, 12.0, 8.0),
                                               decoration: BoxDecoration(
-                                                color: FlutterFlowTheme.of(context).secondaryBackground,
+                                                color:
+                                                    FlutterFlowTheme.of(context)
+                                                        .secondaryBackground,
                                                 border: Border(
                                                   bottom: BorderSide(
-                                                    color: FlutterFlowTheme.of(context).alternate,
+                                                    color: FlutterFlowTheme.of(
+                                                            context)
+                                                        .alternate,
                                                     width: 0.5,
                                                   ),
                                                 ),
@@ -1400,40 +1467,65 @@ class _ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget>
                                                     decoration: BoxDecoration(
                                                       shape: BoxShape.circle,
                                                       border: Border.all(
-                                                        color: FlutterFlowTheme.of(context).primary,
+                                                        color:
+                                                            FlutterFlowTheme.of(
+                                                                    context)
+                                                                .primary,
                                                         width: 1.0,
                                                       ),
                                                     ),
                                                     child: ClipRRect(
-                                                      borderRadius: BorderRadius.circular(16.0),
-                                                      child: member.photoUrl.isNotEmpty
+                                                      borderRadius:
+                                                          BorderRadius.circular(
+                                                              16.0),
+                                                      child: member.photoUrl
+                                                              .isNotEmpty
                                                           ? CachedNetworkImage(
-                                                              imageUrl: member.photoUrl,
+                                                              imageUrl: member
+                                                                  .photoUrl,
                                                               width: 32.0,
                                                               height: 32.0,
                                                               fit: BoxFit.cover,
-                                                              placeholder: (context, url) => Container(
-                                                                color: FlutterFlowTheme.of(context).alternate,
+                                                              placeholder:
+                                                                  (context,
+                                                                          url) =>
+                                                                      Container(
+                                                                color: FlutterFlowTheme.of(
+                                                                        context)
+                                                                    .alternate,
                                                                 child: Icon(
                                                                   Icons.person,
-                                                                  color: FlutterFlowTheme.of(context).secondaryText,
+                                                                  color: FlutterFlowTheme.of(
+                                                                          context)
+                                                                      .secondaryText,
                                                                   size: 16.0,
                                                                 ),
                                                               ),
-                                                              errorWidget: (context, url, error) => Container(
-                                                                color: FlutterFlowTheme.of(context).alternate,
+                                                              errorWidget:
+                                                                  (context, url,
+                                                                          error) =>
+                                                                      Container(
+                                                                color: FlutterFlowTheme.of(
+                                                                        context)
+                                                                    .alternate,
                                                                 child: Icon(
                                                                   Icons.person,
-                                                                  color: FlutterFlowTheme.of(context).secondaryText,
+                                                                  color: FlutterFlowTheme.of(
+                                                                          context)
+                                                                      .secondaryText,
                                                                   size: 16.0,
                                                                 ),
                                                               ),
                                                             )
                                                           : Container(
-                                                              color: FlutterFlowTheme.of(context).alternate,
+                                                              color: FlutterFlowTheme
+                                                                      .of(context)
+                                                                  .alternate,
                                                               child: Icon(
                                                                 Icons.person,
-                                                                color: FlutterFlowTheme.of(context).secondaryText,
+                                                                color: FlutterFlowTheme.of(
+                                                                        context)
+                                                                    .secondaryText,
                                                                 size: 16.0,
                                                               ),
                                                             ),
@@ -1443,31 +1535,49 @@ class _ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget>
                                                   // Name and email
                                                   Expanded(
                                                     child: Column(
-                                                      crossAxisAlignment: CrossAxisAlignment.start,
-                                                      mainAxisSize: MainAxisSize.min,
+                                                      crossAxisAlignment:
+                                                          CrossAxisAlignment
+                                                              .start,
+                                                      mainAxisSize:
+                                                          MainAxisSize.min,
                                                       children: [
                                                         Text(
                                                           member.displayName,
-                                                          style: FlutterFlowTheme.of(context).bodyMedium.override(
-                                                            font: GoogleFonts.inter(),
-                                                            fontSize: 14.0,
-                                                            fontWeight: FontWeight.w500,
-                                                            letterSpacing: 0.0,
-                                                          ),
+                                                          style: FlutterFlowTheme
+                                                                  .of(context)
+                                                              .bodyMedium
+                                                              .override(
+                                                                fontSize: 14.0,
+                                                                fontWeight:
+                                                                    FontWeight
+                                                                        .w500,
+                                                                letterSpacing:
+                                                                    0.0,
+                                                              ),
                                                           maxLines: 1,
-                                                          overflow: TextOverflow.ellipsis,
+                                                          overflow: TextOverflow
+                                                              .ellipsis,
                                                         ),
-                                                        if (member.email.isNotEmpty)
+                                                        if (member
+                                                            .email.isNotEmpty)
                                                           Text(
                                                             member.email,
-                                                            style: FlutterFlowTheme.of(context).bodySmall.override(
-                                                              font: GoogleFonts.inter(),
-                                                              fontSize: 12.0,
-                                                              color: FlutterFlowTheme.of(context).secondaryText,
-                                                              letterSpacing: 0.0,
-                                                            ),
+                                                            style: FlutterFlowTheme
+                                                                    .of(context)
+                                                                .bodySmall
+                                                                .override(
+                                                                  fontSize:
+                                                                      12.0,
+                                                                  color: FlutterFlowTheme.of(
+                                                                          context)
+                                                                      .secondaryText,
+                                                                  letterSpacing:
+                                                                      0.0,
+                                                                ),
                                                             maxLines: 1,
-                                                            overflow: TextOverflow.ellipsis,
+                                                            overflow:
+                                                                TextOverflow
+                                                                    .ellipsis,
                                                           ),
                                                       ],
                                                     ),
@@ -1485,11 +1595,7 @@ class _ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget>
                                       padding:
                                           const EdgeInsetsDirectional.fromSTEB(
                                               16.0, 0.0, 16.0, 0.0),
-                                      child: InkWell(
-                                        splashColor: Colors.transparent,
-                                        focusColor: Colors.transparent,
-                                        hoverColor: Colors.transparent,
-                                        highlightColor: Colors.transparent,
+                                      child: GestureDetector(
                                         onTap: () async {
                                           safeSetState(() {
                                             _model.messageTextController?.text =
@@ -1514,27 +1620,20 @@ class _ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget>
                                                       50.0, 0.0, 0.0, 0.0),
                                               child: Text(
                                                 '@linkai',
-                                                style: FlutterFlowTheme.of(
-                                                        context)
-                                                    .bodyMedium
-                                                    .override(
-                                                      font: GoogleFonts.inter(
-                                                        fontWeight:
-                                                            FontWeight.w500,
-                                                        fontStyle:
-                                                            FontStyle.italic,
-                                                      ),
-                                                      color:
-                                                          FlutterFlowTheme.of(
-                                                                  context)
+                                                style:
+                                                    FlutterFlowTheme.of(context)
+                                                        .bodyMedium
+                                                        .override(
+                                                          color: FlutterFlowTheme
+                                                                  .of(context)
                                                               .primary,
-                                                      fontSize: 16.0,
-                                                      letterSpacing: 0.0,
-                                                      fontWeight:
-                                                          FontWeight.w500,
-                                                      fontStyle:
-                                                          FontStyle.italic,
-                                                    ),
+                                                          fontSize: 16.0,
+                                                          letterSpacing: 0.0,
+                                                          fontWeight:
+                                                              FontWeight.w500,
+                                                          fontStyle:
+                                                              FontStyle.italic,
+                                                        ),
                                               ),
                                             ),
                                           ),
@@ -1748,232 +1847,143 @@ class _ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget>
                                             Expanded(
                                               child: SizedBox(
                                                 width: 200.0,
-                                                child: TextFormField(
-                                                  controller: _model
-                                                      .messageTextController,
-                                                  focusNode:
-                                                      _model.messageFocusNode,
-                                                  onChanged: (_) =>
-                                                      EasyDebounce.debounce(
-                                                    '_model.messageTextController',
-                                                    const Duration(
-                                                        milliseconds: 100),
-                                                    () async {
-                                                      // Check for AI mention
-                                                      _model.isMention = functions
-                                                          .checkmention(_model
-                                                              .messageTextController
-                                                              .text)!;
-                                                      
-                                                      // Check for group member mentions
-                                                      final mentionQuery = functions.extractMentionQuery(
-                                                        _model.messageTextController.text
-                                                      );
-                                                      
-                                                      if (mentionQuery != null && widget.chatReference?.isGroup == true) {
-                                                        // Show mention overlay for group members
-                                                        _model.showMentionOverlay = true;
-                                                        _model.mentionQuery = mentionQuery;
-                                                        
-                                                        // Fetch and filter group members
-                                                        final memberRefs = widget.chatReference?.members ?? [];
-                                                        final members = await Future.wait(
-                                                          memberRefs.map((ref) => UsersRecord.getDocumentOnce(ref))
-                                                        );
-                                                        
-                                                        // Filter members by query
-                                                        _model.filteredMembers = members.where((member) {
-                                                          final displayName = member.displayName.toLowerCase();
-                                                          final email = member.email.toLowerCase();
-                                                          final query = mentionQuery.toLowerCase();
-                                                          return displayName.contains(query) || email.contains(query);
-                                                        }).toList();
-                                                      } else {
-                                                        _model.showMentionOverlay = false;
-                                                        _model.filteredMembers = [];
-                                                      }
-                                                      
-                                                      safeSetState(() {});
-                                                      
-                                                      if (_model.isMention ==
-                                                          true) {
-                                                        if (animationsMap[
-                                                                'containerOnActionTriggerAnimation1'] !=
-                                                            null) {
-                                                          safeSetState(() =>
-                                                              hasContainerTriggered1 =
-                                                                  true);
-                                                          SchedulerBinding
-                                                              .instance
-                                                              .addPostFrameCallback((_) async =>
-                                                                  await animationsMap[
-                                                                          'containerOnActionTriggerAnimation1']!
-                                                                      .controller
-                                                                      .forward(
-                                                                          from:
-                                                                              0.0));
+                                                child: Container(
+                                                  decoration: BoxDecoration(
+                                                    color: Color(
+                                                        0xFFF2F2F7), // iOS 26+ light gray background
+                                                    borderRadius:
+                                                        BorderRadius.circular(
+                                                            20.0), // More rounded for iOS 26+
+                                                  ),
+                                                  child: CupertinoTextField(
+                                                    controller: _model
+                                                        .messageTextController,
+                                                    focusNode:
+                                                        _model.messageFocusNode,
+                                                    placeholder: 'Message',
+                                                    placeholderStyle: TextStyle(
+                                                      fontSize: 17.0,
+                                                      fontWeight:
+                                                          FontWeight.normal,
+                                                      color: Color(
+                                                          0xFF8E8E93), // iOS gray placeholder
+                                                    ),
+                                                    style: TextStyle(
+                                                      fontSize: 17.0,
+                                                      fontWeight:
+                                                          FontWeight.normal,
+                                                      color: Color(
+                                                          0xFF000000), // Black text
+                                                    ),
+                                                    padding: const EdgeInsets
+                                                        .symmetric(
+                                                        horizontal: 16.0,
+                                                        vertical: 10.0),
+                                                    decoration: null,
+                                                    onChanged: (_) =>
+                                                        EasyDebounce.debounce(
+                                                      '_model.messageTextController',
+                                                      const Duration(
+                                                          milliseconds: 100),
+                                                      () async {
+                                                        // Check for AI mention
+                                                        _model.isMention = functions
+                                                            .checkmention(_model
+                                                                .messageTextController
+                                                                .text)!;
+
+                                                        // Check for group member mentions
+                                                        final mentionQuery = functions
+                                                            .extractMentionQuery(
+                                                                _model
+                                                                    .messageTextController
+                                                                    .text);
+
+                                                        if (mentionQuery !=
+                                                                null &&
+                                                            widget.chatReference
+                                                                    ?.isGroup ==
+                                                                true) {
+                                                          // Show mention overlay for group members
+                                                          _model.showMentionOverlay =
+                                                              true;
+                                                          _model.mentionQuery =
+                                                              mentionQuery;
+
+                                                          // Fetch and filter group members
+                                                          final memberRefs = widget
+                                                                  .chatReference
+                                                                  ?.members ??
+                                                              [];
+                                                          final members = await Future
+                                                              .wait(memberRefs.map(
+                                                                  (ref) => UsersRecord
+                                                                      .getDocumentOnce(
+                                                                          ref)));
+
+                                                          // Filter members by query
+                                                          _model.filteredMembers =
+                                                              members.where(
+                                                                  (member) {
+                                                            final displayName =
+                                                                member
+                                                                    .displayName
+                                                                    .toLowerCase();
+                                                            final email = member
+                                                                .email
+                                                                .toLowerCase();
+                                                            final query =
+                                                                mentionQuery
+                                                                    .toLowerCase();
+                                                            return displayName
+                                                                    .contains(
+                                                                        query) ||
+                                                                email.contains(
+                                                                    query);
+                                                          }).toList();
+                                                        } else {
+                                                          _model.showMentionOverlay =
+                                                              false;
+                                                          _model.filteredMembers =
+                                                              [];
                                                         }
-                                                      }
+
+                                                        safeSetState(() {});
+
+                                                        if (_model.isMention ==
+                                                            true) {
+                                                          if (animationsMap[
+                                                                  'containerOnActionTriggerAnimation1'] !=
+                                                              null) {
+                                                            safeSetState(() =>
+                                                                hasContainerTriggered1 =
+                                                                    true);
+                                                            SchedulerBinding
+                                                                .instance
+                                                                .addPostFrameCallback((_) async => await animationsMap[
+                                                                        'containerOnActionTriggerAnimation1']!
+                                                                    .controller
+                                                                    .forward(
+                                                                        from:
+                                                                            0.0));
+                                                          }
+                                                        }
+                                                      },
+                                                    ),
+                                                    onSubmitted: (_) async {
+                                                      safeSetState(() {
+                                                        _model.messageTextController
+                                                                ?.text =
+                                                            '${_model.messageTextController.text}\n';
+                                                      });
                                                     },
+                                                    autofocus: false,
+                                                    maxLines: null,
+                                                    cursorColor:
+                                                        FlutterFlowTheme.of(
+                                                                context)
+                                                            .primaryText,
                                                   ),
-                                                  onFieldSubmitted: (_) async {
-                                                    safeSetState(() {
-                                                      _model.messageTextController
-                                                              ?.text =
-                                                          '${_model.messageTextController.text}\\n';
-                                                    });
-                                                  },
-                                                  autofocus: false,
-                                                  obscureText: false,
-                                                  decoration: InputDecoration(
-                                                    isDense: false,
-                                                    labelStyle: FlutterFlowTheme
-                                                            .of(context)
-                                                        .labelMedium
-                                                        .override(
-                                                          font:
-                                                              GoogleFonts.inter(
-                                                            fontWeight:
-                                                                FlutterFlowTheme.of(
-                                                                        context)
-                                                                    .labelMedium
-                                                                    .fontWeight,
-                                                            fontStyle:
-                                                                FlutterFlowTheme.of(
-                                                                        context)
-                                                                    .labelMedium
-                                                                    .fontStyle,
-                                                          ),
-                                                          letterSpacing: 0.0,
-                                                          fontWeight:
-                                                              FlutterFlowTheme.of(
-                                                                      context)
-                                                                  .labelMedium
-                                                                  .fontWeight,
-                                                          fontStyle:
-                                                              FlutterFlowTheme.of(
-                                                                      context)
-                                                                  .labelMedium
-                                                                  .fontStyle,
-                                                        ),
-                                                    hintText:
-                                                        'Start typing here...',
-                                                    hintStyle: FlutterFlowTheme
-                                                            .of(context)
-                                                        .labelMedium
-                                                        .override(
-                                                          font:
-                                                              GoogleFonts.inter(
-                                                            fontWeight:
-                                                                FlutterFlowTheme.of(
-                                                                        context)
-                                                                    .labelMedium
-                                                                    .fontWeight,
-                                                            fontStyle:
-                                                                FlutterFlowTheme.of(
-                                                                        context)
-                                                                    .labelMedium
-                                                                    .fontStyle,
-                                                          ),
-                                                          letterSpacing: 0.0,
-                                                          fontWeight:
-                                                              FlutterFlowTheme.of(
-                                                                      context)
-                                                                  .labelMedium
-                                                                  .fontWeight,
-                                                          fontStyle:
-                                                              FlutterFlowTheme.of(
-                                                                      context)
-                                                                  .labelMedium
-                                                                  .fontStyle,
-                                                        ),
-                                                    enabledBorder:
-                                                        OutlineInputBorder(
-                                                      borderSide: BorderSide(
-                                                        color:
-                                                            FlutterFlowTheme.of(
-                                                                    context)
-                                                                .accent2,
-                                                        width: 1.0,
-                                                      ),
-                                                      borderRadius:
-                                                          BorderRadius.circular(
-                                                              12.0),
-                                                    ),
-                                                    focusedBorder:
-                                                        OutlineInputBorder(
-                                                      borderSide: BorderSide(
-                                                        color:
-                                                            FlutterFlowTheme.of(
-                                                                    context)
-                                                                .accent2,
-                                                        width: 1.0,
-                                                      ),
-                                                      borderRadius:
-                                                          BorderRadius.circular(
-                                                              12.0),
-                                                    ),
-                                                    errorBorder:
-                                                        OutlineInputBorder(
-                                                      borderSide: BorderSide(
-                                                        color: Colors.black,
-                                                        width: 1.0,
-                                                      ),
-                                                      borderRadius:
-                                                          BorderRadius.circular(
-                                                              12.0),
-                                                    ),
-                                                    focusedErrorBorder:
-                                                        OutlineInputBorder(
-                                                      borderSide: BorderSide(
-                                                        color: Colors.black,
-                                                        width: 1.0,
-                                                      ),
-                                                      borderRadius:
-                                                          BorderRadius.circular(
-                                                              12.0),
-                                                    ),
-                                                    filled: true,
-                                                    fillColor: FlutterFlowTheme
-                                                            .of(context)
-                                                        .secondaryBackground,
-                                                  ),
-                                                  style: FlutterFlowTheme.of(
-                                                          context)
-                                                      .bodyMedium
-                                                      .override(
-                                                        font: GoogleFonts.inter(
-                                                          fontWeight:
-                                                              FlutterFlowTheme.of(
-                                                                      context)
-                                                                  .bodyMedium
-                                                                  .fontWeight,
-                                                          fontStyle:
-                                                              FlutterFlowTheme.of(
-                                                                      context)
-                                                                  .bodyMedium
-                                                                  .fontStyle,
-                                                        ),
-                                                        letterSpacing: 0.0,
-                                                        fontWeight:
-                                                            FlutterFlowTheme.of(
-                                                                    context)
-                                                                .bodyMedium
-                                                                .fontWeight,
-                                                        fontStyle:
-                                                            FlutterFlowTheme.of(
-                                                                    context)
-                                                                .bodyMedium
-                                                                .fontStyle,
-                                                      ),
-                                                  maxLines: null,
-                                                  cursorColor:
-                                                      FlutterFlowTheme.of(
-                                                              context)
-                                                          .primaryText,
-                                                  validator: _model
-                                                      .messageTextControllerValidator
-                                                      .asValidator(context),
                                                 ),
                                               ),
                                             ),
@@ -2330,6 +2340,10 @@ class _ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget>
                                                                                 : functions.getEmptyListImagePath(),
                                                                           },
                                                                         ),
+                                                                        'is_read_by':
+                                                                            [
+                                                                          currentUserReference!
+                                                                        ], // Sender has read their own message
                                                                       });
                                                                   _model.newChat =
                                                                       MessagesRecord
@@ -2418,9 +2432,45 @@ class _ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget>
                                                                   }, messagesRecordReference);
                                                                   triggerPushNotification(
                                                                     notificationTitle:
-                                                                        'New Message',
+                                                                        currentUserDisplayName,
                                                                     notificationText:
-                                                                        '$currentUserDisplayName: ${_model.messageTextController?.text ?? 'sent a message'}',
+                                                                        () {
+                                                                      // Use the same logic as message content to show actual message
+                                                                      if (_model.videoUrl !=
+                                                                              null &&
+                                                                          _model.videoUrl !=
+                                                                              '') {
+                                                                        return 'Sent Video';
+                                                                      } else if (_model
+                                                                              .selectedVideoFile !=
+                                                                          null) {
+                                                                        return 'Sent Video';
+                                                                      } else if (_model.image !=
+                                                                              null &&
+                                                                          _model.image !=
+                                                                              '') {
+                                                                        return 'Sent Image';
+                                                                      } else if (_model.audiopath !=
+                                                                              null &&
+                                                                          _model.audiopath !=
+                                                                              '') {
+                                                                        return 'Sent Voice Message';
+                                                                      } else if (_model.file !=
+                                                                              null &&
+                                                                          _model.file !=
+                                                                              '') {
+                                                                        final originalFileName = _model
+                                                                            .uploadedLocalFile_uploadDataFile
+                                                                            .name;
+                                                                        return (originalFileName != null && originalFileName.isNotEmpty)
+                                                                            ? originalFileName
+                                                                            : (_model.messageTextController?.text ??
+                                                                                'Sent File');
+                                                                      } else {
+                                                                        return _model.messageTextController?.text ??
+                                                                            '';
+                                                                      }
+                                                                    }(),
                                                                     notificationImageUrl: _model.image !=
                                                                                 null &&
                                                                             _model.image !=
@@ -2621,16 +2671,6 @@ class _ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget>
                                   style: FlutterFlowTheme.of(context)
                                       .titleSmall
                                       .override(
-                                        font: GoogleFonts.inter(
-                                          fontWeight:
-                                              FlutterFlowTheme.of(context)
-                                                  .titleSmall
-                                                  .fontWeight,
-                                          fontStyle:
-                                              FlutterFlowTheme.of(context)
-                                                  .titleSmall
-                                                  .fontStyle,
-                                        ),
                                         letterSpacing: 0.0,
                                         fontWeight: FlutterFlowTheme.of(context)
                                             .titleSmall
@@ -2720,11 +2760,7 @@ class _ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget>
                                             .alternate,
                                       ),
                                     ),
-                                    InkWell(
-                                      splashColor: Colors.transparent,
-                                      focusColor: Colors.transparent,
-                                      hoverColor: Colors.transparent,
-                                      highlightColor: Colors.transparent,
+                                    GestureDetector(
                                       onTap: () async {
                                         _model.isSendingImage = true;
                                         _model.select = false;
@@ -2739,14 +2775,17 @@ class _ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget>
                                                     m.storagePath, context))) {
                                           // Check if more than 10 images selected
                                           if (selectedMedia.length > 10) {
-                                            ScaffoldMessenger.of(context).showSnackBar(
+                                            ScaffoldMessenger.of(context)
+                                                .showSnackBar(
                                               SnackBar(
                                                 content: Row(
                                                   children: [
-                                                    const Icon(Icons.warning, color: Colors.white),
+                                                    const Icon(Icons.warning,
+                                                        color: Colors.white),
                                                     const SizedBox(width: 12),
                                                     Expanded(
-                                                      child: Text('You can only select up to 10 images at once'),
+                                                      child: Text(
+                                                          'You can only select up to 10 images at once'),
                                                     ),
                                                   ],
                                                 ),
@@ -2853,18 +2892,6 @@ class _ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget>
                                                   FlutterFlowTheme.of(context)
                                                       .bodyMedium
                                                       .override(
-                                                        font: GoogleFonts.inter(
-                                                          fontWeight:
-                                                              FlutterFlowTheme.of(
-                                                                      context)
-                                                                  .bodyMedium
-                                                                  .fontWeight,
-                                                          fontStyle:
-                                                              FlutterFlowTheme.of(
-                                                                      context)
-                                                                  .bodyMedium
-                                                                  .fontStyle,
-                                                        ),
                                                         letterSpacing: 0.0,
                                                         fontWeight:
                                                             FlutterFlowTheme.of(
@@ -2890,11 +2917,7 @@ class _ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget>
                                             .alternate,
                                       ),
                                     ),
-                                    InkWell(
-                                      splashColor: Colors.transparent,
-                                      focusColor: Colors.transparent,
-                                      hoverColor: Colors.transparent,
-                                      highlightColor: Colors.transparent,
+                                    GestureDetector(
                                       onTap: () async {
                                         _model.isSendingImage = true;
                                         _model.select = false;
@@ -3003,18 +3026,6 @@ class _ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget>
                                                   FlutterFlowTheme.of(context)
                                                       .bodyMedium
                                                       .override(
-                                                        font: GoogleFonts.inter(
-                                                          fontWeight:
-                                                              FlutterFlowTheme.of(
-                                                                      context)
-                                                                  .bodyMedium
-                                                                  .fontWeight,
-                                                          fontStyle:
-                                                              FlutterFlowTheme.of(
-                                                                      context)
-                                                                  .bodyMedium
-                                                                  .fontStyle,
-                                                        ),
                                                         letterSpacing: 0.0,
                                                         fontWeight:
                                                             FlutterFlowTheme.of(
@@ -3040,15 +3051,11 @@ class _ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget>
                                             .alternate,
                                       ),
                                     ),
-                                    InkWell(
-                                      splashColor: Colors.transparent,
-                                      focusColor: Colors.transparent,
-                                      hoverColor: Colors.transparent,
-                                      highlightColor: Colors.transparent,
+                                    GestureDetector(
                                       onTap: () async {
                                         _model.select = false;
                                         safeSetState(() {});
-                                        
+
                                         // Get original filename from file picker
                                         final pickedFiles =
                                             await FilePicker.platform.pickFiles(
@@ -3124,7 +3131,9 @@ class _ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget>
                                           return;
                                         }
 
-                                        if (_model.uploadedFileUrl_uploadDataFile != '') {
+                                        if (_model
+                                                .uploadedFileUrl_uploadDataFile !=
+                                            '') {
                                           _model.file = _model
                                               .uploadedFileUrl_uploadDataFile;
                                           safeSetState(() {});
@@ -3160,18 +3169,6 @@ class _ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget>
                                                   FlutterFlowTheme.of(context)
                                                       .bodyMedium
                                                       .override(
-                                                        font: GoogleFonts.inter(
-                                                          fontWeight:
-                                                              FlutterFlowTheme.of(
-                                                                      context)
-                                                                  .bodyMedium
-                                                                  .fontWeight,
-                                                          fontStyle:
-                                                              FlutterFlowTheme.of(
-                                                                      context)
-                                                                  .bodyMedium
-                                                                  .fontStyle,
-                                                        ),
                                                         letterSpacing: 0.0,
                                                         fontWeight:
                                                             FlutterFlowTheme.of(
@@ -3197,11 +3194,7 @@ class _ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget>
                                             .alternate,
                                       ),
                                     ),
-                                    InkWell(
-                                      splashColor: Colors.transparent,
-                                      focusColor: Colors.transparent,
-                                      hoverColor: Colors.transparent,
-                                      highlightColor: Colors.transparent,
+                                    GestureDetector(
                                       onTap: () async {
                                         _model.isSendingImage = true;
                                         _model.select = false;
@@ -3256,18 +3249,6 @@ class _ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget>
                                                   FlutterFlowTheme.of(context)
                                                       .bodyMedium
                                                       .override(
-                                                        font: GoogleFonts.inter(
-                                                          fontWeight:
-                                                              FlutterFlowTheme.of(
-                                                                      context)
-                                                                  .bodyMedium
-                                                                  .fontWeight,
-                                                          fontStyle:
-                                                              FlutterFlowTheme.of(
-                                                                      context)
-                                                                  .bodyMedium
-                                                                  .fontStyle,
-                                                        ),
                                                         letterSpacing: 0.0,
                                                         fontWeight:
                                                             FlutterFlowTheme.of(
@@ -3316,11 +3297,7 @@ class _ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget>
                                           const AlignmentDirectional(0.0, 0.0),
                                       child: Container(
                                         decoration: const BoxDecoration(),
-                                        child: InkWell(
-                                          splashColor: Colors.transparent,
-                                          focusColor: Colors.transparent,
-                                          hoverColor: Colors.transparent,
-                                          highlightColor: Colors.transparent,
+                                        child: GestureDetector(
                                           onTap: () async {
                                             if (_model.recording == false) {
                                               _model.recording = true;
@@ -3419,16 +3396,6 @@ class _ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget>
                                     style: FlutterFlowTheme.of(context)
                                         .bodyMedium
                                         .override(
-                                          font: GoogleFonts.inter(
-                                            fontWeight:
-                                                FlutterFlowTheme.of(context)
-                                                    .bodyMedium
-                                                    .fontWeight,
-                                            fontStyle:
-                                                FlutterFlowTheme.of(context)
-                                                    .bodyMedium
-                                                    .fontStyle,
-                                          ),
                                           letterSpacing: 0.0,
                                           fontWeight:
                                               FlutterFlowTheme.of(context)
@@ -3448,11 +3415,7 @@ class _ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget>
                             Padding(
                               padding: const EdgeInsetsDirectional.fromSTEB(
                                   0.0, 9.0, 16.0, 0.0),
-                              child: InkWell(
-                                splashColor: Colors.transparent,
-                                focusColor: Colors.transparent,
-                                hoverColor: Colors.transparent,
-                                highlightColor: Colors.transparent,
+                              child: GestureDetector(
                                 onTap: () async {
                                   _model.audio = false;
                                   safeSetState(() {});
@@ -3477,6 +3440,4 @@ class _ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget>
       ),
     );
   }
-
-
 }

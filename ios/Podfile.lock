@@ -1,4 +1,6 @@
 PODS:
+  - adaptive_platform_ui (0.1.0):
+    - Flutter
   - app_badge_plus (1.2.3):
     - Flutter
   - AppAuth (1.7.6):
@@ -27,6 +29,8 @@ PODS:
   - cloud_functions (5.5.2):
     - Firebase/Functions (= 11.13.0)
     - firebase_core
+    - Flutter
+  - cupertino_native (0.0.1):
     - Flutter
   - device_info_plus (0.0.1):
     - Flutter
@@ -332,11 +336,6 @@ PODS:
   - PromisesObjC (2.4.0)
   - PromisesSwift (2.4.0):
     - PromisesObjC (= 2.4.0)
-  - purchases_flutter (8.10.1):
-    - Flutter
-    - PurchasesHybridCommon (= 13.35.0)
-  - PurchasesHybridCommon (13.35.0):
-    - RevenueCat (= 5.27.1)
   - qr_code_scanner_plus (0.2.6):
     - Flutter
     - MTBBarcodeScanner
@@ -347,7 +346,6 @@ PODS:
   - RecaptchaInterop (101.0.0)
   - record_ios (1.0.0):
     - Flutter
-  - RevenueCat (5.27.1)
   - SDWebImage (5.21.2):
     - SDWebImage/Core (= 5.21.2)
   - SDWebImage/Core (5.21.2)
@@ -377,6 +375,7 @@ PODS:
     - FlutterMacOS
 
 DEPENDENCIES:
+  - adaptive_platform_ui (from `.symlinks/plugins/adaptive_platform_ui/ios`)
   - app_badge_plus (from `.symlinks/plugins/app_badge_plus/ios`)
   - assets_audio_player (from `.symlinks/plugins/assets_audio_player/ios`)
   - assets_audio_player_web (from `.symlinks/plugins/assets_audio_player_web/ios`)
@@ -384,6 +383,7 @@ DEPENDENCIES:
   - audio_waveforms (from `.symlinks/plugins/audio_waveforms/ios`)
   - cloud_firestore (from `.symlinks/plugins/cloud_firestore/ios`)
   - cloud_functions (from `.symlinks/plugins/cloud_functions/ios`)
+  - cupertino_native (from `.symlinks/plugins/cupertino_native/ios`)
   - device_info_plus (from `.symlinks/plugins/device_info_plus/ios`)
   - file_picker (from `.symlinks/plugins/file_picker/ios`)
   - Firebase/Messaging
@@ -409,7 +409,6 @@ DEPENDENCIES:
   - path_provider_foundation (from `.symlinks/plugins/path_provider_foundation/darwin`)
   - pdfx (from `.symlinks/plugins/pdfx/ios`)
   - permission_handler_apple (from `.symlinks/plugins/permission_handler_apple/ios`)
-  - purchases_flutter (from `.symlinks/plugins/purchases_flutter/ios`)
   - qr_code_scanner_plus (from `.symlinks/plugins/qr_code_scanner_plus/ios`)
   - qr_code_tools (from `.symlinks/plugins/qr_code_tools/ios`)
   - quill_native_bridge_ios (from `.symlinks/plugins/quill_native_bridge_ios/ios`)
@@ -468,13 +467,13 @@ SPEC REPOS:
     - OrderedSet
     - PromisesObjC
     - PromisesSwift
-    - PurchasesHybridCommon
     - RecaptchaInterop
-    - RevenueCat
     - SDWebImage
     - SwiftyGif
 
 EXTERNAL SOURCES:
+  adaptive_platform_ui:
+    :path: ".symlinks/plugins/adaptive_platform_ui/ios"
   app_badge_plus:
     :path: ".symlinks/plugins/app_badge_plus/ios"
   assets_audio_player:
@@ -489,6 +488,8 @@ EXTERNAL SOURCES:
     :path: ".symlinks/plugins/cloud_firestore/ios"
   cloud_functions:
     :path: ".symlinks/plugins/cloud_functions/ios"
+  cupertino_native:
+    :path: ".symlinks/plugins/cupertino_native/ios"
   device_info_plus:
     :path: ".symlinks/plugins/device_info_plus/ios"
   file_picker:
@@ -536,8 +537,6 @@ EXTERNAL SOURCES:
     :path: ".symlinks/plugins/pdfx/ios"
   permission_handler_apple:
     :path: ".symlinks/plugins/permission_handler_apple/ios"
-  purchases_flutter:
-    :path: ".symlinks/plugins/purchases_flutter/ios"
   qr_code_scanner_plus:
     :path: ".symlinks/plugins/qr_code_scanner_plus/ios"
   qr_code_tools:
@@ -571,6 +570,7 @@ CHECKOUT OPTIONS:
     :tag: 11.13.0
 
 SPEC CHECKSUMS:
+  adaptive_platform_ui: f54f620666d1797636f9ef06f49137ef2cc13611
   app_badge_plus: 0e3470f993dd08094e16463f57a7e0db04c6b587
   AppAuth: d4f13a8fe0baf391b2108511793e4b479691fb73
   AppCheckCore: cc8fd0a3a230ddd401f326489c99990b013f0c4f
@@ -581,6 +581,7 @@ SPEC CHECKSUMS:
   BranchSDK: 7b5380588ec2950bd6553367e8afa4aead2a11a1
   cloud_firestore: 2fdc3301bcc486957ff7fa705430a185468c1987
   cloud_functions: 9c4252b4a2372f96feb0bf5368e1b850c47505ca
+  cupertino_native: 1db0611c94f9a9ea28433ed16a344dcb996370b5
   device_info_plus: 21fcca2080fbcd348be798aa36c3e5ed849eefbe
   DKImagePickerController: 946cec48c7873164274ecc4624d19e3da4c1ef3c
   DKPhotoGallery: b3834fecb755ee09a593d7c9e389d8b5d6deed60
@@ -643,14 +644,11 @@ SPEC CHECKSUMS:
   permission_handler_apple: 4ed2196e43d0651e8ff7ca3483a069d469701f2d
   PromisesObjC: f5707f49cb48b9636751c5b2e7d227e43fba9f47
   PromisesSwift: 9d77319bbe72ebf6d872900551f7eeba9bce2851
-  purchases_flutter: 7cf9cb2f7608e31c3d7db9a6896e12076655b38b
-  PurchasesHybridCommon: 18288b8ad932cfeb5f142f592d5c65e626a35770
   qr_code_scanner_plus: 7e087021bc69873140e0754750eb87d867bed755
   qr_code_tools: 81a52b19190422a5ce108223f64b5ea81865b342
   quill_native_bridge_ios: f47af4b14e7757968486641656c5d23250cee521
   RecaptchaInterop: 11e0b637842dfb48308d242afc3f448062325aba
   record_ios: fee1c924aa4879b882ebca2b4bce6011bcfc3d8b
-  RevenueCat: 87171c9f2412778354c8523f5625d1fece2560a5
   SDWebImage: 9f177d83116802728e122410fb25ad88f5c7608a
   share_plus: 011d6fb4f9d2576b83179a3a5c5e323202cdabcf
   shared_preferences_foundation: 9e1978ff2562383bd5676f64ec4e9aa8fa06a6f7

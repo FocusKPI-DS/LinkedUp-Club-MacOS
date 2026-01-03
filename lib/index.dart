@@ -48,6 +48,7 @@ export '/pages/feed/create_post/create_post_widget.dart' show CreatePostWidget;
 export '/pages/chat/all_pending_requests/all_pending_requests_widget.dart'
     show AllPendingRequestsWidget;
 export '/pages/feed/full_image/full_image_widget.dart' show FullImageWidget;
+export '/pages/connections/connections_widget.dart' show ConnectionsWidget;
 export '/q_r_scan_page/q_r_scan_page_widget.dart' show QRScanPageWidget;
 export '/notification_page/notification_page_widget.dart'
     show NotificationPageWidget;

@@ -48,6 +48,7 @@ class ChatThreadWidget extends StatefulWidget {
     this.onScrollToMessage,
     this.onEditMessage,
     this.isHighlighted = false,
+    this.isGroup = false,
   });
 
   final MessagesRecord? message;
@@ -61,6 +62,7 @@ class ChatThreadWidget extends StatefulWidget {
   final Function(String)? onScrollToMessage;
   final Function(MessagesRecord)? onEditMessage;
   final bool isHighlighted;
+  final bool isGroup; // Show profile photos only in group chats
 
   @override
   State<ChatThreadWidget> createState() => _ChatThreadWidgetState();
@@ -190,11 +192,7 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
       Map<String, dynamic> fileInfo, String attachmentUrl) {
     final isPdf = fileInfo['isPdf'] == true;
 
-    return InkWell(
-      splashColor: Colors.transparent,
-      focusColor: Colors.transparent,
-      hoverColor: Colors.transparent,
-      highlightColor: Colors.transparent,
+    return GestureDetector(
       onTap: () async {
         if (isPdf) {
           await showDialog(
@@ -898,8 +896,7 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
               mainAxisSize: MainAxisSize.min,
               children: [
                 for (int i = 0; i < emojis.length; i++)
-                  InkWell(
-                    borderRadius: BorderRadius.circular(8),
+                  GestureDetector(
                     onTap: () {
                       Navigator.of(context).pop(emojis[i]);
                     },
@@ -1150,7 +1147,6 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
             widget.message?.content ?? '',
             textAlign: TextAlign.center,
             style: FlutterFlowTheme.of(context).bodySmall.override(
-                  font: GoogleFonts.inter(),
                   color: const Color(0xFF6B7280),
                   fontSize: 13.0,
                   letterSpacing: 0.0,
@@ -1168,11 +1164,7 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
           Align(
             alignment: const AlignmentDirectional(1.0, 0.0),
             child: Builder(
-              builder: (context) => InkWell(
-                splashColor: Colors.transparent,
-                focusColor: Colors.transparent,
-                hoverColor: Colors.transparent,
-                highlightColor: Colors.transparent,
+              builder: (context) => GestureDetector(
                 onTap: () async {
                   await actions.closekeyboard();
                   await widget.action?.call();
@@ -1182,7 +1174,7 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
                   width: double.infinity,
                   decoration: const BoxDecoration(),
                   child: Padding(
-                    padding: const EdgeInsets.all(16.0),
+                    padding: const EdgeInsets.all(8.0),
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
                       mainAxisAlignment: MainAxisAlignment.end,
@@ -1204,11 +1196,7 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
                                     padding:
                                         const EdgeInsetsDirectional.fromSTEB(
                                             12.0, 0.0, 12.0, 0.0),
-                                    child: InkWell(
-                                      splashColor: Colors.transparent,
-                                      focusColor: Colors.transparent,
-                                      hoverColor: Colors.transparent,
-                                      highlightColor: Colors.transparent,
+                                    child: GestureDetector(
                                       onLongPress: _copyContentIfAny,
                                       child: _withMessageMenu(
                                         bubble: AnimatedContainer(
@@ -1218,29 +1206,23 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
                                             maxWidth: MediaQuery.of(context)
                                                     .size
                                                     .width *
-                                                0.7,
+                                                0.75,
                                           ),
                                           decoration: BoxDecoration(
                                             color: Colors.white,
                                             borderRadius:
-                                                BorderRadius.circular(8.0),
-                                            border: widget.isHighlighted
-                                                ? Border.all(
-                                                    color:
-                                                        const Color(0xFF3B82F6),
-                                                    width: 3.0,
-                                                  )
-                                                : Border.all(
-                                                    color: Colors.black
-                                                        .withOpacity(0.1),
-                                                    width: 1.0,
-                                                  ),
+                                                BorderRadius.circular(18.0),
+                                            border: Border.all(
+                                              color: Colors.black
+                                                  .withOpacity(0.08),
+                                              width: 1.0,
+                                            ),
                                             boxShadow: widget.isHighlighted
                                                 ? [
                                                     BoxShadow(
                                                       color: const Color(
-                                                              0xFF3B82F6)
-                                                          .withOpacity(0.3),
+                                                              0xFF007AFF)
+                                                          .withOpacity(0.4),
                                                       blurRadius: 8.0,
                                                       spreadRadius: 2.0,
                                                     ),
@@ -1248,7 +1230,9 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
                                                 : null,
                                           ),
                                           child: Padding(
-                                            padding: const EdgeInsets.all(10.0),
+                                            padding: const EdgeInsets.symmetric(
+                                                horizontal: 14.0,
+                                                vertical: 10.0),
                                             child: Column(
                                               mainAxisSize: MainAxisSize.min,
                                               crossAxisAlignment:
@@ -1279,12 +1263,11 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
                                                             0xFFF0F2F5),
                                                         borderRadius:
                                                             BorderRadius
-                                                                .circular(4.0),
-                                                        border: Border(
+                                                                .circular(10.0),
+                                                        border: const Border(
                                                           left: BorderSide(
-                                                            color: FlutterFlowTheme
-                                                                    .of(context)
-                                                                .primary,
+                                                            color: Color(
+                                                                0xFF007AFF),
                                                             width: 3.0,
                                                           ),
                                                         ),
@@ -1306,19 +1289,18 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
                                                                   widget.message
                                                                           ?.replyToSender ??
                                                                       'Unknown',
-                                                                  style: FlutterFlowTheme.of(
-                                                                          context)
-                                                                      .bodySmall
-                                                                      .override(
-                                                                        fontFamily:
-                                                                            'Inter',
-                                                                        color: FlutterFlowTheme.of(context)
-                                                                            .primary,
-                                                                        fontSize:
-                                                                            12.0,
-                                                                        fontWeight:
-                                                                            FontWeight.w600,
-                                                                      ),
+                                                                  style:
+                                                                      const TextStyle(
+                                                                    fontFamily:
+                                                                        'SF Pro Text',
+                                                                    color: Color(
+                                                                        0xFF007AFF),
+                                                                    fontSize:
+                                                                        13.0,
+                                                                    fontWeight:
+                                                                        FontWeight
+                                                                            .w600,
+                                                                  ),
                                                                 ),
                                                                 const SizedBox(
                                                                     height:
@@ -1327,17 +1309,15 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
                                                                   widget.message
                                                                           ?.replyToContent ??
                                                                       '',
-                                                                  style: FlutterFlowTheme.of(
-                                                                          context)
-                                                                      .bodySmall
-                                                                      .override(
-                                                                        fontFamily:
-                                                                            'Inter',
-                                                                        color: const Color(
-                                                                            0xFF667781),
-                                                                        fontSize:
-                                                                            12.0,
-                                                                      ),
+                                                                  style:
+                                                                      const TextStyle(
+                                                                    fontFamily:
+                                                                        'SF Pro Text',
+                                                                    color: Color(
+                                                                        0xFF667781),
+                                                                    fontSize:
+                                                                        13.0,
+                                                                  ),
                                                                   maxLines: 1,
                                                                   overflow:
                                                                       TextOverflow
@@ -1377,132 +1357,85 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
                                                     },
                                                     styleSheet:
                                                         MarkdownStyleSheet(
-                                                      p: FlutterFlowTheme.of(
-                                                              context)
-                                                          .bodyMedium
-                                                          .override(
-                                                            font: GoogleFonts
-                                                                .inter(
-                                                              fontWeight:
-                                                                  FlutterFlowTheme.of(
-                                                                          context)
-                                                                      .bodyMedium
-                                                                      .fontWeight,
-                                                              fontStyle:
-                                                                  FlutterFlowTheme.of(
-                                                                          context)
-                                                                      .bodyMedium
-                                                                      .fontStyle,
-                                                            ),
-                                                            color: const Color(
-                                                                0xFF1F2937),
-                                                            fontSize: 14.0,
-                                                            letterSpacing: 0.0,
-                                                            fontWeight:
-                                                                FlutterFlowTheme.of(
-                                                                        context)
-                                                                    .bodyMedium
-                                                                    .fontWeight,
-                                                            fontStyle:
-                                                                FlutterFlowTheme.of(
-                                                                        context)
-                                                                    .bodyMedium
-                                                                    .fontStyle,
-                                                          ),
-                                                      a: FlutterFlowTheme.of(
-                                                              context)
-                                                          .bodyMedium
-                                                          .override(
-                                                            font: GoogleFonts
-                                                                .inter(),
-                                                            color: const Color(
-                                                                0xFF2563EB),
-                                                            fontSize: 14.0,
-                                                            letterSpacing: 0.0,
-                                                            decoration:
-                                                                TextDecoration
-                                                                    .underline,
-                                                          ),
-                                                      code: FlutterFlowTheme.of(
-                                                              context)
-                                                          .bodyMedium
-                                                          .override(
-                                                            font: GoogleFonts
-                                                                .robotoMono(),
-                                                            color: const Color(
-                                                                0xFF1F2937),
-                                                            fontSize: 13.0,
-                                                          ),
+                                                      // iOS native text styling
+                                                      p: const TextStyle(
+                                                        fontFamily:
+                                                            'SF Pro Text',
+                                                        color:
+                                                            Color(0xFF000000),
+                                                        fontSize: 17.0,
+                                                        letterSpacing: -0.4,
+                                                        fontWeight:
+                                                            FontWeight.w400,
+                                                        height: 1.3,
+                                                      ),
+                                                      a: const TextStyle(
+                                                        fontFamily:
+                                                            'SF Pro Text',
+                                                        color:
+                                                            Color(0xFF007AFF),
+                                                        fontSize: 17.0,
+                                                        letterSpacing: -0.4,
+                                                        fontWeight:
+                                                            FontWeight.w400,
+                                                        decoration:
+                                                            TextDecoration
+                                                                .underline,
+                                                      ),
+                                                      code: const TextStyle(
+                                                        fontFamily: 'SF Mono',
+                                                        color:
+                                                            Color(0xFF000000),
+                                                        fontSize: 15.0,
+                                                      ),
                                                       codeblockDecoration:
                                                           BoxDecoration(
                                                         color: const Color(
                                                             0xFFE5E7EB),
                                                         borderRadius:
                                                             BorderRadius
-                                                                .circular(4),
+                                                                .circular(6),
                                                       ),
-                                                      strong: FlutterFlowTheme
-                                                              .of(context)
-                                                          .bodyMedium
-                                                          .override(
-                                                            font: GoogleFonts
-                                                                .inter(
-                                                              fontWeight:
-                                                                  FontWeight
-                                                                      .bold,
-                                                            ),
-                                                            color: const Color(
-                                                                0xFF1F2937),
-                                                            fontSize: 14.0,
-                                                            fontWeight:
-                                                                FontWeight.bold,
-                                                          ),
-                                                      em: FlutterFlowTheme.of(
-                                                              context)
-                                                          .bodyMedium
-                                                          .override(
-                                                            font: GoogleFonts
-                                                                .inter(
-                                                              fontStyle:
-                                                                  FontStyle
-                                                                      .italic,
-                                                            ),
-                                                            color: const Color(
-                                                                0xFF1F2937),
-                                                            fontSize: 14.0,
-                                                            fontStyle: FontStyle
-                                                                .italic,
-                                                          ),
+                                                      strong: const TextStyle(
+                                                        fontFamily:
+                                                            'SF Pro Text',
+                                                        color:
+                                                            Color(0xFF000000),
+                                                        fontSize: 17.0,
+                                                        fontWeight:
+                                                            FontWeight.w600,
+                                                      ),
+                                                      em: const TextStyle(
+                                                        fontFamily:
+                                                            'SF Pro Text',
+                                                        color:
+                                                            Color(0xFF000000),
+                                                        fontSize: 17.0,
+                                                        fontStyle:
+                                                            FontStyle.italic,
+                                                        fontWeight:
+                                                            FontWeight.w400,
+                                                      ),
                                                       tableBody:
-                                                          FlutterFlowTheme.of(
-                                                                  context)
-                                                              .bodyMedium
-                                                              .override(
-                                                                font: GoogleFonts
-                                                                    .inter(),
-                                                                color: Colors
-                                                                    .black,
-                                                                fontSize: 14.0,
-                                                              ),
+                                                          const TextStyle(
+                                                        fontFamily:
+                                                            'SF Pro Text',
+                                                        color:
+                                                            Color(0xFF000000),
+                                                        fontSize: 15.0,
+                                                        fontWeight:
+                                                            FontWeight.w400,
+                                                      ),
                                                       tableHead:
-                                                          FlutterFlowTheme.of(
-                                                                  context)
-                                                              .bodyMedium
-                                                              .override(
-                                                                font:
-                                                                    GoogleFonts
-                                                                        .inter(
-                                                                  fontWeight:
-                                                                      FontWeight
-                                                                          .bold,
-                                                                ),
-                                                                color: Colors
-                                                                    .black,
-                                                                fontSize: 14.0,
-                                                                fontWeight:
-                                                                    FontWeight
-                                                                        .bold,
-                                                              ),
+                                                          const TextStyle(
+                                                        fontFamily:
+                                                            'SF Pro Text',
+                                                        color:
+                                                            Color(0xFF000000),
+                                                        fontSize: 15.0,
+                                                        fontWeight:
+                                                            FontWeight.w600,
+                                                      ),
                                                     ),
                                                   ),
                                                 // Edited indicator
@@ -1519,53 +1452,46 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
                                                       children: [
                                                         Text(
                                                           'edited',
-                                                          style: FlutterFlowTheme
-                                                                  .of(context)
-                                                              .bodySmall
-                                                              .override(
-                                                                color: FlutterFlowTheme.of(
-                                                                        context)
-                                                                    .secondaryText,
-                                                                fontSize: 11.0,
-                                                                fontStyle:
-                                                                    FontStyle
-                                                                        .italic,
-                                                              ),
+                                                          style: TextStyle(
+                                                            fontFamily:
+                                                                'SF Pro Text',
+                                                            color: const Color(
+                                                                0xFF8E8E93),
+                                                            fontSize: 11.0,
+                                                            fontStyle: FontStyle
+                                                                .italic,
+                                                          ),
                                                         ),
                                                         if (widget.message
                                                                 ?.editedAt !=
                                                             null) ...[
                                                           Text(
                                                             ' • ',
-                                                            style: FlutterFlowTheme
-                                                                    .of(context)
-                                                                .bodySmall
-                                                                .override(
-                                                                  color: FlutterFlowTheme.of(
-                                                                          context)
-                                                                      .secondaryText,
-                                                                  fontSize:
-                                                                      11.0,
-                                                                ),
+                                                            style:
+                                                                const TextStyle(
+                                                              fontFamily:
+                                                                  'SF Pro Text',
+                                                              color: Color(
+                                                                  0xFF8E8E93),
+                                                              fontSize: 11.0,
+                                                            ),
                                                           ),
                                                           Text(
                                                             dateTimeFormat(
                                                                 'MMM d, h:mm a',
                                                                 widget.message!
                                                                     .editedAt!),
-                                                            style: FlutterFlowTheme
-                                                                    .of(context)
-                                                                .bodySmall
-                                                                .override(
-                                                                  color: FlutterFlowTheme.of(
-                                                                          context)
-                                                                      .secondaryText,
-                                                                  fontSize:
-                                                                      11.0,
-                                                                  fontStyle:
-                                                                      FontStyle
-                                                                          .italic,
-                                                                ),
+                                                            style:
+                                                                const TextStyle(
+                                                              fontFamily:
+                                                                  'SF Pro Text',
+                                                              color: Color(
+                                                                  0xFF8E8E93),
+                                                              fontSize: 11.0,
+                                                              fontStyle:
+                                                                  FontStyle
+                                                                      .italic,
+                                                            ),
                                                           ),
                                                         ],
                                                       ],
@@ -1632,16 +1558,8 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
                                                                     : 8.0),
                                                               ),
                                                             ),
-                                                            child: InkWell(
-                                                              splashColor: Colors
-                                                                  .transparent,
-                                                              focusColor: Colors
-                                                                  .transparent,
-                                                              hoverColor: Colors
-                                                                  .transparent,
-                                                              highlightColor:
-                                                                  Colors
-                                                                      .transparent,
+                                                            child:
+                                                                GestureDetector(
                                                               onTap: () async {
                                                                 await Navigator
                                                                     .push(
@@ -1836,19 +1754,7 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
                                                                       Clip.none,
                                                                   children: [
                                                                     // Image container
-                                                                    InkWell(
-                                                                      splashColor:
-                                                                          Colors
-                                                                              .transparent,
-                                                                      focusColor:
-                                                                          Colors
-                                                                              .transparent,
-                                                                      hoverColor:
-                                                                          Colors
-                                                                              .transparent,
-                                                                      highlightColor:
-                                                                          Colors
-                                                                              .transparent,
+                                                                    GestureDetector(
                                                                       onTap:
                                                                           () async {
                                                                         await Navigator
@@ -2042,6 +1948,41 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
                                                         '')
                                                   _buildFileAttachment(widget
                                                       .message!.attachmentUrl),
+                                                // Timestamp inside bubble (bottom right for sent messages)
+                                                Padding(
+                                                  padding:
+                                                      const EdgeInsetsDirectional
+                                                          .fromSTEB(
+                                                          0.0, 4.0, 0.0, 0.0),
+                                                  child: Row(
+                                                    mainAxisAlignment:
+                                                        MainAxisAlignment.end,
+                                                    mainAxisSize:
+                                                        MainAxisSize.min,
+                                                    children: [
+                                                      Text(
+                                                        _formatMessageTimestamp(
+                                                            widget.message
+                                                                ?.createdAt),
+                                                        style: FlutterFlowTheme
+                                                                .of(context)
+                                                            .bodySmall
+                                                            .override(
+                                                              font: GoogleFonts
+                                                                  .inter(),
+                                                              color: const Color(
+                                                                  0xFF6B7280),
+                                                              fontSize: 11.0,
+                                                              letterSpacing:
+                                                                  0.0,
+                                                              fontWeight:
+                                                                  FontWeight
+                                                                      .w400,
+                                                            ),
+                                                      ),
+                                                    ],
+                                                  ),
+                                                ),
                                               ].divide(
                                                   const SizedBox(height: 8.0)),
                                             ),
@@ -2051,101 +1992,27 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
                                     ),
                                   ),
                                 ),
-                                Padding(
-                                  padding: const EdgeInsetsDirectional.fromSTEB(
-                                      12.0, 0.0, 12.0, 0.0),
-                                  child: Row(
-                                    mainAxisAlignment: MainAxisAlignment.end,
-                                    children: [
-                                      Text(
-                                        widget.name ?? 'Unknown',
-                                        style: FlutterFlowTheme.of(context)
-                                            .bodySmall
-                                            .override(
-                                              font: GoogleFonts.inter(
-                                                fontWeight:
-                                                    FlutterFlowTheme.of(context)
-                                                        .bodySmall
-                                                        .fontWeight,
-                                                fontStyle:
-                                                    FlutterFlowTheme.of(context)
-                                                        .bodySmall
-                                                        .fontStyle,
-                                              ),
-                                              color: const Color(0xFF6B7280),
-                                              fontSize: 12.0,
-                                              letterSpacing: 0.0,
-                                              fontWeight:
-                                                  FlutterFlowTheme.of(context)
-                                                      .bodySmall
-                                                      .fontWeight,
-                                              fontStyle:
-                                                  FlutterFlowTheme.of(context)
-                                                      .bodySmall
-                                                      .fontStyle,
-                                            ),
-                                      ),
-                                      Text(
-                                        ' • ',
-                                        style: FlutterFlowTheme.of(context)
-                                            .bodySmall
-                                            .override(
-                                              font: GoogleFonts.inter(),
-                                              color: const Color(0xFF6B7280),
-                                              fontSize: 12.0,
-                                              letterSpacing: 0.0,
-                                            ),
-                                      ),
-                                      Text(
-                                        _formatMessageTimestamp(
-                                            widget.message?.createdAt),
-                                        style: FlutterFlowTheme.of(context)
-                                            .bodySmall
-                                            .override(
-                                              font: GoogleFonts.inter(
-                                                fontWeight:
-                                                    FlutterFlowTheme.of(context)
-                                                        .bodySmall
-                                                        .fontWeight,
-                                                fontStyle:
-                                                    FlutterFlowTheme.of(context)
-                                                        .bodySmall
-                                                        .fontStyle,
-                                              ),
-                                              color: const Color(0xFF6B7280),
-                                              fontSize: 12.0,
-                                              letterSpacing: 0.0,
-                                              fontWeight:
-                                                  FlutterFlowTheme.of(context)
-                                                      .bodySmall
-                                                      .fontWeight,
-                                              fontStyle:
-                                                  FlutterFlowTheme.of(context)
-                                                      .bodySmall
-                                                      .fontStyle,
-                                            ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
                               ].divide(const SizedBox(height: 4.0)),
                             ),
                           ),
                         ),
-                        ClipRRect(
-                          borderRadius: BorderRadius.circular(16.0),
-                          child: CachedNetworkImage(
-                            fadeInDuration: const Duration(milliseconds: 300),
-                            fadeOutDuration: const Duration(milliseconds: 300),
-                            imageUrl: valueOrDefault<String>(
-                              widget.senderImage,
-                              'https://firebasestorage.googleapis.com/v0/b/linkedup-c3e29.firebasestorage.app/o/asset%2Fdiv.png?alt=media&token=85d5445a-3d2d-4dd5-879e-c4000b1fefd5',
+                        // Only show profile photo in group chats
+                        if (widget.isGroup)
+                          ClipRRect(
+                            borderRadius: BorderRadius.circular(16.0),
+                            child: CachedNetworkImage(
+                              fadeInDuration: const Duration(milliseconds: 300),
+                              fadeOutDuration:
+                                  const Duration(milliseconds: 300),
+                              imageUrl: valueOrDefault<String>(
+                                widget.senderImage,
+                                'https://firebasestorage.googleapis.com/v0/b/linkedup-c3e29.firebasestorage.app/o/asset%2Fdiv.png?alt=media&token=85d5445a-3d2d-4dd5-879e-c4000b1fefd5',
+                              ),
+                              width: 36.0,
+                              height: 36.0,
+                              fit: BoxFit.cover,
                             ),
-                            width: 36.0,
-                            height: 36.0,
-                            fit: BoxFit.cover,
                           ),
-                        ),
                       ],
                     ),
                   ),
@@ -2157,11 +2024,7 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
           Align(
             alignment: const AlignmentDirectional(-1.0, 0.0),
             child: Builder(
-              builder: (context) => InkWell(
-                splashColor: Colors.transparent,
-                focusColor: Colors.transparent,
-                hoverColor: Colors.transparent,
-                highlightColor: Colors.transparent,
+              builder: (context) => GestureDetector(
                 onTap: () async {
                   await actions.closekeyboard();
                   await widget.action?.call();
@@ -2171,30 +2034,34 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
                   width: double.infinity,
                   decoration: const BoxDecoration(),
                   child: Padding(
-                    padding: const EdgeInsets.all(16.0),
+                    padding: const EdgeInsets.all(8.0),
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
                       mainAxisAlignment: MainAxisAlignment.start,
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        ClipRRect(
-                          borderRadius: BorderRadius.circular(16.0),
-                          child: CachedNetworkImage(
-                            fadeInDuration: const Duration(milliseconds: 300),
-                            fadeOutDuration: const Duration(milliseconds: 300),
-                            imageUrl: valueOrDefault<String>(
-                              widget.senderImage,
-                              'https://firebasestorage.googleapis.com/v0/b/linkedup-c3e29.firebasestorage.app/o/asset%2Fdiv.png?alt=media&token=85d5445a-3d2d-4dd5-879e-c4000b1fefd5',
+                        // Only show profile photo in group chats
+                        if (widget.isGroup)
+                          ClipRRect(
+                            borderRadius: BorderRadius.circular(16.0),
+                            child: CachedNetworkImage(
+                              fadeInDuration: const Duration(milliseconds: 300),
+                              fadeOutDuration:
+                                  const Duration(milliseconds: 300),
+                              imageUrl: valueOrDefault<String>(
+                                widget.senderImage,
+                                'https://firebasestorage.googleapis.com/v0/b/linkedup-c3e29.firebasestorage.app/o/asset%2Fdiv.png?alt=media&token=85d5445a-3d2d-4dd5-879e-c4000b1fefd5',
+                              ),
+                              width: 36.0,
+                              height: 36.0,
+                              fit: BoxFit.cover,
                             ),
-                            width: 36.0,
-                            height: 36.0,
-                            fit: BoxFit.cover,
                           ),
-                        ),
                         Flexible(
                           child: Container(
                             constraints: BoxConstraints(
-                              maxWidth: MediaQuery.of(context).size.width * 0.7,
+                              maxWidth: MediaQuery.of(context).size.width *
+                                  (widget.isGroup ? 0.7 : 0.8),
                             ),
                             child: Column(
                               mainAxisSize: MainAxisSize.min,
@@ -2207,11 +2074,7 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
                                     padding:
                                         const EdgeInsetsDirectional.fromSTEB(
                                             12.0, 0.0, 12.0, 0.0),
-                                    child: InkWell(
-                                      splashColor: Colors.transparent,
-                                      focusColor: Colors.transparent,
-                                      hoverColor: Colors.transparent,
-                                      highlightColor: Colors.transparent,
+                                    child: GestureDetector(
                                       onLongPress: _copyContentIfAny,
                                       child: _withMessageMenu(
                                         bubble: AnimatedContainer(
@@ -2221,29 +2084,23 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
                                             maxWidth: MediaQuery.of(context)
                                                     .size
                                                     .width *
-                                                0.7,
+                                                0.75,
                                           ),
                                           decoration: BoxDecoration(
                                             color: Colors.white,
                                             borderRadius:
-                                                BorderRadius.circular(8.0),
-                                            border: widget.isHighlighted
-                                                ? Border.all(
-                                                    color:
-                                                        const Color(0xFF3B82F6),
-                                                    width: 3.0,
-                                                  )
-                                                : Border.all(
-                                                    color: Colors.black
-                                                        .withOpacity(0.1),
-                                                    width: 1.0,
-                                                  ),
+                                                BorderRadius.circular(18.0),
+                                            border: Border.all(
+                                              color: Colors.black
+                                                  .withOpacity(0.08),
+                                              width: 1.0,
+                                            ),
                                             boxShadow: widget.isHighlighted
                                                 ? [
                                                     BoxShadow(
                                                       color: const Color(
-                                                              0xFF3B82F6)
-                                                          .withOpacity(0.3),
+                                                              0xFF007AFF)
+                                                          .withOpacity(0.4),
                                                       blurRadius: 8.0,
                                                       spreadRadius: 2.0,
                                                     ),
@@ -2251,13 +2108,15 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
                                                 : null,
                                           ),
                                           child: Padding(
-                                            padding: const EdgeInsets.all(10.0),
+                                            padding: const EdgeInsets.symmetric(
+                                                horizontal: 14.0,
+                                                vertical: 10.0),
                                             child: Column(
                                               mainAxisSize: MainAxisSize.min,
                                               crossAxisAlignment:
                                                   CrossAxisAlignment.start,
                                               children: [
-                                                // Reply indicator
+                                                // Reply indicator for received messages
                                                 if (widget.message?.replyTo !=
                                                         null &&
                                                     widget.message?.replyTo !=
@@ -2282,12 +2141,11 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
                                                             0xFFF0F2F5),
                                                         borderRadius:
                                                             BorderRadius
-                                                                .circular(4.0),
-                                                        border: Border(
+                                                                .circular(10.0),
+                                                        border: const Border(
                                                           left: BorderSide(
-                                                            color: FlutterFlowTheme
-                                                                    .of(context)
-                                                                .primary,
+                                                            color: Color(
+                                                                0xFF007AFF),
                                                             width: 3.0,
                                                           ),
                                                         ),
@@ -2309,19 +2167,18 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
                                                                   widget.message
                                                                           ?.replyToSender ??
                                                                       'Unknown',
-                                                                  style: FlutterFlowTheme.of(
-                                                                          context)
-                                                                      .bodySmall
-                                                                      .override(
-                                                                        fontFamily:
-                                                                            'Inter',
-                                                                        color: FlutterFlowTheme.of(context)
-                                                                            .primary,
-                                                                        fontSize:
-                                                                            12.0,
-                                                                        fontWeight:
-                                                                            FontWeight.w600,
-                                                                      ),
+                                                                  style:
+                                                                      const TextStyle(
+                                                                    fontFamily:
+                                                                        'SF Pro Text',
+                                                                    color: Color(
+                                                                        0xFF007AFF),
+                                                                    fontSize:
+                                                                        13.0,
+                                                                    fontWeight:
+                                                                        FontWeight
+                                                                            .w600,
+                                                                  ),
                                                                 ),
                                                                 const SizedBox(
                                                                     height:
@@ -2330,17 +2187,15 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
                                                                   widget.message
                                                                           ?.replyToContent ??
                                                                       '',
-                                                                  style: FlutterFlowTheme.of(
-                                                                          context)
-                                                                      .bodySmall
-                                                                      .override(
-                                                                        fontFamily:
-                                                                            'Inter',
-                                                                        color: const Color(
-                                                                            0xFF667781),
-                                                                        fontSize:
-                                                                            12.0,
-                                                                      ),
+                                                                  style:
+                                                                      const TextStyle(
+                                                                    fontFamily:
+                                                                        'SF Pro Text',
+                                                                    color: Color(
+                                                                        0xFF667781),
+                                                                    fontSize:
+                                                                        13.0,
+                                                                  ),
                                                                   maxLines: 1,
                                                                   overflow:
                                                                       TextOverflow
@@ -2380,135 +2235,88 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
                                                     },
                                                     styleSheet:
                                                         MarkdownStyleSheet(
-                                                      p: FlutterFlowTheme.of(
-                                                              context)
-                                                          .bodyMedium
-                                                          .override(
-                                                            font: GoogleFonts
-                                                                .inter(
-                                                              fontWeight:
-                                                                  FlutterFlowTheme.of(
-                                                                          context)
-                                                                      .bodyMedium
-                                                                      .fontWeight,
-                                                              fontStyle:
-                                                                  FlutterFlowTheme.of(
-                                                                          context)
-                                                                      .bodyMedium
-                                                                      .fontStyle,
-                                                            ),
-                                                            color: const Color(
-                                                                0xFF1F2937),
-                                                            fontSize: 14.0,
-                                                            letterSpacing: 0.0,
-                                                            fontWeight:
-                                                                FlutterFlowTheme.of(
-                                                                        context)
-                                                                    .bodyMedium
-                                                                    .fontWeight,
-                                                            fontStyle:
-                                                                FlutterFlowTheme.of(
-                                                                        context)
-                                                                    .bodyMedium
-                                                                    .fontStyle,
-                                                          ),
-                                                      a: FlutterFlowTheme.of(
-                                                              context)
-                                                          .bodyMedium
-                                                          .override(
-                                                            font: GoogleFonts
-                                                                .inter(),
-                                                            color: const Color(
-                                                                0xFF2563EB),
-                                                            fontSize: 14.0,
-                                                            letterSpacing: 0.0,
-                                                            decoration:
-                                                                TextDecoration
-                                                                    .underline,
-                                                          ),
-                                                      code: FlutterFlowTheme.of(
-                                                              context)
-                                                          .bodyMedium
-                                                          .override(
-                                                            font: GoogleFonts
-                                                                .robotoMono(),
-                                                            color: const Color(
-                                                                0xFF1F2937),
-                                                            fontSize: 13.0,
-                                                          ),
+                                                      // iMessage received bubble: dark text on gray
+                                                      p: const TextStyle(
+                                                        fontFamily:
+                                                            'SF Pro Text',
+                                                        color:
+                                                            Color(0xFF000000),
+                                                        fontSize: 17.0,
+                                                        letterSpacing: -0.4,
+                                                        fontWeight:
+                                                            FontWeight.w400,
+                                                        height: 1.3,
+                                                      ),
+                                                      a: const TextStyle(
+                                                        fontFamily:
+                                                            'SF Pro Text',
+                                                        color:
+                                                            Color(0xFF007AFF),
+                                                        fontSize: 17.0,
+                                                        letterSpacing: -0.4,
+                                                        fontWeight:
+                                                            FontWeight.w400,
+                                                        decoration:
+                                                            TextDecoration
+                                                                .underline,
+                                                      ),
+                                                      code: const TextStyle(
+                                                        fontFamily: 'SF Mono',
+                                                        color:
+                                                            Color(0xFF000000),
+                                                        fontSize: 15.0,
+                                                      ),
                                                       codeblockDecoration:
                                                           BoxDecoration(
                                                         color: const Color(
-                                                            0xFFE5E7EB),
+                                                            0xFFD1D1D6),
                                                         borderRadius:
                                                             BorderRadius
-                                                                .circular(4),
+                                                                .circular(6),
                                                       ),
-                                                      strong: FlutterFlowTheme
-                                                              .of(context)
-                                                          .bodyMedium
-                                                          .override(
-                                                            font: GoogleFonts
-                                                                .inter(
-                                                              fontWeight:
-                                                                  FontWeight
-                                                                      .bold,
-                                                            ),
-                                                            color: const Color(
-                                                                0xFF1F2937),
-                                                            fontSize: 14.0,
-                                                            fontWeight:
-                                                                FontWeight.bold,
-                                                          ),
-                                                      em: FlutterFlowTheme.of(
-                                                              context)
-                                                          .bodyMedium
-                                                          .override(
-                                                            font: GoogleFonts
-                                                                .inter(
-                                                              fontStyle:
-                                                                  FontStyle
-                                                                      .italic,
-                                                            ),
-                                                            color: const Color(
-                                                                0xFF1F2937),
-                                                            fontSize: 14.0,
-                                                            fontStyle: FontStyle
-                                                                .italic,
-                                                          ),
+                                                      strong: const TextStyle(
+                                                        fontFamily:
+                                                            'SF Pro Text',
+                                                        color:
+                                                            Color(0xFF000000),
+                                                        fontSize: 17.0,
+                                                        fontWeight:
+                                                            FontWeight.w600,
+                                                      ),
+                                                      em: const TextStyle(
+                                                        fontFamily:
+                                                            'SF Pro Text',
+                                                        color:
+                                                            Color(0xFF000000),
+                                                        fontSize: 17.0,
+                                                        fontStyle:
+                                                            FontStyle.italic,
+                                                        fontWeight:
+                                                            FontWeight.w400,
+                                                      ),
                                                       tableBody:
-                                                          FlutterFlowTheme.of(
-                                                                  context)
-                                                              .bodyMedium
-                                                              .override(
-                                                                font: GoogleFonts
-                                                                    .inter(),
-                                                                color: Colors
-                                                                    .black,
-                                                                fontSize: 14.0,
-                                                              ),
+                                                          const TextStyle(
+                                                        fontFamily:
+                                                            'SF Pro Text',
+                                                        color:
+                                                            Color(0xFF000000),
+                                                        fontSize: 15.0,
+                                                        fontWeight:
+                                                            FontWeight.w400,
+                                                      ),
                                                       tableHead:
-                                                          FlutterFlowTheme.of(
-                                                                  context)
-                                                              .bodyMedium
-                                                              .override(
-                                                                font:
-                                                                    GoogleFonts
-                                                                        .inter(
-                                                                  fontWeight:
-                                                                      FontWeight
-                                                                          .bold,
-                                                                ),
-                                                                color: Colors
-                                                                    .black,
-                                                                fontSize: 14.0,
-                                                                fontWeight:
-                                                                    FontWeight
-                                                                        .bold,
-                                                              ),
+                                                          const TextStyle(
+                                                        fontFamily:
+                                                            'SF Pro Text',
+                                                        color:
+                                                            Color(0xFF000000),
+                                                        fontSize: 15.0,
+                                                        fontWeight:
+                                                            FontWeight.w600,
+                                                      ),
                                                     ),
                                                   ),
-                                                // Edited indicator
+                                                // Edited indicator for received messages
                                                 if (widget.message?.isEdited ==
                                                     true)
                                                   Padding(
@@ -2614,16 +2422,8 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
                                                                       .circular(
                                                                           8.0),
                                                             ),
-                                                            child: InkWell(
-                                                              splashColor: Colors
-                                                                  .transparent,
-                                                              focusColor: Colors
-                                                                  .transparent,
-                                                              hoverColor: Colors
-                                                                  .transparent,
-                                                              highlightColor:
-                                                                  Colors
-                                                                      .transparent,
+                                                            child:
+                                                                GestureDetector(
                                                               onTap: () async {
                                                                 await Navigator
                                                                     .push(
@@ -2796,19 +2596,7 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
                                                                       Clip.none,
                                                                   children: [
                                                                     // Image container
-                                                                    InkWell(
-                                                                      splashColor:
-                                                                          Colors
-                                                                              .transparent,
-                                                                      focusColor:
-                                                                          Colors
-                                                                              .transparent,
-                                                                      hoverColor:
-                                                                          Colors
-                                                                              .transparent,
-                                                                      highlightColor:
-                                                                          Colors
-                                                                              .transparent,
+                                                                    GestureDetector(
                                                                       onTap:
                                                                           () async {
                                                                         await Navigator
@@ -3006,98 +2794,82 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
                                                         '')
                                                   _buildFileAttachment(widget
                                                       .message!.attachmentUrl),
+                                                // Sender name and timestamp inside bubble (bottom left for received messages)
+                                                Padding(
+                                                  padding:
+                                                      const EdgeInsetsDirectional
+                                                          .fromSTEB(
+                                                          0.0, 4.0, 0.0, 0.0),
+                                                  child: Row(
+                                                    mainAxisAlignment:
+                                                        MainAxisAlignment.start,
+                                                    mainAxisSize:
+                                                        MainAxisSize.min,
+                                                    children: [
+                                                      Text(
+                                                        valueOrDefault<String>(
+                                                          widget.name,
+                                                          'No One',
+                                                        ),
+                                                        style: FlutterFlowTheme
+                                                                .of(context)
+                                                            .bodySmall
+                                                            .override(
+                                                              font: GoogleFonts
+                                                                  .inter(),
+                                                              color: const Color(
+                                                                  0xFF6B7280),
+                                                              fontSize: 11.0,
+                                                              letterSpacing:
+                                                                  0.0,
+                                                              fontWeight:
+                                                                  FontWeight
+                                                                      .w600,
+                                                            ),
+                                                      ),
+                                                      Text(
+                                                        ' • ',
+                                                        style: FlutterFlowTheme
+                                                                .of(context)
+                                                            .bodySmall
+                                                            .override(
+                                                              font: GoogleFonts
+                                                                  .inter(),
+                                                              color: const Color(
+                                                                  0xFF6B7280),
+                                                              fontSize: 11.0,
+                                                              letterSpacing:
+                                                                  0.0,
+                                                            ),
+                                                      ),
+                                                      Text(
+                                                        _formatMessageTimestamp(
+                                                            widget.message
+                                                                ?.createdAt),
+                                                        style: FlutterFlowTheme
+                                                                .of(context)
+                                                            .bodySmall
+                                                            .override(
+                                                              font: GoogleFonts
+                                                                  .inter(),
+                                                              color: const Color(
+                                                                  0xFF6B7280),
+                                                              fontSize: 11.0,
+                                                              letterSpacing:
+                                                                  0.0,
+                                                              fontWeight:
+                                                                  FontWeight
+                                                                      .w400,
+                                                            ),
+                                                      ),
+                                                    ],
+                                                  ),
+                                                ),
                                               ].divide(
                                                   const SizedBox(height: 8.0)),
                                             ),
                                           ),
                                         ),
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                                Align(
-                                  alignment:
-                                      const AlignmentDirectional(-1.0, -1.0),
-                                  child: Padding(
-                                    padding:
-                                        const EdgeInsetsDirectional.fromSTEB(
-                                            12.0, 0.0, 12.0, 0.0),
-                                    child: RichText(
-                                      textScaler:
-                                          MediaQuery.of(context).textScaler,
-                                      text: TextSpan(
-                                        children: [
-                                          TextSpan(
-                                            text: valueOrDefault<String>(
-                                              widget.name,
-                                              'No One',
-                                            ),
-                                            style: FlutterFlowTheme.of(context)
-                                                .bodySmall
-                                                .override(
-                                                  font: GoogleFonts.inter(
-                                                    fontWeight:
-                                                        FlutterFlowTheme.of(
-                                                                context)
-                                                            .bodySmall
-                                                            .fontWeight,
-                                                    fontStyle:
-                                                        FlutterFlowTheme.of(
-                                                                context)
-                                                            .bodySmall
-                                                            .fontStyle,
-                                                  ),
-                                                  color:
-                                                      const Color(0xFF6B7280),
-                                                  fontSize: 12.0,
-                                                  letterSpacing: 0.0,
-                                                  fontWeight:
-                                                      FlutterFlowTheme.of(
-                                                              context)
-                                                          .bodySmall
-                                                          .fontWeight,
-                                                  fontStyle:
-                                                      FlutterFlowTheme.of(
-                                                              context)
-                                                          .bodySmall
-                                                          .fontStyle,
-                                                ),
-                                          ),
-                                          const TextSpan(
-                                            text: ' • ',
-                                            style: TextStyle(),
-                                          ),
-                                          TextSpan(
-                                            text: _formatMessageTimestamp(
-                                                widget.message?.createdAt),
-                                            style: const TextStyle(),
-                                          )
-                                        ],
-                                        style: FlutterFlowTheme.of(context)
-                                            .bodySmall
-                                            .override(
-                                              font: GoogleFonts.inter(
-                                                fontWeight:
-                                                    FlutterFlowTheme.of(context)
-                                                        .bodySmall
-                                                        .fontWeight,
-                                                fontStyle:
-                                                    FlutterFlowTheme.of(context)
-                                                        .bodySmall
-                                                        .fontStyle,
-                                              ),
-                                              color: const Color(0xFF6B7280),
-                                              fontSize: 12.0,
-                                              letterSpacing: 0.0,
-                                              fontWeight:
-                                                  FlutterFlowTheme.of(context)
-                                                      .bodySmall
-                                                      .fontWeight,
-                                              fontStyle:
-                                                  FlutterFlowTheme.of(context)
-                                                      .bodySmall
-                                                      .fontStyle,
-                                            ),
                                       ),
                                     ),
                                   ),
@@ -3448,11 +3220,13 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
 
           // Sanitize filename for web
           String safeFileName = fileName;
-          safeFileName = safeFileName.replaceAll('/', '_').replaceAll('\\', '_');
+          safeFileName =
+              safeFileName.replaceAll('/', '_').replaceAll('\\', '_');
           safeFileName = safeFileName.split('/').last.split('\\').last;
           if (!safeFileName.contains('.')) {
             // Try to detect file type from content type or default to jpg
-            final contentType = response.headers['content-type'] ?? 'image/jpeg';
+            final contentType =
+                response.headers['content-type'] ?? 'image/jpeg';
             String extension = 'jpg';
             if (contentType.contains('png')) {
               extension = 'png';
@@ -3751,37 +3525,33 @@ class _ReactionChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Material(
-      type: MaterialType.transparency,
-      child: InkWell(
-        borderRadius: BorderRadius.circular(8),
-        onTap: () {
-          // ignore: avoid_print
-          print('Reaction tapped: ' + emoji);
-          onTap(emoji);
-        },
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                emoji,
-                style: const TextStyle(fontSize: 18),
-              ),
-              if (count > 1)
-                Padding(
-                  padding: const EdgeInsets.only(left: 2.0),
-                  child: Text(
-                    count.toString(),
-                    style: const TextStyle(
-                      fontSize: 12,
-                      color: Colors.black87,
-                    ),
+    return GestureDetector(
+      onTap: () {
+        // ignore: avoid_print
+        print('Reaction tapped: ' + emoji);
+        onTap(emoji);
+      },
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              emoji,
+              style: const TextStyle(fontSize: 18),
+            ),
+            if (count > 1)
+              Padding(
+                padding: const EdgeInsets.only(left: 2.0),
+                child: Text(
+                  count.toString(),
+                  style: const TextStyle(
+                    fontSize: 12,
+                    color: Colors.black87,
                   ),
                 ),
-            ],
-          ),
+              ),
+          ],
         ),
       ),
     );

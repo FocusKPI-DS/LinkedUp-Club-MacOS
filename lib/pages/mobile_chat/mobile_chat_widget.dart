@@ -8,12 +8,18 @@ import '/pages/mobile_chat/mobile_chat_model.dart';
 import '/pages/desktop_chat/chat_controller.dart';
 import '/pages/chat/user_profile_detail/user_profile_detail_widget.dart';
 import '/pages/chat/group_chat_detail/group_chat_detail_widget.dart';
+import '/components/chat_filter_buttons.dart';
+import '/custom_code/actions/index.dart' as actions;
+import 'dart:async';
 import 'dart:io';
 import 'dart:ui';
+import 'package:adaptive_platform_ui/adaptive_platform_ui.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:easy_debounce/easy_debounce.dart';
 // import 'package:ff_theme/flutter_flow/flutter_flow_theme.dart'; // Removed unused import
 import 'package:flutter/material.dart';
+import 'package:flutter/cupertino.dart';
+import 'package:flutter/scheduler.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:get/get.dart';
 import 'package:image_picker/image_picker.dart';
@@ -52,9 +58,6 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
     _model = createModel(context, () => MobileChatModel());
     chatController = Get.put(ChatController());
 
-    // Initialize workspace for chat controller
-    _initializeWorkspace();
-
     _model.tabController = TabController(
       vsync: this,
       length: 3, // All, Direct Message, and Groups
@@ -79,32 +82,51 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
       ),
     });
 
-    // Handle initial chat if provided (e.g., from notification tap)
+    // Handle initial chat if provided - open it in full-screen
     if (widget.initialChat != null) {
+      // Use postFrameCallback to push the full-screen route after build
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted && widget.initialChat != null) {
-          setState(() {
-            _model.selectedChat = widget.initialChat;
-          });
           chatController.selectChat(widget.initialChat!);
-          // Notify parent that chat is opened
-          widget.onChatStateChanged?.call(true);
+          _openChatFullScreen(widget.initialChat!);
         }
       });
     }
-  }
 
-  Future<void> _initializeWorkspace() async {
-    try {
-      if (currentUserReference != null) {
-        final currentUserDoc =
-            await UsersRecord.getDocumentOnce(currentUserReference!);
-        final userWorkspaceRef = currentUserDoc.currentWorkspaceRef;
-        chatController.updateCurrentWorkspace(userWorkspaceRef);
+    // On page load action - ensure FCM token is saved for push notifications
+    SchedulerBinding.instance.addPostFrameCallback((_) async {
+      unawaited(
+        () async {
+          await actions.closekeyboard();
+        }(),
+      );
+      unawaited(
+        () async {
+          await actions.dismissKeyboard(
+            context,
+          );
+        }(),
+      );
+      if (loggedIn && currentUserReference != null) {
+        unawaited(
+          () async {
+            final success = await actions.ensureFcmToken(
+              currentUserReference!,
+            );
+            if (success) {
+              print('✅ FCM token ensured from MobileChat page');
+            } else {
+              print('⚠️ Failed to ensure FCM token from MobileChat page');
+            }
+          }(),
+        );
       }
-    } catch (e) {
-      print('Error initializing workspace: $e');
-    }
+      unawaited(
+        () async {
+          await actions.updateAppBadge();
+        }(),
+      );
+    });
   }
 
   @override
@@ -116,11 +138,76 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Color(0xFFF5F5F7),
-      body: RepaintBoundary(
-        child:
-            _model.selectedChat != null ? _buildChatView() : _buildChatList(),
+    // Always show chat list - chat detail is shown in full-screen route
+    return NotificationListener<ScrollNotification>(
+      onNotification: (ScrollNotification notification) {
+        // Absorb all scroll notifications to prevent tab bar from minimizing/blurring
+        return true;
+      },
+      child: AdaptiveScaffold(
+        appBar: null, // No app bar - using custom header instead
+        body: SafeArea(
+          bottom: false,
+          child: Container(
+            color: Color(0xFFF5F5F7),
+            child: RepaintBoundary(
+              child: Column(
+                children: [
+                  // Fixed header section with Chats title, action buttons, search bar, and filters
+                  Container(
+                    color: Color(0xFFF5F5F7),
+                    child: Stack(
+                      clipBehavior: Clip.none,
+                      children: [
+                        // Chats heading in top left
+                        Positioned(
+                          top: 16,
+                          left: 16,
+                          child: Text(
+                            'Chats',
+                            style: TextStyle(
+                              fontSize: 34,
+                              fontWeight: FontWeight.bold,
+                              color: CupertinoColors.label,
+                            ),
+                          ),
+                        ),
+                        // Header action buttons
+                        Positioned(
+                          top: 20,
+                          right: 16,
+                          child: _buildHeaderActionButtons(),
+                        ),
+                        // Always visible search bar
+                        Positioned(
+                          top: 70,
+                          left: 0,
+                          right: 0,
+                          child: Padding(
+                            padding: EdgeInsets.symmetric(horizontal: 16.0),
+                            child: _buildAlwaysVisibleSearchBar(),
+                          ),
+                        ),
+                        // Filter buttons below search bar
+                        Positioned(
+                          top: 118,
+                          left: 0,
+                          right: 0,
+                          child: const ChatFilterButtons(),
+                        ),
+                      ],
+                    ),
+                    height: 180, // Total height for header section
+                  ),
+                  // Scrollable chat list
+                  Expanded(
+                    child: _buildChatList(),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
       ),
     );
   }
@@ -158,363 +245,603 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
         }
         _dragStartX = null;
       },
-      child: Column(
-        children: [
-          // iOS-style navigation bar
-          _buildIOSNavigationBar(),
-          // Chat thread component
-          Expanded(
-            child: ChatThreadComponentWidget(
-              chatReference: _model.selectedChat,
-              onMessageLongPress: _showMessageMenu,
-            ),
-          ),
-        ],
+      child: ChatThreadComponentWidget(
+        chatReference: _model.selectedChat,
+        onMessageLongPress: _showMessageMenu,
       ),
     );
   }
 
-  Widget _buildIOSNavigationBar() {
+  /// Opens a chat in a full-screen modal route (like WhatsApp)
+  /// This covers the tab bar completely without needing parent state changes
+  void _openChatFullScreen(ChatsRecord chat) {
+    // Set the selected chat so reply/edit actions can access it
+    _model.selectedChat = chat;
+
+    Navigator.of(context, rootNavigator: true).push(
+      CupertinoPageRoute(
+        fullscreenDialog: false,
+        builder: (context) => _FullScreenChatPage(
+          chat: chat,
+          onMessageLongPress: _showMessageMenu,
+        ),
+      ),
+    );
+  }
+
+  PreferredSizeWidget _buildChatAppBar() {
     final chat = _model.selectedChat!;
 
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        border: Border(
-          bottom: BorderSide(
-            color: Color(0xFFE5E7EB),
-            width: 0.5,
-          ),
+    return PreferredSize(
+      preferredSize: Size.fromHeight(
+          MediaQuery.of(context).padding.top + 10), // Increased header height
+      child: Container(
+        decoration: BoxDecoration(
+          color: Color(0xFFF2F2F7), // Match chat screen background exactly
         ),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.05),
-            blurRadius: 10,
-            offset: Offset(0, 1),
-          ),
-        ],
-      ),
-      child: SafeArea(
-        child: Container(
-          height: 44,
-          padding: EdgeInsets.symmetric(horizontal: 16),
-          child: Row(
-            children: [
-              // Back button
-              GestureDetector(
-                onTap: () {
-                  setState(() {
-                    _model.selectedChat = null;
-                  });
-                  // Notify parent that chat is closed
-                  widget.onChatStateChanged?.call(false);
-                },
-                child: Container(
-                  width: 36,
-                  height: 36,
-                  decoration: BoxDecoration(
-                    color: Colors.transparent,
-                    borderRadius: BorderRadius.circular(18),
-                  ),
+        child: SafeArea(
+          bottom: false,
+          child: Container(
+            height: 44, // Native iOS toolbar height
+            padding: EdgeInsets.symmetric(horizontal: 8),
+            child: Row(
+              children: [
+                // Floating back button on the left - iOS 26+ style
+                AdaptiveFloatingActionButton(
+                  mini: true,
+                  backgroundColor: Colors.white, // Pure white background
+                  foregroundColor: Color(0xFF007AFF), // System blue icon
+                  onPressed: () {
+                    // If we came from another page (like Connections), pop to go back
+                    // Otherwise, just close the chat to show the chat list
+                    if (widget.initialChat != null &&
+                        Navigator.canPop(context)) {
+                      Navigator.pop(context);
+                    } else {
+                      setState(() {
+                        _model.selectedChat = null;
+                      });
+                      widget.onChatStateChanged?.call(false);
+                    }
+                  },
                   child: Icon(
-                    Icons.arrow_back_ios,
-                    color: Color(0xFF007AFF), // iOS blue
-                    size: 18,
+                    CupertinoIcons.chevron_left,
+                    size: 17,
                   ),
                 ),
-              ),
-              SizedBox(width: 12),
-              // Chat avatar
-              _buildHeaderAvatar(chat),
-              SizedBox(width: 12),
-              // Chat info
-              Expanded(
-                child: _buildHeaderName(chat),
-              ),
-              // More options button
-              GestureDetector(
-                onTap: () => _showChatOptions(chat),
-                child: Container(
-                  width: 36,
-                  height: 36,
-                  decoration: BoxDecoration(
-                    color: Colors.transparent,
-                    borderRadius: BorderRadius.circular(18),
-                  ),
-                  child: Icon(
-                    Icons.more_vert,
-                    color: Color(0xFF007AFF), // iOS blue
-                    size: 18,
+                SizedBox(width: 8),
+                // Centered title in pill shape - native iOS 26 style
+                Expanded(
+                  child: Center(
+                    child: Container(
+                      padding:
+                          EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: Colors.white, // Pure white like back button
+                        borderRadius: BorderRadius.circular(16), // Pill shape
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          // Avatar to the left of group name
+                          SizedBox(
+                            width: 34,
+                            height: 34,
+                            child: FittedBox(
+                              fit: BoxFit.cover,
+                              clipBehavior: Clip.antiAlias,
+                              child: _buildHeaderAvatar(chat),
+                            ),
+                          ),
+                          SizedBox(width: 8),
+                          // Group name or user name text
+                          Flexible(
+                            child: chat.isGroup
+                                ? Text(
+                                    _getChatDisplayName(chat),
+                                    style: TextStyle(
+                                      fontFamily: 'System',
+                                      fontSize: 18,
+                                      fontWeight: FontWeight.w600,
+                                      color: Color(0xFF000000), // Black
+                                    ),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  )
+                                : FutureBuilder<UsersRecord>(
+                                    future: UsersRecord.getDocumentOnce(
+                                      chat.members.firstWhere(
+                                        (member) =>
+                                            member != currentUserReference,
+                                        orElse: () => chat.members.first,
+                                      ),
+                                    ),
+                                    builder: (context, userSnapshot) {
+                                      String displayName = 'Chat';
+                                      if (userSnapshot.hasData &&
+                                          userSnapshot.data != null) {
+                                        final user = userSnapshot.data!;
+                                        final otherUserRef =
+                                            chat.members.firstWhere(
+                                          (member) =>
+                                              member != currentUserReference,
+                                          orElse: () => chat.members.first,
+                                        );
+                                        // Check if this is Summer AI agent
+                                        if (otherUserRef.path
+                                            .contains('ai_agent_summerai')) {
+                                          displayName = 'Summer';
+                                        } else {
+                                          displayName =
+                                              user.displayName.isNotEmpty
+                                                  ? user.displayName
+                                                  : 'Unknown User';
+                                        }
+                                      }
+                                      return Text(
+                                        displayName,
+                                        style: TextStyle(
+                                          fontFamily: 'System',
+                                          fontSize: 19,
+                                          fontWeight: FontWeight.w600,
+                                          color: Color(0xFF000000), // Black
+                                        ),
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                      );
+                                    },
+                                  ),
+                          ),
+                        ],
+                      ),
+                    ),
                   ),
                 ),
-              ),
-            ],
+                SizedBox(width: 8),
+                // Settings button on the right - iOS 26+ style
+                AdaptiveFloatingActionButton(
+                  mini: true,
+                  backgroundColor: Colors.white, // Pure white like back button
+                  foregroundColor: Color(0xFF007AFF), // System blue icon
+                  onPressed: () => _showChatOptions(chat),
+                  child: Icon(
+                    CupertinoIcons.ellipsis,
+                    size: 17,
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ),
     );
+  }
+
+  String _getChatDisplayName(ChatsRecord chat) {
+    if (chat.isGroup) {
+      return chat.title.isNotEmpty ? chat.title : 'Group Chat';
+    } else {
+      // For direct chats, try to get name from searchNames if available
+      // Otherwise return a placeholder that will be updated via FutureBuilder
+      if (chat.searchNames.isNotEmpty) {
+        // Find the name that's not the current user's name
+        final currentUserName = currentUserDisplayName.toLowerCase();
+        final otherName = chat.searchNames.firstWhere(
+          (name) => name.toLowerCase() != currentUserName,
+          orElse: () =>
+              chat.searchNames.isNotEmpty ? chat.searchNames.first : '',
+        );
+        if (otherName.isNotEmpty) {
+          return otherName;
+        }
+      }
+
+      // Check if it's Summer AI agent
+      final otherUserRef = chat.members.firstWhere(
+        (member) => member != currentUserReference,
+        orElse: () => chat.members.first,
+      );
+      if (otherUserRef.path.contains('ai_agent_summerai')) {
+        return 'Summer';
+      }
+
+      // Fallback - will be updated when user data loads
+      return 'Chat';
+    }
   }
 
   Widget _buildChatList() {
     return Column(
       children: [
-        // iOS-style header
-        _buildIOSHeader(),
-        // Search bar (only when visible)
-        if (_model.isSearchVisible) _buildSearchBar(),
-        // Navigation tabs
-        _buildNavigationTabs(),
         // Chat list with smooth transitions
         Expanded(
-          child: AnimatedSwitcher(
-            duration: Duration(milliseconds: 300),
-            transitionBuilder: (Widget child, Animation<double> animation) {
-              return FadeTransition(
-                opacity: animation,
-                child: SlideTransition(
-                  position: Tween<Offset>(
-                    begin: Offset(0.05, 0),
-                    end: Offset.zero,
-                  ).animate(CurvedAnimation(
-                    parent: animation,
-                    curve: Curves.easeOutCubic,
-                  )),
-                  child: child,
-                ),
-              );
+          child: NotificationListener<ScrollNotification>(
+            onNotification: (ScrollNotification notification) {
+              // Prevent bottom navigation bar from hiding on scroll
+              return false;
             },
-            child: _buildChatListContent(),
+            child: AnimatedSwitcher(
+              duration: Duration(milliseconds: 300),
+              transitionBuilder: (Widget child, Animation<double> animation) {
+                return FadeTransition(
+                  opacity: animation,
+                  child: SlideTransition(
+                    position: Tween<Offset>(
+                      begin: Offset(0.05, 0),
+                      end: Offset.zero,
+                    ).animate(CurvedAnimation(
+                      parent: animation,
+                      curve: Curves.easeOutCubic,
+                    )),
+                    child: child,
+                  ),
+                );
+              },
+              child: _buildChatListContent(),
+            ),
           ),
         ),
       ],
     );
   }
 
-  Widget _buildIOSHeader() {
-    return ClipRRect(
-      child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
-        child: Container(
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [
-                Color(0xFF1A1D29).withOpacity(0.95),
-                Color(0xFF2D3142).withOpacity(0.95),
+  void _showMessageMenu(MessagesRecord message) {
+    // Build popup menu items
+    final menuItems = <AdaptivePopupMenuItem<String>>[
+      AdaptivePopupMenuItem(
+        label: 'Copy',
+        icon:
+            PlatformInfo.isIOS26OrHigher() ? 'doc.on.doc' : Icons.copy_rounded,
+        value: 'copy',
+      ),
+      AdaptivePopupMenuItem(
+        label: 'React',
+        icon: PlatformInfo.isIOS26OrHigher()
+            ? 'face.smiling'
+            : Icons.emoji_emotions_rounded,
+        value: 'react',
+      ),
+      AdaptivePopupMenuItem(
+        label: 'Reply',
+        icon: PlatformInfo.isIOS26OrHigher()
+            ? 'arrowshape.turn.up.left'
+            : Icons.reply_rounded,
+        value: 'reply',
+      ),
+    ];
+
+    // Only show edit and unsend options for messages sent by current user
+    if (message.senderRef == currentUserReference) {
+      menuItems.addAll([
+        AdaptivePopupMenuItem(
+          label: 'Edit',
+          icon: PlatformInfo.isIOS26OrHigher() ? 'pencil' : Icons.edit_rounded,
+          value: 'edit',
+        ),
+        AdaptivePopupMenuItem(
+          label: 'Unsend',
+          icon: PlatformInfo.isIOS26OrHigher()
+              ? 'arrow.uturn.backward'
+              : Icons.undo_rounded,
+          value: 'unsend',
+        ),
+      ]);
+    }
+
+    // Add Report option (destructive action)
+    menuItems.add(
+      AdaptivePopupMenuItem(
+        label: 'Report',
+        icon: PlatformInfo.isIOS26OrHigher()
+            ? 'exclamationmark.triangle'
+            : Icons.report_gmailerrorred_rounded,
+        value: 'report',
+      ),
+    );
+
+    // Show floating popup menu at center of screen (iOS 26+ style)
+    _showFloatingPopupMenu(
+      context: context,
+      items: menuItems,
+      onSelected: (index, item) {
+        switch (item.value) {
+          case 'copy':
+            _copyMessage(message);
+            break;
+          case 'react':
+            _showEmojiMenu(message);
+            break;
+          case 'reply':
+            _replyToMessage(message);
+            break;
+          case 'edit':
+            _editMessage(message);
+            break;
+          case 'unsend':
+            _unsendMessage(message);
+            break;
+          case 'report':
+            _reportMessage(message);
+            break;
+        }
+      },
+    );
+  }
+
+  void _showFloatingPopupMenu<T>({
+    required BuildContext context,
+    required List<AdaptivePopupMenuItem<T>> items,
+    required Function(int index, AdaptivePopupMenuItem<T> item) onSelected,
+  }) {
+    final RenderBox? overlay =
+        Overlay.of(context).context.findRenderObject() as RenderBox?;
+    if (overlay == null) return;
+
+    // Position at center of screen
+    final screenSize = MediaQuery.of(context).size;
+    final position = RelativeRect.fromSize(
+      Rect.fromLTWH(
+        screenSize.width / 2 - 150,
+        screenSize.height / 2 - 100,
+        300,
+        200,
+      ),
+      overlay.size,
+    );
+
+    // Use showGeneralDialog for iOS 26+ glass effect, showMenu for older versions
+    if (PlatformInfo.isIOS26OrHigher()) {
+      showGeneralDialog<T>(
+        context: context,
+        barrierColor: Colors.black.withOpacity(0.3),
+        barrierDismissible: true,
+        barrierLabel: 'Dismiss menu',
+        transitionDuration: Duration(milliseconds: 200),
+        pageBuilder: (context, animation, secondaryAnimation) {
+          return _IOS26PopupMenu<T>(
+            position: position,
+            items: items,
+            onSelected: (index, item) {
+              Navigator.of(context).pop();
+              onSelected(index, item);
+            },
+          );
+        },
+      );
+    } else {
+      showMenu<T>(
+        context: context,
+        position: position,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
+        ),
+        color: Colors.white,
+        elevation: 8,
+        items: items.map((item) {
+          final isDestructive = item.value.toString().contains('report') ||
+              item.value.toString().contains('unsend');
+          final textColor =
+              isDestructive ? Color(0xFFFF3B30) : CupertinoColors.label;
+
+          return PopupMenuItem<T>(
+            value: item.value,
+            child: Row(
+              children: [
+                Icon(
+                  item.icon as IconData,
+                  size: 20,
+                  color: textColor,
+                ),
+                SizedBox(width: 12),
+                Text(
+                  item.label,
+                  style: TextStyle(
+                    fontFamily: 'SF Pro Display',
+                    fontSize: 17,
+                    color: textColor,
+                    fontWeight: FontWeight.w400,
+                  ),
+                ),
               ],
             ),
-            border: Border(
-              bottom: BorderSide(
-                color: Colors.white.withOpacity(0.1),
-                width: 0.5,
-              ),
-            ),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withOpacity(0.1),
-                blurRadius: 20,
-                offset: Offset(0, 2),
-              ),
-            ],
-          ),
-          child: SafeArea(
-            child: Container(
-              height: 56,
-              padding: EdgeInsets.symmetric(horizontal: 20),
-              child: Row(
-                children: [
-                  // App title
-                  Expanded(
-                    child: Text(
-                      'Chats',
-                      style: TextStyle(
-                        fontFamily: 'SF Pro Text',
-                        color: Colors.white,
-                        fontSize: 28,
-                        fontWeight: FontWeight.w700,
-                        letterSpacing: -0.5,
-                      ),
-                    ),
-                  ),
-                  // Action buttons
-                  Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      // Search button
-                      _buildHeaderButton(
-                        icon: Icons.search_rounded,
-                        isActive: _model.isSearchVisible,
-                        onTap: () {
-                          setState(() {
-                            _model.isSearchVisible = !_model.isSearchVisible;
-                            if (_model.isSearchVisible) {
-                              Future.delayed(Duration(milliseconds: 100), () {
-                                _model.searchFocusNode?.requestFocus();
-                              });
-                            } else {
-                              _model.searchTextController?.clear();
-                              chatController.updateSearchQuery('');
-                            }
-                          });
-                        },
-                      ),
-                      SizedBox(width: 12),
-                      _buildHeaderButton(
-                        icon: Icons.add_rounded,
-                        isActive: _model.showGroupCreation,
-                        onTap: () {
-                          setState(() {
-                            _model.showGroupCreation =
-                                !_model.showGroupCreation;
-                            if (_model.showGroupCreation) {
-                              _model.groupName = '';
-                              _model.selectedMembers = [];
-                              _model.groupNameController?.clear();
-                              _model.groupImagePath = null;
-                              _model.groupImageUrl = null;
-                              _model.isUploadingImage = false;
-                            }
-                          });
-                        },
-                      ),
-                      SizedBox(width: 12),
-                      _buildHeaderButton(
-                        icon: Icons.person_rounded,
-                        isActive: _model.showWorkspaceMembers,
-                        onTap: () {
-                          setState(() {
-                            _model.showWorkspaceMembers =
-                                !_model.showWorkspaceMembers;
-                          });
-                        },
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
+          );
+        }).toList(),
+      ).then((value) {
+        if (value != null) {
+          final index = items.indexWhere((item) => item.value == value);
+          if (index != -1) {
+            onSelected(index, items[index]);
+          }
+        }
+      });
+    }
   }
 
-  Widget _buildHeaderButton({
-    required IconData icon,
-    required bool isActive,
-    required VoidCallback onTap,
-  }) {
-    return GestureDetector(
-      onTap: onTap,
-      child: AnimatedContainer(
-        duration: Duration(milliseconds: 200),
-        width: 44,
-        height: 44,
+  Widget _buildIOS26ActionSheet(List<CupertinoActionSheetAction> actions) {
+    return BackdropFilter(
+      filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
+      child: Container(
         decoration: BoxDecoration(
-          color: isActive
-              ? Color(0xFF007AFF).withOpacity(0.2)
-              : Colors.white.withOpacity(0.1),
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(
-            color: isActive
-                ? Color(0xFF007AFF).withOpacity(0.3)
-                : Colors.white.withOpacity(0.2),
-            width: 1,
-          ),
-        ),
-        child: Icon(
-          icon,
-          color: isActive ? Color(0xFF007AFF) : Colors.white,
-          size: 22,
-        ),
-      ),
-    );
-  }
-
-  void _showMessageMenu(MessagesRecord message) {
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.transparent,
-      builder: (context) => Container(
-        decoration: BoxDecoration(
-          color: Colors.white,
+          color: Colors.white.withOpacity(0.8),
           borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
         ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            // Handle bar
-            Container(
-              width: 36,
-              height: 5,
-              margin: EdgeInsets.symmetric(vertical: 12),
-              decoration: BoxDecoration(
-                color: Color(0xFFD1D1D6),
-                borderRadius: BorderRadius.circular(2.5),
+        child: SafeArea(
+          top: false,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Handle bar
+              Container(
+                width: 36,
+                height: 5,
+                margin: EdgeInsets.symmetric(vertical: 12),
+                decoration: BoxDecoration(
+                  color: Color(0xFFD1D1D6),
+                  borderRadius: BorderRadius.circular(2.5),
+                ),
               ),
-            ),
-            // Message menu options
-            _buildMessageMenuOption(
-              icon: Icons.copy_rounded,
-              title: 'Copy',
-              onTap: () {
-                Navigator.pop(context);
-                _copyMessage(message);
-              },
-            ),
-            _buildMessageMenuOption(
-              icon: Icons.emoji_emotions_rounded,
-              title: 'React',
-              onTap: () {
-                Navigator.pop(context);
-                _showEmojiMenu(message);
-              },
-            ),
-            _buildMessageMenuOption(
-              icon: Icons.reply_rounded,
-              title: 'Reply',
-              onTap: () {
-                Navigator.pop(context);
-                _replyToMessage(message);
-              },
-            ),
-            // Only show edit and unsend options for messages sent by current user
-            if (message.senderRef == currentUserReference) ...[
-              _buildMessageMenuOption(
-                icon: Icons.edit_rounded,
-                title: 'Edit',
-                onTap: () {
-                  Navigator.pop(context);
-                  _editMessage(message);
-                },
-              ),
-              _buildMessageMenuOption(
-                icon: Icons.undo_rounded,
-                title: 'Unsend',
-                titleColor: Color(0xFFFF3B30),
-                iconColor: Color(0xFFFF3B30),
-                onTap: () {
-                  Navigator.pop(context);
-                  _unsendMessage(message);
-                },
-              ),
+              // Actions - extract and render properly
+              ...actions.map((action) => _buildIOS26ActionButton(action)),
+              SizedBox(height: 8),
+              // Cancel button
+              _buildIOS26CancelButton(),
+              SizedBox(height: 20),
             ],
-            _buildMessageMenuOption(
-              icon: Icons.report_gmailerrorred_rounded,
-              title: 'Report',
-              titleColor: Color(0xFFFF3B30),
-              iconColor: Color(0xFFFF3B30),
-              onTap: () {
-                Navigator.pop(context);
-                _reportMessage(message);
-              },
-            ),
-            SizedBox(height: 20),
-          ],
+          ),
         ),
       ),
     );
+  }
+
+  Widget _buildActionRow({
+    required IconData icon,
+    required String label,
+    required bool isDestructive,
+  }) {
+    final color =
+        isDestructive ? CupertinoColors.destructiveRed : CupertinoColors.label;
+
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        Icon(
+          icon,
+          size: 20,
+          color: color,
+        ),
+        SizedBox(width: 8),
+        Text(
+          label,
+          style: TextStyle(
+            fontFamily: 'SF Pro Display',
+            fontSize: 17,
+            color: color,
+            fontWeight: FontWeight.w400,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildIOS26ActionButton(CupertinoActionSheetAction action) {
+    final isDestructive = action.isDestructiveAction;
+    final textColor =
+        isDestructive ? CupertinoColors.destructiveRed : CupertinoColors.label;
+
+    return CupertinoButton(
+      padding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      onPressed: action.onPressed,
+      child: Container(
+        width: double.infinity,
+        alignment: Alignment.center,
+        child: DefaultTextStyle(
+          style: TextStyle(
+            fontFamily: 'SF Pro Display',
+            fontSize: 17,
+            color: textColor,
+            fontWeight: FontWeight.w400,
+          ),
+          child: action.child,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildIOS26CancelButton() {
+    return CupertinoButton(
+      padding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      onPressed: () => Navigator.pop(context),
+      child: Container(
+        width: double.infinity,
+        alignment: Alignment.center,
+        child: Text(
+          'Cancel',
+          style: TextStyle(
+            fontFamily: 'SF Pro Display',
+            fontSize: 17,
+            fontWeight: FontWeight.w600,
+            color: CupertinoColors.activeBlue,
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _handleMenuAction(MessagesRecord message, String action) {
+    switch (action) {
+      case 'copy':
+        _copyMessage(message);
+        break;
+      case 'react':
+        _showEmojiMenu(message);
+        break;
+      case 'reply':
+        _replyToMessage(message);
+        break;
+      case 'edit':
+        _editMessage(message);
+        break;
+      case 'unsend':
+        _unsendMessage(message);
+        break;
+      case 'report':
+        _reportMessage(message);
+        break;
+    }
+  }
+
+  Widget _buildAdaptiveMenuOption({
+    required AdaptivePopupMenuItem<String> item,
+    required VoidCallback onTap,
+  }) {
+    final isDestructive = item.value == 'report' || item.value == 'unsend';
+    final textColor = isDestructive ? Color(0xFFFF3B30) : Color(0xFF1D1D1F);
+    final iconColor = isDestructive ? Color(0xFFFF3B30) : Color(0xFF1D1D1F);
+
+    // Get the appropriate icon
+    Widget iconWidget;
+    if (PlatformInfo.isIOS26OrHigher() && item.icon is String) {
+      // Use SF Symbol name - for now use CupertinoIcons as fallback
+      // In a real implementation, you'd use a package that supports SF Symbols
+      iconWidget = Icon(
+        _getIconForSFSymbol(item.icon as String),
+        color: iconColor,
+        size: 24,
+      );
+    } else {
+      iconWidget = Icon(
+        item.icon as IconData,
+        color: iconColor,
+        size: 24,
+      );
+    }
+
+    return ListTile(
+      leading: iconWidget,
+      title: Text(
+        item.label,
+        style: TextStyle(
+          fontFamily: 'SF Pro Display',
+          color: textColor,
+          fontSize: 17,
+          fontWeight: FontWeight.w400,
+        ),
+      ),
+      onTap: onTap,
+    );
+  }
+
+  IconData _getIconForSFSymbol(String sfSymbol) {
+    // Map SF Symbol names to CupertinoIcons
+    final iconMap = {
+      'doc.on.doc': CupertinoIcons.doc_on_doc,
+      'face.smiling': CupertinoIcons.smiley,
+      'arrowshape.turn.up.left': CupertinoIcons.arrow_turn_up_left,
+      'pencil': CupertinoIcons.pencil,
+      'arrow.uturn.backward': CupertinoIcons.arrow_counterclockwise,
+      'exclamationmark.triangle': CupertinoIcons.exclamationmark_triangle,
+    };
+    return iconMap[sfSymbol] ?? CupertinoIcons.circle;
   }
 
   Widget _buildMessageMenuOption({
@@ -891,41 +1218,57 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
       print(
           '🔄 Sending reply: "$replyText" to message: "${originalMessage.content}"');
 
+      // Validate required values before proceeding
+      final selectedChat = _model.selectedChat;
+      final userRef = currentUserReference;
+
+      if (selectedChat == null) {
+        print('❌ Error: selectedChat is null');
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Unable to send reply: chat not selected'),
+            backgroundColor: Color(0xFFFF3B30),
+          ),
+        );
+        return;
+      }
+
+      if (userRef == null) {
+        print('❌ Error: currentUserReference is null');
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Unable to send reply: user not logged in'),
+            backgroundColor: Color(0xFFFF3B30),
+          ),
+        );
+        return;
+      }
+
       // Create the reply message
-      final messageRef =
-          MessagesRecord.createDoc(_model.selectedChat!.reference);
+      final messageRef = MessagesRecord.createDoc(selectedChat.reference);
       await messageRef.set({
         'content': replyText,
-        'sender_ref': currentUserReference,
-        'sender_name': currentUser?.displayName ?? 'You',
-        'sender_photo': currentUser?.photoUrl ?? '',
+        'sender_ref': userRef,
+        'sender_name': currentUserDisplayName,
+        'sender_photo': currentUserPhoto,
         'created_at': getCurrentTimestamp,
         'message_type': MessageType.text.serialize(),
         'reply_to': originalMessage.reference.id,
         'reply_to_content': originalMessage.content,
         'reply_to_sender': originalMessage.senderName,
+        'is_read_by': [userRef], // Sender has read their own message
       });
 
       print('✅ Reply message created successfully');
 
       // Update chat's last message
-      if (_model.selectedChat != null) {
-        await _model.selectedChat!.reference.update({
-          'last_message': replyText,
-          'last_message_at': getCurrentTimestamp,
-          'last_message_sent': currentUserReference,
-          'last_message_type': MessageType.text.serialize(),
-        });
-        print('✅ Chat metadata updated');
-      }
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Reply sent'),
-          duration: Duration(milliseconds: 1000),
-          backgroundColor: Color(0xFF34C759),
-        ),
-      );
+      await selectedChat.reference.update({
+        'last_message': replyText,
+        'last_message_at': getCurrentTimestamp,
+        'last_message_sent': userRef,
+        'last_message_type': MessageType.text.serialize(),
+      });
+      print('✅ Chat metadata updated');
     } catch (e) {
       print('❌ Error sending reply: $e');
       ScaffoldMessenger.of(context).showSnackBar(
@@ -1346,219 +1689,162 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
     }
   }
 
-  Widget _buildSearchBar() {
-    return Container(
-      margin: EdgeInsets.fromLTRB(16, 8, 16, 12),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(16),
-        child: BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
-          child: Container(
-            height: 50,
-            decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.8),
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(
-                color: Colors.white.withOpacity(0.9),
-                width: 1.5,
-              ),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.05),
-                  blurRadius: 20,
-                  offset: Offset(0, 4),
-                ),
-              ],
+  Widget _buildAlwaysVisibleSearchBar() {
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(20.0),
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
+        child: Container(
+          height: 44,
+          width: double.infinity,
+          decoration: BoxDecoration(
+            // iOS 26 Liquid Glass effect
+            color: CupertinoColors.white.withOpacity(0.7),
+            borderRadius: BorderRadius.circular(20.0),
+            border: Border.all(
+              color: CupertinoColors.white.withOpacity(0.2),
+              width: 0.5,
             ),
-            child: TextFormField(
-              controller: _model.searchTextController,
-              focusNode: _model.searchFocusNode,
-              onChanged: (value) {
-                EasyDebounce.debounce(
-                  'searchTextController',
-                  Duration(milliseconds: 500),
-                  () => chatController.updateSearchQuery(value),
-                );
-              },
-              decoration: InputDecoration(
-                hintText: 'Search chats...',
-                hintStyle: TextStyle(
-                  fontFamily: 'SF Pro Text',
-                  color: Color(0xFF8E8E93),
-                  fontSize: 16,
-                  fontWeight: FontWeight.w400,
-                ),
-                border: InputBorder.none,
-                contentPadding:
-                    EdgeInsets.symmetric(horizontal: 20, vertical: 14),
-                prefixIcon: Padding(
-                  padding: EdgeInsets.only(left: 16, right: 12),
-                  child: Icon(
-                    Icons.search_rounded,
-                    color: Color(0xFF8E8E93),
-                    size: 22,
-                  ),
-                ),
-                suffixIcon: Obx(() {
-                  return chatController.searchQuery.value.isNotEmpty
-                      ? Padding(
-                          padding: EdgeInsets.only(right: 12),
-                          child: GestureDetector(
-                            onTap: () {
-                              _model.searchTextController?.clear();
-                              chatController.updateSearchQuery('');
-                            },
+            boxShadow: [
+              BoxShadow(
+                color: CupertinoColors.black.withOpacity(0.1),
+                blurRadius: 10,
+                offset: const Offset(0, 4),
+                spreadRadius: 0,
+              ),
+            ],
+          ),
+          child: CupertinoTextField(
+            controller: _model.searchTextController,
+            focusNode: _model.searchFocusNode,
+            onChanged: (value) {
+              EasyDebounce.debounce(
+                'searchTextController',
+                Duration(milliseconds: 500),
+                () => chatController.updateSearchQuery(value),
+              );
+            },
+            placeholder: 'Search',
+            placeholderStyle: TextStyle(
+              fontFamily: 'SF Pro Text',
+              color: CupertinoColors.systemGrey,
+              fontSize: 16,
+              fontWeight: FontWeight.w400,
+            ),
+            padding: EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+            prefix: Padding(
+              padding: EdgeInsets.only(left: 16, right: 12),
+              child: Icon(
+                CupertinoIcons.search,
+                color: CupertinoColors.systemGrey,
+                size: 20,
+              ),
+            ),
+            suffix: Obx(() {
+              return chatController.searchQuery.value.isNotEmpty
+                  ? Padding(
+                      padding: EdgeInsets.only(right: 12),
+                      child: GestureDetector(
+                        onTap: () {
+                          _model.searchTextController?.clear();
+                          chatController.updateSearchQuery('');
+                        },
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(16),
+                          child: BackdropFilter(
+                            filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
                             child: Container(
-                              width: 32,
-                              height: 32,
+                              width: 28,
+                              height: 28,
                               decoration: BoxDecoration(
-                                color: Color(0xFF8E8E93).withOpacity(0.1),
+                                color:
+                                    CupertinoColors.systemGrey.withOpacity(0.2),
                                 shape: BoxShape.circle,
                               ),
                               child: Icon(
-                                Icons.close_rounded,
-                                color: Color(0xFF8E8E93),
-                                size: 18,
+                                CupertinoIcons.clear_circled_solid,
+                                color: CupertinoColors.systemGrey,
+                                size: 16,
                               ),
                             ),
                           ),
-                        )
-                      : Padding(
-                          padding: EdgeInsets.only(right: 12),
-                          child: GestureDetector(
-                            onTap: () {
-                              setState(() {
-                                _model.isSearchVisible = false;
-                                _model.searchTextController?.clear();
-                                chatController.updateSearchQuery('');
-                              });
-                            },
-                            child: Container(
-                              width: 32,
-                              height: 32,
-                              decoration: BoxDecoration(
-                                color: Color(0xFF8E8E93).withOpacity(0.1),
-                                shape: BoxShape.circle,
-                              ),
-                              child: Icon(
-                                Icons.close_rounded,
-                                color: Color(0xFF8E8E93),
-                                size: 18,
-                              ),
-                            ),
-                          ),
-                        );
-                }),
-              ),
-              style: TextStyle(
-                fontFamily: 'SF Pro Text',
-                color: Color(0xFF1D1D1F),
-                fontSize: 16,
-                fontWeight: FontWeight.w400,
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildNavigationTabs() {
-    return Container(
-      margin: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(16),
-        child: BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
-          child: Container(
-            decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.7),
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(
-                color: Colors.white.withOpacity(0.8),
-                width: 1.5,
-              ),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.05),
-                  blurRadius: 20,
-                  offset: Offset(0, 4),
-                ),
-                BoxShadow(
-                  color: Colors.white.withOpacity(0.8),
-                  blurRadius: 6,
-                  offset: Offset(0, -2),
-                ),
-              ],
-            ),
-            padding: EdgeInsets.all(4),
-            child: Row(
-              children: [
-                Expanded(child: _buildTab('All', 0)),
-                SizedBox(width: 4),
-                Expanded(child: _buildTab('DM', 1)),
-                SizedBox(width: 4),
-                Expanded(child: _buildTab('Groups', 2)),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildTab(String text, int index) {
-    final isSelected = _model.tabController?.index == index;
-    return GestureDetector(
-      onTap: () {
-        _model.tabController?.animateTo(
-          index,
-          duration: Duration(milliseconds: 300),
-          curve: Curves.easeInOutCubic,
-        );
-      },
-      child: AnimatedContainer(
-        duration: Duration(milliseconds: 300),
-        curve: Curves.easeInOutCubic,
-        height: 36,
-        decoration: BoxDecoration(
-          gradient: isSelected
-              ? LinearGradient(
-                  colors: [
-                    Color(0xFF5AC8FA), // Lighter blue
-                    Color(0xFF007AFF), // Slightly lighter than before
-                  ],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                )
-              : null,
-          color: isSelected ? null : Colors.transparent,
-          borderRadius: BorderRadius.circular(12),
-          boxShadow: isSelected
-              ? [
-                  BoxShadow(
-                    color: Color(0xFF5AC8FA).withOpacity(0.3),
-                    blurRadius: 12,
-                    offset: Offset(0, 4),
-                  ),
-                ]
-              : null,
-        ),
-        child: Center(
-          child: AnimatedDefaultTextStyle(
-            duration: Duration(milliseconds: 300),
-            curve: Curves.easeInOutCubic,
+                        ),
+                      ),
+                    )
+                  : SizedBox.shrink();
+            }),
             style: TextStyle(
               fontFamily: 'SF Pro Text',
-              color: isSelected ? Colors.white : Color(0xFF6B7280),
-              fontSize: 15,
-              fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
-              letterSpacing: -0.2,
+              color: CupertinoColors.label,
+              fontSize: 16,
+              fontWeight: FontWeight.w400,
             ),
-            child: Text(text),
+            decoration: BoxDecoration(
+              color: Colors.transparent,
+              border: Border.all(color: Colors.transparent),
+            ),
           ),
         ),
       ),
+    );
+  }
+
+  Widget _buildHeaderActionButtons() {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        AdaptiveFloatingActionButton(
+          mini: true,
+          backgroundColor: Colors.white, // Pure white like back button
+          foregroundColor: Color(0xFF007AFF), // System blue icon
+          onPressed: () {
+            setState(() {
+              _model.showNewChatScreen = !_model.showNewChatScreen;
+              if (_model.showNewChatScreen) {
+                _model.selectedChat = null;
+                chatController.selectedChat.value = null;
+                _model.newChatSearchController?.clear();
+                _model.showGroupCreation = false;
+                // Clear group creation state
+                _model.groupName = '';
+                _model.selectedMembers = [];
+                _model.groupNameController?.clear();
+                _model.groupMemberSearchController?.clear();
+              }
+            });
+          },
+          child: Icon(
+            CupertinoIcons.add,
+            size: 20,
+          ),
+        ),
+        const SizedBox(width: 8.0),
+        AdaptiveFloatingActionButton(
+          mini: true,
+          backgroundColor: Colors.white, // Pure white like back button
+          foregroundColor: Color(0xFF007AFF), // System blue icon
+          onPressed: () {
+            setState(() {
+              _model.showGroupCreation = !_model.showGroupCreation;
+              if (_model.showGroupCreation) {
+                _model.groupName = '';
+                _model.selectedMembers = [];
+                _model.groupNameController?.clear();
+                _model.groupMemberSearchController?.clear();
+                _model.groupImagePath = null;
+                _model.groupImageUrl = null;
+                _model.isUploadingImage = false;
+                _model.showNewChatScreen = false;
+                _model.newChatSearchController?.clear();
+              }
+            });
+          },
+          child: Icon(
+            CupertinoIcons.person_2_fill,
+            size: 20,
+          ),
+        ),
+      ],
     );
   }
 
@@ -1637,13 +1923,13 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
           );
 
         case ChatState.success:
+          // If new chat screen is toggled, show new message view
+          if (_model.showNewChatScreen) {
+            return _buildNewMessageView();
+          }
           // If group creation is toggled, show group creation view
           if (_model.showGroupCreation) {
             return _buildGroupCreationView();
-          }
-          // If workspace members view is toggled, show workspace members
-          if (_model.showWorkspaceMembers) {
-            return _buildWorkspaceMembersList();
           }
 
           final filteredChats = chatController.filteredChats;
@@ -1683,11 +1969,73 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
             );
           }
 
+          // Show empty state message for new users when chat list is empty
+          if (filteredChats.isEmpty &&
+              chatController.searchQuery.value.isEmpty) {
+            return Transform.translate(
+              offset: Offset(0, -40),
+              child: Center(
+                child: Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 32.0),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      // Icon with circular background
+                      Container(
+                        width: 100,
+                        height: 100,
+                        decoration: BoxDecoration(
+                          color: CupertinoColors.systemBlue.withOpacity(0.1),
+                          shape: BoxShape.circle,
+                        ),
+                        child: Icon(
+                          CupertinoIcons.person_2_fill,
+                          color: CupertinoColors.systemBlue,
+                          size: 48,
+                        ),
+                      ),
+                      SizedBox(height: 32),
+                      // Header title
+                      Text(
+                        'Connect with Like-minded People!',
+                        style: TextStyle(
+                          fontFamily: '.SF Pro Display',
+                          color: CupertinoColors.label,
+                          fontSize: 24,
+                          fontWeight: FontWeight.bold,
+                          letterSpacing: -0.5,
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                      SizedBox(height: 12),
+                      // Subtitle message
+                      Text(
+                        'Start meaningful conversations by connecting with real users in your network',
+                        style: TextStyle(
+                          fontFamily: '.SF Pro Text',
+                          color: CupertinoColors.secondaryLabel,
+                          fontSize: 16,
+                          fontWeight: FontWeight.w400,
+                          height: 1.4,
+                          letterSpacing: -0.2,
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            );
+          }
+
           return ListView.builder(
             key: ValueKey(
                 'chat_list_items_${_model.tabController?.index ?? 0}_${filteredChats.length}_${chatController.searchQuery.value}'),
-            padding: EdgeInsets.zero,
+            padding: EdgeInsets.only(top: 4, left: 0, right: 0, bottom: 100),
             itemCount: filteredChats.length,
+            physics: ClampingScrollPhysics(),
+            primary: false,
+            keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
             itemBuilder: (context, index) {
               final chat = filteredChats[index];
               final isSelected = chatController.selectedChat.value?.reference ==
@@ -1710,38 +2058,55 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
                       }
                     }
 
-                    return _MobileChatListItem(
-                      key: ValueKey('chat_item_${chat.reference.id}'),
-                      chat: chat,
-                      isSelected: isSelected,
-                      onTap: () {
-                        setState(() {
-                          _model.selectedChat = chat;
-                        });
-                        chatController.selectChat(chat);
-                        // Notify parent that chat is opened
-                        widget.onChatStateChanged?.call(true);
-                      },
-                      hasUnreadMessages: chatController.hasUnreadMessages(chat),
-                    );
+                    return Obx(() {
+                      // Make hasUnreadMessages reactive by accessing observables
+                      final _ = chatController.chats.length;
+                      final __ = chatController.locallySeenChats.length;
+                      final hasUnread = chatController.hasUnreadMessages(chat);
+                      return _MobileChatListItem(
+                        key: ValueKey('chat_item_${chat.reference.id}'),
+                        chat: chat,
+                        isSelected: isSelected,
+                        onTap: () {
+                          // Prevent multiple rapid taps
+                          if (_model.selectedChat?.reference ==
+                              chat.reference) {
+                            return;
+                          }
+                          // Update controller
+                          chatController.selectChat(chat);
+                          // Push full-screen chat route (covers tab bar like WhatsApp)
+                          _openChatFullScreen(chat);
+                        },
+                        hasUnreadMessages: hasUnread,
+                      );
+                    });
                   },
                 );
               }
 
-              return _MobileChatListItem(
-                key: ValueKey('chat_item_${chat.reference.id}'),
-                chat: chat,
-                isSelected: isSelected,
-                onTap: () {
-                  setState(() {
-                    _model.selectedChat = chat;
-                  });
-                  chatController.selectChat(chat);
-                  // Notify parent that chat is opened
-                  widget.onChatStateChanged?.call(true);
-                },
-                hasUnreadMessages: chatController.hasUnreadMessages(chat),
-              );
+              return Obx(() {
+                // Make hasUnreadMessages reactive by accessing observables
+                final _ = chatController.chats.length;
+                final __ = chatController.locallySeenChats.length;
+                final hasUnread = chatController.hasUnreadMessages(chat);
+                return _MobileChatListItem(
+                  key: ValueKey('chat_item_${chat.reference.id}'),
+                  chat: chat,
+                  isSelected: isSelected,
+                  onTap: () {
+                    // Prevent multiple rapid taps
+                    if (_model.selectedChat?.reference == chat.reference) {
+                      return;
+                    }
+                    // Update controller
+                    chatController.selectChat(chat);
+                    // Push full-screen chat route (covers tab bar like WhatsApp)
+                    _openChatFullScreen(chat);
+                  },
+                  hasUnreadMessages: hasUnread,
+                );
+              });
             },
           );
       }
@@ -1756,262 +2121,6 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
     return await UsersRecord.getDocumentOnce(otherUserRef);
   }
 
-  Widget _buildWorkspaceMembersList() {
-    return Column(
-      children: [
-        // Header for workspace members
-        Container(
-          width: double.infinity,
-          padding: EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            color: Color(0xFFF2F2F7),
-            border: Border(
-              bottom: BorderSide(
-                color: Color(0xFFE5E7EB),
-                width: 0.5,
-              ),
-            ),
-          ),
-          child: Row(
-            children: [
-              Icon(
-                Icons.group,
-                color: Color(0xFF007AFF),
-                size: 20,
-              ),
-              SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  'Workspace Members',
-                  style: TextStyle(
-                    fontFamily: 'System',
-                    color: Color(0xFF1D1D1F),
-                    fontSize: 17,
-                    fontWeight: FontWeight.normal,
-                  ),
-                ),
-              ),
-              if (_model.showWorkspaceMembers)
-                GestureDetector(
-                  onTap: () {
-                    setState(() {
-                      _model.showWorkspaceMembers = false;
-                    });
-                  },
-                  child: Icon(
-                    Icons.close,
-                    color: Color(0xFF8E8E93),
-                    size: 20,
-                  ),
-                ),
-            ],
-          ),
-        ),
-        // Members list
-        Expanded(
-          child: StreamBuilder<List<WorkspaceMembersRecord>>(
-            stream: queryWorkspaceMembersRecord(
-              queryBuilder: (workspaceMembersRecord) =>
-                  workspaceMembersRecord.where('workspace_ref',
-                      isEqualTo: chatController.currentWorkspaceRef.value),
-            ),
-            builder: (context, membersSnapshot) {
-              if (!membersSnapshot.hasData) {
-                return Center(
-                  child: CircularProgressIndicator(
-                    color: Color(0xFF007AFF),
-                  ),
-                );
-              }
-
-              final members = membersSnapshot.data!;
-              final searchQuery =
-                  chatController.searchQuery.value.toLowerCase();
-
-              return ListView.builder(
-                padding: EdgeInsets.zero,
-                itemCount: members.length,
-                itemBuilder: (context, index) {
-                  final member = members[index];
-
-                  return StreamBuilder<UsersRecord>(
-                    stream: UsersRecord.getDocument(member.userRef!),
-                    builder: (context, userSnapshot) {
-                      if (!userSnapshot.hasData) {
-                        return SizedBox.shrink();
-                      }
-
-                      final user = userSnapshot.data!;
-                      final isCurrentUser =
-                          user.reference == currentUserReference;
-
-                      if (isCurrentUser) {
-                        return SizedBox.shrink();
-                      }
-
-                      // Check if search query matches
-                      if (searchQuery.isNotEmpty) {
-                        final displayName = user.displayName.toLowerCase();
-                        final email = user.email.toLowerCase();
-                        if (!displayName.contains(searchQuery) &&
-                            !email.contains(searchQuery)) {
-                          return SizedBox.shrink();
-                        }
-                      }
-
-                      return InkWell(
-                        onTap: () async {
-                          await _startNewChatWithUser(user);
-                        },
-                        child: Container(
-                          width: double.infinity,
-                          padding: EdgeInsets.all(16),
-                          decoration: BoxDecoration(
-                            color: Colors.white,
-                            border: Border(
-                              bottom: BorderSide(
-                                color: Color(0xFFE5E7EB),
-                                width: 0.5,
-                              ),
-                            ),
-                          ),
-                          child: Row(
-                            children: [
-                              // Avatar
-                              Container(
-                                width: 50,
-                                height: 50,
-                                decoration: BoxDecoration(
-                                  color: Color(0xFF007AFF),
-                                  shape: BoxShape.circle,
-                                ),
-                                child: ClipRRect(
-                                  borderRadius: BorderRadius.circular(25),
-                                  child: CachedNetworkImage(
-                                    imageUrl: user.photoUrl,
-                                    width: 50,
-                                    height: 50,
-                                    fit: BoxFit.cover,
-                                    memCacheWidth: 100,
-                                    memCacheHeight: 100,
-                                    maxWidthDiskCache: 100,
-                                    maxHeightDiskCache: 100,
-                                    filterQuality: FilterQuality.high,
-                                    placeholder: (context, url) => Container(
-                                      width: 50,
-                                      height: 50,
-                                      decoration: BoxDecoration(
-                                        color: Colors.white,
-                                        shape: BoxShape.circle,
-                                      ),
-                                      child: Icon(
-                                        Icons.person,
-                                        color: Color(0xFF8E8E93),
-                                        size: 24,
-                                      ),
-                                    ),
-                                    errorWidget: (context, url, error) =>
-                                        Container(
-                                      width: 50,
-                                      height: 50,
-                                      decoration: BoxDecoration(
-                                        color: Colors.white,
-                                        shape: BoxShape.circle,
-                                      ),
-                                      child: Icon(
-                                        Icons.person,
-                                        color: Color(0xFF8E8E93),
-                                        size: 24,
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                              ),
-                              SizedBox(width: 12),
-                              // User Info
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Row(
-                                      children: [
-                                        Expanded(
-                                          child: Text(
-                                            user.displayName,
-                                            style: TextStyle(
-                                              fontFamily: 'System',
-                                              color: Color(0xFF1D1D1F),
-                                              fontSize: 17,
-                                              fontWeight: FontWeight.normal,
-                                            ),
-                                            maxLines: 1,
-                                            overflow: TextOverflow.ellipsis,
-                                          ),
-                                        ),
-                                        Container(
-                                          padding: EdgeInsets.symmetric(
-                                              horizontal: 8, vertical: 4),
-                                          decoration: BoxDecoration(
-                                            color: _getRoleColor(member.role),
-                                            borderRadius:
-                                                BorderRadius.circular(12),
-                                          ),
-                                          child: Text(
-                                            member.role.toUpperCase(),
-                                            style: TextStyle(
-                                              color: Colors.white,
-                                              fontSize: 10,
-                                              fontWeight: FontWeight.normal,
-                                            ),
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                    SizedBox(height: 4),
-                                    Text(
-                                      user.email,
-                                      style: TextStyle(
-                                        fontFamily: 'System',
-                                        color: Color(0xFF8E8E93),
-                                        fontSize: 15,
-                                      ),
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                    ),
-                                    SizedBox(height: 4),
-                                    Text(
-                                      'Tap to start a chat',
-                                      style: TextStyle(
-                                        fontFamily: 'System',
-                                        color: Color(0xFF007AFF),
-                                        fontSize: 13,
-                                        fontWeight: FontWeight.w500,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                              // Chat icon
-                              Icon(
-                                Icons.chat_bubble_outline,
-                                color: Color(0xFF007AFF),
-                                size: 20,
-                              ),
-                            ],
-                          ),
-                        ),
-                      );
-                    },
-                  );
-                },
-              );
-            },
-          ),
-        ),
-      ],
-    );
-  }
-
   Widget _buildGroupCreationView() {
     return Column(
       children: [
@@ -2020,10 +2129,10 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
           width: double.infinity,
           padding: EdgeInsets.all(16),
           decoration: BoxDecoration(
-            color: Color(0xFFF2F2F7),
+            color: CupertinoColors.systemGrey6,
             border: Border(
               bottom: BorderSide(
-                color: Color(0xFFE5E7EB),
+                color: CupertinoColors.separator,
                 width: 0.5,
               ),
             ),
@@ -2031,8 +2140,8 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
           child: Row(
             children: [
               Icon(
-                Icons.group_add,
-                color: Color(0xFF007AFF),
+                CupertinoIcons.group_solid,
+                color: CupertinoColors.systemBlue,
                 size: 20,
               ),
               SizedBox(width: 8),
@@ -2040,10 +2149,11 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
                 child: Text(
                   'Create New Group',
                   style: TextStyle(
-                    fontFamily: 'System',
-                    color: Color(0xFF1D1D1F),
+                    fontFamily: 'SF Pro Text',
+                    color: CupertinoColors.label,
                     fontSize: 17,
-                    fontWeight: FontWeight.normal,
+                    fontWeight: FontWeight.w400,
+                    letterSpacing: -0.41,
                   ),
                 ),
               ),
@@ -2054,14 +2164,15 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
                     _model.groupName = '';
                     _model.selectedMembers = [];
                     _model.groupNameController?.clear();
+                    _model.groupMemberSearchController?.clear();
                     _model.groupImagePath = null;
                     _model.groupImageUrl = null;
                     _model.isUploadingImage = false;
                   });
                 },
                 child: Icon(
-                  Icons.close,
-                  color: Color(0xFF8E8E93),
+                  CupertinoIcons.xmark,
+                  color: CupertinoColors.systemGrey,
                   size: 20,
                 ),
               ),
@@ -2079,44 +2190,47 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
                 Text(
                   'Group Name (Optional)',
                   style: TextStyle(
-                    fontFamily: 'System',
-                    color: Color(0xFF1D1D1F),
+                    fontFamily: 'SF Pro Text',
+                    color: CupertinoColors.label,
                     fontSize: 17,
-                    fontWeight: FontWeight.normal,
+                    fontWeight: FontWeight.w400,
+                    letterSpacing: -0.41,
                   ),
                 ),
                 SizedBox(height: 8),
                 Container(
                   decoration: BoxDecoration(
-                    color: Color(0xFFF2F2F7),
+                    color: CupertinoColors.systemGrey6,
                     borderRadius: BorderRadius.circular(10),
                     border: Border.all(
-                      color: Color(0xFFE5E7EB),
+                      color: CupertinoColors.separator,
                       width: 0.5,
                     ),
                   ),
-                  child: TextFormField(
+                  child: CupertinoTextField(
                     controller: _model.groupNameController,
                     onChanged: (value) {
                       setState(() {
                         _model.groupName = value;
                       });
                     },
-                    decoration: InputDecoration(
-                      hintText: 'Enter group name',
-                      hintStyle: TextStyle(
-                        fontFamily: 'System',
-                        color: Color(0xFF8E8E93),
-                        fontSize: 16,
-                      ),
-                      border: InputBorder.none,
-                      contentPadding:
-                          EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-                    ),
-                    style: TextStyle(
-                      fontFamily: 'System',
-                      color: Color(0xFF1D1D1F),
+                    placeholder: 'Enter group name',
+                    placeholderStyle: TextStyle(
+                      fontFamily: 'SF Pro Text',
+                      color: CupertinoColors.systemGrey,
                       fontSize: 16,
+                      fontWeight: FontWeight.w400,
+                    ),
+                    padding: EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                    style: TextStyle(
+                      fontFamily: 'SF Pro Text',
+                      color: CupertinoColors.label,
+                      fontSize: 16,
+                      fontWeight: FontWeight.w400,
+                    ),
+                    decoration: BoxDecoration(
+                      color: Colors.transparent,
+                      borderRadius: BorderRadius.circular(10),
                     ),
                   ),
                 ),
@@ -2125,10 +2239,11 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
                 Text(
                   'Group Image (Optional)',
                   style: TextStyle(
-                    fontFamily: 'System',
-                    color: Color(0xFF1D1D1F),
+                    fontFamily: 'SF Pro Text',
+                    color: CupertinoColors.label,
                     fontSize: 17,
-                    fontWeight: FontWeight.normal,
+                    fontWeight: FontWeight.w400,
+                    letterSpacing: -0.41,
                   ),
                 ),
                 SizedBox(height: 8),
@@ -2141,18 +2256,17 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
                         width: 80,
                         height: 80,
                         decoration: BoxDecoration(
-                          color: Color(0xFFF2F2F7),
+                          color: CupertinoColors.systemGrey6,
                           borderRadius: BorderRadius.circular(10),
                           border: Border.all(
-                            color: Color(0xFFE5E7EB),
+                            color: CupertinoColors.separator,
                             width: 0.5,
                           ),
                         ),
                         child: _model.isUploadingImage
                             ? Center(
-                                child: CircularProgressIndicator(
-                                  color: Color(0xFF007AFF),
-                                  strokeWidth: 2,
+                                child: CupertinoActivityIndicator(
+                                  color: CupertinoColors.systemBlue,
                                 ),
                               )
                             : _model.groupImageUrl != null
@@ -2171,10 +2285,10 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
                                       placeholder: (context, url) => Container(
                                         width: 80,
                                         height: 80,
-                                        color: Color(0xFFF2F2F7),
+                                        color: CupertinoColors.systemGrey6,
                                         child: Icon(
-                                          Icons.image,
-                                          color: Color(0xFF8E8E93),
+                                          CupertinoIcons.photo,
+                                          color: CupertinoColors.systemGrey,
                                           size: 24,
                                         ),
                                       ),
@@ -2182,10 +2296,10 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
                                           Container(
                                         width: 80,
                                         height: 80,
-                                        color: Color(0xFFF2F2F7),
+                                        color: CupertinoColors.systemGrey6,
                                         child: Icon(
-                                          Icons.image,
-                                          color: Color(0xFF8E8E93),
+                                          CupertinoIcons.photo,
+                                          color: CupertinoColors.systemGrey,
                                           size: 24,
                                         ),
                                       ),
@@ -2195,17 +2309,18 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
                                     mainAxisAlignment: MainAxisAlignment.center,
                                     children: [
                                       Icon(
-                                        Icons.add_photo_alternate,
-                                        color: Color(0xFF8E8E93),
+                                        CupertinoIcons.photo_on_rectangle,
+                                        color: CupertinoColors.systemGrey,
                                         size: 24,
                                       ),
                                       SizedBox(height: 4),
                                       Text(
                                         'Add Image',
                                         style: TextStyle(
-                                          fontFamily: 'System',
-                                          color: Color(0xFF8E8E93),
+                                          fontFamily: 'SF Pro Text',
+                                          color: CupertinoColors.systemGrey,
                                           fontSize: 12,
+                                          fontWeight: FontWeight.w400,
                                         ),
                                       ),
                                     ],
@@ -2223,67 +2338,64 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
                                 ? 'Image selected'
                                 : 'No image selected',
                             style: TextStyle(
-                              fontFamily: 'System',
+                              fontFamily: 'SF Pro Text',
                               color: _model.groupImageUrl != null
-                                  ? Color(0xFF34C759)
-                                  : Color(0xFF8E8E93),
+                                  ? CupertinoColors.systemGreen
+                                  : CupertinoColors.systemGrey,
                               fontSize: 15,
                               fontWeight: FontWeight.w500,
+                              letterSpacing: -0.24,
                             ),
                           ),
                           SizedBox(height: 8),
                           Row(
                             children: [
-                              GestureDetector(
-                                onTap: _model.isUploadingImage
+                              CupertinoButton(
+                                onPressed: _model.isUploadingImage
                                     ? null
                                     : _pickGroupImage,
-                                child: Container(
-                                  padding: EdgeInsets.symmetric(
-                                      horizontal: 12, vertical: 8),
-                                  decoration: BoxDecoration(
-                                    color: _model.isUploadingImage
-                                        ? Color(0xFF8E8E93)
-                                        : Color(0xFF007AFF),
-                                    borderRadius: BorderRadius.circular(8),
-                                  ),
-                                  child: Text(
-                                    _model.groupImageUrl != null
-                                        ? 'Change'
-                                        : 'Select',
-                                    style: TextStyle(
-                                      fontFamily: 'System',
-                                      color: Colors.white,
-                                      fontSize: 14,
-                                      fontWeight: FontWeight.normal,
-                                    ),
+                                color: _model.isUploadingImage
+                                    ? CupertinoColors.systemGrey
+                                    : CupertinoColors.systemBlue,
+                                padding: EdgeInsets.symmetric(
+                                    horizontal: 12, vertical: 8),
+                                borderRadius: BorderRadius.circular(8),
+                                minSize: 0,
+                                child: Text(
+                                  _model.groupImageUrl != null
+                                      ? 'Change'
+                                      : 'Select',
+                                  style: TextStyle(
+                                    fontFamily: 'SF Pro Text',
+                                    color: CupertinoColors.white,
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w500,
+                                    letterSpacing: -0.15,
                                   ),
                                 ),
                               ),
                               if (_model.groupImageUrl != null) ...[
                                 SizedBox(width: 8),
-                                GestureDetector(
-                                  onTap: () {
+                                CupertinoButton(
+                                  onPressed: () {
                                     setState(() {
                                       _model.groupImagePath = null;
                                       _model.groupImageUrl = null;
                                     });
                                   },
-                                  child: Container(
-                                    padding: EdgeInsets.symmetric(
-                                        horizontal: 12, vertical: 8),
-                                    decoration: BoxDecoration(
-                                      color: Color(0xFFFF3B30),
-                                      borderRadius: BorderRadius.circular(8),
-                                    ),
-                                    child: Text(
-                                      'Remove',
-                                      style: TextStyle(
-                                        fontFamily: 'System',
-                                        color: Colors.white,
-                                        fontSize: 14,
-                                        fontWeight: FontWeight.normal,
-                                      ),
+                                  color: CupertinoColors.systemRed,
+                                  padding: EdgeInsets.symmetric(
+                                      horizontal: 12, vertical: 8),
+                                  borderRadius: BorderRadius.circular(8),
+                                  minSize: 0,
+                                  child: Text(
+                                    'Remove',
+                                    style: TextStyle(
+                                      fontFamily: 'SF Pro Text',
+                                      color: CupertinoColors.white,
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.w500,
+                                      letterSpacing: -0.15,
                                     ),
                                   ),
                                 ),
@@ -2296,234 +2408,406 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
                   ],
                 ),
                 SizedBox(height: 20),
-                // Selected members count
-                Text(
-                  'Selected Members (${_model.selectedMembers.length})',
-                  style: TextStyle(
-                    fontFamily: 'System',
-                    color: Color(0xFF1D1D1F),
-                    fontSize: 17,
-                    fontWeight: FontWeight.normal,
-                  ),
+                // Selected members header with search
+                Row(
+                  children: [
+                    Text(
+                      'Selected Members (${_model.selectedMembers.length})',
+                      style: TextStyle(
+                        fontFamily: 'SF Pro Text',
+                        color: CupertinoColors.label,
+                        fontSize: 17,
+                        fontWeight: FontWeight.w400,
+                        letterSpacing: -0.41,
+                      ),
+                    ),
+                    Spacer(),
+                    Container(
+                      width: 180,
+                      height: 36,
+                      decoration: BoxDecoration(
+                        color: CupertinoColors.systemBackground,
+                        borderRadius: BorderRadius.circular(18),
+                        border: Border.all(
+                          color: CupertinoColors.separator,
+                          width: 0.5,
+                        ),
+                      ),
+                      child: CupertinoTextField(
+                        controller: _model.groupMemberSearchController,
+                        onChanged: (_) => setState(() {}),
+                        placeholder: 'Search...',
+                        placeholderStyle: TextStyle(
+                          fontFamily: 'SF Pro Text',
+                          color: CupertinoColors.systemGrey,
+                          fontSize: 14,
+                          fontWeight: FontWeight.w400,
+                        ),
+                        padding:
+                            EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                        prefix: Padding(
+                          padding: EdgeInsets.only(left: 8, right: 4),
+                          child: Icon(
+                            CupertinoIcons.search,
+                            color: CupertinoColors.systemBlue,
+                            size: 16,
+                          ),
+                        ),
+                        suffix: _model.groupMemberSearchController?.text
+                                    .isNotEmpty ==
+                                true
+                            ? GestureDetector(
+                                onTap: () {
+                                  setState(() {
+                                    _model.groupMemberSearchController?.clear();
+                                  });
+                                },
+                                child: Padding(
+                                  padding: EdgeInsets.only(right: 8),
+                                  child: Icon(
+                                    CupertinoIcons.xmark_circle_fill,
+                                    color: CupertinoColors.systemGrey,
+                                    size: 16,
+                                  ),
+                                ),
+                              )
+                            : null,
+                        style: TextStyle(
+                          fontFamily: 'SF Pro Text',
+                          color: CupertinoColors.label,
+                          fontSize: 14,
+                          fontWeight: FontWeight.w400,
+                        ),
+                        decoration: BoxDecoration(
+                          color: Colors.transparent,
+                          borderRadius: BorderRadius.circular(18),
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
                 SizedBox(height: 8),
-                // Workspace members list for selection
+                // Users list for selection (filtered by connections)
                 Container(
                   height: 300,
                   decoration: BoxDecoration(
-                    color: Color(0xFFF2F2F7),
+                    color: CupertinoColors.systemGrey6,
                     borderRadius: BorderRadius.circular(10),
                     border: Border.all(
-                      color: Color(0xFFE5E7EB),
+                      color: CupertinoColors.separator,
                       width: 0.5,
                     ),
                   ),
-                  child: StreamBuilder<List<WorkspaceMembersRecord>>(
-                    stream: queryWorkspaceMembersRecord(
-                      queryBuilder: (workspaceMembersRecord) =>
-                          workspaceMembersRecord.where('workspace_ref',
-                              isEqualTo:
-                                  chatController.currentWorkspaceRef.value),
-                    ),
-                    builder: (context, membersSnapshot) {
-                      if (!membersSnapshot.hasData) {
-                        return Center(
-                          child: CircularProgressIndicator(
-                            color: Color(0xFF007AFF),
+                  child: currentUserReference == null
+                      ? Center(
+                          child: CupertinoActivityIndicator(
+                            color: CupertinoColors.systemBlue,
                           ),
-                        );
-                      }
+                        )
+                      : StreamBuilder<UsersRecord>(
+                          stream:
+                              UsersRecord.getDocument(currentUserReference!),
+                          builder: (context, currentUserSnapshot) {
+                            if (!currentUserSnapshot.hasData) {
+                              return Center(
+                                child: CupertinoActivityIndicator(
+                                  color: CupertinoColors.systemBlue,
+                                ),
+                              );
+                            }
 
-                      final members = membersSnapshot.data!;
-                      final searchQuery =
-                          chatController.searchQuery.value.toLowerCase();
+                            final currentUser = currentUserSnapshot.data!;
+                            final connections = currentUser.friends;
 
-                      return ListView.builder(
-                        padding: EdgeInsets.all(8),
-                        itemCount: members.length,
-                        itemBuilder: (context, index) {
-                          final member = members[index];
-
-                          return StreamBuilder<UsersRecord>(
-                            stream: UsersRecord.getDocument(member.userRef!),
-                            builder: (context, userSnapshot) {
-                              if (!userSnapshot.hasData) {
-                                return SizedBox.shrink();
-                              }
-
-                              final user = userSnapshot.data!;
-                              final isCurrentUser =
-                                  user.reference == currentUserReference;
-                              final isSelected = _model.selectedMembers
-                                  .contains(user.reference);
-
-                              if (isCurrentUser) {
-                                return SizedBox.shrink();
-                              }
-
-                              // Check if search query matches
-                              if (searchQuery.isNotEmpty) {
-                                final displayName =
-                                    user.displayName.toLowerCase();
-                                final email = user.email.toLowerCase();
-                                if (!displayName.contains(searchQuery) &&
-                                    !email.contains(searchQuery)) {
-                                  return SizedBox.shrink();
-                                }
-                              }
-
-                              return InkWell(
-                                onTap: () {
-                                  setState(() {
-                                    if (isSelected) {
-                                      _model.selectedMembers
-                                          .remove(user.reference);
-                                    } else {
-                                      _model.selectedMembers
-                                          .add(user.reference);
-                                    }
-                                  });
-                                },
-                                child: Container(
-                                  margin: EdgeInsets.only(bottom: 4),
-                                  padding: EdgeInsets.all(12),
-                                  decoration: BoxDecoration(
-                                    color: isSelected
-                                        ? Color(0xFF007AFF)
-                                        : Colors.white,
-                                    borderRadius: BorderRadius.circular(8),
-                                    border: Border.all(
-                                      color: isSelected
-                                          ? Color(0xFF007AFF)
-                                          : Color(0xFFE5E7EB),
-                                      width: 0.5,
+                            if (connections.isEmpty) {
+                              return Center(
+                                child: Column(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(
+                                      CupertinoIcons.person_2,
+                                      color: CupertinoColors.systemGrey,
+                                      size: 48,
                                     ),
-                                  ),
-                                  child: Row(
-                                    children: [
-                                      Container(
-                                        width: 40,
-                                        height: 40,
+                                    SizedBox(height: 16),
+                                    Text(
+                                      'No connections yet',
+                                      style: TextStyle(
+                                        fontFamily: 'SF Pro Text',
+                                        color: CupertinoColors.label,
+                                        fontSize: 17,
+                                        fontWeight: FontWeight.w400,
+                                        letterSpacing: -0.41,
+                                      ),
+                                    ),
+                                    SizedBox(height: 8),
+                                    Text(
+                                      'Add connections to create a group',
+                                      style: TextStyle(
+                                        fontFamily: 'SF Pro Text',
+                                        color: CupertinoColors.systemGrey,
+                                        fontSize: 15,
+                                        fontWeight: FontWeight.w400,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              );
+                            }
+
+                            final searchQuery = _model
+                                    .groupMemberSearchController?.text
+                                    .toLowerCase() ??
+                                '';
+
+                            return ListView.builder(
+                              padding: EdgeInsets.all(8),
+                              itemCount: connections.length,
+                              itemBuilder: (context, index) {
+                                final connectionRef = connections[index];
+
+                                return StreamBuilder<UsersRecord>(
+                                  stream:
+                                      UsersRecord.getDocument(connectionRef),
+                                  builder: (context, userSnapshot) {
+                                    if (!userSnapshot.hasData) {
+                                      return SizedBox.shrink();
+                                    }
+
+                                    final user = userSnapshot.data!;
+                                    final isCurrentUser =
+                                        user.reference == currentUserReference;
+                                    final isSelected = _model.selectedMembers
+                                        .contains(user.reference);
+
+                                    if (isCurrentUser) {
+                                      return SizedBox.shrink();
+                                    }
+
+                                    // Check if search query matches
+                                    if (searchQuery.isNotEmpty) {
+                                      final displayName =
+                                          user.displayName.toLowerCase();
+                                      final email = user.email.toLowerCase();
+                                      if (!displayName.contains(searchQuery) &&
+                                          !email.contains(searchQuery)) {
+                                        return SizedBox.shrink();
+                                      }
+                                    }
+
+                                    return GestureDetector(
+                                      onTap: () {
+                                        setState(() {
+                                          if (isSelected) {
+                                            _model.selectedMembers
+                                                .remove(user.reference);
+                                          } else {
+                                            _model.selectedMembers
+                                                .add(user.reference);
+                                          }
+                                        });
+                                      },
+                                      child: Container(
+                                        margin: EdgeInsets.only(bottom: 4),
+                                        padding: EdgeInsets.all(12),
                                         decoration: BoxDecoration(
-                                          color: Color(0xFF007AFF),
-                                          shape: BoxShape.circle,
-                                        ),
-                                        child: ClipRRect(
+                                          color: isSelected
+                                              ? CupertinoColors.systemBlue
+                                              : CupertinoColors
+                                                  .systemBackground,
                                           borderRadius:
-                                              BorderRadius.circular(20),
-                                          child: CachedNetworkImage(
-                                            imageUrl: user.photoUrl,
-                                            width: 40,
-                                            height: 40,
-                                            fit: BoxFit.cover,
-                                            memCacheWidth: 80,
-                                            memCacheHeight: 80,
-                                            maxWidthDiskCache: 80,
-                                            maxHeightDiskCache: 80,
-                                            filterQuality: FilterQuality.high,
-                                            placeholder: (context, url) =>
-                                                Container(
-                                              width: 40,
-                                              height: 40,
-                                              decoration: BoxDecoration(
-                                                color: Colors.white,
-                                                shape: BoxShape.circle,
-                                              ),
-                                              child: Icon(
-                                                Icons.person,
-                                                color: Color(0xFF8E8E93),
-                                                size: 18,
-                                              ),
-                                            ),
-                                            errorWidget:
-                                                (context, url, error) =>
-                                                    Container(
-                                              width: 40,
-                                              height: 40,
-                                              decoration: BoxDecoration(
-                                                color: Colors.white,
-                                                shape: BoxShape.circle,
-                                              ),
-                                              child: Icon(
-                                                Icons.person,
-                                                color: Color(0xFF8E8E93),
-                                                size: 18,
-                                              ),
-                                            ),
+                                              BorderRadius.circular(8),
+                                          border: Border.all(
+                                            color: isSelected
+                                                ? CupertinoColors.systemBlue
+                                                : CupertinoColors.separator,
+                                            width: isSelected ? 1.5 : 0.5,
                                           ),
                                         ),
-                                      ),
-                                      SizedBox(width: 12),
-                                      Expanded(
-                                        child: Column(
-                                          crossAxisAlignment:
-                                              CrossAxisAlignment.start,
+                                        child: Row(
                                           children: [
-                                            Text(
-                                              user.displayName,
-                                              style: TextStyle(
-                                                fontFamily: 'System',
-                                                color: isSelected
-                                                    ? Colors.white
-                                                    : Color(0xFF1D1D1F),
-                                                fontSize: 15,
-                                                fontWeight: FontWeight.normal,
+                                            Stack(
+                                              clipBehavior: Clip.none,
+                                              children: [
+                                                Container(
+                                                  width: 40,
+                                                  height: 40,
+                                                  decoration: BoxDecoration(
+                                                    color: CupertinoColors
+                                                        .systemGrey5,
+                                                    shape: BoxShape.circle,
+                                                  ),
+                                                  child: ClipRRect(
+                                                    borderRadius:
+                                                        BorderRadius.circular(
+                                                            20),
+                                                    child: CachedNetworkImage(
+                                                      imageUrl: user.photoUrl,
+                                                      width: 40,
+                                                      height: 40,
+                                                      fit: BoxFit.cover,
+                                                      memCacheWidth: 80,
+                                                      memCacheHeight: 80,
+                                                      maxWidthDiskCache: 80,
+                                                      maxHeightDiskCache: 80,
+                                                      filterQuality:
+                                                          FilterQuality.high,
+                                                      placeholder:
+                                                          (context, url) =>
+                                                              Container(
+                                                        width: 40,
+                                                        height: 40,
+                                                        decoration:
+                                                            BoxDecoration(
+                                                          color: CupertinoColors
+                                                              .systemGrey5,
+                                                          shape:
+                                                              BoxShape.circle,
+                                                        ),
+                                                        child: Icon(
+                                                          CupertinoIcons
+                                                              .person_fill,
+                                                          color: CupertinoColors
+                                                              .systemGrey,
+                                                          size: 18,
+                                                        ),
+                                                      ),
+                                                      errorWidget: (context,
+                                                              url, error) =>
+                                                          Container(
+                                                        width: 40,
+                                                        height: 40,
+                                                        decoration:
+                                                            BoxDecoration(
+                                                          color: CupertinoColors
+                                                              .systemGrey5,
+                                                          shape:
+                                                              BoxShape.circle,
+                                                        ),
+                                                        child: Icon(
+                                                          CupertinoIcons
+                                                              .person_fill,
+                                                          color: CupertinoColors
+                                                              .systemGrey,
+                                                          size: 18,
+                                                        ),
+                                                      ),
+                                                    ),
+                                                  ),
+                                                ),
+                                                // Green dot indicator for online status
+                                                if (user.isOnline)
+                                                  Positioned(
+                                                    right: 0,
+                                                    bottom: 0,
+                                                    child: Container(
+                                                      width: 12,
+                                                      height: 12,
+                                                      decoration: BoxDecoration(
+                                                        color: CupertinoColors
+                                                            .systemGreen,
+                                                        shape: BoxShape.circle,
+                                                        border: Border.all(
+                                                          color: CupertinoColors
+                                                              .systemBackground,
+                                                          width: 2,
+                                                        ),
+                                                      ),
+                                                    ),
+                                                  ),
+                                              ],
+                                            ),
+                                            SizedBox(width: 12),
+                                            Expanded(
+                                              child: Column(
+                                                crossAxisAlignment:
+                                                    CrossAxisAlignment.start,
+                                                children: [
+                                                  Text(
+                                                    user.displayName,
+                                                    style: TextStyle(
+                                                      fontFamily: 'SF Pro Text',
+                                                      color: isSelected
+                                                          ? CupertinoColors
+                                                              .white
+                                                          : CupertinoColors
+                                                              .label,
+                                                      fontSize: 15,
+                                                      fontWeight:
+                                                          FontWeight.w600,
+                                                      letterSpacing: -0.24,
+                                                    ),
+                                                    maxLines: 1,
+                                                    overflow:
+                                                        TextOverflow.ellipsis,
+                                                  ),
+                                                  SizedBox(height: 2),
+                                                  Text(
+                                                    user.email,
+                                                    style: TextStyle(
+                                                      fontFamily: 'SF Pro Text',
+                                                      color: isSelected
+                                                          ? CupertinoColors
+                                                              .white
+                                                              .withOpacity(0.8)
+                                                          : CupertinoColors
+                                                              .systemGrey,
+                                                      fontSize: 13,
+                                                      fontWeight:
+                                                          FontWeight.w400,
+                                                    ),
+                                                    maxLines: 1,
+                                                    overflow:
+                                                        TextOverflow.ellipsis,
+                                                  ),
+                                                ],
                                               ),
                                             ),
-                                            Text(
-                                              user.email,
-                                              style: TextStyle(
-                                                fontFamily: 'System',
-                                                color: isSelected
-                                                    ? Colors.white70
-                                                    : Color(0xFF8E8E93),
-                                                fontSize: 13,
+                                            if (isSelected)
+                                              Container(
+                                                padding: EdgeInsets.all(4),
+                                                decoration: BoxDecoration(
+                                                  color: CupertinoColors.white,
+                                                  shape: BoxShape.circle,
+                                                ),
+                                                child: Icon(
+                                                  CupertinoIcons.check_mark,
+                                                  color: CupertinoColors
+                                                      .systemBlue,
+                                                  size: 16,
+                                                ),
                                               ),
-                                            ),
                                           ],
                                         ),
                                       ),
-                                      if (isSelected)
-                                        Icon(
-                                          Icons.check_circle,
-                                          color: Colors.white,
-                                          size: 20,
-                                        ),
-                                    ],
-                                  ),
-                                ),
-                              );
-                            },
-                          );
-                        },
-                      );
-                    },
-                  ),
+                                    );
+                                  },
+                                );
+                              },
+                            );
+                          }),
                 ),
                 SizedBox(height: 20),
                 // Create group button
                 SizedBox(
                   width: double.infinity,
-                  child: ElevatedButton(
+                  child: CupertinoButton(
                     onPressed: _model.selectedMembers.isNotEmpty
                         ? () => _createGroup()
                         : null,
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: _model.selectedMembers.isNotEmpty
-                          ? Color(0xFF007AFF)
-                          : Color(0xFF8E8E93),
-                      padding: EdgeInsets.symmetric(vertical: 16),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                    ),
+                    color: _model.selectedMembers.isNotEmpty
+                        ? CupertinoColors.systemBlue
+                        : CupertinoColors.systemGrey,
+                    padding: EdgeInsets.symmetric(vertical: 16),
+                    borderRadius: BorderRadius.circular(10),
                     child: Text(
                       'Create Group',
                       style: TextStyle(
-                        fontFamily: 'System',
-                        color: Colors.white,
+                        fontFamily: 'SF Pro Text',
+                        color: CupertinoColors.white,
                         fontSize: 17,
-                        fontWeight: FontWeight.normal,
+                        fontWeight: FontWeight.w600,
+                        letterSpacing: -0.41,
                       ),
                     ),
                   ),
@@ -2534,100 +2818,6 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
         ),
       ],
     );
-  }
-
-  Color _getRoleColor(String role) {
-    switch (role.toLowerCase()) {
-      case 'owner':
-        return Color(0xFFFF3B30); // Red
-      case 'moderator':
-        return Color(0xFF34C759); // Green
-      case 'member':
-        return Color(0xFF8E8E93); // Gray
-      default:
-        return Color(0xFF8E8E93); // Default gray
-    }
-  }
-
-  Future<void> _startNewChatWithUser(UsersRecord user) async {
-    try {
-      // Check if a chat already exists between current user and this user IN THE CURRENT WORKSPACE
-      final currentWorkspaceRef = chatController.currentWorkspaceRef.value;
-
-      final existingChats = await queryChatsRecordOnce(
-        queryBuilder: (chatsRecord) => chatsRecord
-            .where('members', arrayContains: currentUserReference)
-            .where('is_group', isEqualTo: false)
-            .where('workspace_ref', isEqualTo: currentWorkspaceRef),
-      );
-
-      // Find if there's already a direct chat with this user in the current workspace
-      ChatsRecord? existingChat;
-      for (final chat in existingChats) {
-        if (chat.members.contains(user.reference) &&
-            chat.members.length == 2 &&
-            !chat.isGroup &&
-            chat.workspaceRef?.path == currentWorkspaceRef?.path) {
-          existingChat = chat;
-          break;
-        }
-      }
-
-      if (existingChat != null) {
-        // Chat already exists, select it
-        setState(() {
-          _model.selectedChat = existingChat;
-        });
-        chatController.selectChat(existingChat);
-        // Notify parent that chat is opened
-        widget.onChatStateChanged?.call(true);
-      } else {
-        // Create a new chat
-        final newChatRef = await ChatsRecord.collection.add({
-          ...createChatsRecordData(
-            isGroup: false,
-            title: '', // Empty for direct chats
-            createdAt: getCurrentTimestamp,
-            lastMessageAt: getCurrentTimestamp,
-            lastMessage: '',
-            lastMessageSent: currentUserReference,
-            workspaceRef: chatController.currentWorkspaceRef.value,
-          ),
-          'members': [
-            currentUserReference ??
-                FirebaseFirestore.instance
-                    .collection('users')
-                    .doc('placeholder'),
-            user.reference
-          ],
-          'last_message_seen': [
-            currentUserReference ??
-                FirebaseFirestore.instance
-                    .collection('users')
-                    .doc('placeholder')
-          ],
-        });
-
-        // Get the created chat document
-        final newChat = await ChatsRecord.getDocumentOnce(newChatRef);
-
-        // Select the new chat
-        setState(() {
-          _model.selectedChat = newChat;
-        });
-        chatController.selectChat(newChat);
-        // Notify parent that chat is opened
-        widget.onChatStateChanged?.call(true);
-      }
-    } catch (e) {
-      // Show error message
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Error starting chat: $e'),
-          backgroundColor: Color(0xFFFF3B30),
-        ),
-      );
-    }
   }
 
   Future<void> _pickGroupImage() async {
@@ -2732,31 +2922,32 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
       if (groupName.isEmpty) {
         // Fetch all member names
         final List<String> memberNames = [];
-        
+
         // Get current user name
         if (currentUserReference != null) {
           try {
-            final currentUser = await UsersRecord.getDocumentOnce(currentUserReference!);
-            memberNames.add(currentUser.displayName.isNotEmpty 
-                ? currentUser.displayName 
+            final currentUser =
+                await UsersRecord.getDocumentOnce(currentUserReference!);
+            memberNames.add(currentUser.displayName.isNotEmpty
+                ? currentUser.displayName
                 : currentUser.email.split('@')[0]);
           } catch (e) {
             memberNames.add('You');
           }
         }
-        
+
         // Get selected member names
         for (final memberRef in _model.selectedMembers) {
           try {
             final user = await UsersRecord.getDocumentOnce(memberRef);
-            memberNames.add(user.displayName.isNotEmpty 
-                ? user.displayName 
+            memberNames.add(user.displayName.isNotEmpty
+                ? user.displayName
                 : user.email.split('@')[0]);
           } catch (e) {
             // Skip if we can't fetch the user
           }
         }
-        
+
         // Join names with comma and space (like Slack)
         groupName = memberNames.join(', ');
       }
@@ -2767,11 +2958,12 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
           title: groupName,
           isGroup: true,
           createdAt: getCurrentTimestamp,
+          createdBy: currentUserReference,
           lastMessageAt: getCurrentTimestamp,
           lastMessage: '',
           lastMessageSent: currentUserReference,
-          workspaceRef: chatController.currentWorkspaceRef.value,
           chatImageUrl: _model.groupImageUrl ?? '',
+          admin: currentUserReference,
         ),
         'members': allMembers,
         'last_message_seen': [
@@ -2790,13 +2982,12 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
         _model.groupName = '';
         _model.selectedMembers = [];
         _model.groupNameController?.clear();
+        _model.groupMemberSearchController?.clear();
         _model.groupImagePath = null;
         _model.groupImageUrl = null;
         _model.isUploadingImage = false;
       });
       chatController.selectChat(newChat);
-      // Notify parent that chat is opened
-      widget.onChatStateChanged?.call(true);
 
       // Show success message
       ScaffoldMessenger.of(context).showSnackBar(
@@ -2805,11 +2996,553 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
           backgroundColor: Color(0xFF34C759),
         ),
       );
+
+      // Open the new group chat in full-screen
+      _openChatFullScreen(newChat);
     } catch (e) {
       // Show error message
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('Error creating group: $e'),
+          backgroundColor: Color(0xFFFF3B30),
+        ),
+      );
+    }
+  }
+
+  Widget _buildNewMessageView() {
+    return Column(
+      children: [
+        // Header for new message
+        Container(
+          width: double.infinity,
+          padding: EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: CupertinoColors.systemGrey6,
+            border: Border(
+              bottom: BorderSide(
+                color: CupertinoColors.separator,
+                width: 0.5,
+              ),
+            ),
+          ),
+          child: Row(
+            children: [
+              Icon(
+                CupertinoIcons.chat_bubble,
+                color: CupertinoColors.systemBlue,
+                size: 20,
+              ),
+              SizedBox(width: 8),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Start a New Direct Message',
+                      style: TextStyle(
+                        fontFamily: 'SF Pro Text',
+                        color: CupertinoColors.label,
+                        fontSize: 17,
+                        fontWeight: FontWeight.w600,
+                        letterSpacing: -0.41,
+                      ),
+                    ),
+                    SizedBox(height: 4),
+                    Text(
+                      'Search for a connection to begin a private conversation',
+                      style: TextStyle(
+                        fontFamily: 'SF Pro Text',
+                        color: CupertinoColors.systemGrey,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w400,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              GestureDetector(
+                onTap: () {
+                  setState(() {
+                    _model.showNewChatScreen = false;
+                    _model.newChatSearchController?.clear();
+                  });
+                },
+                child: Icon(
+                  CupertinoIcons.xmark,
+                  color: CupertinoColors.systemGrey,
+                  size: 20,
+                ),
+              ),
+            ],
+          ),
+        ),
+        // Search bar
+        Container(
+          width: double.infinity,
+          padding: EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: CupertinoColors.systemBackground,
+          ),
+          child: Container(
+            height: 44,
+            decoration: BoxDecoration(
+              color: CupertinoColors.systemGrey6,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                color: CupertinoColors.separator,
+                width: 0.5,
+              ),
+            ),
+            child: CupertinoTextField(
+              controller: _model.newChatSearchController,
+              onChanged: (value) {
+                setState(() {});
+              },
+              placeholder: 'Search by name or email',
+              placeholderStyle: TextStyle(
+                fontFamily: 'SF Pro Text',
+                color: CupertinoColors.systemGrey,
+                fontSize: 14,
+                fontWeight: FontWeight.w400,
+              ),
+              padding: EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+              prefix: Padding(
+                padding: EdgeInsets.only(left: 12, right: 8),
+                child: Icon(
+                  CupertinoIcons.search,
+                  color: CupertinoColors.systemBlue,
+                  size: 18,
+                ),
+              ),
+              suffix: _model.newChatSearchController?.text.isNotEmpty == true
+                  ? GestureDetector(
+                      onTap: () {
+                        setState(() {
+                          _model.newChatSearchController?.clear();
+                        });
+                      },
+                      child: Padding(
+                        padding: EdgeInsets.only(right: 12),
+                        child: Icon(
+                          CupertinoIcons.xmark_circle_fill,
+                          color: CupertinoColors.systemGrey,
+                          size: 16,
+                        ),
+                      ),
+                    )
+                  : null,
+              style: TextStyle(
+                fontFamily: 'SF Pro Text',
+                color: CupertinoColors.label,
+                fontSize: 14,
+                fontWeight: FontWeight.w400,
+              ),
+              decoration: BoxDecoration(
+                color: Colors.transparent,
+                borderRadius: BorderRadius.circular(12),
+              ),
+            ),
+          ),
+        ),
+        // Suggested connections list
+        Expanded(
+          child: Container(
+            width: double.infinity,
+            padding: EdgeInsets.symmetric(horizontal: 16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Padding(
+                  padding: EdgeInsets.only(left: 4, bottom: 12, top: 8),
+                  child: Row(
+                    children: [
+                      Container(
+                        width: 3,
+                        height: 14,
+                        decoration: BoxDecoration(
+                          color: CupertinoColors.systemBlue,
+                          borderRadius: BorderRadius.circular(2),
+                        ),
+                      ),
+                      SizedBox(width: 8),
+                      Text(
+                        'SUGGESTED',
+                        style: TextStyle(
+                          fontFamily: 'SF Pro Text',
+                          color: CupertinoColors.systemGrey,
+                          fontSize: 11,
+                          fontWeight: FontWeight.w700,
+                          letterSpacing: 1.2,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                Expanded(
+                  child: currentUserReference == null
+                      ? Center(
+                          child: CupertinoActivityIndicator(
+                            color: CupertinoColors.systemBlue,
+                          ),
+                        )
+                      : StreamBuilder<UsersRecord>(
+                          stream:
+                              UsersRecord.getDocument(currentUserReference!),
+                          builder: (context, currentUserSnapshot) {
+                            if (!currentUserSnapshot.hasData) {
+                              return Center(
+                                child: CupertinoActivityIndicator(
+                                  color: CupertinoColors.systemBlue,
+                                ),
+                              );
+                            }
+
+                            final currentUser = currentUserSnapshot.data!;
+                            final connections = currentUser.friends;
+
+                            if (connections.isEmpty) {
+                              return Center(
+                                child: Column(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Container(
+                                      width: 64,
+                                      height: 64,
+                                      decoration: BoxDecoration(
+                                        color: CupertinoColors.systemBlue
+                                            .withOpacity(0.1),
+                                        shape: BoxShape.circle,
+                                      ),
+                                      child: Icon(
+                                        CupertinoIcons.person_2,
+                                        color: CupertinoColors.systemBlue,
+                                        size: 32,
+                                      ),
+                                    ),
+                                    SizedBox(height: 16),
+                                    Text(
+                                      'No connections',
+                                      style: TextStyle(
+                                        fontFamily: 'SF Pro Text',
+                                        color: CupertinoColors.label,
+                                        fontSize: 17,
+                                        fontWeight: FontWeight.w600,
+                                        letterSpacing: -0.41,
+                                      ),
+                                    ),
+                                    SizedBox(height: 8),
+                                    Text(
+                                      'Add connections to start chatting',
+                                      style: TextStyle(
+                                        fontFamily: 'SF Pro Text',
+                                        color: CupertinoColors.systemGrey,
+                                        fontSize: 15,
+                                        fontWeight: FontWeight.w400,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              );
+                            }
+
+                            final searchQuery = _model
+                                    .newChatSearchController?.text
+                                    .toLowerCase() ??
+                                '';
+
+                            return ListView.builder(
+                              itemCount: connections.length,
+                              itemBuilder: (context, index) {
+                                final connectionRef = connections[index];
+
+                                return StreamBuilder<UsersRecord>(
+                                  stream:
+                                      UsersRecord.getDocument(connectionRef),
+                                  builder: (context, userSnapshot) {
+                                    if (!userSnapshot.hasData) {
+                                      return SizedBox.shrink();
+                                    }
+
+                                    final user = userSnapshot.data!;
+                                    final isCurrentUser =
+                                        user.reference == currentUserReference;
+
+                                    if (isCurrentUser) {
+                                      return SizedBox.shrink();
+                                    }
+
+                                    // Filter by search query
+                                    if (searchQuery.isNotEmpty) {
+                                      final displayName =
+                                          user.displayName.toLowerCase();
+                                      final email = user.email.toLowerCase();
+                                      if (!displayName.contains(searchQuery) &&
+                                          !email.contains(searchQuery)) {
+                                        return SizedBox.shrink();
+                                      }
+                                    }
+
+                                    return GestureDetector(
+                                      onTap: () async {
+                                        await _startNewChatWithUser(user);
+                                        setState(() {
+                                          _model.showNewChatScreen = false;
+                                        });
+                                      },
+                                      child: Container(
+                                        margin: EdgeInsets.only(bottom: 8),
+                                        padding: EdgeInsets.all(12),
+                                        decoration: BoxDecoration(
+                                          color:
+                                              CupertinoColors.systemBackground,
+                                          borderRadius:
+                                              BorderRadius.circular(10),
+                                          border: Border.all(
+                                            color: CupertinoColors.separator,
+                                            width: 0.5,
+                                          ),
+                                        ),
+                                        child: Row(
+                                          children: [
+                                            // Avatar
+                                            Stack(
+                                              clipBehavior: Clip.none,
+                                              children: [
+                                                Container(
+                                                  width: 48,
+                                                  height: 48,
+                                                  decoration: BoxDecoration(
+                                                    color: CupertinoColors
+                                                        .systemGrey5,
+                                                    shape: BoxShape.circle,
+                                                  ),
+                                                  child: ClipRRect(
+                                                    borderRadius:
+                                                        BorderRadius.circular(
+                                                            24),
+                                                    child: CachedNetworkImage(
+                                                      imageUrl: user.photoUrl,
+                                                      width: 48,
+                                                      height: 48,
+                                                      fit: BoxFit.cover,
+                                                      memCacheWidth: 96,
+                                                      memCacheHeight: 96,
+                                                      maxWidthDiskCache: 96,
+                                                      maxHeightDiskCache: 96,
+                                                      filterQuality:
+                                                          FilterQuality.high,
+                                                      placeholder:
+                                                          (context, url) =>
+                                                              Container(
+                                                        width: 48,
+                                                        height: 48,
+                                                        decoration:
+                                                            BoxDecoration(
+                                                          color: CupertinoColors
+                                                              .systemGrey5,
+                                                          shape:
+                                                              BoxShape.circle,
+                                                        ),
+                                                        child: Icon(
+                                                          CupertinoIcons
+                                                              .person_fill,
+                                                          color: CupertinoColors
+                                                              .systemGrey,
+                                                          size: 24,
+                                                        ),
+                                                      ),
+                                                      errorWidget: (context,
+                                                              url, error) =>
+                                                          Container(
+                                                        width: 48,
+                                                        height: 48,
+                                                        decoration:
+                                                            BoxDecoration(
+                                                          color: CupertinoColors
+                                                              .systemGrey5,
+                                                          shape:
+                                                              BoxShape.circle,
+                                                        ),
+                                                        child: Icon(
+                                                          CupertinoIcons
+                                                              .person_fill,
+                                                          color: CupertinoColors
+                                                              .systemGrey,
+                                                          size: 24,
+                                                        ),
+                                                      ),
+                                                    ),
+                                                  ),
+                                                ),
+                                                // Green dot indicator for online status
+                                                if (user.isOnline)
+                                                  Positioned(
+                                                    right: 0,
+                                                    bottom: 0,
+                                                    child: Container(
+                                                      width: 12,
+                                                      height: 12,
+                                                      decoration: BoxDecoration(
+                                                        color: CupertinoColors
+                                                            .systemGreen,
+                                                        shape: BoxShape.circle,
+                                                        border: Border.all(
+                                                          color: CupertinoColors
+                                                              .systemBackground,
+                                                          width: 2,
+                                                        ),
+                                                      ),
+                                                    ),
+                                                  ),
+                                              ],
+                                            ),
+                                            SizedBox(width: 12),
+                                            // User info
+                                            Expanded(
+                                              child: Column(
+                                                crossAxisAlignment:
+                                                    CrossAxisAlignment.start,
+                                                children: [
+                                                  Text(
+                                                    user.displayName,
+                                                    style: TextStyle(
+                                                      fontFamily: 'SF Pro Text',
+                                                      color:
+                                                          CupertinoColors.label,
+                                                      fontSize: 15,
+                                                      fontWeight:
+                                                          FontWeight.w600,
+                                                      letterSpacing: -0.24,
+                                                    ),
+                                                    maxLines: 1,
+                                                    overflow:
+                                                        TextOverflow.ellipsis,
+                                                  ),
+                                                  SizedBox(height: 2),
+                                                  Text(
+                                                    user.email,
+                                                    style: TextStyle(
+                                                      fontFamily: 'SF Pro Text',
+                                                      color: CupertinoColors
+                                                          .systemGrey,
+                                                      fontSize: 13,
+                                                      fontWeight:
+                                                          FontWeight.w400,
+                                                    ),
+                                                    maxLines: 1,
+                                                    overflow:
+                                                        TextOverflow.ellipsis,
+                                                  ),
+                                                ],
+                                              ),
+                                            ),
+                                            // Start Chat button
+                                            Container(
+                                              width: 32,
+                                              height: 32,
+                                              decoration: BoxDecoration(
+                                                color: CupertinoColors
+                                                    .systemBlue
+                                                    .withOpacity(0.1),
+                                                borderRadius:
+                                                    BorderRadius.circular(8),
+                                              ),
+                                              child: Icon(
+                                                CupertinoIcons.arrow_right,
+                                                color:
+                                                    CupertinoColors.systemBlue,
+                                                size: 16,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    );
+                                  },
+                                );
+                              },
+                            );
+                          }),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Future<void> _startNewChatWithUser(UsersRecord user) async {
+    try {
+      // Check if a chat already exists between current user and this user
+      final existingChats = await queryChatsRecordOnce(
+        queryBuilder: (chatsRecord) => chatsRecord
+            .where('members', arrayContains: currentUserReference)
+            .where('is_group', isEqualTo: false),
+      );
+
+      // Find if there's already a direct chat with this user
+      ChatsRecord? existingChat;
+      for (final chat in existingChats) {
+        if (chat.members.contains(user.reference) &&
+            chat.members.length == 2 &&
+            !chat.isGroup) {
+          existingChat = chat;
+          break;
+        }
+      }
+
+      if (existingChat != null) {
+        // Chat already exists, select it
+        setState(() {
+          _model.showNewChatScreen = false;
+        });
+        chatController.selectChat(existingChat);
+        // Open in full-screen
+        _openChatFullScreen(existingChat);
+      } else {
+        // Create a new chat
+        final newChatRef = await ChatsRecord.collection.add({
+          ...createChatsRecordData(
+            isGroup: false,
+            title: '', // Empty for direct chats
+            createdAt: getCurrentTimestamp,
+            lastMessageAt: getCurrentTimestamp,
+            lastMessage: '',
+            lastMessageSent: currentUserReference,
+          ),
+          'members': [
+            currentUserReference ??
+                FirebaseFirestore.instance
+                    .collection('users')
+                    .doc('placeholder'),
+            user.reference
+          ],
+          'last_message_seen': [
+            currentUserReference ??
+                FirebaseFirestore.instance
+                    .collection('users')
+                    .doc('placeholder')
+          ],
+        });
+
+        // Get the created chat document
+        final newChat = await ChatsRecord.getDocumentOnce(newChatRef);
+
+        // Select the new chat
+        setState(() {
+          _model.showNewChatScreen = false;
+        });
+        chatController.selectChat(newChat);
+        // Open in full-screen
+        _openChatFullScreen(newChat);
+      }
+    } catch (e) {
+      // Show error message
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error starting chat: $e'),
           backgroundColor: Color(0xFFFF3B30),
         ),
       );
@@ -2934,58 +3667,6 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
                 ),
               ),
             ),
-          );
-        },
-      );
-    }
-  }
-
-  Widget _buildHeaderName(ChatsRecord chat) {
-    if (chat.isGroup) {
-      return Text(
-        chat.title.isNotEmpty ? chat.title : 'Group Chat',
-        style: TextStyle(
-          fontFamily: 'System',
-          color: Color(0xFF1D1D1F),
-          fontSize: 16,
-          fontWeight: FontWeight.normal,
-        ),
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
-      );
-    } else {
-      // For direct chats, get the other user's name
-      final otherUserRef = chat.members.firstWhere(
-        (member) => member != currentUserReference,
-        orElse: () => chat.members.first,
-      );
-
-      return FutureBuilder<UsersRecord>(
-        future: UsersRecord.getDocumentOnce(otherUserRef),
-        builder: (context, userSnapshot) {
-          String displayName = 'Direct Chat';
-          if (userSnapshot.hasData && userSnapshot.data != null) {
-            final user = userSnapshot.data!;
-            // Check if this is Summer
-            if (otherUserRef.path.contains('ai_agent_summerai')) {
-              displayName = 'Summer';
-            } else {
-              displayName = user.displayName.isNotEmpty
-                  ? user.displayName
-                  : 'Unknown User';
-            }
-          }
-
-          return Text(
-            displayName,
-            style: TextStyle(
-              fontFamily: 'System',
-              color: Color(0xFF1D1D1F),
-              fontSize: 17,
-              fontWeight: FontWeight.normal,
-            ),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
           );
         },
       );
@@ -3342,32 +4023,29 @@ class _MobileChatListItemState extends State<_MobileChatListItem>
     Color? iconColor,
   }) {
     final defaultColor = Color(0xFF1D1D1F);
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
-        child: Container(
-          width: double.infinity,
-          padding: EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-          child: Row(
-            children: [
-              Icon(
-                icon,
-                color: iconColor ?? defaultColor,
-                size: 20,
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        width: double.infinity,
+        padding: EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+        child: Row(
+          children: [
+            Icon(
+              icon,
+              color: iconColor ?? defaultColor,
+              size: 20,
+            ),
+            SizedBox(width: 16),
+            Text(
+              title,
+              style: TextStyle(
+                fontFamily: 'SF Pro Text',
+                color: textColor ?? defaultColor,
+                fontSize: 16,
+                fontWeight: FontWeight.w400,
               ),
-              SizedBox(width: 16),
-              Text(
-                title,
-                style: TextStyle(
-                  fontFamily: 'SF Pro Text',
-                  color: textColor ?? defaultColor,
-                  fontSize: 16,
-                  fontWeight: FontWeight.w400,
-                ),
-              ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );
@@ -3446,12 +4124,18 @@ class _MobileChatListItemState extends State<_MobileChatListItem>
   Widget build(BuildContext context) {
     super.build(context);
 
-    return GestureDetector(
-      onTap: () => widget.onTap(),
-      onLongPress: () => _showChatMenu(widget.chat),
-      onLongPressStart: (_) {}, // Required for onLongPress to work
+    return Material(
+      color: Colors
+          .transparent, // Transparent Material to satisfy InkWell requirement
       child: InkWell(
-        onTap: null, // Disable InkWell tap since GestureDetector handles it
+        onTap: widget.onTap,
+        onLongPress: () => _showChatMenu(widget.chat),
+        borderRadius: BorderRadius.circular(16),
+        splashColor:
+            Platform.isIOS ? Colors.transparent : null, // Disable ripple on iOS
+        highlightColor: Platform.isIOS
+            ? Colors.transparent
+            : null, // Disable highlight on iOS
         child: Container(
           width: double.infinity,
           padding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
@@ -3467,64 +4151,73 @@ class _MobileChatListItemState extends State<_MobileChatListItem>
               ),
             ],
           ),
-          child: Row(
+          child: Stack(
             children: [
-              // Avatar
-              _buildChatAvatar(widget.chat),
-              SizedBox(width: 12),
-              // Chat Info
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    _getChatDisplayName(widget.chat),
-                    SizedBox(height: 4),
-                    _getLastMessagePreview(widget.chat),
-                  ],
-                ),
-              ),
-              // Timestamp, pin icon, and notification dot
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.end,
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Timestamp
-                  Text(
-                    _formatTimestamp(widget.chat.lastMessageAt),
-                    style: TextStyle(
-                      fontFamily: 'SF Pro Text',
-                      color: Color(0xFF8E8E93),
-                      fontSize: 13,
+                  // Avatar
+                  _buildChatAvatar(widget.chat),
+                  SizedBox(width: 12),
+                  // Chat Info
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        _getChatDisplayName(widget.chat),
+                        SizedBox(height: 4),
+                        _getLastMessagePreview(widget.chat),
+                      ],
                     ),
                   ),
-                  SizedBox(height: 4),
-                  // Pin icon and notification dot row
-                  Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      // Pin icon for pinned chats
-                      if (widget.chat.isPin)
-                        Container(
-                          margin: EdgeInsets.only(right: 4),
-                          child: Icon(
+                  // Timestamp and pin icon column
+                  SizedBox(
+                    height: 50, // Match avatar height
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        // Timestamp at top
+                        Text(
+                          _formatTimestamp(widget.chat.lastMessageAt),
+                          style: TextStyle(
+                            fontFamily: 'SF Pro Text',
+                            color: Color(0xFF8E8E93),
+                            fontSize: 13,
+                          ),
+                        ),
+                        // Pin icon at bottom
+                        if (widget.chat.isPin)
+                          Icon(
                             Icons.push_pin,
                             size: 12,
                             color: Color(0xFF8E8E93),
-                          ),
-                        ),
-                      // Notification dot for unread messages
-                      if (widget.hasUnreadMessages)
-                        Container(
-                          width: 8,
-                          height: 8,
-                          decoration: BoxDecoration(
-                            color: Color(0xFF007AFF),
-                            shape: BoxShape.circle,
-                          ),
-                        ),
-                    ],
+                          )
+                        else
+                          SizedBox(height: 12), // Reserve space if no pin
+                      ],
+                    ),
                   ),
                 ],
               ),
+              // Notification dot centered vertically
+              if (widget.hasUnreadMessages)
+                Positioned(
+                  right: 16,
+                  top: 0,
+                  bottom: 0,
+                  child: Center(
+                    child: Container(
+                      width: 8,
+                      height: 8,
+                      decoration: BoxDecoration(
+                        color: Color(0xFF007AFF),
+                        shape: BoxShape.circle,
+                      ),
+                    ),
+                  ),
+                ),
             ],
           ),
         ),
@@ -3728,5 +4421,604 @@ class _MobileChatListItemState extends State<_MobileChatListItem>
       maxLines: 1,
       overflow: TextOverflow.ellipsis,
     );
+  }
+}
+
+/// Full-screen chat page that covers the entire screen including tab bar
+/// Used when opening a chat from the chat list (like WhatsApp behavior)
+class _FullScreenChatPage extends StatefulWidget {
+  final ChatsRecord chat;
+  final Function(MessagesRecord)? onMessageLongPress;
+
+  const _FullScreenChatPage({
+    Key? key,
+    required this.chat,
+    this.onMessageLongPress,
+  }) : super(key: key);
+
+  @override
+  State<_FullScreenChatPage> createState() => _FullScreenChatPageState();
+}
+
+class _FullScreenChatPageState extends State<_FullScreenChatPage> {
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: _buildAppBar(),
+      backgroundColor: Color(0xFFF2F2F7),
+      body: SafeArea(
+        bottom: false,
+        child: Container(
+          color: Color(0xFFF2F2F7),
+          child: ChatThreadComponentWidget(
+            chatReference: widget.chat,
+            onMessageLongPress: widget.onMessageLongPress,
+          ),
+        ),
+      ),
+    );
+  }
+
+  PreferredSizeWidget _buildAppBar() {
+    final chat = widget.chat;
+
+    // Minimal header - just bubble height, shifted up
+    const double bubbleHeight = 45;
+
+    return PreferredSize(
+      preferredSize:
+          Size.fromHeight(bubbleHeight + 50), // Account for the offset
+      child: Stack(
+        children: [
+          // Spacer to push content down
+          SizedBox(height: bubbleHeight + 50),
+          // Positioned header
+          Positioned(
+            top: 50, // Shift downward
+            left: 0,
+            right: 0,
+            height: bubbleHeight,
+            child: Container(
+              height: bubbleHeight,
+              color: Colors.transparent,
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  SizedBox(width: 8),
+                  // Back button - using AdaptiveFloatingActionButton
+                  AdaptiveFloatingActionButton(
+                    onPressed: () {
+                      print('🔙 Back button clicked!');
+                      Navigator.of(context).pop();
+                    },
+                    mini: true,
+                    backgroundColor: Colors.white,
+                    foregroundColor: CupertinoColors.systemBlue,
+                    child: Icon(
+                      CupertinoIcons.chevron_left,
+                      size: 22,
+                    ),
+                  ),
+                  SizedBox(width: 4),
+                  // Centered title - tappable to view profile
+                  Expanded(
+                    child: Center(
+                      child: GestureDetector(
+                        onTap: () => _navigateToProfile(chat),
+                        child: Container(
+                          padding:
+                              EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(16),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              // Avatar
+                              _buildAvatar(chat),
+                              SizedBox(width: 6),
+                              // Name - show other user's name for DMs
+                              Flexible(
+                                child: chat.isGroup
+                                    ? Text(
+                                        chat.title.isNotEmpty
+                                            ? chat.title
+                                            : 'Group Chat',
+                                        style: TextStyle(
+                                          fontFamily: 'SF Pro Display',
+                                          fontSize: 17,
+                                          fontWeight: FontWeight.w600,
+                                          color: CupertinoColors.label,
+                                        ),
+                                        overflow: TextOverflow.ellipsis,
+                                      )
+                                    : FutureBuilder<UsersRecord>(
+                                        future: _getOtherUser(chat),
+                                        builder: (context, snapshot) {
+                                          String displayName = 'Chat';
+                                          if (snapshot.hasData) {
+                                            final user = snapshot.data!;
+                                            displayName =
+                                                user.displayName.isNotEmpty
+                                                    ? user.displayName
+                                                    : 'Chat';
+                                          }
+                                          return Text(
+                                            displayName,
+                                            style: TextStyle(
+                                              fontFamily: 'SF Pro Display',
+                                              fontSize: 17,
+                                              fontWeight: FontWeight.w600,
+                                              color: CupertinoColors.label,
+                                            ),
+                                            overflow: TextOverflow.ellipsis,
+                                          );
+                                        },
+                                      ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                  SizedBox(width: 4),
+                  // More options button - using AdaptivePopupMenuButton
+                  AdaptivePopupMenuButton.widget<String>(
+                    items: chat.isGroup
+                        ? [
+                            // Group chat options
+                            AdaptivePopupMenuItem(
+                              label: 'View Group Chat',
+                              icon: PlatformInfo.isIOS26OrHigher()
+                                  ? 'person.2.circle'
+                                  : Icons.group,
+                              value: 'view_group',
+                            ),
+                          ]
+                        : [
+                            // Direct message options
+                            AdaptivePopupMenuItem(
+                              label: 'View User Profile',
+                              icon: PlatformInfo.isIOS26OrHigher()
+                                  ? 'person.circle'
+                                  : Icons.person,
+                              value: 'view_profile',
+                            ),
+                            AdaptivePopupMenuItem(
+                              label: 'Block User',
+                              icon: PlatformInfo.isIOS26OrHigher()
+                                  ? 'hand.raised.fill'
+                                  : Icons.block,
+                              value: 'block_user',
+                            ),
+                          ],
+                    onSelected: (index, item) {
+                      if (item.value == 'view_profile') {
+                        _navigateToProfile(chat);
+                      } else if (item.value == 'view_group') {
+                        _navigateToProfile(chat);
+                      } else if (item.value == 'block_user') {
+                        _blockUserFromChat(chat);
+                      }
+                    },
+                    child: AdaptiveFloatingActionButton(
+                      mini: true,
+                      backgroundColor: Colors.white,
+                      foregroundColor: CupertinoColors.systemBlue,
+                      onPressed: () {
+                        // Menu will open automatically
+                      },
+                      child: Icon(
+                        CupertinoIcons.ellipsis,
+                        size: 22,
+                      ),
+                    ),
+                  ),
+                  SizedBox(width: 8),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildAvatar(ChatsRecord chat) {
+    if (chat.isGroup) {
+      // Group avatar
+      if (chat.chatImageUrl.isNotEmpty) {
+        return ClipRRect(
+          borderRadius: BorderRadius.circular(14),
+          child: CachedNetworkImage(
+            imageUrl: chat.chatImageUrl,
+            width: 28,
+            height: 28,
+            fit: BoxFit.cover,
+            placeholder: (context, url) => Container(
+              width: 28,
+              height: 28,
+              decoration: BoxDecoration(
+                color: Color(0xFFE5E5EA),
+                borderRadius: BorderRadius.circular(14),
+              ),
+              child: Icon(
+                CupertinoIcons.person_2_fill,
+                size: 14,
+                color: Color(0xFF8E8E93),
+              ),
+            ),
+            errorWidget: (context, url, error) => Container(
+              width: 28,
+              height: 28,
+              decoration: BoxDecoration(
+                color: Color(0xFFE5E5EA),
+                borderRadius: BorderRadius.circular(14),
+              ),
+              child: Icon(
+                CupertinoIcons.person_2_fill,
+                size: 14,
+                color: Color(0xFF8E8E93),
+              ),
+            ),
+          ),
+        );
+      } else {
+        return Container(
+          width: 28,
+          height: 28,
+          decoration: BoxDecoration(
+            color: Color(0xFFE5E5EA),
+            borderRadius: BorderRadius.circular(14),
+          ),
+          child: Icon(
+            CupertinoIcons.person_2_fill,
+            size: 14,
+            color: Color(0xFF8E8E93),
+          ),
+        );
+      }
+    } else {
+      // DM - show other user's avatar
+      return FutureBuilder<UsersRecord>(
+        future: _getOtherUser(chat),
+        builder: (context, snapshot) {
+          if (snapshot.hasData && snapshot.data!.photoUrl.isNotEmpty) {
+            return ClipRRect(
+              borderRadius: BorderRadius.circular(14),
+              child: CachedNetworkImage(
+                imageUrl: snapshot.data!.photoUrl,
+                width: 28,
+                height: 28,
+                fit: BoxFit.cover,
+                placeholder: (context, url) => Container(
+                  width: 28,
+                  height: 28,
+                  decoration: BoxDecoration(
+                    color: Color(0xFFE5E5EA),
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  child: Icon(
+                    CupertinoIcons.person_fill,
+                    size: 14,
+                    color: Color(0xFF8E8E93),
+                  ),
+                ),
+                errorWidget: (context, url, error) => Container(
+                  width: 28,
+                  height: 28,
+                  decoration: BoxDecoration(
+                    color: Color(0xFFE5E5EA),
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  child: Icon(
+                    CupertinoIcons.person_fill,
+                    size: 14,
+                    color: Color(0xFF8E8E93),
+                  ),
+                ),
+              ),
+            );
+          }
+          return Container(
+            width: 28,
+            height: 28,
+            decoration: BoxDecoration(
+              color: Color(0xFFE5E5EA),
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: Icon(
+              CupertinoIcons.person_fill,
+              size: 14,
+              color: Color(0xFF8E8E93),
+            ),
+          );
+        },
+      );
+    }
+  }
+
+  Future<UsersRecord> _getOtherUser(ChatsRecord chat) async {
+    final otherUserRef = chat.members.firstWhere(
+      (member) => member != currentUserReference,
+      orElse: () => chat.members.first,
+    );
+    return await UsersRecord.getDocumentOnce(otherUserRef);
+  }
+
+  void _navigateToProfile(ChatsRecord chat) async {
+    if (chat.isGroup) {
+      // For group chats, navigate to group details
+      context.pushNamed(
+        GroupChatDetailWidget.routeName,
+        queryParameters: {
+          'chatDoc': serializeParam(chat, ParamType.Document),
+        }.withoutNulls,
+        extra: <String, dynamic>{'chatDoc': chat},
+      );
+    } else {
+      // For DMs, navigate to user profile
+      try {
+        final user = await _getOtherUser(chat);
+        if (context.mounted) {
+          context.pushNamed(
+            UserProfileDetailWidget.routeName,
+            queryParameters: {
+              'user': serializeParam(user, ParamType.Document),
+            }.withoutNulls,
+            extra: <String, dynamic>{'user': user},
+          );
+        }
+      } catch (e) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error loading user profile'),
+            backgroundColor: Color(0xFFFF3B30),
+          ),
+        );
+      }
+    }
+  }
+
+  void _blockUserFromChat(ChatsRecord chat) async {
+    if (chat.isGroup) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Cannot block group chats'),
+          backgroundColor: Color(0xFF8E8E93),
+        ),
+      );
+      return;
+    }
+
+    // For direct chats, get the other user and block them
+    final otherUserRef = chat.members.firstWhere(
+      (member) => member != currentUserReference,
+      orElse: () => chat.members.first,
+    );
+
+    try {
+      final user = await UsersRecord.getDocumentOnce(otherUserRef);
+
+      // Show confirmation dialog
+      final shouldBlock = await showDialog<bool>(
+        context: context,
+        builder: (BuildContext context) {
+          return AlertDialog(
+            backgroundColor: Colors.white,
+            title: Text(
+              'Block User',
+              style: TextStyle(
+                fontFamily: 'System',
+                color: Color(0xFF1D1D1F),
+                fontSize: 17,
+                fontWeight: FontWeight.normal,
+              ),
+            ),
+            content: Text(
+              'Are you sure you want to block ${user.displayName}? You will no longer see their messages or be able to contact them.',
+              style: TextStyle(
+                fontFamily: 'System',
+                color: Color(0xFF8E8E93),
+                fontSize: 15,
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(false),
+                child: Text(
+                  'Cancel',
+                  style: TextStyle(
+                    fontFamily: 'System',
+                    color: Color(0xFF8E8E93),
+                    fontSize: 17,
+                  ),
+                ),
+              ),
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(true),
+                child: Text(
+                  'Block',
+                  style: TextStyle(
+                    fontFamily: 'System',
+                    color: Color(0xFFFF3B30),
+                    fontSize: 17,
+                    fontWeight: FontWeight.normal,
+                  ),
+                ),
+              ),
+            ],
+          );
+        },
+      );
+
+      if (shouldBlock == true) {
+        // Create blocked user record
+        await BlockedUsersRecord.collection.add({
+          ...createBlockedUsersRecordData(
+            blockerUser: currentUserReference,
+            blockedUser: otherUserRef,
+            createdAt: getCurrentTimestamp,
+          ),
+        });
+
+        // Show success message
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('User has been blocked'),
+            backgroundColor: Color(0xFF34C759),
+          ),
+        );
+
+        // Navigate back to chat list
+        Navigator.of(context).pop();
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error blocking user'),
+          backgroundColor: Color(0xFFFF3B30),
+        ),
+      );
+    }
+  }
+}
+
+// iOS 26+ floating popup menu with glass effect
+class _IOS26PopupMenu<T> extends StatelessWidget {
+  final RelativeRect position;
+  final List<AdaptivePopupMenuItem<T>> items;
+  final Function(int index, AdaptivePopupMenuItem<T> item) onSelected;
+
+  const _IOS26PopupMenu({
+    required this.position,
+    required this.items,
+    required this.onSelected,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final screenSize = MediaQuery.of(context).size;
+    final menuWidth = 200.0;
+    final menuHeight = items.length * 50.0 + 16.0; // 50 per item + padding
+
+    // Calculate position (slightly above center, more natural for message menus)
+    final left = screenSize.width / 2 - menuWidth / 2;
+    final top = screenSize.height * 0.4 - menuHeight / 2;
+
+    return Material(
+      color: Colors.transparent,
+      child: Stack(
+        children: [
+          // Dismissible background
+          GestureDetector(
+            onTap: () => Navigator.of(context).pop(),
+            child: Container(
+              color: Colors.transparent,
+              width: double.infinity,
+              height: double.infinity,
+            ),
+          ),
+          // Floating menu
+          Positioned(
+            left: left,
+            top: top,
+            child: BackdropFilter(
+              filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
+              child: Container(
+                width: menuWidth,
+                decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(0.9),
+                  borderRadius: BorderRadius.circular(16),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.1),
+                      blurRadius: 20,
+                      offset: Offset(0, 8),
+                    ),
+                  ],
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: items.asMap().entries.map((entry) {
+                    final index = entry.key;
+                    final item = entry.value;
+                    final isDestructive =
+                        item.value.toString().contains('report') ||
+                            item.value.toString().contains('unsend');
+                    final textColor = isDestructive
+                        ? Color(0xFFFF3B30)
+                        : CupertinoColors.label;
+                    final isLast = index == items.length - 1;
+
+                    return Material(
+                      color: Colors.transparent,
+                      child: InkWell(
+                        onTap: () {
+                          onSelected(index, item);
+                        },
+                        borderRadius: BorderRadius.vertical(
+                          top: index == 0 ? Radius.circular(16) : Radius.zero,
+                          bottom: isLast ? Radius.circular(16) : Radius.zero,
+                        ),
+                        child: Container(
+                          padding: EdgeInsets.symmetric(
+                              horizontal: 16, vertical: 14),
+                          child: Row(
+                            children: [
+                              // Icon
+                              if (item.icon is String)
+                                Icon(
+                                  _getIconForSFSymbol(item.icon as String),
+                                  size: 20,
+                                  color: textColor,
+                                )
+                              else
+                                Icon(
+                                  item.icon as IconData,
+                                  size: 20,
+                                  color: textColor,
+                                ),
+                              SizedBox(width: 12),
+                              // Label
+                              Expanded(
+                                child: Text(
+                                  item.label,
+                                  style: TextStyle(
+                                    fontFamily: 'SF Pro Display',
+                                    fontSize: 17,
+                                    color: textColor,
+                                    fontWeight: FontWeight.w400,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    );
+                  }).toList(),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  IconData _getIconForSFSymbol(String symbol) {
+    // Map SF Symbols to CupertinoIcons
+    final iconMap = {
+      'doc.on.doc': CupertinoIcons.doc_on_doc,
+      'face.smiling': CupertinoIcons.smiley,
+      'arrowshape.turn.up.left': CupertinoIcons.arrow_turn_up_left,
+      'pencil': CupertinoIcons.pencil,
+      'arrow.uturn.backward': CupertinoIcons.arrow_counterclockwise,
+      'exclamationmark.triangle': CupertinoIcons.exclamationmark_triangle,
+    };
+    return iconMap[symbol] ?? CupertinoIcons.circle;
   }
 }
