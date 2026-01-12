@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
-import 'dart:ui';
 import 'package:get/get.dart';
+import 'package:liquid_glass_renderer/liquid_glass_renderer.dart';
 import '/pages/desktop_chat/chat_controller.dart';
 
 class ChatFilterButtons extends StatelessWidget {
@@ -43,6 +43,12 @@ class ChatFilterButtons extends StatelessWidget {
                 isSelected: selectedFilter == 'Groups',
                 onTap: () => chatController.updateChatFilter('Groups'),
               ),
+              const SizedBox(width: 8.0),
+              _FilterButton(
+                label: 'Service',
+                isSelected: selectedFilter == 'Service',
+                onTap: () => chatController.updateChatFilter('Service'),
+              ),
             ],
           ),
         ),
@@ -64,39 +70,29 @@ class _FilterButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(20.0),
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(20.0),
-          child: BackdropFilter(
-            filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
+    return LiquidStretch(
+      stretch: 0.5,
+      interactionScale: 1.05,
+      child: GlassGlow(
+        glowColor: isSelected
+            ? CupertinoColors.systemBlue.withOpacity(0.3)
+            : Colors.white24,
+        glowRadius: 1.0,
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            onTap: onTap,
+            borderRadius: BorderRadius.circular(20.0),
             child: AnimatedContainer(
               duration: const Duration(milliseconds: 200),
               padding:
                   const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
               decoration: BoxDecoration(
-                // Liquid Glass effect with semi-transparent background
+                // Fully opaque white background with liquid glass tap effects
                 color: isSelected
-                    ? CupertinoColors.systemBlue.withOpacity(0.96)
-                    : CupertinoColors.white.withOpacity(0.8),
+                    ? CupertinoColors.systemBlue
+                    : Colors.white, // Fully opaque white
                 borderRadius: BorderRadius.circular(20.0),
-                border: Border.all(
-                  color: isSelected
-                      ? CupertinoColors.systemBlue.withOpacity(0.96)
-                      : CupertinoColors.white.withOpacity(0.8),
-                  width: 1.5,
-                ),
-                boxShadow: [
-                  BoxShadow(
-                    color: CupertinoColors.black.withOpacity(0.1),
-                    blurRadius: 10,
-                    offset: const Offset(0, 4),
-                    spreadRadius: 0,
-                  ),
-                ],
               ),
               child: Text(
                 label,

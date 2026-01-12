@@ -66,6 +66,32 @@ class _OnboardingProfileWidgetState extends State<OnboardingProfileWidget>
       await actions.dismissKeyboard(
         context,
       );
+      
+      // Check for referrer from user document (for Google/Apple sign-in)
+      if (FFAppState().referrerName == null || FFAppState().referrerName!.isEmpty) {
+        try {
+          final userDoc = await currentUserReference?.get();
+          if (userDoc != null && userDoc.exists) {
+            final userData = userDoc.data() as Map<String, dynamic>?;
+            final referrerRef = userData?['referrer_ref'] as DocumentReference?;
+            if (referrerRef != null) {
+              final referrerDoc = await referrerRef.get();
+              if (referrerDoc.exists) {
+                final referrerData = referrerDoc.data() as Map<String, dynamic>?;
+                final referrerName = referrerData?['display_name'] as String?;
+                if (referrerName != null && referrerName.isNotEmpty) {
+                  FFAppState().update(() {
+                    FFAppState().referrerName = referrerName;
+                  });
+                }
+              }
+            }
+          }
+        } catch (e) {
+          // Error checking referrer (non-critical)
+        }
+      }
+      
       if (widget.deeplink == true) {
         await showDialog(
           context: context,
@@ -2964,6 +2990,41 @@ class _OnboardingProfileWidgetState extends State<OnboardingProfileWidget>
                                                     crossAxisAlignment:
                                                         CrossAxisAlignment.start,
                                                     children: [
+                                                      if (FFAppState().referrerName != null && FFAppState().referrerName!.isNotEmpty)
+                                                        Container(
+                                                          margin: const EdgeInsetsDirectional.fromSTEB(0.0, 0.0, 0.0, 12.0),
+                                                          padding: const EdgeInsetsDirectional.fromSTEB(12.0, 8.0, 12.0, 8.0),
+                                                          decoration: BoxDecoration(
+                                                            color: FlutterFlowTheme.of(context).primary.withOpacity(0.1),
+                                                            borderRadius: BorderRadius.circular(8.0),
+                                                            border: Border.all(
+                                                              color: FlutterFlowTheme.of(context).primary.withOpacity(0.3),
+                                                            ),
+                                                          ),
+                                                          child: Row(
+                                                            mainAxisSize: MainAxisSize.min,
+                                                            children: [
+                                                              Icon(
+                                                                Icons.check_circle,
+                                                                color: FlutterFlowTheme.of(context).primary,
+                                                                size: 20.0,
+                                                              ),
+                                                              const SizedBox(width: 8.0),
+                                                              Flexible(
+                                                                child: Text(
+                                                                  '${FFAppState().referrerName} invited you (Already Connected)',
+                                                                  style: FlutterFlowTheme.of(context).bodyMedium.override(
+                                                                    fontFamily: 'Inter',
+                                                                    color: FlutterFlowTheme.of(context).primary,
+                                                                    fontSize: 14.0,
+                                                                    fontWeight: FontWeight.w500,
+                                                                    letterSpacing: 0.0,
+                                                                  ),
+                                                                ),
+                                                              ),
+                                                            ],
+                                                          ),
+                                                        ),
                                                       Text(
                                                         'Start Connecting!',
                                                         textAlign:

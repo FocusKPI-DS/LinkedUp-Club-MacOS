@@ -104,22 +104,32 @@ GoRouter createRouter(AppStateNotifier appStateNotifier) {
     debugLogDiagnostics: true,
     refreshListenable: appStateNotifier,
     navigatorKey: appNavigatorKey,
-    errorBuilder: (context, state) =>
-        appStateNotifier.loggedIn
-            ? (!kIsWeb && Platform.isIOS
-                ? NavBarPage(initialPage: 'MobileChat')
-                : NavBarPage())
-            : const WelcomeWidget(),
+    errorBuilder: (context, state) => appStateNotifier.loggedIn
+        ? (!kIsWeb && Platform.isIOS
+            ? NavBarPage(initialPage: 'MobileChat')
+            : NavBarPage())
+        : const WelcomeWidget(),
     routes: [
       FFRoute(
         name: '_initialize',
         path: '/',
-        builder: (context, _) =>
-            appStateNotifier.loggedIn
-                ? (!kIsWeb && Platform.isIOS
-                    ? NavBarPage(initialPage: 'MobileChat')
-                    : NavBarPage())
-                : const WelcomeWidget(),
+        builder: (context, params) {
+          // Check for tab query parameter
+          print('🔍 _initialize route builder called');
+          print('   params.allParams: ${params.state.allParams}');
+          print(
+              '   params.uri.queryParameters: ${params.state.uri.queryParameters}');
+          final tab = params.getParam('tab', ParamType.String);
+          print('   Extracted tab parameter: $tab');
+          final result = appStateNotifier.loggedIn
+              ? (!kIsWeb && Platform.isIOS
+                  ? NavBarPage(initialPage: tab ?? 'MobileChat')
+                  : NavBarPage(initialPage: tab))
+              : const WelcomeWidget();
+          print(
+              '   Returning NavBarPage with initialPage: ${tab ?? 'MobileChat'}');
+          return result;
+        },
       ),
       FFRoute(
         name: LoginWidget.routeName,
@@ -327,6 +337,34 @@ GoRouter createRouter(AppStateNotifier appStateNotifier) {
         ),
       ),
       FFRoute(
+        name: MobileGroupMediaWidget.routeName,
+        path: MobileGroupMediaWidget.routePath,
+        requireAuth: true,
+        asyncParams: {
+          'chatDoc': getDoc(['chats'], ChatsRecord.fromSnapshot),
+        },
+        builder: (context, params) => MobileGroupMediaWidget(
+          chatDoc: params.getParam(
+            'chatDoc',
+            ParamType.Document,
+          ),
+        ),
+      ),
+      FFRoute(
+        name: MobileGroupTasksWidget.routeName,
+        path: MobileGroupTasksWidget.routePath,
+        requireAuth: true,
+        asyncParams: {
+          'chatDoc': getDoc(['chats'], ChatsRecord.fromSnapshot),
+        },
+        builder: (context, params) => MobileGroupTasksWidget(
+          chatDoc: params.getParam(
+            'chatDoc',
+            ParamType.Document,
+          ),
+        ),
+      ),
+      FFRoute(
         name: GroupActionTasksWidget.routeName,
         path: GroupActionTasksWidget.routePath,
         requireAuth: true,
@@ -430,9 +468,21 @@ GoRouter createRouter(AppStateNotifier appStateNotifier) {
         name: MobileChatWidget.routeName,
         path: MobileChatWidget.routePath,
         requireAuth: true,
-        builder: (context, params) => params.isEmpty
-            ? NavBarPage(initialPage: 'MobileChat')
-            : const MobileChatWidget(),
+        asyncParams: {
+          'chatDoc': getDoc(['chats'], ChatsRecord.fromSnapshot),
+        },
+        builder: (context, params) {
+          final chatDoc = params.getParam('chatDoc', ParamType.Document);
+          // Always wrap in NavBarPage to keep tab bar visible
+          return NavBarPage(
+            initialPage: 'MobileChat',
+            page: chatDoc != null
+                ? MobileChatWidget(
+                    initialChat: chatDoc as ChatsRecord?,
+                  )
+                : null,
+          );
+        },
       ),
       FFRoute(
         name: TermsPrivacyWidget.routeName,
@@ -520,34 +570,16 @@ GoRouter createRouter(AppStateNotifier appStateNotifier) {
         builder: (context, params) => const NotificationPageWidget(),
       ),
       FFRoute(
-        name: EventbriteDashboardWidget.routeName,
-        path: EventbriteDashboardWidget.routePath,
+        name: ConnectionsWidget.routeName,
+        path: ConnectionsWidget.routePath,
         requireAuth: true,
-        builder: (context, params) => const EventbriteDashboardWidget(),
+        builder: (context, params) => const ConnectionsWidget(),
       ),
       FFRoute(
-        name: PaymentHistoryPageWidget.routeName,
-        path: PaymentHistoryPageWidget.routePath,
+        name: AddConnectionsWidget.routeName,
+        path: AddConnectionsWidget.routePath,
         requireAuth: true,
-        builder: (context, params) => const PaymentHistoryPageWidget(),
-      ),
-      FFRoute(
-        name: PaymentSuccessWidget.routeName,
-        path: PaymentSuccessWidget.routePath,
-        builder: (context, params) => PaymentSuccessWidget(
-          eventId: params.getParam(
-            'eventId',
-            ParamType.String,
-          ),
-          payment: params.getParam(
-            'payment',
-            ParamType.String,
-          ),
-          sessionId: params.getParam(
-            'sessionId',
-            ParamType.String,
-          ),
-        ),
+        builder: (context, params) => const AddConnectionsWidget(),
       ),
       FFRoute(
         name: $branchio_dynamic_linking_akp5u6.TestHomePageWidget.routeName,

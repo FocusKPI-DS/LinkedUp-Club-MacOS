@@ -677,6 +677,92 @@ exports.sendReactionNotificationTrigger = functions
 //     }
 //   });
 
+// Trigger for Lona Service message broadcasting
+exports.sendLonaServiceMessageTrigger = functions
+  .runWith({
+    timeoutSeconds: 300,
+    memory: "512MB",
+  })
+  .firestore.document('chats/lona-service-chat/messages/{messageId}')
+  .onCreate(async (snapshot, context) => {
+    try {
+      const messageData = snapshot.data();
+      
+      // Verify sender is lona-service
+      const senderRef = messageData.sender_ref;
+      if (!senderRef) {
+        console.log('No sender_ref found for message');
+        return;
+      }
+
+      // Check if sender is lona-service
+      if (senderRef.id !== 'lona-service') {
+        console.log('Message not from lona-service, skipping broadcast');
+        return;
+      }
+
+      console.log('🔔 Lona Service message detected, broadcasting to all users');
+
+      // Get message content
+      const messageContent = messageData.content || messageData.text || 'New message from Lona Service';
+      
+      // Determine message preview text
+      let messagePreview = messageContent;
+      if (messageData.images && messageData.images.length > 0) {
+        messagePreview = '📷 Photo';
+      } else if (messageData.video) {
+        messagePreview = '🎬 Video';
+      } else if (messageData.audio) {
+        messagePreview = '🎤 Voice message';
+      } else if (messageData.attachment_url || messageData.file) {
+        messagePreview = '📎 File';
+      }
+
+      // Query all users from Firestore
+      const usersSnapshot = await firestore.collection('users').get();
+      const userRefs = usersSnapshot.docs.map(doc => doc.ref);
+      
+      if (userRefs.length === 0) {
+        console.log('No users found to notify');
+        return;
+      }
+
+      console.log(`📤 Broadcasting to ${userRefs.length} users`);
+
+      // Update the service chat document with last message info
+      const chatRef = firestore.doc('chats/lona-service-chat');
+      await chatRef.update({
+        last_message: messagePreview,
+        last_message_at: admin.firestore.FieldValue.serverTimestamp(),
+        last_message_sent: senderRef,
+        last_message_type: messageData.message_type || 'text',
+        last_message_seen: [senderRef], // Only lona-service has seen it
+      });
+      console.log(`✅ Updated chat document with last message info`);
+
+      // Create push notification document
+      const notificationData = {
+        notification_title: 'Lona Service',
+        notification_text: messagePreview,
+        notification_image_url: messageData.sender_photo || '',
+        notification_sound: 'default',
+        user_refs: userRefs.map(ref => ref.path).join(','),
+        initial_page_name: 'ChatDetail',
+        parameter_data: JSON.stringify({
+          chatDoc: 'chats/lona-service-chat',
+        }),
+        sender: senderRef,
+        timestamp: admin.firestore.FieldValue.serverTimestamp(),
+      };
+
+      await firestore.collection(kUserPushNotificationsCollection).add(notificationData);
+      console.log(`✅ Lona Service message broadcast notification created for ${userRefs.length} users`);
+      
+    } catch (e) {
+      console.log(`❌ Error in Lona Service message trigger: ${e}`);
+    }
+  });
+
 // Trigger for connection request notifications
 exports.sendConnectionRequestNotificationTrigger = functions
   .runWith({
@@ -2302,7 +2388,7 @@ exports.dailySummary = functions
           notification_image_url: "https://firebasestorage.googleapis.com/v0/b/linkedup-c3e29.firebasestorage.app/o/asset%2Fsoftware-agent.png?alt=media&token=99761584-999d-4f8e-b3d1-f9d1baf86120",
           notification_sound: "notification_sound.mp3",
           user_refs: requestingUserRef.path,
-          initial_page_name: "Chat",
+          initial_page_name: "ChatDetail",
           parameter_data: JSON.stringify({
             chatDoc: dmChatRef.path
           }),

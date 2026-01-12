@@ -159,8 +159,9 @@ class _SignUpWidgetState extends State<SignUpWidget>
                                   mainAxisAlignment: MainAxisAlignment.center,
                                   children: [
                                     Padding(
-                                      padding: const EdgeInsetsDirectional.fromSTEB(
-                                          0.0, 24.0, 0.0, 0.0),
+                                      padding:
+                                          const EdgeInsetsDirectional.fromSTEB(
+                                              0.0, 24.0, 0.0, 0.0),
                                       child: Container(
                                         width: 184.9,
                                         height: 120.0,
@@ -222,8 +223,8 @@ class _SignUpWidgetState extends State<SignUpWidget>
                                         CrossAxisAlignment.start,
                                     children: [
                                       Padding(
-                                        padding: const EdgeInsetsDirectional.fromSTEB(
-                                            0.0, 0.0, 0.0, 4.0),
+                                        padding: const EdgeInsetsDirectional
+                                            .fromSTEB(0.0, 0.0, 0.0, 4.0),
                                         child: Text(
                                           'Email',
                                           style: FlutterFlowTheme.of(context)
@@ -248,8 +249,8 @@ class _SignUpWidgetState extends State<SignUpWidget>
                                         ),
                                       ),
                                       Padding(
-                                        padding: const EdgeInsetsDirectional.fromSTEB(
-                                            0.0, 0.0, 0.0, 16.0),
+                                        padding: const EdgeInsetsDirectional
+                                            .fromSTEB(0.0, 0.0, 0.0, 16.0),
                                         child: SizedBox(
                                           width: double.infinity,
                                           child: TextFormField(
@@ -374,8 +375,8 @@ class _SignUpWidgetState extends State<SignUpWidget>
                                         ),
                                       ),
                                       Padding(
-                                        padding: const EdgeInsetsDirectional.fromSTEB(
-                                            0.0, 0.0, 0.0, 4.0),
+                                        padding: const EdgeInsetsDirectional
+                                            .fromSTEB(0.0, 0.0, 0.0, 4.0),
                                         child: Text(
                                           'Password',
                                           style: FlutterFlowTheme.of(context)
@@ -400,8 +401,8 @@ class _SignUpWidgetState extends State<SignUpWidget>
                                         ),
                                       ),
                                       Padding(
-                                        padding: const EdgeInsetsDirectional.fromSTEB(
-                                            0.0, 0.0, 0.0, 16.0),
+                                        padding: const EdgeInsetsDirectional
+                                            .fromSTEB(0.0, 0.0, 0.0, 16.0),
                                         child: SizedBox(
                                           width: double.infinity,
                                           child: TextFormField(
@@ -545,8 +546,8 @@ class _SignUpWidgetState extends State<SignUpWidget>
                                         ),
                                       ),
                                       Padding(
-                                        padding: const EdgeInsetsDirectional.fromSTEB(
-                                            0.0, 0.0, 0.0, 4.0),
+                                        padding: const EdgeInsetsDirectional
+                                            .fromSTEB(0.0, 0.0, 0.0, 4.0),
                                         child: Text(
                                           'Name',
                                           style: FlutterFlowTheme.of(context)
@@ -571,8 +572,8 @@ class _SignUpWidgetState extends State<SignUpWidget>
                                         ),
                                       ),
                                       Padding(
-                                        padding: const EdgeInsetsDirectional.fromSTEB(
-                                            0.0, 0.0, 0.0, 16.0),
+                                        padding: const EdgeInsetsDirectional
+                                            .fromSTEB(0.0, 0.0, 0.0, 16.0),
                                         child: SizedBox(
                                           width: double.infinity,
                                           child: TextFormField(
@@ -580,7 +581,9 @@ class _SignUpWidgetState extends State<SignUpWidget>
                                                 _model.nameTextController,
                                             focusNode: _model.nameFocusNode,
                                             autofocus: true,
-                                            autofillHints: const [AutofillHints.name],
+                                            autofillHints: const [
+                                              AutofillHints.name
+                                            ],
                                             obscureText: false,
                                             decoration: InputDecoration(
                                               hintText: 'yourname',
@@ -688,8 +691,8 @@ class _SignUpWidgetState extends State<SignUpWidget>
                                         ),
                                       ),
                                       Padding(
-                                        padding: const EdgeInsetsDirectional.fromSTEB(
-                                            0.0, 0.0, 0.0, 16.0),
+                                        padding: const EdgeInsetsDirectional
+                                            .fromSTEB(0.0, 0.0, 0.0, 16.0),
                                         child: Row(
                                           mainAxisSize: MainAxisSize.max,
                                           children: [
@@ -742,7 +745,8 @@ class _SignUpWidgetState extends State<SignUpWidget>
                                             ),
                                             Expanded(
                                               child: Container(
-                                                decoration: const BoxDecoration(),
+                                                decoration:
+                                                    const BoxDecoration(),
                                                 child: InkWell(
                                                   splashColor:
                                                       Colors.transparent,
@@ -867,120 +871,158 @@ class _SignUpWidgetState extends State<SignUpWidget>
                                       ),
                                       Builder(
                                         builder: (context) => Padding(
-                                          padding:
-                                              const EdgeInsetsDirectional.fromSTEB(
-                                                  0.0, 0.0, 0.0, 30.0),
+                                          padding: const EdgeInsetsDirectional
+                                              .fromSTEB(0.0, 0.0, 0.0, 30.0),
                                           child: FFButtonWidget(
-                                            onPressed: (_model.checkboxValue != true) ? null : () async {
-                                              GoRouter.of(context)
-                                                  .prepareAuthEvent();
+                                            onPressed: (_model.checkboxValue !=
+                                                    true)
+                                                ? null
+                                                : () async {
+                                                    GoRouter.of(context)
+                                                        .prepareAuthEvent();
 
-                                              final user = await authManager
-                                                  .createAccountWithEmail(
-                                                context,
-                                                _model
-                                                    .emailAddressTextController
-                                                    .text,
-                                                _model.passwordTextController
-                                                    .text,
-                                              );
-                                              if (user == null) {
-                                                return;
-                                              }
+                                                    final user = await authManager
+                                                        .createAccountWithEmail(
+                                                      context,
+                                                      _model
+                                                          .emailAddressTextController
+                                                          .text,
+                                                      _model
+                                                          .passwordTextController
+                                                          .text,
+                                                    );
+                                                    if (user == null) {
+                                                      return;
+                                                    }
 
-                                              await UsersRecord.collection
-                                                  .doc(user.uid)
-                                                  .update(createUsersRecordData(
-                                                    email: _model
-                                                        .emailAddressTextController
-                                                        .text,
-                                                    displayName: _model
-                                                        .nameTextController
-                                                        .text,
-                                                    createdTime:
-                                                        getCurrentTimestamp,
-                                                    isOnboarding: false,
-                                                    agreedToTerms:
-                                                        _model.checkboxValue,
-                                                    invitationCode: random_data
-                                                        .randomString(
-                                                      5,
-                                                      9,
-                                                      true,
-                                                      true,
-                                                      true,
-                                                    ),
-                                                    invitedByCode:
-                                                        widget.isDeeplink ==
-                                                                true
-                                                            ? FFAppState()
-                                                                .DeeplinkInfo
-                                                                .invitationCode
-                                                            : '',
-                                                    invitedBy:
-                                                        widget.isDeeplink ==
-                                                                true
-                                                            ? FFAppState()
-                                                                .DeeplinkInfo
-                                                                .userInvite
-                                                            : '',
-                                                  ));
+                                                    // Handle referral connection before updating user document
+                                                    String? referrerName;
+                                                    final userUid = user.uid;
+                                                    if (userUid != null &&
+                                                        userUid.isNotEmpty) {
+                                                      referrerName = await actions
+                                                          .handleReferralConnection(
+                                                              userUid);
+                                                    }
 
-                                              showDialog(
-                                                context: context,
-                                                builder: (dialogContext) {
-                                                  return Dialog(
-                                                    elevation: 0,
-                                                    insetPadding:
-                                                        EdgeInsets.zero,
-                                                    backgroundColor:
-                                                        Colors.transparent,
-                                                    alignment:
-                                                        const AlignmentDirectional(
-                                                                0.0, 0.0)
-                                                            .resolve(
-                                                                Directionality.of(
-                                                                    context)),
-                                                    child: GestureDetector(
-                                                      onTap: () {
-                                                        FocusScope.of(
-                                                                dialogContext)
-                                                            .unfocus();
-                                                        FocusManager.instance
-                                                            .primaryFocus
-                                                            ?.unfocus();
+                                                    await UsersRecord.collection
+                                                        .doc(userUid ?? '')
+                                                        .update(
+                                                            createUsersRecordData(
+                                                          email: _model
+                                                              .emailAddressTextController
+                                                              .text,
+                                                          displayName: _model
+                                                              .nameTextController
+                                                              .text,
+                                                          createdTime:
+                                                              getCurrentTimestamp,
+                                                          isOnboarding: false,
+                                                          agreedToTerms: _model
+                                                              .checkboxValue,
+                                                          invitationCode:
+                                                              random_data
+                                                                  .randomString(
+                                                            5,
+                                                            9,
+                                                            true,
+                                                            true,
+                                                            true,
+                                                          ),
+                                                          invitedByCode: widget
+                                                                      .isDeeplink ==
+                                                                  true
+                                                              ? FFAppState()
+                                                                  .DeeplinkInfo
+                                                                  .invitationCode
+                                                              : '',
+                                                          invitedBy: widget
+                                                                      .isDeeplink ==
+                                                                  true
+                                                              ? FFAppState()
+                                                                  .DeeplinkInfo
+                                                                  .userInvite
+                                                              : '',
+                                                        ));
+
+                                                    // Store referrer name for onboarding display
+                                                    if (referrerName != null) {
+                                                      FFAppState().update(() {
+                                                        FFAppState()
+                                                                .referrerName =
+                                                            referrerName;
+                                                      });
+                                                    }
+
+                                                    showDialog(
+                                                      context: context,
+                                                      builder: (dialogContext) {
+                                                        return Dialog(
+                                                          elevation: 0,
+                                                          insetPadding:
+                                                              EdgeInsets.zero,
+                                                          backgroundColor:
+                                                              Colors
+                                                                  .transparent,
+                                                          alignment: const AlignmentDirectional(
+                                                                  0.0, 0.0)
+                                                              .resolve(
+                                                                  Directionality.of(
+                                                                      context)),
+                                                          child:
+                                                              GestureDetector(
+                                                            onTap: () {
+                                                              FocusScope.of(
+                                                                      dialogContext)
+                                                                  .unfocus();
+                                                              FocusManager
+                                                                  .instance
+                                                                  .primaryFocus
+                                                                  ?.unfocus();
+                                                            },
+                                                            child:
+                                                                CongratulatioAccCreationWidget(
+                                                              action:
+                                                                  () async {},
+                                                            ),
+                                                          ),
+                                                        );
                                                       },
-                                                      child:
-                                                          CongratulatioAccCreationWidget(
-                                                        action: () async {},
-                                                      ),
-                                                    ),
-                                                  );
-                                                },
-                                              );
+                                                    );
 
-                                              context.goNamedAuth(
-                                                OnboardingProfileWidget
-                                                    .routeName,
-                                                context.mounted,
-                                                queryParameters: {
-                                                  'deeplink': serializeParam(
-                                                    widget.isDeeplink,
-                                                    ParamType.bool,
-                                                  ),
-                                                }.withoutNulls,
-                                              );
+                                                    context.goNamedAuth(
+                                                      OnboardingProfileWidget
+                                                          .routeName,
+                                                      context.mounted,
+                                                      queryParameters: {
+                                                        'deeplink':
+                                                            serializeParam(
+                                                          widget.isDeeplink,
+                                                          ParamType.bool,
+                                                        ),
+                                                        'hasReferrer':
+                                                            serializeParam(
+                                                          referrerName != null,
+                                                          ParamType.bool,
+                                                        ),
+                                                      }.withoutNulls,
+                                                    );
 
-                                              await actions.closekeyboard();
-                                            },
+                                                    await actions
+                                                        .closekeyboard();
+                                                  },
                                             text: 'Sign Up',
                                             options: FFButtonOptions(
                                               width: double.infinity,
                                               height: 48.0,
-                                              padding: const EdgeInsetsDirectional
-                                                  .fromSTEB(0.0, 0.0, 0.0, 0.0),
-                                              iconPadding: const EdgeInsetsDirectional
-                                                  .fromSTEB(0.0, 0.0, 0.0, 0.0),
+                                              padding:
+                                                  const EdgeInsetsDirectional
+                                                      .fromSTEB(
+                                                      0.0, 0.0, 0.0, 0.0),
+                                              iconPadding:
+                                                  const EdgeInsetsDirectional
+                                                      .fromSTEB(
+                                                      0.0, 0.0, 0.0, 0.0),
                                               color:
                                                   FlutterFlowTheme.of(context)
                                                       .primary,
@@ -1032,12 +1074,11 @@ class _SignUpWidgetState extends State<SignUpWidget>
 
                                       // You will have to add an action on this rich text to go to your login page.
                                       Align(
-                                        alignment:
-                                            const AlignmentDirectional(0.0, 0.0),
+                                        alignment: const AlignmentDirectional(
+                                            0.0, 0.0),
                                         child: Padding(
-                                          padding:
-                                              const EdgeInsetsDirectional.fromSTEB(
-                                                  0.0, 30.0, 0.0, 18.0),
+                                          padding: const EdgeInsetsDirectional
+                                              .fromSTEB(0.0, 30.0, 0.0, 18.0),
                                           child: RichText(
                                             textScaler: MediaQuery.of(context)
                                                 .textScaler,
@@ -1111,12 +1152,14 @@ class _SignUpWidgetState extends State<SignUpWidget>
                                                 borderRadius:
                                                     BorderRadius.circular(8.0),
                                                 border: Border.all(
-                                                  color: const Color(0xFFD1D5DB),
+                                                  color:
+                                                      const Color(0xFFD1D5DB),
                                                 ),
                                               ),
                                               child: Align(
-                                                alignment: const AlignmentDirectional(
-                                                    0.0, 0.0),
+                                                alignment:
+                                                    const AlignmentDirectional(
+                                                        0.0, 0.0),
                                                 child: FaIcon(
                                                   FontAwesomeIcons.google,
                                                   color: FlutterFlowTheme.of(
@@ -1128,48 +1171,50 @@ class _SignUpWidgetState extends State<SignUpWidget>
                                             ),
                                           ),
                                           // Sign in with Apple - now enabled for all platforms including macOS
-                                            InkWell(
-                                              splashColor: Colors.transparent,
-                                              focusColor: Colors.transparent,
-                                              hoverColor: Colors.transparent,
-                                              highlightColor: Colors.transparent,
-                                              onTap: () async {
-                                                GoRouter.of(context)
-                                                    .prepareAuthEvent();
-                                                final user = await authManager
-                                                    .signInWithApple(context);
-                                                if (user == null) {
-                                                  return;
-                                                }
-                                                await action_blocks
-                                                    .checkOnboarding(context);
-                                              },
-                                              child: Container(
-                                                width: 106.0,
-                                                height: 38.0,
-                                                decoration: BoxDecoration(
+                                          InkWell(
+                                            splashColor: Colors.transparent,
+                                            focusColor: Colors.transparent,
+                                            hoverColor: Colors.transparent,
+                                            highlightColor: Colors.transparent,
+                                            onTap: () async {
+                                              GoRouter.of(context)
+                                                  .prepareAuthEvent();
+                                              final user = await authManager
+                                                  .signInWithApple(context);
+                                              if (user == null) {
+                                                return;
+                                              }
+                                              await action_blocks
+                                                  .checkOnboarding(context);
+                                            },
+                                            child: Container(
+                                              width: 106.0,
+                                              height: 38.0,
+                                              decoration: BoxDecoration(
+                                                color:
+                                                    FlutterFlowTheme.of(context)
+                                                        .secondaryBackground,
+                                                borderRadius:
+                                                    BorderRadius.circular(8.0),
+                                                border: Border.all(
                                                   color:
-                                                      FlutterFlowTheme.of(context)
-                                                          .secondaryBackground,
-                                                  borderRadius:
-                                                      BorderRadius.circular(8.0),
-                                                  border: Border.all(
-                                                    color: const Color(0xFFD1D5DB),
-                                                  ),
+                                                      const Color(0xFFD1D5DB),
                                                 ),
-                                                child: Align(
-                                                  alignment: const AlignmentDirectional(
-                                                      0.0, 0.0),
-                                                  child: Icon(
-                                                    Icons.apple_rounded,
-                                                    color: FlutterFlowTheme.of(
-                                                            context)
-                                                        .primaryText,
-                                                    size: 28.0,
-                                                  ),
+                                              ),
+                                              child: Align(
+                                                alignment:
+                                                    const AlignmentDirectional(
+                                                        0.0, 0.0),
+                                                child: Icon(
+                                                  Icons.apple_rounded,
+                                                  color: FlutterFlowTheme.of(
+                                                          context)
+                                                      .primaryText,
+                                                  size: 28.0,
                                                 ),
                                               ),
                                             ),
+                                          ),
                                           if (false)
                                             Container(
                                               width: 106.0,
@@ -1181,11 +1226,13 @@ class _SignUpWidgetState extends State<SignUpWidget>
                                                 borderRadius:
                                                     BorderRadius.circular(8.0),
                                                 border: Border.all(
-                                                  color: const Color(0xFFD1D5DB),
+                                                  color:
+                                                      const Color(0xFFD1D5DB),
                                                 ),
                                               ),
-                                              alignment: const AlignmentDirectional(
-                                                  0.0, 0.0),
+                                              alignment:
+                                                  const AlignmentDirectional(
+                                                      0.0, 0.0),
                                               child: ClipRRect(
                                                 borderRadius:
                                                     BorderRadius.circular(8.0),
@@ -1202,12 +1249,11 @@ class _SignUpWidgetState extends State<SignUpWidget>
 
                                       // You will have to add an action on this rich text to go to your login page.
                                       Align(
-                                        alignment:
-                                            const AlignmentDirectional(0.0, 0.0),
+                                        alignment: const AlignmentDirectional(
+                                            0.0, 0.0),
                                         child: Padding(
-                                          padding:
-                                              const EdgeInsetsDirectional.fromSTEB(
-                                                  0.0, 27.0, 0.0, 12.0),
+                                          padding: const EdgeInsetsDirectional
+                                              .fromSTEB(0.0, 27.0, 0.0, 12.0),
                                           child: InkWell(
                                             splashColor: Colors.transparent,
                                             focusColor: Colors.transparent,

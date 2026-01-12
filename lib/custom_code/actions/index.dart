@@ -7,6 +7,8 @@ export 'get_first_letter_name.dart' show getFirstLetterName;
 export 'check_valid_words.dart' show checkValidWords;
 export 'download_p_d_f_file.dart' show downloadPDFFile;
 export 'pass_deeplink_data.dart' show passDeeplinkData;
+export 'handle_referral_deeplink.dart' show initializeReferralDeepLink, getStoredReferralUid, clearStoredReferralUid, disposeReferralDeepLink;
+export 'handle_referral_connection.dart' show handleReferralConnection;
 export 'call_a_i_agent.dart' show callAIAgent;
 export 'check_event_invite.dart' show checkEventInvite;
 export 'stop_branch_deeplink.dart' show stopBranchDeeplink;

@@ -122,6 +122,11 @@ class ChatsRecord extends FirestoreRecord {
   DocumentReference? get workspaceRef => _workspaceRef;
   bool hasWorkspaceRef() => _workspaceRef != null;
 
+  // "is_service_chat" field.
+  bool? _isServiceChat;
+  bool get isServiceChat => _isServiceChat ?? false;
+  bool hasIsServiceChat() => _isServiceChat != null;
+
   void _initializeFields() {
     _title = snapshotData['title'] as String?;
     _isGroup = snapshotData['is_group'] as bool?;
@@ -146,6 +151,7 @@ class ChatsRecord extends FirestoreRecord {
     _reminderFrequency = castToType<int>(snapshotData['reminder_frequency']);
     _lastSeen = snapshotData['last_seen'] as DocumentReference?;
     _workspaceRef = snapshotData['workspace_ref'] as DocumentReference?;
+    _isServiceChat = snapshotData['is_service_chat'] as bool?;
   }
 
   static CollectionReference get collection =>
@@ -199,6 +205,7 @@ Map<String, dynamic> createChatsRecordData({
   int? reminderFrequency,
   DocumentReference? lastSeen,
   DocumentReference? workspaceRef,
+  bool? isServiceChat,
 }) {
   final firestoreData = mapToFirestore(
     <String, dynamic>{
@@ -219,6 +226,7 @@ Map<String, dynamic> createChatsRecordData({
       'reminder_frequency': reminderFrequency,
       'last_seen': lastSeen,
       'workspace_ref': workspaceRef,
+      'is_service_chat': isServiceChat,
     }.withoutNulls,
   );
 
@@ -251,7 +259,8 @@ class ChatsRecordDocumentEquality implements Equality<ChatsRecord> {
         listEquality.equals(e1?.blockedUser, e2?.blockedUser) &&
         e1?.reminderFrequency == e2?.reminderFrequency &&
         e1?.lastSeen == e2?.lastSeen &&
-        e1?.workspaceRef == e2?.workspaceRef;
+        e1?.workspaceRef == e2?.workspaceRef &&
+        e1?.isServiceChat == e2?.isServiceChat;
   }
 
   @override
@@ -276,7 +285,8 @@ class ChatsRecordDocumentEquality implements Equality<ChatsRecord> {
         e?.blockedUser,
         e?.reminderFrequency,
         e?.lastSeen,
-        e?.workspaceRef
+        e?.workspaceRef,
+        e?.isServiceChat
       ]);
 
   @override

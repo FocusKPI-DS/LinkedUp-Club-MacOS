@@ -27,11 +27,8 @@ Future<bool> ensureFcmToken(DocumentReference userRef) async {
             userAgent.contains('edg'); // Edge user agent contains 'edg'
 
         if (!isChrome && !isEdge) {
-          print('🔔 FCM web push only supported on Chrome/Edge browsers');
           return false;
         }
-
-        print('🔔 Initializing FCM for web (Chrome/Edge)...');
 
         // VAPID key from Firebase Console
         const vapidKey =
@@ -52,33 +49,25 @@ Future<bool> ensureFcmToken(DocumentReference userRef) async {
         );
 
         if (settings.authorizationStatus != AuthorizationStatus.authorized) {
-          print(
-              '❌ Notification permission not granted for web: ${settings.authorizationStatus}');
           return false;
         }
-
-        print('✅ Notification permission granted for web');
 
         // Get FCM token with VAPID key for web
         String? token;
         try {
           token = await messaging.getToken(vapidKey: vapidKey);
         } catch (e) {
-          print('❌ Error getting FCM token with VAPID key: $e');
           // Try without VAPID key as fallback
           try {
             token = await messaging.getToken();
           } catch (e2) {
-            print('❌ Error getting FCM token: $e2');
+            // Error getting FCM token
           }
         }
 
         if (token == null || token.isEmpty) {
-          print('❌ Failed to get FCM token on web');
           return false;
         }
-
-        print('✅ FCM token obtained on web: ${token.substring(0, 10)}...');
 
         // Determine device type
         String deviceType = isChrome ? 'Chrome' : 'Edge';
@@ -91,31 +80,21 @@ Future<bool> ensureFcmToken(DocumentReference userRef) async {
             .get();
 
         if (existingTokenQuery.docs.isEmpty) {
-          final docRef = await fcmTokensRef.add({
+          await fcmTokensRef.add({
             'fcm_token': token,
             'device_type': deviceType,
             'created_at': FieldValue.serverTimestamp(),
           });
-
-          print('✅ FCM token added successfully for web!');
-          print('   Token: ${token.substring(0, 10)}...');
-          print('   Device: $deviceType');
-          print('   Path: ${docRef.path}');
         } else {
           await existingTokenQuery.docs.first.reference.update({
             'fcm_token': token,
             'device_type': deviceType,
           });
-
-          print('✅ FCM token updated successfully for web!');
         }
 
         // Listen for token refresh
         FirebaseMessaging.instance.onTokenRefresh.listen((newToken) async {
           try {
-            print(
-                '🔄 FCM Token refreshed on web! New: ${newToken.substring(0, 10)}...');
-
             final allTokensQuery = await fcmTokensRef.get();
             for (var doc in allTokensQuery.docs) {
               await doc.reference.delete();
@@ -126,16 +105,13 @@ Future<bool> ensureFcmToken(DocumentReference userRef) async {
               'device_type': deviceType,
               'created_at': FieldValue.serverTimestamp(),
             });
-
-            print('✅ FCM token refresh completed for web!');
           } catch (e) {
-            print('❌ Error during token refresh on web: $e');
+            // Error during token refresh
           }
         });
 
         return true;
       } catch (e) {
-        print('❌ Error setting up FCM on web: $e');
         return false;
       }
     }
@@ -155,19 +131,11 @@ Future<bool> ensureFcmToken(DocumentReference userRef) async {
     );
 
     if (settings.authorizationStatus != AuthorizationStatus.authorized) {
-      print('❌ User declined notifications permission!');
-      print('   Authorization status: ${settings.authorizationStatus}');
       return false;
-    } else {
-      print('✅ Notification permission granted!');
-      print('   Authorization status: ${settings.authorizationStatus}');
     }
 
     // For macOS and iOS, ensure APNS token is available before getting FCM token
     if (!kIsWeb && (Platform.isMacOS || Platform.isIOS)) {
-      print(
-          'Waiting for APNS token on ${Platform.isMacOS ? 'macOS' : 'iOS'}...');
-
       String? apnsToken;
       int maxRetries = 10;
       int retryCount = 0;
@@ -176,12 +144,10 @@ Future<bool> ensureFcmToken(DocumentReference userRef) async {
         try {
           apnsToken = await FirebaseMessaging.instance.getAPNSToken();
           if (apnsToken != null) {
-            print(
-                'APNS token received: ${apnsToken.substring(0, min(10, apnsToken.length))}...');
             break;
           }
         } catch (e) {
-          print('Attempt ${retryCount + 1}: APNS token not yet available - $e');
+          // APNS token not yet available
         }
 
         // Exponential backoff: wait longer each time
@@ -190,12 +156,6 @@ Future<bool> ensureFcmToken(DocumentReference userRef) async {
       }
 
       if (apnsToken == null) {
-        print('Failed to get APNS token after $maxRetries attempts');
-        print('This might be due to:');
-        print(
-            '1. Another app version (e.g., TestFlight) is using the APNS token');
-        print('2. APNS is not properly configured');
-        print('3. The app is not properly signed');
         return false;
       }
     }
@@ -204,7 +164,6 @@ Future<bool> ensureFcmToken(DocumentReference userRef) async {
     String? token = await messaging.getToken();
 
     if (token == null || token.isEmpty) {
-      print('Failed to get FCM token');
       return false;
     }
 
@@ -227,48 +186,31 @@ Future<bool> ensureFcmToken(DocumentReference userRef) async {
 
     if (existingTokenQuery.docs.isEmpty) {
       // Token doesn't exist, add it
-      final docRef = await fcmTokensRef.add({
+      await fcmTokensRef.add({
         'fcm_token': token,
         'device_type': deviceType,
         'created_at': FieldValue.serverTimestamp(),
       });
-
-      print('✅ FCM token added successfully!');
-      print('   Token: ${token.substring(0, 10)}...');
-      print('   Device: $deviceType');
-      print('   Path: ${docRef.path}');
-      print('   User: ${userRef.path}');
     } else {
       // Token exists, update it if needed
       await existingTokenQuery.docs.first.reference.update({
         'fcm_token': token,
         'device_type': deviceType,
       });
-
-      print('✅ FCM token updated successfully!');
-      print('   Token: ${token.substring(0, 10)}...');
-      print('   Device: $deviceType');
-      print('   Doc: ${existingTokenQuery.docs.first.reference.path}');
     }
 
     // Subscribe to News topic (mobile platforms only)
     try {
       if (!kIsWeb && (Platform.isAndroid || Platform.isIOS)) {
         await FirebaseMessaging.instance.subscribeToTopic('news');
-        print('✅ Subscribed to topic: news');
-      } else {
-        print('ℹ️ Topic subscribe skipped on this platform');
       }
     } catch (e) {
-      print('❌ Failed to subscribe to topic news: $e');
+      // Failed to subscribe to topic
     }
 
-    // Also listen for token refresh - FIXED VERSION
+    // Also listen for token refresh
     FirebaseMessaging.instance.onTokenRefresh.listen((newToken) async {
       try {
-        print(
-            '🔄 FCM Token refreshed! Old: ${token.substring(0, 10)}... New: ${newToken.substring(0, 10)}...');
-
         // Remove ALL old tokens for this user (cleanup)
         final allTokensQuery = await fcmTokensRef.get();
         for (var doc in allTokensQuery.docs) {
@@ -286,21 +228,17 @@ Future<bool> ensureFcmToken(DocumentReference userRef) async {
         try {
           if (!kIsWeb && (Platform.isAndroid || Platform.isIOS)) {
             await FirebaseMessaging.instance.subscribeToTopic('news');
-            print('✅ Re-subscribed to topic: news');
           }
         } catch (e) {
-          print('❌ Failed to re-subscribe to topic news: $e');
+          // Failed to re-subscribe
         }
-
-        print('✅ FCM token refresh completed! New token registered.');
       } catch (e) {
-        print('❌ Error during token refresh: $e');
+        // Error during token refresh
       }
     });
 
     return true;
   } catch (e) {
-    print('Error ensuring FCM token: $e');
     return false;
   }
 }

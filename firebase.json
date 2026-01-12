@@ -45,13 +45,17 @@
     "rules": "firebase/storage.rules"
   },
   "hosting": {
-    "public": "build/web",
+    "public": "nextjs-landing/out",
     "ignore": [
       "firebase.json",
       "**/.*",
       "**/node_modules/**"
     ],
     "rewrites": [
+      {
+        "source": "/invite/**",
+        "destination": "/invite.html"
+      },
       {
         "source": "**",
         "destination": "/index.html"
@@ -91,6 +95,15 @@
           {
             "key": "Cache-Control",
             "value": "no-cache, no-store, must-revalidate"
+          }
+        ]
+      },
+      {
+        "source": "/.well-known/apple-app-site-association",
+        "headers": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
           }
         ]
       }

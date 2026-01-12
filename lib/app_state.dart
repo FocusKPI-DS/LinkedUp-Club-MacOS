@@ -350,6 +350,12 @@ class FFAppState extends ChangeNotifier {
     _skippedInvitation = value;
   }
 
+  String? _referrerName;
+  String? get referrerName => _referrerName;
+  set referrerName(String? value) {
+    _referrerName = value;
+  }
+
   // Transient flag to show the News alert only once per app run
   bool _hasShownNewsAlert = false;
   bool get hasShownNewsAlert => _hasShownNewsAlert;

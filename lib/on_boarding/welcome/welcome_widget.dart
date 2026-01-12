@@ -5,6 +5,8 @@ import '/flutter_flow/flutter_flow_widgets.dart';
 import 'dart:ui';
 import '/custom_code/actions/index.dart' as actions;
 import '/index.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:branchio_dynamic_linking_akp5u6/custom_code/actions/index.dart'
     as branchio_dynamic_linking_akp5u6_actions;
 import 'package:smooth_page_indicator/smooth_page_indicator.dart'
@@ -44,6 +46,31 @@ class _WelcomeWidgetState extends State<WelcomeWidget>
 
     // On page load action.
     SchedulerBinding.instance.addPostFrameCallback((_) async {
+      // Check for referrer query parameter (from web invite link)
+      if (kIsWeb) {
+        try {
+          // Get referrer parameter from URL
+          // Uri.base should work even with base href /app/
+          final uri = Uri.base;
+          final referrerUid = uri.queryParameters['referrer'];
+          
+          print('[Web Referral] Current URL: ${uri.toString()}');
+          print('[Web Referral] Query parameters: ${uri.queryParameters}');
+          print('[Web Referral] Referrer UID: $referrerUid');
+          
+          if (referrerUid != null && referrerUid.isNotEmpty) {
+            // Store referral UID for web app signup
+            final prefs = await SharedPreferences.getInstance();
+            await prefs.setString('pending_referrer_uid', referrerUid);
+            print('[Web Referral] ✅ Stored referral UID: $referrerUid');
+          } else {
+            print('[Web Referral] ⚠️ No referrer parameter found in URL');
+          }
+        } catch (e) {
+          print('[Web Referral] ❌ Error storing referral UID: $e');
+        }
+      }
+      
       await branchio_dynamic_linking_akp5u6_actions.handleBranchDeeplink(
         (linkData) async {
           _model.dataLink = await actions.checkEventInvite(

@@ -29,6 +29,10 @@ export '/pages/chat/group_chat_detail/group_chat_detail_widget.dart'
     show GroupChatDetailWidget;
 export '/pages/chat/group_chat_detail/group_media_links_docs_widget.dart'
     show GroupMediaLinksDocsWidget;
+export '/pages/chat/group_chat_detail/mobile_group_media_widget.dart'
+    show MobileGroupMediaWidget;
+export '/pages/chat/group_chat_detail/mobile_group_tasks_widget.dart'
+    show MobileGroupTasksWidget;
 export '/pages/chat/user_profile_detail/user_profile_detail_widget.dart'
     show UserProfileDetailWidget;
 export '/pages/chat/chat/chat_widget.dart' show ChatWidget;
@@ -49,6 +53,8 @@ export '/pages/chat/all_pending_requests/all_pending_requests_widget.dart'
     show AllPendingRequestsWidget;
 export '/pages/feed/full_image/full_image_widget.dart' show FullImageWidget;
 export '/pages/connections/connections_widget.dart' show ConnectionsWidget;
+export '/pages/connections/add_connections_widget.dart'
+    show AddConnectionsWidget;
 export '/q_r_scan_page/q_r_scan_page_widget.dart' show QRScanPageWidget;
 export '/notification_page/notification_page_widget.dart'
     show NotificationPageWidget;
@@ -56,7 +62,7 @@ export '/eventbrite_dashboard/eventbrite_dashboard_widget.dart'
     show EventbriteDashboardWidget;
 export '/payment_history_page/payment_history_page_widget.dart'
     show PaymentHistoryPageWidget;
-export '/payment_success/payment_success_widget.dart' show PaymentSuccessWidget;
+
 export '/pages/desktop_chat/desktop_chat_widget.dart' show DesktopChatWidget;
 export '/pages/ai_assistant/ai_assistant_widget.dart' show AIAssistantWidget;
 export '/pages/chat/group_action_tasks/group_action_tasks_widget.dart'

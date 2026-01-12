@@ -1,7 +1,6 @@
 import '/auth/base_auth_user_provider.dart';
 import '/auth/firebase_auth/auth_util.dart';
 import '/backend/backend.dart';
-import '/components/invite_friends_button_widget.dart';
 import '/flutter_flow/flutter_flow_animations.dart';
 import '/flutter_flow/flutter_flow_util.dart';
 import '/custom_code/widgets/summerai_todos.dart';
@@ -17,6 +16,9 @@ import 'package:flutter/scheduler.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:provider/provider.dart';
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:adaptive_platform_ui/adaptive_platform_ui.dart';
+import 'package:liquid_glass_renderer/liquid_glass_renderer.dart';
+import 'package:share_plus/share_plus.dart';
 import 'home_model.dart';
 export 'home_model.dart';
 
@@ -183,11 +185,28 @@ class _HomeWidgetState extends State<HomeWidget> with TickerProviderStateMixin {
                 ),
               ),
             ),
-            // Invite friends button in top right
+            // Invite friends button in top right - iOS 26+ style with liquid glass effects
             Positioned(
               top: 8,
               right: 16,
-              child: InviteFriendsButtonWidget(),
+              child: LiquidStretch(
+                stretch: 0.5,
+                interactionScale: 1.05,
+                child: GlassGlow(
+                  glowColor: Colors.white24,
+                  glowRadius: 1.0,
+                  child: AdaptiveFloatingActionButton(
+                    mini: true,
+                    backgroundColor: Colors.white,
+                    foregroundColor: Color(0xFF007AFF),
+                    onPressed: () => _showInviteDialog(context),
+                    child: Icon(
+                      CupertinoIcons.person_add_solid,
+                      size: 17,
+                    ),
+                  ),
+                ),
+              ),
             ),
           ],
         ),
@@ -392,5 +411,59 @@ class _HomeWidgetState extends State<HomeWidget> with TickerProviderStateMixin {
 
   Widget _buildSummerAITasksSection(BuildContext context) {
     return const SummerAITodos();
+  }
+
+  String _getInviteMessage() {
+    // Get current user's UID for personalized referral link
+    final userUid = currentUserUid.isNotEmpty
+        ? currentUserUid
+        : (currentUserReference?.id ?? '');
+
+    // Create personalized referral link
+    final referralLink = 'https://lona.club/invite/$userUid';
+
+    return 'Hey! I\'ve been using this app named Lona for communication, and it\'s amazing! It really boosts productivity and makes team collaboration so much easier. You should check it out!\n\nJoin me on Lona: $referralLink';
+  }
+
+  Future<void> _shareInviteMessage() async {
+    // Open native iOS share sheet (like WhatsApp)
+    // Get screen size for share position origin
+    final size = MediaQuery.of(context).size;
+    final sharePositionOrigin = Rect.fromLTWH(
+      size.width / 2 - 100,
+      size.height / 2,
+      200,
+      100,
+    );
+
+    await Share.share(
+      _getInviteMessage(),
+      sharePositionOrigin: sharePositionOrigin,
+    );
+  }
+
+  void _showInviteDialog(BuildContext context) async {
+    // Show iOS 26+ adaptive dialog with invite options (iOS 26+ liquid glass effect)
+    await AdaptiveAlertDialog.show(
+      context: context,
+      title: 'Invite Friends',
+      message:
+          'Share Lona with your friends and boost your team\'s productivity together!',
+      icon: 'person.2.fill',
+      actions: [
+        AlertAction(
+          title: 'Cancel',
+          style: AlertActionStyle.cancel,
+          onPressed: () {},
+        ),
+        AlertAction(
+          title: 'Share',
+          style: AlertActionStyle.primary,
+          onPressed: () {
+            _shareInviteMessage();
+          },
+        ),
+      ],
+    );
   }
 }

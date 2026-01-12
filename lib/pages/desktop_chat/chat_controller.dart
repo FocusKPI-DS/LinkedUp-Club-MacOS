@@ -27,18 +27,21 @@ class ChatController extends GetxController {
   }
 
   StreamSubscription? _chatsSubscription;
+  StreamSubscription? _serviceChatsSubscription;
 
   @override
   void onClose() {
     _chatsSubscription?.cancel();
+    _serviceChatsSubscription?.cancel();
     super.onClose();
   }
 
   // Load chats from Firestore with real-time updates
   Future<void> loadChats() async {
     try {
-      // Cancel existing subscription if any
+      // Cancel existing subscriptions if any
       await _chatsSubscription?.cancel();
+      await _serviceChatsSubscription?.cancel();
 
       chatState.value = ChatState.loading;
 
@@ -49,20 +52,42 @@ class ChatController extends GetxController {
         return;
       }
 
-      // Use queryChatsRecord stream which handles errors better
-      final chatsStream = queryChatsRecord(
+      // Regular chats stream
+      final regularChatsStream = queryChatsRecord(
         queryBuilder: (chatsRecord) => chatsRecord
-            .where('members', arrayContains: currentUserReference)
-            .orderBy('last_message_at', descending: true),
+            .where('members', arrayContains: currentUserReference),
       );
 
-      _chatsSubscription = chatsStream.listen(
+      // Service chats stream (visible to all users)
+      final serviceChatsStream = queryChatsRecord(
+        queryBuilder: (chatsRecord) => chatsRecord
+            .where('is_service_chat', isEqualTo: true),
+      );
+
+      // Store regular chats
+      List<ChatsRecord> regularChats = [];
+      List<ChatsRecord> serviceChats = [];
+
+      // Listen to regular chats
+      _chatsSubscription = regularChatsStream.listen(
         (chatsList) {
-          chats.value = chatsList;
-          chatState.value = ChatState.success;
+          regularChats = chatsList;
+          _combineAndUpdateChats(regularChats, serviceChats);
         },
         onError: (error) {
           errorMessage.value = 'Error loading chats: $error';
+          chatState.value = ChatState.error;
+        },
+      );
+
+      // Listen to service chats
+      _serviceChatsSubscription = serviceChatsStream.listen(
+        (chatsList) {
+          serviceChats = chatsList;
+          _combineAndUpdateChats(regularChats, serviceChats);
+        },
+        onError: (error) {
+          errorMessage.value = 'Error loading service chats: $error';
           chatState.value = ChatState.error;
         },
       );
@@ -70,6 +95,37 @@ class ChatController extends GetxController {
       errorMessage.value = 'Error loading chats: $e';
       chatState.value = ChatState.error;
     }
+  }
+
+  // Combine regular and service chats, remove duplicates, sort, and update
+  void _combineAndUpdateChats(List<ChatsRecord> regularChats, List<ChatsRecord> serviceChats) {
+    // Combine and remove duplicates by reference path
+    final Map<String, ChatsRecord> uniqueChats = {};
+    for (final chat in regularChats) {
+      uniqueChats[chat.reference.path] = chat;
+    }
+    for (final chat in serviceChats) {
+      uniqueChats[chat.reference.path] = chat;
+    }
+
+    final combinedChats = uniqueChats.values.toList();
+
+    // Sort chats client-side by last_message_at (handles null values)
+    combinedChats.sort((a, b) {
+      final aTime = a.lastMessageAt;
+      final bTime = b.lastMessageAt;
+      
+      // Handle null values - put nulls at the end
+      if (aTime == null && bTime == null) return 0;
+      if (aTime == null) return 1; // a goes after b
+      if (bTime == null) return -1; // b goes after a
+      
+      // Both have values, sort descending (newest first)
+      return bTime.compareTo(aTime);
+    });
+    
+    chats.value = combinedChats;
+    chatState.value = ChatState.success;
   }
 
   // Set selected chat
@@ -103,6 +159,12 @@ class ChatController extends GetxController {
     // Then check Firestore state
     if (currentUserReference == null) return false;
 
+    // Special handling for service chats - they should show as unread if they have any messages
+    // and the user hasn't explicitly marked them as read
+    if (chat.isServiceChat == true) {
+      return chat.lastMessage.isNotEmpty;
+    }
+
     bool hasUnread = !chat.lastMessageSeen.contains(currentUserReference) &&
         chat.lastMessage.isNotEmpty &&
         chat.lastMessageSent != currentUserReference;
@@ -121,6 +183,15 @@ class ChatController extends GetxController {
     // Check local state first - if chat is marked as seen locally, return 0
     if (locallySeenChats.contains(chat.reference.id)) {
       return Stream.value(0);
+    }
+
+    // Special handling for service chats - count all messages as unread
+    if (chat.isServiceChat == true) {
+      // For service chats, count all messages in the chat
+      return chat.reference
+          .collection('messages')
+          .snapshots()
+          .map((snapshot) => snapshot.docs.length);
     }
 
     // If user has seen the last message, no unread messages
@@ -359,7 +430,11 @@ class ChatController extends GetxController {
     List<ChatsRecord> filteredChats = List.from(chats);
 
     // Hide chats with no messages (temporary chats only appear when selected)
+    // But always show service chats regardless of message count
     filteredChats = filteredChats.where((chat) {
+      if (chat.isServiceChat == true) {
+        return true; // Always show service chats
+      }
       if (chat.lastMessage.isEmpty) {
         return false;
       }
@@ -389,9 +464,13 @@ class ChatController extends GetxController {
     } else if (chatFilter.value == 'Groups') {
       // Groups only
       filteredChats = filteredChats.where((chat) => chat.isGroup).toList();
+      // Note: Service chats are not groups, so they won't appear in Groups filter
+    } else if (chatFilter.value == 'Service') {
+      // Service messages only
+      filteredChats = filteredChats.where((chat) => chat.isServiceChat == true).toList();
     } else if (chatFilter.value == 'All') {
-      // All - show both direct messages and groups (no additional filtering)
-      // filteredChats remains unchanged
+      // All - show direct messages and groups (service chats only show in Service filter)
+      filteredChats = filteredChats.where((chat) => !chat.isServiceChat).toList();
     } else {
       // Fallback to selected tab (for backward compatibility)
       if (selectedTabIndex.value == 0) {
@@ -406,11 +485,15 @@ class ChatController extends GetxController {
       }
     }
 
-    // Sort chats: Pinned chats at the top, then by last message time
+    // Sort chats: Pinned chats at the top, then service chats, then by last message time
     filteredChats.sort((a, b) {
       // First, sort by pinned status (pinned chats come first)
       if (a.isPin != b.isPin) {
         return a.isPin ? -1 : 1;
+      }
+      // Then, service chats come before regular chats
+      if (a.isServiceChat != b.isServiceChat) {
+        return a.isServiceChat ? -1 : 1;
       }
       // Then sort by last message time (most recent first)
       if (a.lastMessageAt != null && b.lastMessageAt != null) {

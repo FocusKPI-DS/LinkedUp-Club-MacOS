@@ -22,6 +22,7 @@ import 'schema/workspace_members_record.dart';
 import 'schema/action_items_record.dart';
 import 'dart:async';
 import 'package:infinite_scroll_pagination/infinite_scroll_pagination.dart';
+import '../custom_code/actions/index.dart' as actions;
 
 export 'dart:async' show StreamSubscription;
 export 'package:cloud_firestore/cloud_firestore.dart' hide Order;
@@ -1140,7 +1141,6 @@ Stream<List<T>> queryCollection<T>(
   }
   return query.snapshots().asyncMap((s) async {
     try {
-      print('DEBUG queryCollection: Got ${s.docs.length} documents from query');
       return s.docs
           .map(
             (d) => safeGet(
@@ -1285,6 +1285,16 @@ Future maybeCreateUser(User user) async {
 
   await userRecord.set(userData);
   currentUserDocument = UsersRecord.getDocumentFromData(userData, userRecord);
+  
+  // Handle referral connection for new users (Google/Apple sign-in)
+  try {
+    final userUid = user.uid;
+    if (userUid != null && userUid.isNotEmpty) {
+      await actions.handleReferralConnection(userUid);
+    }
+  } catch (e) {
+    // Referral connection failed (non-critical)
+  }
 }
 
 Future updateUserDocument({String? email}) async {

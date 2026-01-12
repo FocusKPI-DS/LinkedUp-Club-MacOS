@@ -3,6 +3,8 @@ PODS:
     - Flutter
   - app_badge_plus (1.2.3):
     - Flutter
+  - app_links (6.4.1):
+    - Flutter
   - AppAuth (1.7.6):
     - AppAuth/Core (= 1.7.6)
     - AppAuth/ExternalUserAgent (= 1.7.6)
@@ -65,6 +67,8 @@ PODS:
   - DKPhotoGallery/Resource (0.0.19):
     - SDWebImage
     - SwiftyGif
+  - emoji_picker_flutter (0.0.1):
+    - Flutter
   - file_picker (0.0.1):
     - DKImagePickerController/PhotoGallery
     - Flutter
@@ -377,6 +381,7 @@ PODS:
 DEPENDENCIES:
   - adaptive_platform_ui (from `.symlinks/plugins/adaptive_platform_ui/ios`)
   - app_badge_plus (from `.symlinks/plugins/app_badge_plus/ios`)
+  - app_links (from `.symlinks/plugins/app_links/ios`)
   - assets_audio_player (from `.symlinks/plugins/assets_audio_player/ios`)
   - assets_audio_player_web (from `.symlinks/plugins/assets_audio_player_web/ios`)
   - audio_session (from `.symlinks/plugins/audio_session/ios`)
@@ -385,6 +390,7 @@ DEPENDENCIES:
   - cloud_functions (from `.symlinks/plugins/cloud_functions/ios`)
   - cupertino_native (from `.symlinks/plugins/cupertino_native/ios`)
   - device_info_plus (from `.symlinks/plugins/device_info_plus/ios`)
+  - emoji_picker_flutter (from `.symlinks/plugins/emoji_picker_flutter/ios`)
   - file_picker (from `.symlinks/plugins/file_picker/ios`)
   - Firebase/Messaging
   - firebase_auth (from `.symlinks/plugins/firebase_auth/ios`)
@@ -476,6 +482,8 @@ EXTERNAL SOURCES:
     :path: ".symlinks/plugins/adaptive_platform_ui/ios"
   app_badge_plus:
     :path: ".symlinks/plugins/app_badge_plus/ios"
+  app_links:
+    :path: ".symlinks/plugins/app_links/ios"
   assets_audio_player:
     :path: ".symlinks/plugins/assets_audio_player/ios"
   assets_audio_player_web:
@@ -492,6 +500,8 @@ EXTERNAL SOURCES:
     :path: ".symlinks/plugins/cupertino_native/ios"
   device_info_plus:
     :path: ".symlinks/plugins/device_info_plus/ios"
+  emoji_picker_flutter:
+    :path: ".symlinks/plugins/emoji_picker_flutter/ios"
   file_picker:
     :path: ".symlinks/plugins/file_picker/ios"
   firebase_auth:
@@ -572,6 +582,7 @@ CHECKOUT OPTIONS:
 SPEC CHECKSUMS:
   adaptive_platform_ui: f54f620666d1797636f9ef06f49137ef2cc13611
   app_badge_plus: 0e3470f993dd08094e16463f57a7e0db04c6b587
+  app_links: 3dbc685f76b1693c66a6d9dd1e9ab6f73d97dc0a
   AppAuth: d4f13a8fe0baf391b2108511793e4b479691fb73
   AppCheckCore: cc8fd0a3a230ddd401f326489c99990b013f0c4f
   assets_audio_player: ae418728ee1b31f11556504fda8034639e20ce44
@@ -585,6 +596,7 @@ SPEC CHECKSUMS:
   device_info_plus: 21fcca2080fbcd348be798aa36c3e5ed849eefbe
   DKImagePickerController: 946cec48c7873164274ecc4624d19e3da4c1ef3c
   DKPhotoGallery: b3834fecb755ee09a593d7c9e389d8b5d6deed60
+  emoji_picker_flutter: ece213fc274bdddefb77d502d33080dc54e616cc
   file_picker: a0560bc09d61de87f12d246fc47d2119e6ef37be
   Firebase: 3435bc66b4d494c2f22c79fd3aae4c1db6662327
   firebase_auth: ebc1f561cc3077efebad5005974c9ed58008973b

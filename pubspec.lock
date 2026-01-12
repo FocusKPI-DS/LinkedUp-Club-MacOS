@@ -33,6 +33,38 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "1.2.3"
+  app_links:
+    dependency: "direct main"
+    description:
+      name: app_links
+      sha256: "5f88447519add627fe1cbcab4fd1da3d4fed15b9baf29f28b22535c95ecee3e8"
+      url: "https://pub.dev"
+    source: hosted
+    version: "6.4.1"
+  app_links_linux:
+    dependency: transitive
+    description:
+      name: app_links_linux
+      sha256: f5f7173a78609f3dfd4c2ff2c95bd559ab43c80a87dc6a095921d96c05688c81
+      url: "https://pub.dev"
+    source: hosted
+    version: "1.0.3"
+  app_links_platform_interface:
+    dependency: transitive
+    description:
+      name: app_links_platform_interface
+      sha256: "05f5379577c513b534a29ddea68176a4d4802c46180ee8e2e966257158772a3f"
+      url: "https://pub.dev"
+    source: hosted
+    version: "2.0.2"
+  app_links_web:
+    dependency: transitive
+    description:
+      name: app_links_web
+      sha256: af060ed76183f9e2b87510a9480e56a5352b6c249778d07bd2c95fc35632a555
+      url: "https://pub.dev"
+    source: hosted
+    version: "1.0.4"
   archive:
     dependency: transitive
     description:
@@ -370,6 +402,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "2.0.1"
+  emoji_picker_flutter:
+    dependency: "direct main"
+    description:
+      name: emoji_picker_flutter
+      sha256: "984d3e9b9cf3175df9a868ce4a2d9611491e80e5d3b8e2b1e8991a4998972885"
+      url: "https://pub.dev"
+    source: hosted
+    version: "4.4.0"
   equatable:
     dependency: transitive
     description:
@@ -1086,6 +1126,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "0.12.4+4"
+  gtk:
+    dependency: transitive
+    description:
+      name: gtk
+      sha256: e8ce9ca4b1df106e4d72dad201d345ea1a036cc12c360f1a7d5a758f78ffa42c
+      url: "https://pub.dev"
+    source: hosted
+    version: "2.1.0"
   html:
     dependency: "direct main"
     description:
@@ -1302,6 +1350,22 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "4.0.0"
+  liquid_glass_renderer:
+    dependency: "direct main"
+    description:
+      name: liquid_glass_renderer
+      sha256: "789be157494b38cdef7607bb9b63e7fe3fab76fae16149e52fa313c2d858cb3f"
+      url: "https://pub.dev"
+    source: hosted
+    version: "0.2.0-dev.4"
+  liquid_glass_ui_design:
+    dependency: "direct main"
+    description:
+      name: liquid_glass_ui_design
+      sha256: "9db86795fa5158cd9d3aed962864c6fd322502e24fc6351c05a5873097812b58"
+      url: "https://pub.dev"
+    source: hosted
+    version: "1.0.5"
   logging:
     dependency: transitive
     description:
@@ -1366,6 +1430,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "1.0.0"
+  motor:
+    dependency: transitive
+    description:
+      name: motor
+      sha256: cbd49f21b00e568c2b1a55f134ed803614a107782f4fea7769693bca32940c58
+      url: "https://pub.dev"
+    source: hosted
+    version: "1.1.0"
   nested:
     dependency: transitive
     description:
@@ -1374,6 +1446,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "1.0.0"
+  oc_liquid_glass:
+    dependency: "direct main"
+    description:
+      name: oc_liquid_glass
+      sha256: ca255faaf7c070d611e2b91c237f9a8f4f4627554c29f4f075c34a61ce0c64c4
+      url: "https://pub.dev"
+    source: hosted
+    version: "0.2.1"
   octo_image:
     dependency: "direct main"
     description:

@@ -76,7 +76,8 @@ service cloud.firestore {
     match /users/{document} {
       allow create: if request.auth.uid == document;
       // Allow authenticated users to read any user document and query the collection
-      allow read: if request.auth != null;
+      // Also allow public read access for invite links (to show referrer info)
+      allow read: if request.auth != null || true;
       allow update: if request.auth.uid == document || 
         // Allow connection-related updates from other authenticated users
         (request.auth != null && 

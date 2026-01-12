@@ -33,6 +33,7 @@ import 'auth/firebase_auth/firebase_user_provider.dart';
 import 'auth/firebase_auth/auth_util.dart';
 import 'backend/backend.dart';
 import 'backend/firebase/firebase_config.dart';
+import 'backend/push_notifications/push_notifications_handler.dart';
 import 'flutter_flow/flutter_flow_util.dart';
 import 'flutter_flow/nav/nav.dart';
 import 'index.dart';
@@ -43,8 +44,10 @@ import 'package:branchio_dynamic_linking_akp5u6/library_values.dart'
     as branchio_dynamic_linking_akp5u6_library_values;
 import 'package:linkedup/backend/schema/structs/index.dart';
 import 'package:linkedup/custom_code/services/web_notification_service.dart';
+import 'package:linkedup/custom_code/services/app_update_service.dart';
 import 'package:adaptive_platform_ui/adaptive_platform_ui.dart';
 import 'package:share_plus/share_plus.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -107,6 +110,15 @@ void main() async {
         await branchio_dynamic_linking_akp5u6_actions.initBranch();
       } catch (e) {
         // Branch SDK initialization failed
+      }
+    }
+
+    // Initialize referral deep link listener (lona://invite/{uid})
+    if (!kIsWeb && (Platform.isIOS || Platform.isAndroid)) {
+      try {
+        await actions.initializeReferralDeepLink();
+      } catch (e) {
+        // Referral deep link initialization failed
       }
     }
 
@@ -253,14 +265,8 @@ void _initializePushNotificationsAsync() async {
         criticalAlert: false,
       );
 
-      print(
-          '🔔 Push notification authorization status: ${settings.authorizationStatus}');
-
       if (settings.authorizationStatus == AuthorizationStatus.authorized ||
           settings.authorizationStatus == AuthorizationStatus.provisional) {
-        print(
-            '✅ Notifications authorized! Setting foreground presentation options...');
-
         // Show system banners while app is in foreground
         await FirebaseMessaging.instance
             .setForegroundNotificationPresentationOptions(
@@ -269,103 +275,103 @@ void _initializePushNotificationsAsync() async {
           sound: true,
         );
 
-        print('✅ Foreground notification presentation options set!');
-
         // Explicitly register for remote notifications on iOS
         if (Platform.isIOS) {
+          // Set up method channel to receive notification taps from iOS
+          const platform = MethodChannel('com.linkedup.notifications');
+          platform.setMethodCallHandler((call) async {
+            if (call.method == 'onNotificationTapped') {
+              print('📱 [FLUTTER] Received notification tap from iOS native');
+              final data = call.arguments as Map<dynamic, dynamic>?;
+              if (data != null) {
+                print('   Data received: $data');
+                // Convert data to String keys
+                final messageData = <String, dynamic>{};
+                for (final entry in data.entries) {
+                  messageData[entry.key.toString()] = entry.value;
+                }
+                print('   Converted data: $messageData');
+                print('   initialPageName: ${messageData['initialPageName']}');
+                
+                // Create a RemoteMessage manually
+                final message = RemoteMessage(
+                  messageId: messageData['gcm.message_id'] as String? ?? 
+                             messageData['google.c.a.e'] as String?,
+                  data: messageData,
+                );
+                print('   Created RemoteMessage, calling handleNotificationNavigation...');
+                await handleNotificationNavigation(message);
+              } else {
+                print('   ⚠️ No data received from iOS');
+              }
+            }
+          });
+          print('✅ Method channel handler set up for iOS notification taps');
+          
           // Register for remote notifications after permission is granted
           try {
             // Use method channel to explicitly register for remote notifications
             // Delay to ensure method channel is ready
             Future.delayed(const Duration(milliseconds: 500), () async {
               try {
-                const platform = MethodChannel('com.linkedup.notifications');
                 await platform.invokeMethod('registerForRemoteNotifications');
-                print('✅ iOS: Explicitly registered for remote notifications');
               } catch (e) {
-                print('⚠️ iOS: Method channel call failed (non-critical): $e');
+                // Method channel call failed (non-critical)
               }
             });
-            
+
             // Force registration by getting FCM token (this triggers APNS registration)
             final fcmToken = await messaging.getToken();
-            if (fcmToken != null) {
-              print('✅ iOS: FCM token obtained: ${fcmToken.substring(0, 20)}...');
-              
-              // CRITICAL: Save FCM token to Firestore if user is logged in
-              // This ensures notifications can be sent to this device
-              if (currentUserReference != null) {
-                try {
-                  await actions.ensureFcmToken(currentUserReference!);
-                  print('✅ iOS: FCM token saved to Firestore');
-                } catch (e) {
-                  print('⚠️ iOS: Failed to save FCM token to Firestore: $e');
-                }
-              } else {
-                print('⚠️ iOS: User not logged in, FCM token not saved (will be saved on login)');
+            if (fcmToken != null && currentUserReference != null) {
+              try {
+                await actions.ensureFcmToken(currentUserReference!);
+              } catch (e) {
+                print('⚠️ Failed to save FCM token: $e');
               }
-            }
-            
-            // Also check for APNS token - this helps trigger registration
-            final apnsToken = await messaging.getAPNSToken();
-            if (apnsToken != null) {
-              print('✅ iOS: APNS token available: ${apnsToken.substring(0, apnsToken.length > 20 ? 20 : apnsToken.length)}...');
-            } else {
-              print('⚠️ iOS: APNS token not yet available (check Xcode console for native logs)');
-              // Retry after a short delay
-              Future.delayed(const Duration(seconds: 2), () async {
-                try {
-                  final retryApnsToken = await messaging.getAPNSToken();
-                  if (retryApnsToken != null) {
-                    print('✅ iOS: APNS token available after retry: ${retryApnsToken.substring(0, 20)}...');
-                  }
-                } catch (e) {
-                  print('⚠️ iOS: APNS token retry failed: $e');
-                }
-              });
             }
           } catch (e) {
             print('⚠️ iOS: Token check failed: $e');
-            print('   Note: Native iOS logs appear in Xcode console, not Flutter console');
+            print(
+                '   Note: Native iOS logs appear in Xcode console, not Flutter console');
           }
         }
 
         // Listen for foreground messages
         FirebaseMessaging.onMessage.listen((RemoteMessage message) {
-          print('🔔 FOREGROUND NOTIFICATION RECEIVED!');
-          print('   Title: ${message.notification?.title}');
-          print('   Body: ${message.notification?.body}');
-          print('   Data: ${message.data}');
-          print('   Message ID: ${message.messageId}');
-          print('   Sent Time: ${message.sentTime}');
-          // Note: With setForegroundNotificationPresentationOptions, system will show notification
+          // System will show notification automatically
         });
 
         // Listen for notification taps (when app is opened from notification)
+        print('🔍 Setting up onMessageOpenedApp listener...');
         FirebaseMessaging.onMessageOpenedApp.listen((RemoteMessage message) {
-          print('📱 NOTIFICATION TAPPED - App opened from notification');
-          print('   Title: ${message.notification?.title}');
-          print('   Body: ${message.notification?.body}');
+          print('📱 [MAIN] Notification tapped - navigating...');
+          print('   Message ID: ${message.messageId}');
           print('   Data: ${message.data}');
+          print('   Data keys: ${message.data.keys}');
+          print('   initialPageName: ${message.data['initialPageName']}');
+          print('   parameterData: ${message.data['parameterData']}');
+          handleNotificationNavigation(message);
         });
+        print('✅ onMessageOpenedApp listener registered');
 
         // Check if app was opened from a notification (when app was terminated)
         final initialMessage = await messaging.getInitialMessage();
         if (initialMessage != null) {
-          print('📱 APP OPENED FROM NOTIFICATION (terminated state)');
-          print('   Title: ${initialMessage.notification?.title}');
-          print('   Data: ${initialMessage.data}');
+          print('📱 App opened from notification (terminated) - navigating...');
+          // Wait for app to finish initializing, then navigate
+          WidgetsBinding.instance.addPostFrameCallback((_) async {
+            await Future.delayed(const Duration(milliseconds: 500));
+            await handleNotificationNavigation(initialMessage);
+          });
         }
 
         // Listen for token refresh
         FirebaseMessaging.instance.onTokenRefresh.listen((newToken) {
-          print('🔄 FCM token refreshed: ${newToken.substring(0, 10)}...');
           // Save new token to Firestore if user is logged in
           if (currentUserReference != null) {
             Future.delayed(const Duration(seconds: 1), () async {
               try {
                 await actions.ensureFcmToken(currentUserReference!);
-                print('✅ Refreshed FCM token saved to Firestore');
               } catch (e) {
                 print('⚠️ Failed to save refreshed FCM token: $e');
               }
@@ -467,7 +473,8 @@ class MyAppScrollBehavior extends MaterialScrollBehavior {
 }
 
 class _MyAppState extends State<MyApp> {
-  ThemeMode _themeMode = ThemeMode.light; // Force light mode - never use dark mode
+  ThemeMode _themeMode =
+      ThemeMode.light; // Force light mode - never use dark mode
 
   late AppStateNotifier _appStateNotifier;
   late GoRouter _router;
@@ -490,14 +497,13 @@ class _MyAppState extends State<MyApp> {
     // Trigger Gmail prefetch when user is authenticated
     if (user != null && user.uid.isNotEmpty) {
       _triggerGmailPrefetchIfConnected();
-      
+
       // Ensure FCM token is saved when user logs in
       // This handles the case where token was obtained before login
       Future.delayed(const Duration(seconds: 1), () async {
         try {
           if (currentUserReference != null) {
             await actions.ensureFcmToken(currentUserReference!);
-            print('✅ FCM token ensured after user login');
           }
         } catch (e) {
           print('⚠️ Failed to ensure FCM token after login: $e');
@@ -562,6 +568,77 @@ class _MyAppState extends State<MyApp> {
       if (mounted) {
         _appStateNotifier.stopShowingSplashImage();
       }
+    }
+
+    // Check for app updates after initialization (only on iOS)
+    if (!kIsWeb && Platform.isIOS) {
+      _checkForAppUpdate();
+    }
+  }
+
+  /// Check for app updates and show alert if update is available
+  Future<void> _checkForAppUpdate() async {
+    try {
+      // Wait a bit for the app to fully render before checking
+      await Future.delayed(const Duration(seconds: 2));
+
+      final hasUpdate = await AppUpdateService.checkForUpdate();
+      if (hasUpdate == true && mounted) {
+        // Use post-frame callback to ensure context is available
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          // Get context from navigator key (imported from nav.dart)
+          final context = appNavigatorKey.currentContext;
+          if (context != null && mounted) {
+            _showUpdateDialog(context);
+          } else {
+            // If context is not available yet, wait a bit and try again
+            Future.delayed(const Duration(seconds: 1), () {
+              final retryContext = appNavigatorKey.currentContext;
+              if (retryContext != null && mounted) {
+                _showUpdateDialog(retryContext);
+              }
+            });
+          }
+        });
+      }
+    } catch (e) {
+      print('Error checking for app update: $e');
+    }
+  }
+
+  /// Show update alert dialog
+  Future<void> _showUpdateDialog(BuildContext context) async {
+    try {
+      await AdaptiveAlertDialog.show(
+        context: context,
+        title: 'Update Available',
+        message:
+            'A new version of Lona is available on the App Store. Please update to continue using the latest features and improvements.',
+        icon: 'arrow.down.circle.fill',
+        actions: [
+          AlertAction(
+            title: 'Later',
+            style: AlertActionStyle.cancel,
+            onPressed: () {
+              // User chose to update later
+            },
+          ),
+          AlertAction(
+            title: 'Update',
+            style: AlertActionStyle.primary,
+            onPressed: () async {
+              // Open App Store
+              final appStoreUrl = AppUpdateService.getAppStoreUrl();
+              final uri = Uri.parse(appStoreUrl);
+              if (await canLaunchUrl(uri)) {
+                await launchUrl(uri, mode: LaunchMode.externalApplication);
+              }
+            },
+          ),
+        ],
+      );
+    } catch (e) {
+      print('Error showing update dialog: $e');
     }
   }
 
@@ -784,7 +861,7 @@ class _NavBarPageState extends State<NavBarPage> with WidgetsBindingObserver {
     // iOS uses mobile layout with bottom navigation
     if (!kIsWeb && Platform.isIOS) {
       return StreamBuilder<UsersRecord?>(
-        stream: currentUserReference != null 
+        stream: currentUserReference != null
             ? UsersRecord.getDocument(currentUserReference!)
             : Stream.value(null),
         builder: (context, userSnapshot) {
@@ -818,7 +895,7 @@ class _NavBarPageState extends State<NavBarPage> with WidgetsBindingObserver {
             ),
             AdaptiveNavigationDestination(
               icon: 'person.2.fill',
-              label: connectionRequestCount > 0 
+              label: connectionRequestCount > 0
                   ? 'Connections (${connectionRequestCount > 99 ? '99+' : connectionRequestCount})'
                   : 'Connections',
               addSpacerAfter: true,
@@ -836,7 +913,8 @@ class _NavBarPageState extends State<NavBarPage> with WidgetsBindingObserver {
               items: items,
               selectedIndex: currentIndex,
               selectedItemColor: const Color.fromARGB(255, 2, 156, 252),
-              unselectedItemColor: CupertinoColors.systemGrey, // Lighter gray for unselected icons
+              unselectedItemColor: CupertinoColors
+                  .systemGrey, // Lighter gray for unselected icons
               onTap: (i) => safeSetState(() {
                 _currentPage = null;
                 _setCurrentPageName(pageNames[i], tabs);
@@ -1677,7 +1755,8 @@ class _NavBarPageState extends State<NavBarPage> with WidgetsBindingObserver {
       ],
       selectedIndex: currentIndex,
       selectedItemColor: const Color.fromARGB(255, 2, 156, 252),
-      unselectedItemColor: CupertinoColors.systemGrey, // Lighter gray for unselected icons
+      unselectedItemColor:
+          CupertinoColors.systemGrey, // Lighter gray for unselected icons
       onTap: (i) => safeSetState(() {
         _currentPage = null;
         _setCurrentPageName(pageNames[i], tabs);
@@ -1685,8 +1764,10 @@ class _NavBarPageState extends State<NavBarPage> with WidgetsBindingObserver {
     );
   }
 
-  AdaptiveBottomNavigationBar _buildHorizontalNavBarWithBadge(Map<String, Widget> tabs,
-      int currentIndex, Map<String, int> navItemToIndex) {
+  AdaptiveBottomNavigationBar _buildHorizontalNavBarWithBadge(
+      Map<String, Widget> tabs,
+      int currentIndex,
+      Map<String, int> navItemToIndex) {
     // Map tab indices to page names (5 items: Home, Chat, Mail, Connections, Settings)
     final pageNames = [
       'Home',
@@ -1719,7 +1800,7 @@ class _NavBarPageState extends State<NavBarPage> with WidgetsBindingObserver {
       ),
       AdaptiveNavigationDestination(
         icon: 'person.2.fill',
-        label: connectionRequestCount > 0 
+        label: connectionRequestCount > 0
             ? 'Connections (${connectionRequestCount > 99 ? '99+' : connectionRequestCount})'
             : 'Connections',
         addSpacerAfter: true,
@@ -1735,7 +1816,8 @@ class _NavBarPageState extends State<NavBarPage> with WidgetsBindingObserver {
       items: items,
       selectedIndex: currentIndex,
       selectedItemColor: const Color.fromARGB(255, 2, 156, 252),
-      unselectedItemColor: CupertinoColors.systemGrey, // Lighter gray for unselected icons
+      unselectedItemColor:
+          CupertinoColors.systemGrey, // Lighter gray for unselected icons
       onTap: (i) => safeSetState(() {
         _currentPage = null;
         _setCurrentPageName(pageNames[i], tabs);

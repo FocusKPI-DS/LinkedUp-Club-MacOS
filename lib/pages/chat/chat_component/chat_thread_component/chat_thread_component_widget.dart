@@ -35,6 +35,8 @@ import 'package:flutter/services.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:record/record.dart';
 import 'package:file_picker/file_picker.dart';
+import 'package:emoji_picker_flutter/emoji_picker_flutter.dart';
+import 'package:liquid_glass_renderer/liquid_glass_renderer.dart';
 import 'chat_thread_component_model.dart';
 export 'chat_thread_component_model.dart';
 
@@ -63,6 +65,15 @@ class _ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget>
   var hasContainerTriggered2 = false;
   final animationsMap = <String, AnimationInfo>{};
 
+  // Pagination state
+  List<MessagesRecord> _loadedOlderMessages = [];
+  DocumentSnapshot?
+      _lastLoadedOlderMessageSnapshot; // Last document from older messages query
+  bool _isLoadingOlderMessages = false;
+  bool _hasMoreOlderMessages = true;
+  String? _currentChatId; // Track current chat to reset pagination on change
+  static const int _messagesPerPage = 50;
+
   @override
   void setState(VoidCallback callback) {
     super.setState(callback);
@@ -77,6 +88,9 @@ class _ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget>
     _model.messageTextController ??= TextEditingController();
     _model.messageFocusNode ??= FocusNode();
     _model.scrollController ??= ScrollController();
+
+    // Add scroll listener for pagination
+    _model.scrollController?.addListener(_onScroll);
 
     animationsMap.addAll({
       'containerOnActionTriggerAnimation1': AnimationInfo(
@@ -226,10 +240,103 @@ class _ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget>
 
   @override
   void dispose() {
+    _model.scrollController?.removeListener(_onScroll);
     _model.scrollController?.dispose();
     _model.maybeDispose();
 
     super.dispose();
+  }
+
+  // Reset pagination state when chat changes
+  void _resetPagination() {
+    setState(() {
+      _loadedOlderMessages.clear();
+      _lastLoadedOlderMessageSnapshot = null;
+      _isLoadingOlderMessages = false;
+      _hasMoreOlderMessages = true;
+    });
+  }
+
+  // Scroll listener to detect when user scrolls to top (for loading older messages)
+  void _onScroll() {
+    if (_model.scrollController == null ||
+        !_model.scrollController!.hasClients) {
+      return;
+    }
+
+    // For reversed ListView, maxScrollExtent is at the top (oldest messages)
+    // When user scrolls near the top (within 200px), load more older messages
+    final position = _model.scrollController!.position;
+    if (position.pixels >= position.maxScrollExtent - 200) {
+      if (!_isLoadingOlderMessages &&
+          _hasMoreOlderMessages &&
+          widget.chatReference != null) {
+        _loadOlderMessages();
+      }
+    }
+  }
+
+  // Load older messages (messages before the currently loaded ones)
+  Future<void> _loadOlderMessages() async {
+    if (_isLoadingOlderMessages ||
+        !_hasMoreOlderMessages ||
+        widget.chatReference == null) {
+      return;
+    }
+
+    setState(() {
+      _isLoadingOlderMessages = true;
+    });
+
+    try {
+      Query query = widget.chatReference!.reference
+          .collection('messages')
+          .orderBy('created_at', descending: true);
+
+      // If we have a last loaded message snapshot, start after it
+      if (_lastLoadedOlderMessageSnapshot != null) {
+        query = query.startAfterDocument(_lastLoadedOlderMessageSnapshot!);
+      } else {
+        // First load: we need to get the oldest message from the stream
+        // This will be set when the stream first loads
+        setState(() {
+          _isLoadingOlderMessages = false;
+        });
+        return;
+      }
+
+      query = query.limit(_messagesPerPage);
+
+      final snapshot = await query.get();
+
+      if (snapshot.docs.isEmpty) {
+        setState(() {
+          _hasMoreOlderMessages = false;
+          _isLoadingOlderMessages = false;
+        });
+        return;
+      }
+
+      // Convert to MessagesRecord
+      final newMessages =
+          snapshot.docs.map((doc) => MessagesRecord.fromSnapshot(doc)).toList();
+
+      // Update state
+      setState(() {
+        _loadedOlderMessages.addAll(newMessages);
+        if (snapshot.docs.length < _messagesPerPage) {
+          _hasMoreOlderMessages = false;
+        } else {
+          _lastLoadedOlderMessageSnapshot = snapshot.docs.last;
+        }
+        _isLoadingOlderMessages = false;
+      });
+    } catch (e) {
+      print('Error loading older messages: $e');
+      setState(() {
+        _isLoadingOlderMessages = false;
+      });
+    }
   }
 
   void _scrollToMessage(String messageId, List<MessagesRecord> messages) {
@@ -417,6 +524,574 @@ class _ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget>
     safeSetState(() {});
   }
 
+  /// Send a new message to the chat
+  Future<void> _sendMessage() async {
+    if (widget.chatReference == null || currentUserReference == null) return;
+
+    final messageText = _model.messageTextController?.text.trim() ?? '';
+    final hasText = messageText.isNotEmpty;
+    final hasImages = _model.images.isNotEmpty;
+    final hasSingleImage = _model.image != null && _model.image!.isNotEmpty;
+    final hasFile = _model.file != null && _model.file!.isNotEmpty;
+    final hasAudio = _model.audiopath != null && _model.audiopath!.isNotEmpty;
+    final hasVideo = _model.selectedVideoFile != null;
+
+    // Check if there's anything to send
+    if (!hasText &&
+        !hasImages &&
+        !hasSingleImage &&
+        !hasFile &&
+        !hasAudio &&
+        !hasVideo) {
+      return;
+    }
+
+    try {
+      _model.isSending = true;
+      safeSetState(() {});
+
+      // Upload video if selected
+      String? videoUrl;
+      if (hasVideo && _model.selectedVideoFile != null) {
+        final selectedFile = _model.selectedVideoFile!;
+        videoUrl =
+            await uploadData(selectedFile.storagePath, selectedFile.bytes);
+      }
+
+      // Upload audio if recorded
+      String? audioUrl;
+      if (hasAudio) {
+        audioUrl = await actions.uploadAudioToStorage(_model.audiopath!);
+      }
+
+      // Determine message type
+      MessageType messageType = MessageType.text;
+      if (hasImages || hasSingleImage) {
+        messageType = MessageType.image;
+      } else if (hasVideo && videoUrl != null) {
+        messageType = MessageType.video;
+      } else if (hasAudio && audioUrl != null) {
+        messageType = MessageType.voice;
+      } else if (hasFile) {
+        messageType = MessageType.file;
+      }
+
+      // Build images list
+      List<String> imagesList = [];
+      if (hasImages) {
+        imagesList = List<String>.from(_model.images);
+      }
+      if (hasSingleImage) {
+        imagesList.add(_model.image!);
+      }
+
+      // Create message data
+      final messageData = <String, dynamic>{
+        'content': messageText,
+        'sender_ref': currentUserReference,
+        'sender_name': currentUserDisplayName.isNotEmpty
+            ? currentUserDisplayName
+            : (currentUserDocument?.displayName ?? 'User'),
+        'sender_photo': currentUserPhoto.isNotEmpty
+            ? currentUserPhoto
+            : (currentUserDocument?.photoUrl ?? ''),
+        'created_at': getCurrentTimestamp,
+        'message_type': messageType.serialize(),
+        'is_read_by': [currentUserReference],
+        'is_system_message': false,
+      };
+
+      // Add images if present
+      if (imagesList.isNotEmpty) {
+        messageData['images'] = imagesList;
+      }
+
+      // Add video if present
+      if (videoUrl != null && videoUrl.isNotEmpty) {
+        messageData['video'] = videoUrl;
+      }
+
+      // Add audio if present
+      if (audioUrl != null && audioUrl.isNotEmpty) {
+        messageData['audio'] = audioUrl;
+      }
+
+      // Add file if present
+      if (hasFile) {
+        messageData['file'] = _model.file;
+        // Try to get original filename from uploaded file
+        if (_model.uploadedLocalFile_uploadDataFile.name != null) {
+          messageData['file_name'] =
+              _model.uploadedLocalFile_uploadDataFile.name;
+        }
+      }
+
+      // Add reply context if replying
+      if (_model.replyingToMessage != null) {
+        messageData['reply_to'] = _model.replyingToMessage!.reference.id;
+        messageData['reply_to_content'] = _model.replyingToMessage!.content;
+        messageData['reply_to_sender'] = _model.replyingToMessage!.senderName;
+      }
+
+      // Create the message document
+      final messageRef =
+          MessagesRecord.createDoc(widget.chatReference!.reference);
+      await messageRef.set(messageData);
+
+      // Determine last message text for chat metadata
+      String lastMessageText = messageText;
+      if (lastMessageText.isEmpty) {
+        if (hasImages || hasSingleImage) {
+          lastMessageText = '📷 Photo';
+        } else if (hasVideo) {
+          lastMessageText = '🎬 Video';
+        } else if (hasAudio) {
+          lastMessageText = '🎤 Voice message';
+        } else if (hasFile) {
+          lastMessageText = '📎 File';
+        }
+      }
+
+      // Update chat's last message metadata
+      await widget.chatReference!.reference.update({
+        'last_message': lastMessageText,
+        'last_message_at': getCurrentTimestamp,
+        'last_message_sent': currentUserReference,
+        'last_message_type': messageType.serialize(),
+        'last_message_seen': [currentUserReference],
+      });
+
+      // Send push notifications to other members
+      try {
+        final chatDoc = widget.chatReference!;
+        final otherMembers =
+            chatDoc.members.where((m) => m != currentUserReference).toList();
+
+        if (otherMembers.isNotEmpty) {
+          final notificationTitle =
+              chatDoc.isGroup ? chatDoc.title : currentUserDisplayName;
+          print('🔍 DEBUG: Creating notification with:');
+          print('   notificationTitle: "$notificationTitle"');
+          print('   currentUserDisplayName: "$currentUserDisplayName"');
+          print('   chatDoc.isGroup: ${chatDoc.isGroup}');
+          print('   chatDoc.title: "${chatDoc.title}"');
+          print('   lastMessageText: "$lastMessageText"');
+          triggerPushNotification(
+            notificationTitle: notificationTitle,
+            notificationText: lastMessageText,
+            userRefs: otherMembers,
+            initialPageName: 'ChatDetail',
+            parameterData: {
+              'chatDoc': chatDoc.reference.path,
+            },
+          );
+        }
+      } catch (e) {
+        print('Error sending push notifications: $e');
+      }
+
+      // Clear all input state
+      _model.messageTextController?.clear();
+      _model.images.clear();
+      _model.image = null;
+      _model.file = null;
+      _model.audiopath = null;
+      _model.selectedVideoFile = null;
+      _model.replyingToMessage = null;
+      _model.uploadedFileUrls_uploadData.clear();
+      _model.uploadedLocalFiles_uploadData.clear();
+      _model.uploadedFileUrl_uploadDataCamera = '';
+      _model.uploadedFileUrl_uploadDataFile = '';
+
+      safeSetState(() {});
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Failed to send message: $e',
+            style: TextStyle(color: FlutterFlowTheme.of(context).primaryText),
+          ),
+          duration: const Duration(milliseconds: 3000),
+          backgroundColor: FlutterFlowTheme.of(context).error,
+        ),
+      );
+    } finally {
+      _model.isSending = false;
+      safeSetState(() {});
+    }
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // MEDIA SELECTION HANDLERS
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  Future<void> _handleSelectImages() async {
+    _model.isSendingImage = true;
+    safeSetState(() {});
+    final selectedMedia = await selectMedia(
+      mediaSource: MediaSource.photoGallery,
+      multiImage: true,
+    );
+    if (selectedMedia != null &&
+        selectedMedia
+            .every((m) => validateFileFormat(m.storagePath, context))) {
+      // Check if more than 10 images selected
+      if (selectedMedia.length > 10) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Row(
+              children: [
+                const Icon(Icons.warning, color: Colors.white),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text('You can only select up to 10 images at once'),
+                ),
+              ],
+            ),
+            backgroundColor: Colors.orange,
+          ),
+        );
+        _model.isSendingImage = false;
+        safeSetState(() {});
+        return;
+      }
+      safeSetState(() => _model.isDataUploading_uploadData = true);
+      var selectedUploadedFiles = <FFUploadedFile>[];
+
+      var downloadUrls = <String>[];
+      try {
+        selectedUploadedFiles = selectedMedia
+            .map((m) => FFUploadedFile(
+                  name: m.storagePath.split('/').last,
+                  bytes: m.bytes,
+                  height: m.dimensions?.height,
+                  width: m.dimensions?.width,
+                  blurHash: m.blurHash,
+                ))
+            .toList();
+
+        downloadUrls = (await Future.wait(
+          selectedMedia.map(
+            (m) async => await uploadData(m.storagePath, m.bytes),
+          ),
+        ))
+            .where((u) => u != null)
+            .map((u) => u!)
+            .toList();
+      } finally {
+        _model.isDataUploading_uploadData = false;
+      }
+      if (selectedUploadedFiles.length == selectedMedia.length &&
+          downloadUrls.length == selectedMedia.length) {
+        safeSetState(() {
+          _model.uploadedLocalFiles_uploadData = selectedUploadedFiles;
+          _model.uploadedFileUrls_uploadData = downloadUrls;
+        });
+      } else {
+        safeSetState(() {});
+        _model.isSendingImage = false;
+        return;
+      }
+    }
+
+    if ((_model.uploadedFileUrls_uploadData.isNotEmpty) == true) {
+      _model.images = _model.uploadedFileUrls_uploadData
+          .map((url) => url.toString())
+          .toList();
+      safeSetState(() {});
+    }
+    _model.isSendingImage = false;
+    safeSetState(() {});
+  }
+
+  Future<void> _handleCameraCapture() async {
+    _model.isSendingImage = true;
+    safeSetState(() {});
+    final selectedMedia = await selectMediaWithSourceBottomSheet(
+      context: context,
+      allowPhoto: true,
+      allowVideo: true,
+    );
+    if (selectedMedia != null &&
+        selectedMedia
+            .every((m) => validateFileFormat(m.storagePath, context))) {
+      safeSetState(() => _model.isDataUploading_uploadDataCamera = true);
+      var selectedUploadedFiles = <FFUploadedFile>[];
+
+      var downloadUrls = <String>[];
+      try {
+        selectedUploadedFiles = selectedMedia
+            .map((m) => FFUploadedFile(
+                  name: m.storagePath.split('/').last,
+                  bytes: m.bytes,
+                  height: m.dimensions?.height,
+                  width: m.dimensions?.width,
+                  blurHash: m.blurHash,
+                ))
+            .toList();
+
+        downloadUrls = (await Future.wait(
+          selectedMedia.map(
+            (m) async => await uploadData(m.storagePath, m.bytes),
+          ),
+        ))
+            .where((u) => u != null)
+            .map((u) => u!)
+            .toList();
+      } finally {
+        _model.isDataUploading_uploadDataCamera = false;
+      }
+      if (selectedUploadedFiles.length == selectedMedia.length &&
+          downloadUrls.length == selectedMedia.length) {
+        safeSetState(() {
+          _model.uploadedLocalFile_uploadDataCamera =
+              selectedUploadedFiles.first;
+          _model.uploadedFileUrl_uploadDataCamera = downloadUrls.first;
+        });
+      } else {
+        safeSetState(() {});
+        _model.isSendingImage = false;
+        return;
+      }
+    }
+
+    if (_model.uploadedFileUrl_uploadDataCamera != '') {
+      _model.image = _model.uploadedFileUrl_uploadDataCamera;
+      safeSetState(() {});
+    }
+    _model.isSendingImage = false;
+    safeSetState(() {});
+  }
+
+  Future<void> _handleFilePicker() async {
+    // Get original filename from file picker
+    final pickedFiles = await FilePicker.platform.pickFiles(
+      type: FileType.any,
+      withData: true,
+      allowMultiple: false,
+    );
+
+    if (pickedFiles == null || pickedFiles.files.isEmpty) {
+      return;
+    }
+
+    final pickedFile = pickedFiles.files.first;
+    if (pickedFile.bytes == null) {
+      return;
+    }
+
+    final originalFileName = pickedFile.name;
+
+    safeSetState(() => _model.isDataUploading_uploadDataFile = true);
+    var selectedUploadedFiles = <FFUploadedFile>[];
+
+    var downloadUrls = <String>[];
+    try {
+      // Generate storage path (similar to selectFiles)
+      // Format: users/{uid}/uploads/{timestamp}.{ext}
+      final currentUserUid = currentUserReference?.id ?? '';
+      final pathPrefix = 'users/$currentUserUid/uploads';
+      final timestamp = DateTime.now().microsecondsSinceEpoch;
+      final ext = originalFileName.contains('.')
+          ? originalFileName.split('.').last
+          : 'file';
+      final storagePath = '$pathPrefix/$timestamp.$ext';
+
+      // Use the original filename instead of storage path
+      selectedUploadedFiles = [
+        FFUploadedFile(
+          name: originalFileName,
+          bytes: pickedFile.bytes!,
+        )
+      ];
+
+      downloadUrls = [(await uploadData(storagePath, pickedFile.bytes!)) ?? '']
+          .where((u) => u.isNotEmpty)
+          .toList();
+    } finally {
+      _model.isDataUploading_uploadDataFile = false;
+    }
+    if (selectedUploadedFiles.length == 1 && downloadUrls.length == 1) {
+      safeSetState(() {
+        _model.uploadedLocalFile_uploadDataFile = selectedUploadedFiles.first;
+        _model.uploadedFileUrl_uploadDataFile = downloadUrls.first;
+      });
+    } else {
+      safeSetState(() {});
+      return;
+    }
+
+    if (_model.uploadedFileUrl_uploadDataFile != '') {
+      _model.file = _model.uploadedFileUrl_uploadDataFile;
+      safeSetState(() {});
+    }
+  }
+
+  Future<void> _handleVideoCapture() async {
+    _model.isSendingImage = true;
+    safeSetState(() {});
+    final selectedMedia = await selectMediaWithSourceBottomSheet(
+      context: context,
+      allowPhoto: false,
+      allowVideo: true,
+    );
+    if (selectedMedia != null &&
+        selectedMedia
+            .every((m) => validateFileFormat(m.storagePath, context))) {
+      // Store the selected video file locally for preview
+      _model.selectedVideoFile = selectedMedia.first;
+      safeSetState(() {});
+    }
+    _model.isSendingImage = false;
+    safeSetState(() {});
+  }
+
+  void _showEmojiPicker() {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (context) => Container(
+        height: MediaQuery.of(context).size.height * 0.45,
+        decoration: BoxDecoration(
+          color: isDark ? const Color(0xFF1C1C1E) : Colors.white,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+        ),
+        child: Column(
+          children: [
+            // Handle bar
+            Container(
+              margin: const EdgeInsets.only(top: 12, bottom: 8),
+              width: 36,
+              height: 5,
+              decoration: BoxDecoration(
+                color: Colors.grey.withOpacity(0.3),
+                borderRadius: BorderRadius.circular(2.5),
+              ),
+            ),
+            // Emoji Picker - Full featured like WhatsApp
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.only(
+                    bottom: 20.0,
+                    left:
+                        8.0), // Add bottom padding to move buttons up, left padding for search button
+                child: EmojiPicker(
+                  onEmojiSelected: (category, emoji) {
+                    _insertEmoji(emoji.emoji);
+                  },
+                  onBackspacePressed: () {
+                    final controller = _model.messageTextController;
+                    if (controller != null && controller.text.isNotEmpty) {
+                      final text = controller.text;
+                      final selection = controller.selection;
+                      if (selection.start > 0) {
+                        // Handle emoji deletion (emojis can be multiple chars)
+                        final newText = text.substring(0, selection.start - 1) +
+                            text.substring(selection.end);
+                        controller.value = TextEditingValue(
+                          text: newText,
+                          selection: TextSelection.collapsed(
+                            offset: selection.start - 1,
+                          ),
+                        );
+                      }
+                    }
+                  },
+                  config: Config(
+                    height: MediaQuery.of(context).size.height * 0.38,
+                    checkPlatformCompatibility: true,
+                    emojiViewConfig: EmojiViewConfig(
+                      emojiSizeMax: 28,
+                      verticalSpacing: 0,
+                      horizontalSpacing: 0,
+                      gridPadding: EdgeInsets.zero,
+                      recentsLimit: 28,
+                      replaceEmojiOnLimitExceed: true,
+                      noRecents: Text(
+                        'No Recents',
+                        style: TextStyle(
+                          fontSize: 16,
+                          color: isDark ? Colors.white54 : Colors.black54,
+                        ),
+                      ),
+                      loadingIndicator: const Center(
+                        child: CupertinoActivityIndicator(),
+                      ),
+                      buttonMode: ButtonMode.CUPERTINO,
+                      backgroundColor:
+                          isDark ? const Color(0xFF1C1C1E) : Colors.white,
+                    ),
+                    skinToneConfig: const SkinToneConfig(
+                      enabled: true,
+                      dialogBackgroundColor: Colors.white,
+                      indicatorColor: Colors.grey,
+                    ),
+                    categoryViewConfig: CategoryViewConfig(
+                      initCategory: Category.RECENT,
+                      backgroundColor:
+                          isDark ? const Color(0xFF1C1C1E) : Colors.white,
+                      indicatorColor: FlutterFlowTheme.of(context).primary,
+                      iconColor: isDark ? Colors.white54 : Colors.black45,
+                      iconColorSelected: FlutterFlowTheme.of(context).primary,
+                      categoryIcons: const CategoryIcons(
+                        recentIcon: CupertinoIcons.clock,
+                        smileyIcon: CupertinoIcons.smiley,
+                        animalIcon: CupertinoIcons.tortoise,
+                        foodIcon: CupertinoIcons.cart,
+                        activityIcon: CupertinoIcons.sportscourt,
+                        travelIcon: CupertinoIcons.car,
+                        objectIcon: CupertinoIcons.lightbulb,
+                        symbolIcon: CupertinoIcons.heart,
+                        flagIcon: CupertinoIcons.flag,
+                      ),
+                    ),
+                    bottomActionBarConfig: BottomActionBarConfig(
+                      backgroundColor:
+                          isDark ? const Color(0xFF1C1C1E) : Colors.white,
+                      buttonColor: isDark ? Colors.white54 : Colors.black45,
+                      buttonIconColor: isDark ? Colors.white : Colors.black87,
+                      showBackspaceButton: true,
+                      showSearchViewButton: true,
+                    ),
+                    searchViewConfig: SearchViewConfig(
+                      backgroundColor: isDark
+                          ? const Color(0xFF2C2C2E)
+                          : const Color(0xFFF2F2F7),
+                      buttonIconColor: isDark ? Colors.white54 : Colors.black54,
+                      hintText: 'Search emoji...',
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _insertEmoji(String emoji) {
+    final controller = _model.messageTextController;
+    if (controller == null) return;
+
+    final text = controller.text;
+    final selection = controller.selection;
+    final start = selection.start >= 0 ? selection.start : text.length;
+    final end = selection.end >= 0 ? selection.end : text.length;
+
+    final newText = text.replaceRange(start, end, emoji);
+    controller.value = TextEditingValue(
+      text: newText,
+      selection: TextSelection.collapsed(
+        offset: start + emoji.length,
+      ),
+    );
+    safeSetState(() {});
+  }
+
   double _estimateMessageHeight(MessagesRecord message) {
     // Estimate message height based on content
     double baseHeight = 60.0; // Base height for message container
@@ -453,9 +1128,20 @@ class _ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget>
 
   @override
   Widget build(BuildContext context) {
-    // Mark messages as read when widget is built/displayed
+    // Reset pagination when chat changes
+    final currentChatId = widget.chatReference?.reference.id;
+    if (currentChatId != null && _currentChatId != currentChatId) {
+      _currentChatId = currentChatId;
+      _resetPagination();
+    }
+
+    // Mark messages as read when widget is built/displayed - debounced to avoid multiple calls
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      _markMessagesAsRead();
+      EasyDebounce.debounce(
+        'markMessagesAsRead',
+        const Duration(milliseconds: 500),
+        () => _markMessagesAsRead(),
+      );
     });
 
     return GestureDetector(
@@ -475,14 +1161,17 @@ class _ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget>
                     stream: queryMessagesRecord(
                       parent: widget.chatReference?.reference,
                       queryBuilder: (messagesRecord) => messagesRecord
-                          .orderBy('created_at', descending: true),
+                          .orderBy('created_at', descending: true)
+                          .limit(_messagesPerPage), // Load initial 50 messages
                     ),
                     builder: (context, snapshot) {
-                      // Mark messages as read when messages are loaded
+                      // Mark messages as read when messages are loaded - debounced to avoid multiple calls
                       if (snapshot.hasData && snapshot.data!.isNotEmpty) {
-                        WidgetsBinding.instance.addPostFrameCallback((_) {
-                          _markMessagesAsRead();
-                        });
+                        EasyDebounce.debounce(
+                          'markMessagesAsRead',
+                          const Duration(milliseconds: 500),
+                          () => _markMessagesAsRead(),
+                        );
                       }
                       // Customize what your widget looks like when it's loading.
                       if (!snapshot.hasData) {
@@ -498,8 +1187,56 @@ class _ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget>
                           ),
                         );
                       }
-                      List<MessagesRecord> listViewMessagesRecordList =
-                          snapshot.data!;
+
+                      // Get recent messages from stream (latest 50)
+                      List<MessagesRecord> recentMessages = snapshot.data!;
+
+                      // Initialize pagination marker from stream's oldest message (first time only)
+                      if (recentMessages.isNotEmpty &&
+                          _lastLoadedOlderMessageSnapshot == null &&
+                          _loadedOlderMessages.isEmpty) {
+                        // Get the document snapshot for the oldest message in the stream
+                        // This will be used to load messages older than the initial 50
+                        final oldestMessage = recentMessages
+                            .last; // Last in descending order is oldest
+                        oldestMessage.reference.get().then((docSnapshot) {
+                          if (docSnapshot.exists && mounted) {
+                            setState(() {
+                              _lastLoadedOlderMessageSnapshot = docSnapshot;
+                            });
+                          }
+                        }).catchError((e) {
+                          print('Error getting oldest message snapshot: $e');
+                        });
+                      }
+
+                      // Merge with loaded older messages
+                      // Recent messages are newest first, older messages are also newest first
+                      // We need to combine them: older messages go before recent messages
+                      List<MessagesRecord> listViewMessagesRecordList = [];
+
+                      // Add older messages first (they're already in descending order)
+                      listViewMessagesRecordList.addAll(_loadedOlderMessages);
+
+                      // Then add recent messages, avoiding duplicates
+                      final olderMessageIds = _loadedOlderMessages
+                          .map((m) => m.reference.id)
+                          .toSet();
+                      for (final message in recentMessages) {
+                        if (!olderMessageIds.contains(message.reference.id)) {
+                          listViewMessagesRecordList.add(message);
+                        }
+                      }
+
+                      // Sort by created_at descending to ensure correct order
+                      listViewMessagesRecordList.sort((a, b) {
+                        final aTime = a.createdAt;
+                        final bTime = b.createdAt;
+                        if (aTime == null && bTime == null) return 0;
+                        if (aTime == null) return 1;
+                        if (bTime == null) return -1;
+                        return bTime.compareTo(aTime);
+                      });
 
                       // Calculate unread messages using isReadBy field on each message
                       final chat = widget.chatReference;
@@ -556,16 +1293,46 @@ class _ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget>
                         },
                         child: ListView.builder(
                           controller: _model.scrollController,
-                          padding: EdgeInsets.zero,
+                          // Top padding for floating top bar, bottom for floating input bar
+                          // Add extra padding at top when loading older messages
+                          padding: EdgeInsets.only(
+                            top: 120 + (_isLoadingOlderMessages ? 50 : 0),
+                            bottom: 100,
+                          ),
                           reverse: true,
-                          shrinkWrap: true,
+                          shrinkWrap: false, // Better performance when false
                           scrollDirection: Axis.vertical,
+                          cacheExtent:
+                              500, // Cache more items for smoother scrolling
+                          addAutomaticKeepAlives:
+                              false, // Don't keep items alive unnecessarily
+                          addRepaintBoundaries:
+                              true, // Add repaint boundaries for better performance
                           itemCount: listViewMessagesRecordList.length +
-                              (unreadSeparatorIndex != null ? 1 : 0),
+                              (unreadSeparatorIndex != null ? 1 : 0) +
+                              (_isLoadingOlderMessages ? 1 : 0),
                           itemBuilder: (context, listViewIndex) {
+                            // Show loading indicator at the top (first item in reversed list)
+                            if (_isLoadingOlderMessages && listViewIndex == 0) {
+                              return Container(
+                                padding: EdgeInsets.all(16.0),
+                                alignment: Alignment.center,
+                                child: CircularProgressIndicator(
+                                  valueColor: AlwaysStoppedAnimation<Color>(
+                                    FlutterFlowTheme.of(context).primary,
+                                  ),
+                                ),
+                              );
+                            }
+
+                            // Adjust index if loading indicator is shown
+                            int adjustedIndex = _isLoadingOlderMessages
+                                ? listViewIndex - 1
+                                : listViewIndex;
+
                             // Calculate the actual message index accounting for separator
                             // The separator is inserted right before the first (newest) unread message
-                            int messageIndex = listViewIndex;
+                            int messageIndex = adjustedIndex;
 
                             // Insert separator right before first unread message
                             if (unreadSeparatorIndex != null &&
@@ -660,7 +1427,8 @@ class _ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget>
                                   },
                                   isHighlighted: _model.highlightedMessageId ==
                                       listViewMessagesRecord.reference.id,
-                                  isGroup: widget.chatReference?.isGroup ?? false,
+                                  isGroup:
+                                      widget.chatReference?.isGroup ?? false,
                                 ),
                               ),
                             );
@@ -670,2772 +1438,830 @@ class _ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget>
                     },
                   ),
                 ),
-                Column(
-                  mainAxisSize: MainAxisSize.max,
+              ],
+            ),
+            // ═══════════════════════════════════════════════════════════
+            // FLOATING INPUT BAR - OVERLAYS SCROLLING CONTENT
+            // Messages scroll BEHIND this, shadows visible through glass
+            // ═══════════════════════════════════════════════════════════
+            Positioned(
+              left: 0,
+              right: 0,
+              bottom: 0,
+              child: SafeArea(
+                top: false,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
                   children: [
-                    Divider(
-                      height: 1.0,
-                      thickness: 1.0,
-                      color: FlutterFlowTheme.of(context).alternate,
-                    ),
-                    Container(
-                      width: double.infinity,
-                      decoration: BoxDecoration(
-                        color: FlutterFlowTheme.of(context).secondaryBackground,
-                      ),
-                      child: Padding(
-                        padding: const EdgeInsetsDirectional.fromSTEB(
-                            0.0, 0.0, 0.0, 16.0),
-                        child: GestureDetector(
-                          onTap: () async {
-                            _model.select = false;
-                            safeSetState(() {});
-                          },
-                          child: Column(
-                            mainAxisSize: MainAxisSize.max,
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Stack(
+                    // Reply/Edit Preview Banner - Floating Liquid Glass
+                    if (_model.replyingToMessage != null ||
+                        _model.editingMessage != null)
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(16),
+                          child: BackdropFilter(
+                            filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
+                            child: Container(
+                              width: double.infinity,
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 12.0, vertical: 10.0),
+                              decoration: BoxDecoration(
+                                gradient: LinearGradient(
+                                  begin: Alignment.topLeft,
+                                  end: Alignment.bottomRight,
+                                  colors: [
+                                    FlutterFlowTheme.of(context)
+                                        .primary
+                                        .withOpacity(0.15),
+                                    FlutterFlowTheme.of(context)
+                                        .primary
+                                        .withOpacity(0.08),
+                                  ],
+                                ),
+                                borderRadius: BorderRadius.circular(16),
+                                border: Border.all(
+                                  color: FlutterFlowTheme.of(context)
+                                      .primary
+                                      .withOpacity(0.2),
+                                  width: 0.5,
+                                ),
+                              ),
+                              child: Row(
                                 children: [
-                                  Padding(
-                                    padding:
-                                        const EdgeInsetsDirectional.fromSTEB(
-                                            16.0, 12.0, 0.0, 0.0),
-                                    child: SingleChildScrollView(
-                                      scrollDirection: Axis.horizontal,
-                                      child: Row(
-                                        mainAxisSize: MainAxisSize.max,
-                                        crossAxisAlignment:
-                                            CrossAxisAlignment.start,
-                                        children: [
-                                          if ((_model
-                                                  .uploadedFileUrls_uploadData
-                                                  .isNotEmpty) ==
-                                              true)
-                                            Builder(
-                                              builder: (context) {
-                                                final uploadedImages =
-                                                    _model.images.toList();
-
-                                                return Column(
-                                                  crossAxisAlignment:
-                                                      CrossAxisAlignment.start,
-                                                  children: [
-                                                    if (uploadedImages.length >
-                                                        1)
-                                                      Padding(
-                                                        padding:
-                                                            const EdgeInsets
-                                                                .only(
-                                                                left: 8.0,
-                                                                bottom: 8.0),
-                                                        child: Container(
-                                                          padding:
-                                                              const EdgeInsets
-                                                                  .symmetric(
-                                                                  horizontal:
-                                                                      8.0,
-                                                                  vertical:
-                                                                      4.0),
-                                                          decoration:
-                                                              BoxDecoration(
-                                                            color: FlutterFlowTheme
-                                                                    .of(context)
-                                                                .primary
-                                                                .withOpacity(
-                                                                    0.1),
-                                                            borderRadius:
-                                                                BorderRadius
-                                                                    .circular(
-                                                                        12.0),
-                                                            border: Border.all(
-                                                              color: FlutterFlowTheme
-                                                                      .of(context)
-                                                                  .primary,
-                                                              width: 1.0,
-                                                            ),
-                                                          ),
-                                                          child: Text(
-                                                            '${uploadedImages.length} images selected',
-                                                            style: TextStyle(
-                                                              color: FlutterFlowTheme
-                                                                      .of(context)
-                                                                  .primary,
-                                                              fontSize: 12.0,
-                                                              fontWeight:
-                                                                  FontWeight
-                                                                      .w600,
-                                                            ),
-                                                          ),
-                                                        ),
-                                                      ),
-                                                    SingleChildScrollView(
-                                                      scrollDirection:
-                                                          Axis.horizontal,
-                                                      child: Row(
-                                                        mainAxisSize:
-                                                            MainAxisSize.min,
-                                                        children: List.generate(
-                                                            uploadedImages
-                                                                .length,
-                                                            (uploadedImagesIndex) {
-                                                          final uploadedImagesItem =
-                                                              uploadedImages[
-                                                                  uploadedImagesIndex];
-                                                          return SizedBox(
-                                                            width: 140.0,
-                                                            height: 120.0,
-                                                            child: Stack(
-                                                              alignment:
-                                                                  const AlignmentDirectional(
-                                                                      0.0, 0.0),
-                                                              children: [
-                                                                FlutterFlowMediaDisplay(
-                                                                  path:
-                                                                      uploadedImagesItem,
-                                                                  imageBuilder:
-                                                                      (path) =>
-                                                                          ClipRRect(
-                                                                    borderRadius:
-                                                                        BorderRadius.circular(
-                                                                            8.0),
-                                                                    child:
-                                                                        CachedNetworkImage(
-                                                                      fadeInDuration:
-                                                                          const Duration(
-                                                                              milliseconds: 500),
-                                                                      fadeOutDuration:
-                                                                          const Duration(
-                                                                              milliseconds: 500),
-                                                                      imageUrl:
-                                                                          path,
-                                                                      width:
-                                                                          120.0,
-                                                                      height:
-                                                                          100.0,
-                                                                      fit: BoxFit
-                                                                          .cover,
-                                                                    ),
-                                                                  ),
-                                                                  videoPlayerBuilder:
-                                                                      (path) =>
-                                                                          FlutterFlowVideoPlayer(
-                                                                    path: path,
-                                                                    width:
-                                                                        300.0,
-                                                                    autoPlay:
-                                                                        false,
-                                                                    looping:
-                                                                        true,
-                                                                    showControls:
-                                                                        true,
-                                                                    allowFullScreen:
-                                                                        true,
-                                                                    allowPlaybackSpeedMenu:
-                                                                        false,
-                                                                  ),
-                                                                ),
-                                                                Align(
-                                                                  alignment:
-                                                                      const AlignmentDirectional(
-                                                                          1.12,
-                                                                          -0.95),
-                                                                  child:
-                                                                      FlutterFlowIconButton(
-                                                                    borderColor:
-                                                                        FlutterFlowTheme.of(context)
-                                                                            .error,
-                                                                    borderRadius:
-                                                                        20.0,
-                                                                    borderWidth:
-                                                                        2.0,
-                                                                    buttonSize:
-                                                                        40.0,
-                                                                    fillColor: FlutterFlowTheme.of(
-                                                                            context)
-                                                                        .primaryBackground,
-                                                                    icon: Icon(
-                                                                      Icons
-                                                                          .delete_outline_rounded,
-                                                                      color: Colors
-                                                                          .black,
-                                                                      size:
-                                                                          24.0,
-                                                                    ),
-                                                                    onPressed:
-                                                                        () async {
-                                                                      _model.removeFromImages(
-                                                                          uploadedImagesItem);
-                                                                      safeSetState(
-                                                                          () {});
-                                                                    },
-                                                                  ),
-                                                                ),
-                                                              ],
-                                                            ),
-                                                          );
-                                                        }).divide(
-                                                            const SizedBox(
-                                                                width: 5.0)),
-                                                      ),
-                                                    ),
-                                                  ],
-                                                );
-                                              },
-                                            ),
-                                          if (_model.file != null &&
-                                              _model.file != '')
-                                            Builder(
-                                              builder: (context) {
-                                                final fileUrl = _model.file!;
-                                                final isPdf = fileUrl
-                                                        .toLowerCase()
-                                                        .endsWith('.pdf') ||
-                                                    fileUrl
-                                                        .toLowerCase()
-                                                        .contains('.pdf');
-                                                final uploadedFileName = _model
-                                                    .uploadedLocalFile_uploadDataFile
-                                                    .name;
-                                                final fileName =
-                                                    (uploadedFileName != null &&
-                                                            uploadedFileName
-                                                                .isNotEmpty)
-                                                        ? uploadedFileName
-                                                        : (fileUrl
-                                                                .split('/')
-                                                                .last
-                                                                .split('?')
-                                                                .first
-                                                                .isNotEmpty
-                                                            ? fileUrl
-                                                                .split('/')
-                                                                .last
-                                                                .split('?')
-                                                                .first
-                                                            : 'file');
-
-                                                if (isPdf) {
-                                                  return SizedBox(
-                                                    width: 160.0,
-                                                    height: 120.0,
-                                                    child: Stack(
-                                                      alignment:
-                                                          const AlignmentDirectional(
-                                                              0.0, 0.0),
-                                                      children: [
-                                                        FlutterFlowPdfViewer(
-                                                          networkPath: fileUrl,
-                                                          height: 300.0,
-                                                          horizontalScroll:
-                                                              false,
-                                                        ),
-                                                        Align(
-                                                          alignment:
-                                                              const AlignmentDirectional(
-                                                                  1.0, -0.95),
-                                                          child:
-                                                              FlutterFlowIconButton(
-                                                            borderColor:
-                                                                FlutterFlowTheme.of(
-                                                                        context)
-                                                                    .error,
-                                                            borderRadius: 20.0,
-                                                            borderWidth: 2.0,
-                                                            buttonSize: 40.0,
-                                                            fillColor: FlutterFlowTheme
-                                                                    .of(context)
-                                                                .primaryBackground,
-                                                            icon: Icon(
-                                                              Icons
-                                                                  .delete_outline_rounded,
-                                                              color:
-                                                                  Colors.black,
-                                                              size: 24.0,
-                                                            ),
-                                                            onPressed:
-                                                                () async {
-                                                              safeSetState(() {
-                                                                _model.isDataUploading_uploadDataFile =
-                                                                    false;
-                                                                _model.uploadedLocalFile_uploadDataFile =
-                                                                    FFUploadedFile(
-                                                                        bytes: Uint8List.fromList(
-                                                                            []));
-                                                                _model.uploadedFileUrl_uploadDataFile =
-                                                                    '';
-                                                                _model.file =
-                                                                    '';
-                                                              });
-                                                            },
-                                                          ),
-                                                        ),
-                                                      ],
-                                                    ),
-                                                  );
-                                                } else {
-                                                  return Container(
-                                                    width: 200.0,
-                                                    padding:
-                                                        EdgeInsets.all(12.0),
-                                                    decoration: BoxDecoration(
-                                                      color: FlutterFlowTheme
-                                                              .of(context)
-                                                          .secondaryBackground,
-                                                      borderRadius:
-                                                          BorderRadius.circular(
-                                                              8.0),
-                                                      border: Border.all(
-                                                        color:
-                                                            FlutterFlowTheme.of(
-                                                                    context)
-                                                                .alternate,
-                                                      ),
-                                                    ),
-                                                    child: Stack(
-                                                      children: [
-                                                        Row(
-                                                          children: [
-                                                            Icon(
-                                                              Icons
-                                                                  .insert_drive_file_rounded,
-                                                              color: FlutterFlowTheme
-                                                                      .of(context)
-                                                                  .primary,
-                                                              size: 32.0,
-                                                            ),
-                                                            SizedBox(
-                                                                width: 12.0),
-                                                            Expanded(
-                                                              child: Column(
-                                                                crossAxisAlignment:
-                                                                    CrossAxisAlignment
-                                                                        .start,
-                                                                mainAxisSize:
-                                                                    MainAxisSize
-                                                                        .min,
-                                                                children: [
-                                                                  Text(
-                                                                    fileName,
-                                                                    style: FlutterFlowTheme.of(
-                                                                            context)
-                                                                        .bodyMedium,
-                                                                    maxLines: 2,
-                                                                    overflow:
-                                                                        TextOverflow
-                                                                            .ellipsis,
-                                                                  ),
-                                                                ],
-                                                              ),
-                                                            ),
-                                                          ],
-                                                        ),
-                                                        Align(
-                                                          alignment:
-                                                              AlignmentDirectional(
-                                                                  1.0, -1.0),
-                                                          child:
-                                                              FlutterFlowIconButton(
-                                                            borderColor:
-                                                                FlutterFlowTheme.of(
-                                                                        context)
-                                                                    .error,
-                                                            borderRadius: 20.0,
-                                                            borderWidth: 2.0,
-                                                            buttonSize: 32.0,
-                                                            fillColor: FlutterFlowTheme
-                                                                    .of(context)
-                                                                .primaryBackground,
-                                                            icon: Icon(
-                                                              Icons
-                                                                  .delete_outline_rounded,
-                                                              color:
-                                                                  Colors.black,
-                                                              size: 18.0,
-                                                            ),
-                                                            onPressed:
-                                                                () async {
-                                                              safeSetState(() {
-                                                                _model.isDataUploading_uploadDataFile =
-                                                                    false;
-                                                                _model.uploadedLocalFile_uploadDataFile =
-                                                                    FFUploadedFile(
-                                                                        bytes: Uint8List.fromList(
-                                                                            []));
-                                                                _model.uploadedFileUrl_uploadDataFile =
-                                                                    '';
-                                                                _model.file =
-                                                                    '';
-                                                              });
-                                                            },
-                                                          ),
-                                                        ),
-                                                      ],
-                                                    ),
-                                                  );
-                                                }
-                                              },
-                                            ),
-                                          if (_model.audiopath != null &&
-                                              _model.audiopath != '')
-                                            SizedBox(
-                                              width: 300.0,
-                                              height: 110.0,
-                                              child: Stack(
-                                                alignment:
-                                                    const AlignmentDirectional(
-                                                        0.0, 0.0),
-                                                children: [
-                                                  SizedBox(
-                                                    width: double.infinity,
-                                                    height: double.infinity,
-                                                    child: custom_widgets
-                                                        .LinkedUpPlayer(
-                                                      width: double.infinity,
-                                                      height: double.infinity,
-                                                      audioPath:
-                                                          _model.audiopath!,
-                                                      isLocal: true,
-                                                    ),
-                                                  ),
-                                                  Align(
-                                                    alignment:
-                                                        const AlignmentDirectional(
-                                                            -1.0, 1.0),
-                                                    child: Padding(
-                                                      padding:
-                                                          const EdgeInsetsDirectional
-                                                              .fromSTEB(25.0,
-                                                              0.0, 0.0, 5.0),
-                                                      child:
-                                                          FlutterFlowIconButton(
-                                                        borderColor:
-                                                            FlutterFlowTheme.of(
-                                                                    context)
-                                                                .error,
-                                                        borderRadius: 20.0,
-                                                        borderWidth: 2.0,
-                                                        buttonSize: 30.0,
-                                                        fillColor:
-                                                            FlutterFlowTheme.of(
-                                                                    context)
-                                                                .primaryBackground,
-                                                        icon: Icon(
-                                                          Icons
-                                                              .delete_outline_rounded,
-                                                          color: FlutterFlowTheme
-                                                                  .of(context)
-                                                              .error,
-                                                          size: 14.0,
-                                                        ),
-                                                        onPressed: () async {
-                                                          _model.audiopath =
-                                                              null;
-                                                          safeSetState(() {});
-                                                        },
-                                                      ),
-                                                    ),
-                                                  ),
-                                                ],
+                                  Container(
+                                    width: 3,
+                                    height: 36,
+                                    decoration: BoxDecoration(
+                                      color:
+                                          FlutterFlowTheme.of(context).primary,
+                                      borderRadius: BorderRadius.circular(2),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 10),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Text(
+                                          _model.editingMessage != null
+                                              ? 'Editing Message'
+                                              : 'Replying to ${_model.replyingToMessage?.senderName ?? 'User'}',
+                                          style: FlutterFlowTheme.of(context)
+                                              .labelSmall
+                                              .override(
+                                                fontFamily: 'Inter',
+                                                color:
+                                                    FlutterFlowTheme.of(context)
+                                                        .primary,
+                                                fontWeight: FontWeight.w600,
+                                                letterSpacing: 0.0,
                                               ),
-                                            ),
-                                          if (_model
-                                                  .uploadedFileUrl_uploadDataCamera !=
-                                              '')
-                                            SizedBox(
-                                              width: 140.0,
-                                              height: 120.0,
-                                              child: Stack(
-                                                alignment:
-                                                    const AlignmentDirectional(
-                                                        0.0, 0.0),
-                                                children: [
-                                                  FlutterFlowMediaDisplay(
-                                                    path: _model.image!,
-                                                    imageBuilder: (path) =>
-                                                        ClipRRect(
-                                                      borderRadius:
-                                                          BorderRadius.circular(
-                                                              8.0),
-                                                      child: CachedNetworkImage(
-                                                        fadeInDuration:
-                                                            const Duration(
-                                                                milliseconds:
-                                                                    500),
-                                                        fadeOutDuration:
-                                                            const Duration(
-                                                                milliseconds:
-                                                                    500),
-                                                        imageUrl: path,
-                                                        width: 120.0,
-                                                        height: 100.0,
-                                                        fit: BoxFit.cover,
-                                                      ),
-                                                    ),
-                                                    videoPlayerBuilder: (path) =>
-                                                        FlutterFlowVideoPlayer(
-                                                      path: path,
-                                                      width: 300.0,
-                                                      autoPlay: false,
-                                                      looping: true,
-                                                      showControls: true,
-                                                      allowFullScreen: true,
-                                                      allowPlaybackSpeedMenu:
-                                                          false,
-                                                    ),
-                                                  ),
-                                                  Align(
-                                                    alignment:
-                                                        const AlignmentDirectional(
-                                                            1.36, -0.95),
-                                                    child:
-                                                        FlutterFlowIconButton(
-                                                      borderColor:
-                                                          FlutterFlowTheme.of(
-                                                                  context)
-                                                              .error,
-                                                      borderRadius: 20.0,
-                                                      borderWidth: 2.0,
-                                                      buttonSize: 40.0,
-                                                      fillColor:
-                                                          FlutterFlowTheme.of(
-                                                                  context)
-                                                              .primaryBackground,
-                                                      icon: Icon(
-                                                        Icons
-                                                            .delete_outline_rounded,
-                                                        color: Colors.black,
-                                                        size: 24.0,
-                                                      ),
-                                                      onPressed: () async {
-                                                        safeSetState(() {
-                                                          _model.isDataUploading_uploadDataCamera =
-                                                              false;
-                                                          _model.uploadedLocalFile_uploadDataCamera =
-                                                              FFUploadedFile(
-                                                                  bytes: Uint8List
-                                                                      .fromList(
-                                                                          []));
-                                                          _model.uploadedFileUrl_uploadDataCamera =
-                                                              '';
-                                                        });
-
-                                                        _model.image = null;
-                                                        safeSetState(() {});
-                                                      },
-                                                    ),
-                                                  ),
-                                                ],
+                                        ),
+                                        const SizedBox(height: 2),
+                                        Text(
+                                          (_model.editingMessage?.content ??
+                                                  _model.replyingToMessage
+                                                      ?.content ??
+                                                  '')
+                                              .replaceAll('\n', ' '),
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                          style: FlutterFlowTheme.of(context)
+                                              .bodySmall
+                                              .override(
+                                                fontFamily: 'Inter',
+                                                color:
+                                                    FlutterFlowTheme.of(context)
+                                                        .secondaryText,
+                                                letterSpacing: 0.0,
                                               ),
-                                            ),
-                                        ]
-                                            .divide(const SizedBox(width: 8.0))
-                                            .addToStart(
-                                                const SizedBox(width: 16.0))
-                                            .addToEnd(
-                                                const SizedBox(width: 16.0)),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  GestureDetector(
+                                    onTap: _cancelEdit,
+                                    child: Container(
+                                      padding: const EdgeInsets.all(4),
+                                      decoration: BoxDecoration(
+                                        color: FlutterFlowTheme.of(context)
+                                            .secondaryText
+                                            .withOpacity(0.1),
+                                        shape: BoxShape.circle,
+                                      ),
+                                      child: Icon(
+                                        CupertinoIcons.xmark,
+                                        size: 16,
+                                        color: FlutterFlowTheme.of(context)
+                                            .secondaryText,
                                       ),
                                     ),
                                   ),
-                                  if (_model.selectedVideoFile != null)
-                                    Padding(
-                                      padding:
-                                          const EdgeInsetsDirectional.fromSTEB(
-                                              16.0, 0.0, 0.0, 0.0),
-                                      child: Container(
-                                        width: 200.0,
-                                        height: 150.0,
-                                        decoration: BoxDecoration(
-                                          color: FlutterFlowTheme.of(context)
-                                              .secondaryBackground,
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    // Attachment Previews - Floating Style
+                    if (_model.images.isNotEmpty ||
+                        _model.image != null ||
+                        _model.file != null ||
+                        _model.audiopath != null ||
+                        _model.selectedVideoFile != null)
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
+                        child: SingleChildScrollView(
+                          scrollDirection: Axis.horizontal,
+                          child: Row(
+                            children: [
+                              // Multiple Images Preview
+                              ..._model.images.map((imageUrl) => Padding(
+                                    padding: const EdgeInsets.only(right: 8.0),
+                                    child: Stack(
+                                      children: [
+                                        ClipRRect(
                                           borderRadius:
-                                              BorderRadius.circular(12.0),
+                                              BorderRadius.circular(12),
+                                          child: CachedNetworkImage(
+                                            imageUrl: imageUrl,
+                                            width: 70,
+                                            height: 70,
+                                            fit: BoxFit.cover,
+                                          ),
                                         ),
-                                        child: Stack(
-                                          children: [
-                                            ClipRRect(
-                                              borderRadius:
-                                                  BorderRadius.circular(12.0),
-                                              child: SizedBox(
-                                                width: 200.0,
-                                                height: 150.0,
-                                                child: Container(
-                                                  width: 200.0,
-                                                  height: 150.0,
-                                                  color: FlutterFlowTheme.of(
-                                                          context)
-                                                      .primaryBackground,
-                                                  child: Column(
-                                                    mainAxisAlignment:
-                                                        MainAxisAlignment
-                                                            .center,
-                                                    children: [
-                                                      Icon(
-                                                        Icons.videocam,
-                                                        color:
-                                                            FlutterFlowTheme.of(
-                                                                    context)
-                                                                .primary,
-                                                        size: 40,
-                                                      ),
-                                                      const SizedBox(height: 8),
-                                                      Text(
-                                                        'Video Selected',
-                                                        style:
-                                                            FlutterFlowTheme.of(
-                                                                    context)
-                                                                .bodyMedium,
-                                                      ),
-                                                      Text(
-                                                        _model
-                                                            .selectedVideoFile!
-                                                            .storagePath
-                                                            .split('/')
-                                                            .last,
-                                                        style:
-                                                            FlutterFlowTheme.of(
-                                                                    context)
-                                                                .bodySmall,
-                                                        textAlign:
-                                                            TextAlign.center,
-                                                        maxLines: 1,
-                                                        overflow: TextOverflow
-                                                            .ellipsis,
-                                                      ),
-                                                    ],
-                                                  ),
-                                                ),
+                                        Positioned(
+                                          top: 4,
+                                          right: 4,
+                                          child: GestureDetector(
+                                            onTap: () {
+                                              _model.removeFromImages(imageUrl);
+                                              safeSetState(() {});
+                                            },
+                                            child: Container(
+                                              padding: const EdgeInsets.all(4),
+                                              decoration: BoxDecoration(
+                                                color: Colors.black
+                                                    .withOpacity(0.6),
+                                                shape: BoxShape.circle,
+                                              ),
+                                              child: const Icon(
+                                                CupertinoIcons.xmark,
+                                                size: 12,
+                                                color: Colors.white,
                                               ),
                                             ),
-                                            Positioned(
-                                              top: 8.0,
-                                              right: 8.0,
-                                              child: Container(
-                                                decoration: BoxDecoration(
-                                                  color: Colors.black
-                                                      .withOpacity(0.6),
-                                                  borderRadius:
-                                                      BorderRadius.circular(
-                                                          20.0),
-                                                ),
-                                                child: IconButton(
-                                                  icon: Icon(
-                                                    Icons.close,
-                                                    color: Colors.white,
-                                                    size: 20.0,
-                                                  ),
-                                                  onPressed: () {
-                                                    _model.selectedVideoFile =
-                                                        null;
-                                                    safeSetState(() {});
-                                                  },
-                                                ),
-                                              ),
-                                            ),
-                                          ],
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  )),
+                              // Single Image Preview
+                              if (_model.image != null)
+                                Padding(
+                                  padding: const EdgeInsets.only(right: 8.0),
+                                  child: Stack(
+                                    children: [
+                                      ClipRRect(
+                                        borderRadius: BorderRadius.circular(12),
+                                        child: CachedNetworkImage(
+                                          imageUrl: _model.image!,
+                                          width: 70,
+                                          height: 70,
+                                          fit: BoxFit.cover,
                                         ),
                                       ),
-                                    ),
-                                  if (_model.isSendingImage == true)
-                                    Padding(
-                                      padding:
-                                          const EdgeInsetsDirectional.fromSTEB(
-                                              16.0, 0.0, 0.0, 0.0),
-                                      child: Container(
-                                        width: 120.0,
-                                        height: 130.0,
-                                        decoration: BoxDecoration(
-                                          color: FlutterFlowTheme.of(context)
-                                              .secondaryBackground,
-                                          borderRadius:
-                                              BorderRadius.circular(12.0),
+                                      Positioned(
+                                        top: 4,
+                                        right: 4,
+                                        child: GestureDetector(
+                                          onTap: () {
+                                            _model.image = null;
+                                            safeSetState(() {});
+                                          },
+                                          child: Container(
+                                            padding: const EdgeInsets.all(4),
+                                            decoration: BoxDecoration(
+                                              color:
+                                                  Colors.black.withOpacity(0.6),
+                                              shape: BoxShape.circle,
+                                            ),
+                                            child: const Icon(
+                                              CupertinoIcons.xmark,
+                                              size: 12,
+                                              color: Colors.white,
+                                            ),
+                                          ),
                                         ),
-                                        child: Padding(
-                                          padding: const EdgeInsets.all(9.0),
-                                          child: SizedBox(
-                                            width: double.infinity,
-                                            height: double.infinity,
-                                            child: custom_widgets.FFlowSpinner(
-                                              width: double.infinity,
-                                              height: double.infinity,
-                                              backgroundColor:
-                                                  Colors.transparent,
-                                              spinnerColor:
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              // Video Preview - Liquid Glass
+                              if (_model.selectedVideoFile != null)
+                                Padding(
+                                  padding: const EdgeInsets.only(right: 8.0),
+                                  child: Stack(
+                                    children: [
+                                      ClipRRect(
+                                        borderRadius: BorderRadius.circular(12),
+                                        child: BackdropFilter(
+                                          filter: ImageFilter.blur(
+                                              sigmaX: 15, sigmaY: 15),
+                                          child: Container(
+                                            width: 70,
+                                            height: 70,
+                                            decoration: BoxDecoration(
+                                              gradient: LinearGradient(
+                                                begin: Alignment.topLeft,
+                                                end: Alignment.bottomRight,
+                                                colors: [
+                                                  (Theme.of(context)
+                                                                  .brightness ==
+                                                              Brightness.dark
+                                                          ? Colors.white
+                                                          : Colors.black)
+                                                      .withOpacity(0.12),
+                                                  (Theme.of(context)
+                                                                  .brightness ==
+                                                              Brightness.dark
+                                                          ? Colors.white
+                                                          : Colors.black)
+                                                      .withOpacity(0.06),
+                                                ],
+                                              ),
+                                              borderRadius:
+                                                  BorderRadius.circular(12),
+                                              border: Border.all(
+                                                color: (Theme.of(context)
+                                                                .brightness ==
+                                                            Brightness.dark
+                                                        ? Colors.white
+                                                        : Colors.black)
+                                                    .withOpacity(0.1),
+                                                width: 0.5,
+                                              ),
+                                            ),
+                                            child: Icon(
+                                              CupertinoIcons.play_circle_fill,
+                                              size: 32,
+                                              color:
                                                   FlutterFlowTheme.of(context)
                                                       .primary,
                                             ),
                                           ),
                                         ),
                                       ),
-                                    ),
-                                ],
-                              ),
-                              Column(
-                                mainAxisSize: MainAxisSize.max,
-                                children: [
-                                  // Group member mention overlay
-                                  if (_model.showMentionOverlay &&
-                                      _model.filteredMembers.isNotEmpty)
-                                    Container(
-                                      constraints: BoxConstraints(
-                                        maxHeight: 200.0,
-                                      ),
-                                      decoration: BoxDecoration(
-                                        color: FlutterFlowTheme.of(context)
-                                            .secondaryBackground,
-                                        borderRadius:
-                                            BorderRadius.circular(8.0),
-                                        border: Border.all(
-                                          color: FlutterFlowTheme.of(context)
-                                              .alternate,
-                                          width: 1.0,
-                                        ),
-                                        boxShadow: [
-                                          BoxShadow(
-                                            color: Color(0x1A000000),
-                                            blurRadius: 8.0,
-                                            offset: Offset(0, -2),
+                                      Positioned(
+                                        top: 4,
+                                        right: 4,
+                                        child: GestureDetector(
+                                          onTap: () {
+                                            _model.selectedVideoFile = null;
+                                            safeSetState(() {});
+                                          },
+                                          child: Container(
+                                            padding: const EdgeInsets.all(4),
+                                            decoration: BoxDecoration(
+                                              color:
+                                                  Colors.black.withOpacity(0.6),
+                                              shape: BoxShape.circle,
+                                            ),
+                                            child: const Icon(
+                                              CupertinoIcons.xmark,
+                                              size: 12,
+                                              color: Colors.white,
+                                            ),
                                           ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              // File Preview - Liquid Glass
+                              if (_model.file != null)
+                                Padding(
+                                  padding: const EdgeInsets.only(right: 8.0),
+                                  child: Stack(
+                                    children: [
+                                      ClipRRect(
+                                        borderRadius: BorderRadius.circular(12),
+                                        child: BackdropFilter(
+                                          filter: ImageFilter.blur(
+                                              sigmaX: 15, sigmaY: 15),
+                                          child: Container(
+                                            width: 70,
+                                            height: 70,
+                                            decoration: BoxDecoration(
+                                              gradient: LinearGradient(
+                                                begin: Alignment.topLeft,
+                                                end: Alignment.bottomRight,
+                                                colors: [
+                                                  (Theme.of(context)
+                                                                  .brightness ==
+                                                              Brightness.dark
+                                                          ? Colors.white
+                                                          : Colors.black)
+                                                      .withOpacity(0.12),
+                                                  (Theme.of(context)
+                                                                  .brightness ==
+                                                              Brightness.dark
+                                                          ? Colors.white
+                                                          : Colors.black)
+                                                      .withOpacity(0.06),
+                                                ],
+                                              ),
+                                              borderRadius:
+                                                  BorderRadius.circular(12),
+                                              border: Border.all(
+                                                color: (Theme.of(context)
+                                                                .brightness ==
+                                                            Brightness.dark
+                                                        ? Colors.white
+                                                        : Colors.black)
+                                                    .withOpacity(0.1),
+                                                width: 0.5,
+                                              ),
+                                            ),
+                                            child: Icon(
+                                              CupertinoIcons.doc_fill,
+                                              size: 32,
+                                              color:
+                                                  FlutterFlowTheme.of(context)
+                                                      .primary,
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                      Positioned(
+                                        top: 4,
+                                        right: 4,
+                                        child: GestureDetector(
+                                          onTap: () {
+                                            _model.file = null;
+                                            safeSetState(() {});
+                                          },
+                                          child: Container(
+                                            padding: const EdgeInsets.all(4),
+                                            decoration: BoxDecoration(
+                                              color:
+                                                  Colors.black.withOpacity(0.6),
+                                              shape: BoxShape.circle,
+                                            ),
+                                            child: const Icon(
+                                              CupertinoIcons.xmark,
+                                              size: 12,
+                                              color: Colors.white,
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              // Audio Preview - Liquid Glass
+                              if (_model.audiopath != null)
+                                Padding(
+                                  padding: const EdgeInsets.only(right: 8.0),
+                                  child: Stack(
+                                    children: [
+                                      ClipRRect(
+                                        borderRadius: BorderRadius.circular(12),
+                                        child: BackdropFilter(
+                                          filter: ImageFilter.blur(
+                                              sigmaX: 15, sigmaY: 15),
+                                          child: Container(
+                                            width: 70,
+                                            height: 70,
+                                            decoration: BoxDecoration(
+                                              gradient: LinearGradient(
+                                                begin: Alignment.topLeft,
+                                                end: Alignment.bottomRight,
+                                                colors: [
+                                                  (Theme.of(context)
+                                                                  .brightness ==
+                                                              Brightness.dark
+                                                          ? Colors.white
+                                                          : Colors.black)
+                                                      .withOpacity(0.12),
+                                                  (Theme.of(context)
+                                                                  .brightness ==
+                                                              Brightness.dark
+                                                          ? Colors.white
+                                                          : Colors.black)
+                                                      .withOpacity(0.06),
+                                                ],
+                                              ),
+                                              borderRadius:
+                                                  BorderRadius.circular(12),
+                                              border: Border.all(
+                                                color: (Theme.of(context)
+                                                                .brightness ==
+                                                            Brightness.dark
+                                                        ? Colors.white
+                                                        : Colors.black)
+                                                    .withOpacity(0.1),
+                                                width: 0.5,
+                                              ),
+                                            ),
+                                            child: Icon(
+                                              CupertinoIcons.waveform,
+                                              size: 32,
+                                              color:
+                                                  FlutterFlowTheme.of(context)
+                                                      .primary,
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                      Positioned(
+                                        top: 4,
+                                        right: 4,
+                                        child: GestureDetector(
+                                          onTap: () {
+                                            _model.audiopath = null;
+                                            safeSetState(() {});
+                                          },
+                                          child: Container(
+                                            padding: const EdgeInsets.all(4),
+                                            decoration: BoxDecoration(
+                                              color:
+                                                  Colors.black.withOpacity(0.6),
+                                              shape: BoxShape.circle,
+                                            ),
+                                            child: const Icon(
+                                              CupertinoIcons.xmark,
+                                              size: 12,
+                                              color: Colors.white,
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    // Main Input Row
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(8, 8, 8, 8),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.end,
+                        children: [
+                          // ═══════════════════════════════════════════
+                          // ADAPTIVE + BUTTON WITH POPUP MENU
+                          // ═══════════════════════════════════════════
+                          AdaptivePopupMenuButton.widget<String>(
+                            items: [
+                              AdaptivePopupMenuItem(
+                                label: 'Images',
+                                icon: PlatformInfo.isIOS26OrHigher()
+                                    ? 'photo.on.rectangle'
+                                    : Icons.image_rounded,
+                                value: 'images',
+                              ),
+                              AdaptivePopupMenuItem(
+                                label: 'Camera',
+                                icon: PlatformInfo.isIOS26OrHigher()
+                                    ? 'camera'
+                                    : Icons.camera_alt,
+                                value: 'camera',
+                              ),
+                              AdaptivePopupMenuItem(
+                                label: 'File',
+                                icon: PlatformInfo.isIOS26OrHigher()
+                                    ? 'paperclip'
+                                    : Icons.attach_file_rounded,
+                                value: 'file',
+                              ),
+                              AdaptivePopupMenuItem(
+                                label: 'Video',
+                                icon: PlatformInfo.isIOS26OrHigher()
+                                    ? 'video'
+                                    : Icons.videocam,
+                                value: 'video',
+                              ),
+                            ],
+                            onSelected: (index, item) async {
+                              if (_isServiceChatReadOnly()) {
+                                return; // Don't allow actions in service chat
+                              }
+                              switch (item.value) {
+                                case 'images':
+                                  await _handleSelectImages();
+                                  break;
+                                case 'camera':
+                                  await _handleCameraCapture();
+                                  break;
+                                case 'file':
+                                  await _handleFilePicker();
+                                  break;
+                                case 'video':
+                                  await _handleVideoCapture();
+                                  break;
+                              }
+                            },
+                            child: Opacity(
+                              opacity: _isServiceChatReadOnly() ? 0.3 : 1.0,
+                              child: ClipRRect(
+                                borderRadius: BorderRadius.circular(22),
+                                child: BackdropFilter(
+                                  filter:
+                                      ImageFilter.blur(sigmaX: 20, sigmaY: 20),
+                                  child: Container(
+                                    width: 44,
+                                    height: 44,
+                                    decoration: BoxDecoration(
+                                      // 🔮 Ultra Glass - very subtle
+                                      gradient: LinearGradient(
+                                        begin: Alignment.topLeft,
+                                        end: Alignment.bottomRight,
+                                        colors: [
+                                          (Theme.of(context).brightness ==
+                                                      Brightness.dark
+                                                  ? Colors.white
+                                                  : Colors.black)
+                                              .withOpacity(0.05),
+                                          (Theme.of(context).brightness ==
+                                                      Brightness.dark
+                                                  ? Colors.white
+                                                  : Colors.black)
+                                              .withOpacity(0.02),
                                         ],
                                       ),
-                                      child: ListView.builder(
-                                        shrinkWrap: true,
-                                        padding: EdgeInsets.zero,
-                                        itemCount:
-                                            _model.filteredMembers.length,
-                                        itemBuilder: (context, index) {
-                                          final member =
-                                              _model.filteredMembers[index];
-                                          return GestureDetector(
-                                            onTap: () async {
-                                              // Replace the @query with @username
-                                              final currentText = _model
-                                                      .messageTextController
-                                                      ?.text ??
-                                                  '';
-                                              final lastAtIndex =
-                                                  currentText.lastIndexOf('@');
-                                              if (lastAtIndex != -1) {
-                                                final beforeAt = currentText
-                                                    .substring(0, lastAtIndex);
-                                                final mention =
-                                                    '@${member.displayName} ';
-                                                _model.messageTextController
-                                                    ?.text = beforeAt + mention;
-                                                _model.messageTextController
-                                                        ?.selection =
-                                                    TextSelection.fromPosition(
-                                                  TextPosition(
-                                                      offset:
-                                                          (beforeAt + mention)
-                                                              .length),
-                                                );
-                                              }
-
-                                              // Hide overlay
-                                              _model.showMentionOverlay = false;
-                                              _model.filteredMembers = [];
-                                              safeSetState(() {});
-
-                                              // Refocus on text field
-                                              _model.messageFocusNode
-                                                  ?.requestFocus();
-                                            },
-                                            child: Container(
-                                              padding: EdgeInsetsDirectional
-                                                  .fromSTEB(
-                                                      12.0, 8.0, 12.0, 8.0),
-                                              decoration: BoxDecoration(
-                                                color:
-                                                    FlutterFlowTheme.of(context)
-                                                        .secondaryBackground,
-                                                border: Border(
-                                                  bottom: BorderSide(
-                                                    color: FlutterFlowTheme.of(
-                                                            context)
-                                                        .alternate,
-                                                    width: 0.5,
-                                                  ),
+                                      borderRadius: BorderRadius.circular(22),
+                                      border: Border.all(
+                                        color: (Theme.of(context).brightness ==
+                                                    Brightness.dark
+                                                ? Colors.white
+                                                : Colors.black)
+                                            .withOpacity(0.08),
+                                        width: 0.5,
+                                      ),
+                                    ),
+                                    child: Icon(
+                                      CupertinoIcons.plus,
+                                      size: 22,
+                                      color: CupertinoColors.systemBlue,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          // ═══════════════════════════════════════════
+                          // TEXT INPUT WITH INLINE SEND BUTTON (iMessage style)
+                          // ═══════════════════════════════════════════
+                          Expanded(
+                            child: _isServiceChatReadOnly()
+                                ? _buildServiceChatReadOnlyMessage()
+                                : ClipRRect(
+                                    borderRadius: BorderRadius.circular(22),
+                                    child: BackdropFilter(
+                                      filter: ImageFilter.blur(
+                                          sigmaX: 20, sigmaY: 20),
+                                      child: Container(
+                                        decoration: BoxDecoration(
+                                          // 🔮 Ultra Glass - very subtle
+                                          gradient: LinearGradient(
+                                            begin: Alignment.topLeft,
+                                            end: Alignment.bottomRight,
+                                            colors: [
+                                              (Theme.of(context).brightness ==
+                                                          Brightness.dark
+                                                      ? Colors.white
+                                                      : Colors.black)
+                                                  .withOpacity(0.05),
+                                              (Theme.of(context).brightness ==
+                                                          Brightness.dark
+                                                      ? Colors.white
+                                                      : Colors.black)
+                                                  .withOpacity(0.02),
+                                            ],
+                                          ),
+                                          borderRadius:
+                                              BorderRadius.circular(22),
+                                          border: Border.all(
+                                            color:
+                                                (Theme.of(context).brightness ==
+                                                            Brightness.dark
+                                                        ? Colors.white
+                                                        : Colors.black)
+                                                    .withOpacity(0.08),
+                                            width: 0.5,
+                                          ),
+                                        ),
+                                        child: Row(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.end,
+                                          children: [
+                                            // Emoji Button
+                                            GestureDetector(
+                                              onTap: () => _showEmojiPicker(),
+                                              child: Padding(
+                                                padding: const EdgeInsets.only(
+                                                    left: 12, bottom: 10),
+                                                child: Icon(
+                                                  CupertinoIcons.smiley,
+                                                  size: 24,
+                                                  color: FlutterFlowTheme.of(
+                                                          context)
+                                                      .secondaryText,
                                                 ),
                                               ),
-                                              child: Row(
-                                                children: [
-                                                  // Avatar
-                                                  Container(
-                                                    width: 32.0,
-                                                    height: 32.0,
-                                                    decoration: BoxDecoration(
-                                                      shape: BoxShape.circle,
-                                                      border: Border.all(
-                                                        color:
-                                                            FlutterFlowTheme.of(
-                                                                    context)
-                                                                .primary,
-                                                        width: 1.0,
+                                            ),
+                                            // Text Input
+                                            Expanded(
+                                              child: CupertinoTextField(
+                                                controller: _model
+                                                    .messageTextController,
+                                                focusNode:
+                                                    _model.messageFocusNode,
+                                                placeholder:
+                                                    _model.editingMessage !=
+                                                            null
+                                                        ? 'Edit your message...'
+                                                        : 'Message...',
+                                                placeholderStyle: TextStyle(
+                                                  color: FlutterFlowTheme.of(
+                                                          context)
+                                                      .secondaryText
+                                                      .withOpacity(0.6),
+                                                  fontSize: 16,
+                                                  fontWeight: FontWeight.w400,
+                                                ),
+                                                style: TextStyle(
+                                                  color: FlutterFlowTheme.of(
+                                                          context)
+                                                      .primaryText,
+                                                  fontSize: 16,
+                                                ),
+                                                padding: const EdgeInsets.only(
+                                                  left: 8,
+                                                  right: 8,
+                                                  top: 12,
+                                                  bottom: 12,
+                                                ),
+                                                decoration: const BoxDecoration(
+                                                  color: Colors.transparent,
+                                                ),
+                                                minLines: 1,
+                                                maxLines: 5,
+                                                textInputAction:
+                                                    TextInputAction.newline,
+                                                onChanged: (value) {
+                                                  // Remove unnecessary setState - text field updates automatically
+                                                  // Only update if we need to show/hide send button or adjust UI
+                                                  // The debounce is not needed here as TextField handles updates efficiently
+                                                },
+                                              ),
+                                            ),
+                                            // ═══════════════════════════════════════
+                                            // INLINE SEND BUTTON - System Blue, iMessage style
+                                            // ═══════════════════════════════════════
+                                            AnimatedOpacity(
+                                              opacity: 1.0, // Always visible
+                                              duration: const Duration(
+                                                  milliseconds: 150),
+                                              child: AnimatedScale(
+                                                scale: 1.0, // Always full scale
+                                                duration: const Duration(
+                                                    milliseconds: 150),
+                                                child: Padding(
+                                                  padding:
+                                                      const EdgeInsets.only(
+                                                          right: 6, bottom: 6),
+                                                  child: GestureDetector(
+                                                    onTap: () async {
+                                                      if (_model
+                                                              .editingMessage !=
+                                                          null) {
+                                                        await _updateMessage();
+                                                      } else {
+                                                        await _sendMessage();
+                                                      }
+                                                    },
+                                                    child: Container(
+                                                      width: 32,
+                                                      height: 32,
+                                                      decoration: BoxDecoration(
+                                                        // System Blue
+                                                        color: CupertinoColors
+                                                            .systemBlue,
+                                                        shape: BoxShape.circle,
                                                       ),
-                                                    ),
-                                                    child: ClipRRect(
-                                                      borderRadius:
-                                                          BorderRadius.circular(
-                                                              16.0),
-                                                      child: member.photoUrl
-                                                              .isNotEmpty
-                                                          ? CachedNetworkImage(
-                                                              imageUrl: member
-                                                                  .photoUrl,
-                                                              width: 32.0,
-                                                              height: 32.0,
-                                                              fit: BoxFit.cover,
-                                                              placeholder:
-                                                                  (context,
-                                                                          url) =>
-                                                                      Container(
-                                                                color: FlutterFlowTheme.of(
-                                                                        context)
-                                                                    .alternate,
-                                                                child: Icon(
-                                                                  Icons.person,
-                                                                  color: FlutterFlowTheme.of(
-                                                                          context)
-                                                                      .secondaryText,
-                                                                  size: 16.0,
-                                                                ),
-                                                              ),
-                                                              errorWidget:
-                                                                  (context, url,
-                                                                          error) =>
-                                                                      Container(
-                                                                color: FlutterFlowTheme.of(
-                                                                        context)
-                                                                    .alternate,
-                                                                child: Icon(
-                                                                  Icons.person,
-                                                                  color: FlutterFlowTheme.of(
-                                                                          context)
-                                                                      .secondaryText,
-                                                                  size: 16.0,
-                                                                ),
-                                                              ),
+                                                      child: _model.isSending ==
+                                                              true
+                                                          ? const CupertinoActivityIndicator(
+                                                              color:
+                                                                  Colors.white,
+                                                              radius: 8,
                                                             )
-                                                          : Container(
-                                                              color: FlutterFlowTheme
-                                                                      .of(context)
-                                                                  .alternate,
-                                                              child: Icon(
-                                                                Icons.person,
-                                                                color: FlutterFlowTheme.of(
-                                                                        context)
-                                                                    .secondaryText,
-                                                                size: 16.0,
-                                                              ),
+                                                          : const Icon(
+                                                              CupertinoIcons
+                                                                  .arrow_up,
+                                                              size: 18,
+                                                              color:
+                                                                  Colors.white,
                                                             ),
                                                     ),
                                                   ),
-                                                  SizedBox(width: 12.0),
-                                                  // Name and email
-                                                  Expanded(
-                                                    child: Column(
-                                                      crossAxisAlignment:
-                                                          CrossAxisAlignment
-                                                              .start,
-                                                      mainAxisSize:
-                                                          MainAxisSize.min,
-                                                      children: [
-                                                        Text(
-                                                          member.displayName,
-                                                          style: FlutterFlowTheme
-                                                                  .of(context)
-                                                              .bodyMedium
-                                                              .override(
-                                                                fontSize: 14.0,
-                                                                fontWeight:
-                                                                    FontWeight
-                                                                        .w500,
-                                                                letterSpacing:
-                                                                    0.0,
-                                                              ),
-                                                          maxLines: 1,
-                                                          overflow: TextOverflow
-                                                              .ellipsis,
-                                                        ),
-                                                        if (member
-                                                            .email.isNotEmpty)
-                                                          Text(
-                                                            member.email,
-                                                            style: FlutterFlowTheme
-                                                                    .of(context)
-                                                                .bodySmall
-                                                                .override(
-                                                                  fontSize:
-                                                                      12.0,
-                                                                  color: FlutterFlowTheme.of(
-                                                                          context)
-                                                                      .secondaryText,
-                                                                  letterSpacing:
-                                                                      0.0,
-                                                                ),
-                                                            maxLines: 1,
-                                                            overflow:
-                                                                TextOverflow
-                                                                    .ellipsis,
-                                                          ),
-                                                      ],
-                                                    ),
-                                                  ),
-                                                ],
-                                              ),
-                                            ),
-                                          );
-                                        },
-                                      ),
-                                    ),
-                                  // AI mention overlay (keep existing)
-                                  if (_model.isMention == true)
-                                    Padding(
-                                      padding:
-                                          const EdgeInsetsDirectional.fromSTEB(
-                                              16.0, 0.0, 16.0, 0.0),
-                                      child: GestureDetector(
-                                        onTap: () async {
-                                          safeSetState(() {
-                                            _model.messageTextController?.text =
-                                                '@linkai';
-                                          });
-                                        },
-                                        child: Container(
-                                          width: double.infinity,
-                                          height: 50.0,
-                                          decoration: BoxDecoration(
-                                            color: FlutterFlowTheme.of(context)
-                                                .secondaryBackground,
-                                          ),
-                                          child: Align(
-                                            alignment:
-                                                const AlignmentDirectional(
-                                                    -1.0, 0.0),
-                                            child: Padding(
-                                              padding:
-                                                  const EdgeInsetsDirectional
-                                                      .fromSTEB(
-                                                      50.0, 0.0, 0.0, 0.0),
-                                              child: Text(
-                                                '@linkai',
-                                                style:
-                                                    FlutterFlowTheme.of(context)
-                                                        .bodyMedium
-                                                        .override(
-                                                          color: FlutterFlowTheme
-                                                                  .of(context)
-                                                              .primary,
-                                                          fontSize: 16.0,
-                                                          letterSpacing: 0.0,
-                                                          fontWeight:
-                                                              FontWeight.w500,
-                                                          fontStyle:
-                                                              FontStyle.italic,
-                                                        ),
-                                              ),
-                                            ),
-                                          ),
-                                        ),
-                                      ).animateOnActionTrigger(
-                                          animationsMap[
-                                              'containerOnActionTriggerAnimation1']!,
-                                          hasBeenTriggered:
-                                              hasContainerTriggered1),
-                                    ),
-                                  // Reply preview section
-                                  if (_model.replyingToMessage != null)
-                                    Container(
-                                      width: double.infinity,
-                                      decoration: BoxDecoration(
-                                        color: FlutterFlowTheme.of(context)
-                                            .primaryBackground,
-                                        borderRadius:
-                                            BorderRadius.circular(8.0),
-                                        border: Border.all(
-                                          color: FlutterFlowTheme.of(context)
-                                              .primary,
-                                          width: 1.0,
-                                        ),
-                                      ),
-                                      child: Padding(
-                                        padding: const EdgeInsetsDirectional
-                                            .fromSTEB(12.0, 8.0, 12.0, 8.0),
-                                        child: Row(
-                                          children: [
-                                            Container(
-                                              width: 3.0,
-                                              height: 40.0,
-                                              decoration: BoxDecoration(
-                                                border: Border(
-                                                  left: BorderSide(
-                                                    color: FlutterFlowTheme.of(
-                                                            context)
-                                                        .primary,
-                                                    width: 4.0,
-                                                  ),
                                                 ),
                                               ),
                                             ),
-                                            Expanded(
-                                              child: Column(
-                                                crossAxisAlignment:
-                                                    CrossAxisAlignment.start,
-                                                children: [
-                                                  Text(
-                                                    'Replying to ${_model.replyingToMessage!.senderName}',
-                                                    style: FlutterFlowTheme.of(
-                                                            context)
-                                                        .bodySmall
-                                                        .override(
-                                                          color: FlutterFlowTheme
-                                                                  .of(context)
-                                                              .primary,
-                                                          fontWeight:
-                                                              FontWeight.w600,
-                                                        ),
-                                                  ),
-                                                  const SizedBox(height: 2.0),
-                                                  Text(
-                                                    _model.replyingToMessage!
-                                                        .content,
-                                                    style: FlutterFlowTheme.of(
-                                                            context)
-                                                        .bodySmall
-                                                        .override(
-                                                          color: FlutterFlowTheme
-                                                                  .of(context)
-                                                              .secondaryText,
-                                                        ),
-                                                    maxLines: 2,
-                                                    overflow:
-                                                        TextOverflow.ellipsis,
-                                                  ),
-                                                ],
-                                              ),
-                                            ),
-                                            IconButton(
-                                              icon: Icon(
-                                                Icons.close,
-                                                color:
-                                                    FlutterFlowTheme.of(context)
-                                                        .secondaryText,
-                                                size: 20.0,
-                                              ),
-                                              onPressed: () {
-                                                _model.replyingToMessage = null;
-                                                safeSetState(() {});
-                                              },
-                                            ),
                                           ],
-                                        ),
-                                      ),
-                                    ),
-                                  // Edit preview section
-                                  if (_model.editingMessage != null)
-                                    Container(
-                                      width: double.infinity,
-                                      decoration: BoxDecoration(
-                                        color: FlutterFlowTheme.of(context)
-                                            .secondaryBackground,
-                                        borderRadius:
-                                            BorderRadius.circular(8.0),
-                                        border: Border.all(
-                                          color: FlutterFlowTheme.of(context)
-                                              .warning,
-                                          width: 1.0,
-                                        ),
-                                      ),
-                                      child: Padding(
-                                        padding: const EdgeInsetsDirectional
-                                            .fromSTEB(12.0, 8.0, 12.0, 8.0),
-                                        child: Row(
-                                          children: [
-                                            Container(
-                                              width: 3.0,
-                                              height: 40.0,
-                                              decoration: BoxDecoration(
-                                                color:
-                                                    FlutterFlowTheme.of(context)
-                                                        .warning,
-                                                borderRadius:
-                                                    BorderRadius.circular(2.0),
-                                              ),
-                                            ),
-                                            const SizedBox(width: 8.0),
-                                            Expanded(
-                                              child: Column(
-                                                crossAxisAlignment:
-                                                    CrossAxisAlignment.start,
-                                                children: [
-                                                  Text(
-                                                    'Editing message',
-                                                    style: FlutterFlowTheme.of(
-                                                            context)
-                                                        .bodySmall
-                                                        .override(
-                                                          color: FlutterFlowTheme
-                                                                  .of(context)
-                                                              .warning,
-                                                          fontWeight:
-                                                              FontWeight.w600,
-                                                        ),
-                                                  ),
-                                                  const SizedBox(height: 2.0),
-                                                  Text(
-                                                    _model.editingMessage!
-                                                        .content,
-                                                    style: FlutterFlowTheme.of(
-                                                            context)
-                                                        .bodySmall
-                                                        .override(
-                                                          color: FlutterFlowTheme
-                                                                  .of(context)
-                                                              .secondaryText,
-                                                        ),
-                                                    maxLines: 2,
-                                                    overflow:
-                                                        TextOverflow.ellipsis,
-                                                  ),
-                                                ],
-                                              ),
-                                            ),
-                                            IconButton(
-                                              icon: Icon(
-                                                Icons.close,
-                                                color:
-                                                    FlutterFlowTheme.of(context)
-                                                        .secondaryText,
-                                                size: 20.0,
-                                              ),
-                                              onPressed: () {
-                                                _cancelEdit();
-                                              },
-                                            ),
-                                          ],
-                                        ),
-                                      ),
-                                    ),
-                                  Align(
-                                    alignment:
-                                        const AlignmentDirectional(0.0, 0.0),
-                                    child: Container(
-                                      constraints: const BoxConstraints(
-                                        maxHeight: 150.0,
-                                      ),
-                                      decoration: const BoxDecoration(),
-                                      child: Padding(
-                                        padding: const EdgeInsetsDirectional
-                                            .fromSTEB(16.0, 0.0, 16.0, 0.0),
-                                        child: Row(
-                                          mainAxisSize: MainAxisSize.max,
-                                          children: [
-                                            FlutterFlowIconButton(
-                                              borderRadius: 16.0,
-                                              buttonSize: 38.0,
-                                              icon: const Icon(
-                                                Icons.add,
-                                                color: Color(0xFF6B7280),
-                                                size: 20.0,
-                                              ),
-                                              onPressed: () async {
-                                                _model.select = true;
-                                                safeSetState(() {});
-                                              },
-                                            ),
-                                            Expanded(
-                                              child: SizedBox(
-                                                width: 200.0,
-                                                child: Container(
-                                                  decoration: BoxDecoration(
-                                                    color: Color(
-                                                        0xFFF2F2F7), // iOS 26+ light gray background
-                                                    borderRadius:
-                                                        BorderRadius.circular(
-                                                            20.0), // More rounded for iOS 26+
-                                                  ),
-                                                  child: CupertinoTextField(
-                                                    controller: _model
-                                                        .messageTextController,
-                                                    focusNode:
-                                                        _model.messageFocusNode,
-                                                    placeholder: 'Message',
-                                                    placeholderStyle: TextStyle(
-                                                      fontSize: 17.0,
-                                                      fontWeight:
-                                                          FontWeight.normal,
-                                                      color: Color(
-                                                          0xFF8E8E93), // iOS gray placeholder
-                                                    ),
-                                                    style: TextStyle(
-                                                      fontSize: 17.0,
-                                                      fontWeight:
-                                                          FontWeight.normal,
-                                                      color: Color(
-                                                          0xFF000000), // Black text
-                                                    ),
-                                                    padding: const EdgeInsets
-                                                        .symmetric(
-                                                        horizontal: 16.0,
-                                                        vertical: 10.0),
-                                                    decoration: null,
-                                                    onChanged: (_) =>
-                                                        EasyDebounce.debounce(
-                                                      '_model.messageTextController',
-                                                      const Duration(
-                                                          milliseconds: 100),
-                                                      () async {
-                                                        // Check for AI mention
-                                                        _model.isMention = functions
-                                                            .checkmention(_model
-                                                                .messageTextController
-                                                                .text)!;
-
-                                                        // Check for group member mentions
-                                                        final mentionQuery = functions
-                                                            .extractMentionQuery(
-                                                                _model
-                                                                    .messageTextController
-                                                                    .text);
-
-                                                        if (mentionQuery !=
-                                                                null &&
-                                                            widget.chatReference
-                                                                    ?.isGroup ==
-                                                                true) {
-                                                          // Show mention overlay for group members
-                                                          _model.showMentionOverlay =
-                                                              true;
-                                                          _model.mentionQuery =
-                                                              mentionQuery;
-
-                                                          // Fetch and filter group members
-                                                          final memberRefs = widget
-                                                                  .chatReference
-                                                                  ?.members ??
-                                                              [];
-                                                          final members = await Future
-                                                              .wait(memberRefs.map(
-                                                                  (ref) => UsersRecord
-                                                                      .getDocumentOnce(
-                                                                          ref)));
-
-                                                          // Filter members by query
-                                                          _model.filteredMembers =
-                                                              members.where(
-                                                                  (member) {
-                                                            final displayName =
-                                                                member
-                                                                    .displayName
-                                                                    .toLowerCase();
-                                                            final email = member
-                                                                .email
-                                                                .toLowerCase();
-                                                            final query =
-                                                                mentionQuery
-                                                                    .toLowerCase();
-                                                            return displayName
-                                                                    .contains(
-                                                                        query) ||
-                                                                email.contains(
-                                                                    query);
-                                                          }).toList();
-                                                        } else {
-                                                          _model.showMentionOverlay =
-                                                              false;
-                                                          _model.filteredMembers =
-                                                              [];
-                                                        }
-
-                                                        safeSetState(() {});
-
-                                                        if (_model.isMention ==
-                                                            true) {
-                                                          if (animationsMap[
-                                                                  'containerOnActionTriggerAnimation1'] !=
-                                                              null) {
-                                                            safeSetState(() =>
-                                                                hasContainerTriggered1 =
-                                                                    true);
-                                                            SchedulerBinding
-                                                                .instance
-                                                                .addPostFrameCallback((_) async => await animationsMap[
-                                                                        'containerOnActionTriggerAnimation1']!
-                                                                    .controller
-                                                                    .forward(
-                                                                        from:
-                                                                            0.0));
-                                                          }
-                                                        }
-                                                      },
-                                                    ),
-                                                    onSubmitted: (_) async {
-                                                      safeSetState(() {
-                                                        _model.messageTextController
-                                                                ?.text =
-                                                            '${_model.messageTextController.text}\n';
-                                                      });
-                                                    },
-                                                    autofocus: false,
-                                                    maxLines: null,
-                                                    cursorColor:
-                                                        FlutterFlowTheme.of(
-                                                                context)
-                                                            .primaryText,
-                                                  ),
-                                                ),
-                                              ),
-                                            ),
-                                            Builder(
-                                              builder: (context) {
-                                                if (_model.isSending == false) {
-                                                  return FlutterFlowIconButton(
-                                                    borderRadius: 32.0,
-                                                    buttonSize: 40.0,
-                                                    fillColor:
-                                                        FlutterFlowTheme.of(
-                                                                context)
-                                                            .primary,
-                                                    icon: Icon(
-                                                      _model.editingMessage !=
-                                                              null
-                                                          ? Icons.save_rounded
-                                                          : Icons.send_rounded,
-                                                      color:
-                                                          FlutterFlowTheme.of(
-                                                                  context)
-                                                              .info,
-                                                      size: 20.0,
-                                                    ),
-                                                    onPressed: ((_model
-                                                                    .messageTextController
-                                                                    .text ==
-                                                                '') &&
-                                                            (_model.audiopath ==
-                                                                    null ||
-                                                                _model.audiopath ==
-                                                                    '') &&
-                                                            (_model.image == null ||
-                                                                _model.image ==
-                                                                    '') &&
-                                                            (_model.videoUrl ==
-                                                                    null ||
-                                                                _model.videoUrl ==
-                                                                    '') &&
-                                                            (_model.selectedVideoFile ==
-                                                                null) &&
-                                                            !(_model.images
-                                                                .isNotEmpty) &&
-                                                            !(_model.images
-                                                                .isNotEmpty) &&
-                                                            (_model.file ==
-                                                                    null ||
-                                                                _model.file ==
-                                                                    ''))
-                                                        ? null
-                                                        : () async {
-                                                            // Check if we're in edit mode
-                                                            if (_model
-                                                                    .editingMessage !=
-                                                                null) {
-                                                              await _updateMessage();
-                                                              return;
-                                                            }
-
-                                                            final firestoreBatch =
-                                                                FirebaseFirestore
-                                                                    .instance
-                                                                    .batch();
-                                                            try {
-                                                              _model.isSending =
-                                                                  true;
-                                                              safeSetState(
-                                                                  () {});
-                                                              if (!((_model
-                                                                          .messageTextController
-                                                                          .text ==
-                                                                      '') &&
-                                                                  (_model.image ==
-                                                                          null ||
-                                                                      _model.image ==
-                                                                          '') &&
-                                                                  (_model.audiopath ==
-                                                                          null ||
-                                                                      _model.audiopath ==
-                                                                          '') &&
-                                                                  (_model.videoUrl ==
-                                                                          null ||
-                                                                      _model.videoUrl ==
-                                                                          '') &&
-                                                                  (_model.selectedVideoFile ==
-                                                                      null) &&
-                                                                  (_model.file ==
-                                                                          null ||
-                                                                      _model.file ==
-                                                                          '') &&
-                                                                  !(_model
-                                                                      .images
-                                                                      .isNotEmpty))) {
-                                                                _model.isValid =
-                                                                    await actions
-                                                                        .checkValidWords(
-                                                                  _model
-                                                                      .messageTextController
-                                                                      .text,
-                                                                );
-                                                                if (_model
-                                                                        .isValid ==
-                                                                    true) {
-                                                                  ScaffoldMessenger.of(
-                                                                          context)
-                                                                      .showSnackBar(
-                                                                    SnackBar(
-                                                                      content:
-                                                                          Text(
-                                                                        '⚠️ Message blocked due to inappropriate content.',
-                                                                        style:
-                                                                            TextStyle(
-                                                                          color:
-                                                                              FlutterFlowTheme.of(context).primaryText,
-                                                                        ),
-                                                                      ),
-                                                                      duration: const Duration(
-                                                                          milliseconds:
-                                                                              4000),
-                                                                      backgroundColor:
-                                                                          FlutterFlowTheme.of(context)
-                                                                              .secondary,
-                                                                    ),
-                                                                  );
-                                                                } else {
-                                                                  if (_model.audiopath !=
-                                                                          null &&
-                                                                      _model.audiopath !=
-                                                                          '') {
-                                                                    _model.netwoekURL =
-                                                                        await actions
-                                                                            .uploadAudioToStorage(
-                                                                      _model
-                                                                          .audiopath,
-                                                                    );
-                                                                    _model.audioMainUrl =
-                                                                        _model
-                                                                            .netwoekURL;
-                                                                    safeSetState(
-                                                                        () {});
-                                                                  } else {
-                                                                    if (functions.containsAIMention(_model
-                                                                            .messageTextController
-                                                                            .text) ==
-                                                                        true) {
-                                                                      unawaited(
-                                                                        () async {
-                                                                          await actions
-                                                                              .callAIAgent(
-                                                                            widget.chatReference!.reference.id,
-                                                                            _model.messageTextController.text,
-                                                                          );
-                                                                        }(),
-                                                                      );
-                                                                    }
-                                                                  }
-
-                                                                  _model.addToUserSend(
-                                                                      currentUserReference!);
-                                                                  safeSetState(
-                                                                      () {});
-
-                                                                  firestoreBatch.update(
-                                                                      widget
-                                                                          .chatReference!
-                                                                          .reference,
-                                                                      {
-                                                                        ...createChatsRecordData(
-                                                                          lastMessage: widget.chatReference?.isGroup == true
-                                                                              ? '$currentUserDisplayName: ${() {
-                                                                                  if (_model.videoUrl != null && _model.videoUrl != '') {
-                                                                                    return 'Sent Video';
-                                                                                  } else if (_model.image != null && _model.image != '') {
-                                                                                    return 'Sent Image';
-                                                                                  } else if (_model.audiopath != null && _model.audiopath != '') {
-                                                                                    return 'Sent Voice Message';
-                                                                                  } else if (_model.file != null && _model.file != '') {
-                                                                                    return 'Sent File';
-                                                                                  } else {
-                                                                                    return _model.messageTextController.text;
-                                                                                  }
-                                                                                }()}'
-                                                                              : '$currentUserDisplayName: ${() {
-                                                                                  if (_model.videoUrl != null && _model.videoUrl != '') {
-                                                                                    return 'Sent Video';
-                                                                                  } else if (_model.image != null && _model.image != '') {
-                                                                                    return 'Sent Image';
-                                                                                  } else if (_model.audiopath != null && _model.audiopath != '') {
-                                                                                    return 'Sent Voice Message';
-                                                                                  } else if (_model.file != null && _model.file != '') {
-                                                                                    return 'Sent File';
-                                                                                  } else {
-                                                                                    return _model.messageTextController.text;
-                                                                                  }
-                                                                                }()}',
-                                                                          lastMessageAt:
-                                                                              getCurrentTimestamp,
-                                                                          lastMessageSent:
-                                                                              currentUserReference,
-                                                                          lastMessageType:
-                                                                              () {
-                                                                            if (_model.videoUrl != null &&
-                                                                                _model.videoUrl != '') {
-                                                                              return MessageType.video;
-                                                                            } else if (_model.image == null || _model.image == '') {
-                                                                              return MessageType.text;
-                                                                            } else {
-                                                                              return MessageType.image;
-                                                                            }
-                                                                          }(),
-                                                                        ),
-                                                                        ...mapToFirestore(
-                                                                          {
-                                                                            'last_message_seen':
-                                                                                _model.userSend,
-                                                                          },
-                                                                        ),
-                                                                      });
-
-                                                                  // Upload video if selected
-                                                                  if (_model
-                                                                          .selectedVideoFile !=
-                                                                      null) {
-                                                                    try {
-                                                                      showUploadMessage(
-                                                                        context,
-                                                                        'Uploading video...',
-                                                                        showLoading:
-                                                                            true,
-                                                                      );
-                                                                      _model.videoUrl =
-                                                                          await uploadData(
-                                                                        _model
-                                                                            .selectedVideoFile!
-                                                                            .storagePath,
-                                                                        _model
-                                                                            .selectedVideoFile!
-                                                                            .bytes,
-                                                                      );
-                                                                      ScaffoldMessenger.of(
-                                                                              context)
-                                                                          .hideCurrentSnackBar();
-
-                                                                      // Update chat timestamp after video upload completes
-                                                                      await widget
-                                                                          .chatReference!
-                                                                          .reference
-                                                                          .update({
-                                                                        'last_message_at':
-                                                                            getCurrentTimestamp,
-                                                                      });
-                                                                    } catch (e) {
-                                                                      ScaffoldMessenger.of(
-                                                                              context)
-                                                                          .hideCurrentSnackBar();
-                                                                      ScaffoldMessenger.of(
-                                                                              context)
-                                                                          .showSnackBar(
-                                                                        SnackBar(
-                                                                          content:
-                                                                              Text(
-                                                                            'Failed to upload video: $e',
-                                                                            style:
-                                                                                TextStyle(
-                                                                              color: FlutterFlowTheme.of(context).primaryText,
-                                                                            ),
-                                                                          ),
-                                                                          duration:
-                                                                              const Duration(milliseconds: 4000),
-                                                                          backgroundColor:
-                                                                              FlutterFlowTheme.of(context).secondary,
-                                                                        ),
-                                                                      );
-                                                                      _model.isSending =
-                                                                          false;
-                                                                      safeSetState(
-                                                                          () {});
-                                                                      return;
-                                                                    }
-                                                                  }
-
-                                                                  var messagesRecordReference =
-                                                                      MessagesRecord.createDoc(widget
-                                                                          .chatReference!
-                                                                          .reference);
-                                                                  firestoreBatch
-                                                                      .set(
-                                                                          messagesRecordReference,
-                                                                          {
-                                                                        ...createMessagesRecordData(
-                                                                          senderRef:
-                                                                              currentUserReference,
-                                                                          content:
-                                                                              () {
-                                                                            // If sending a file without text, store the original file name in content
-                                                                            if (_model.file != null &&
-                                                                                _model.file != '' &&
-                                                                                (_model.messageTextController?.text.isEmpty ?? true)) {
-                                                                              final originalFileName = _model.uploadedLocalFile_uploadDataFile.name;
-                                                                              return (originalFileName != null && originalFileName.isNotEmpty) ? originalFileName : (_model.messageTextController?.text ?? '');
-                                                                            }
-                                                                            return _model.messageTextController?.text ??
-                                                                                '';
-                                                                          }(),
-                                                                          createdAt:
-                                                                              getCurrentTimestamp,
-                                                                          replyTo: _model
-                                                                              .replyingToMessage
-                                                                              ?.reference
-                                                                              .id,
-                                                                          replyToContent: _model
-                                                                              .replyingToMessage
-                                                                              ?.content,
-                                                                          replyToSender: _model
-                                                                              .replyingToMessage
-                                                                              ?.senderName,
-                                                                          messageType:
-                                                                              () {
-                                                                            if (_model.videoUrl != null &&
-                                                                                _model.videoUrl != '') {
-                                                                              return MessageType.video;
-                                                                            } else if (_model.selectedVideoFile != null) {
-                                                                              return MessageType.video;
-                                                                            } else if (_model.image == null || _model.image == '') {
-                                                                              return MessageType.text;
-                                                                            } else if (_model.audiopath != null && _model.audiopath != '') {
-                                                                              return MessageType.voice;
-                                                                            } else {
-                                                                              return MessageType.image;
-                                                                            }
-                                                                          }(),
-                                                                          image: _model.image != null && _model.image != ''
-                                                                              ? _model.image
-                                                                              : null,
-                                                                          audio:
-                                                                              _model.audiopath,
-                                                                          video: _model.videoUrl != null && _model.videoUrl != ''
-                                                                              ? _model.videoUrl
-                                                                              : null,
-                                                                          attachmentUrl: _model.file != null && _model.file != ''
-                                                                              ? _model.file
-                                                                              : '',
-                                                                          audioPath:
-                                                                              _model.audioMainUrl,
-                                                                          senderName:
-                                                                              currentUserDisplayName,
-                                                                          senderPhoto:
-                                                                              currentUserPhoto,
-                                                                        ),
-                                                                        ...mapToFirestore(
-                                                                          {
-                                                                            'images': _model.images.isNotEmpty
-                                                                                ? _model.images
-                                                                                : functions.getEmptyListImagePath(),
-                                                                          },
-                                                                        ),
-                                                                        'is_read_by':
-                                                                            [
-                                                                          currentUserReference!
-                                                                        ], // Sender has read their own message
-                                                                      });
-                                                                  _model.newChat =
-                                                                      MessagesRecord
-                                                                          .getDocumentFromData({
-                                                                    ...createMessagesRecordData(
-                                                                      senderRef:
-                                                                          currentUserReference,
-                                                                      content:
-                                                                          () {
-                                                                        // If sending a file without text, store the original file name in content
-                                                                        if (_model.file != null &&
-                                                                            _model.file !=
-                                                                                '' &&
-                                                                            (_model.messageTextController?.text.isEmpty ??
-                                                                                true)) {
-                                                                          final originalFileName = _model
-                                                                              .uploadedLocalFile_uploadDataFile
-                                                                              .name;
-                                                                          return (originalFileName != null && originalFileName.isNotEmpty)
-                                                                              ? originalFileName
-                                                                              : (_model.messageTextController?.text ?? '');
-                                                                        }
-                                                                        return _model.messageTextController?.text ??
-                                                                            '';
-                                                                      }(),
-                                                                      createdAt:
-                                                                          getCurrentTimestamp,
-                                                                      replyTo: _model
-                                                                          .replyingToMessage
-                                                                          ?.reference
-                                                                          .id,
-                                                                      replyToContent: _model
-                                                                          .replyingToMessage
-                                                                          ?.content,
-                                                                      replyToSender: _model
-                                                                          .replyingToMessage
-                                                                          ?.senderName,
-                                                                      messageType:
-                                                                          () {
-                                                                        if (_model.image ==
-                                                                                null ||
-                                                                            _model.image ==
-                                                                                '') {
-                                                                          return MessageType
-                                                                              .text;
-                                                                        } else if (_model.audiopath !=
-                                                                                null &&
-                                                                            _model.audiopath !=
-                                                                                '') {
-                                                                          return MessageType
-                                                                              .voice;
-                                                                        } else {
-                                                                          return MessageType
-                                                                              .image;
-                                                                        }
-                                                                      }(),
-                                                                      image: _model.image != null &&
-                                                                              _model.image !=
-                                                                                  ''
-                                                                          ? _model
-                                                                              .image
-                                                                          : null,
-                                                                      audio: _model
-                                                                          .audiopath,
-                                                                      attachmentUrl: _model.file != null &&
-                                                                              _model.file !=
-                                                                                  ''
-                                                                          ? _model
-                                                                              .file
-                                                                          : '',
-                                                                      audioPath:
-                                                                          _model
-                                                                              .audioMainUrl,
-                                                                      senderName:
-                                                                          currentUserDisplayName,
-                                                                      senderPhoto:
-                                                                          currentUserPhoto,
-                                                                    ),
-                                                                    ...mapToFirestore(
-                                                                      {
-                                                                        'images': _model.images.isNotEmpty
-                                                                            ? _model.images
-                                                                            : functions.getEmptyListImagePath(),
-                                                                      },
-                                                                    ),
-                                                                  }, messagesRecordReference);
-                                                                  triggerPushNotification(
-                                                                    notificationTitle:
-                                                                        currentUserDisplayName,
-                                                                    notificationText:
-                                                                        () {
-                                                                      // Use the same logic as message content to show actual message
-                                                                      if (_model.videoUrl !=
-                                                                              null &&
-                                                                          _model.videoUrl !=
-                                                                              '') {
-                                                                        return 'Sent Video';
-                                                                      } else if (_model
-                                                                              .selectedVideoFile !=
-                                                                          null) {
-                                                                        return 'Sent Video';
-                                                                      } else if (_model.image !=
-                                                                              null &&
-                                                                          _model.image !=
-                                                                              '') {
-                                                                        return 'Sent Image';
-                                                                      } else if (_model.audiopath !=
-                                                                              null &&
-                                                                          _model.audiopath !=
-                                                                              '') {
-                                                                        return 'Sent Voice Message';
-                                                                      } else if (_model.file !=
-                                                                              null &&
-                                                                          _model.file !=
-                                                                              '') {
-                                                                        final originalFileName = _model
-                                                                            .uploadedLocalFile_uploadDataFile
-                                                                            .name;
-                                                                        return (originalFileName != null && originalFileName.isNotEmpty)
-                                                                            ? originalFileName
-                                                                            : (_model.messageTextController?.text ??
-                                                                                'Sent File');
-                                                                      } else {
-                                                                        return _model.messageTextController?.text ??
-                                                                            '';
-                                                                      }
-                                                                    }(),
-                                                                    notificationImageUrl: _model.image !=
-                                                                                null &&
-                                                                            _model.image !=
-                                                                                ''
-                                                                        ? _model
-                                                                            .image
-                                                                        : '',
-                                                                    notificationSound:
-                                                                        'default',
-                                                                    userRefs: widget
-                                                                        .chatReference!
-                                                                        .members
-                                                                        .where((e) =>
-                                                                            e !=
-                                                                            currentUserReference)
-                                                                        .toList(),
-                                                                    initialPageName: (!kIsWeb &&
-                                                                            Platform.isIOS)
-                                                                        ? 'MobileChat'
-                                                                        : 'ChatDetail',
-                                                                    parameterData: {
-                                                                      'chatDoc':
-                                                                          widget
-                                                                              .chatReference,
-                                                                    },
-                                                                  );
-                                                                  safeSetState(
-                                                                      () {
-                                                                    _model
-                                                                        .messageTextController
-                                                                        ?.clear();
-                                                                  });
-                                                                  _model.audiopath =
-                                                                      null;
-                                                                  _model.select =
-                                                                      false;
-                                                                  _model.image =
-                                                                      null;
-                                                                  _model.file =
-                                                                      null;
-                                                                  _model.images =
-                                                                      [];
-                                                                  _model.videoUrl =
-                                                                      null;
-                                                                  _model.selectedVideoFile =
-                                                                      null;
-                                                                  _model.replyingToMessage =
-                                                                      null;
-                                                                  safeSetState(
-                                                                      () {});
-                                                                  safeSetState(
-                                                                      () {
-                                                                    _model.isDataUploading_uploadData =
-                                                                        false;
-                                                                    _model.uploadedLocalFiles_uploadData =
-                                                                        [];
-                                                                    _model.uploadedFileUrls_uploadData =
-                                                                        [];
-                                                                  });
-
-                                                                  safeSetState(
-                                                                      () {
-                                                                    _model.isDataUploading_uploadDataCamera =
-                                                                        false;
-                                                                    _model.uploadedLocalFile_uploadDataCamera =
-                                                                        FFUploadedFile(
-                                                                            bytes:
-                                                                                Uint8List.fromList([]));
-                                                                    _model.uploadedFileUrl_uploadDataCamera =
-                                                                        '';
-                                                                  });
-
-                                                                  safeSetState(
-                                                                      () {
-                                                                    _model.isDataUploading_uploadDataFile =
-                                                                        false;
-                                                                    _model.uploadedLocalFile_uploadDataFile =
-                                                                        FFUploadedFile(
-                                                                            bytes:
-                                                                                Uint8List.fromList([]));
-                                                                    _model.uploadedFileUrl_uploadDataFile =
-                                                                        '';
-                                                                  });
-                                                                }
-                                                              }
-                                                              _model.isSending =
-                                                                  false;
-                                                              safeSetState(
-                                                                  () {});
-                                                            } finally {
-                                                              await firestoreBatch
-                                                                  .commit();
-                                                            }
-
-                                                            safeSetState(() {});
-                                                          },
-                                                  );
-                                                } else {
-                                                  return Container(
-                                                    width: 40.0,
-                                                    height: 40.0,
-                                                    decoration: BoxDecoration(
-                                                      color:
-                                                          FlutterFlowTheme.of(
-                                                                  context)
-                                                              .primary,
-                                                      shape: BoxShape.circle,
-                                                    ),
-                                                    child: Padding(
-                                                      padding:
-                                                          const EdgeInsets.all(
-                                                              5.0),
-                                                      child: SizedBox(
-                                                        width: double.infinity,
-                                                        height: double.infinity,
-                                                        child: custom_widgets
-                                                            .FFlowSpinner(
-                                                          width:
-                                                              double.infinity,
-                                                          height:
-                                                              double.infinity,
-                                                          backgroundColor:
-                                                              Colors
-                                                                  .transparent,
-                                                          spinnerColor:
-                                                              FlutterFlowTheme.of(
-                                                                      context)
-                                                                  .secondaryBackground,
-                                                        ),
-                                                      ),
-                                                    ),
-                                                  );
-                                                }
-                                              },
-                                            ),
-                                          ].divide(const SizedBox(width: 12.0)),
                                         ),
                                       ),
                                     ),
                                   ),
-                                ],
-                              ),
-                            ],
                           ),
-                        ),
+                        ],
                       ),
                     ),
                   ],
                 ),
-              ]
-                  .divide(const SizedBox(height: 2.0))
-                  .addToStart(const SizedBox(height: 8.0))
-                  .addToEnd(const SizedBox(height: 8.0)),
-            ),
-            Align(
-              alignment: const AlignmentDirectional(-0.8, 0.65),
-              child: Container(
-                decoration: BoxDecoration(
-                  color: FlutterFlowTheme.of(context).secondaryBackground,
-                  borderRadius: BorderRadius.circular(12.0),
-                ),
-                child: Builder(
-                  builder: (context) {
-                    if (_model.audio == false) {
-                      return Visibility(
-                        visible: _model.select == true,
-                        child: Container(
-                          constraints: const BoxConstraints(
-                            maxWidth: 150.0,
-                          ),
-                          decoration: BoxDecoration(
-                            color: FlutterFlowTheme.of(context)
-                                .secondaryBackground,
-                            boxShadow: const [
-                              BoxShadow(
-                                blurRadius: 8.0,
-                                color: Color(0x33000000),
-                                offset: Offset(
-                                  0.0,
-                                  4.0,
-                                ),
-                                spreadRadius: 0.0,
-                              )
-                            ],
-                            borderRadius: BorderRadius.circular(12.0),
-                          ),
-                          child: Padding(
-                            padding: const EdgeInsetsDirectional.fromSTEB(
-                                16.0, 16.0, 16.0, 16.0),
-                            child: Column(
-                              mainAxisSize: MainAxisSize.min,
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  'Select Media',
-                                  textAlign: TextAlign.center,
-                                  style: FlutterFlowTheme.of(context)
-                                      .titleSmall
-                                      .override(
-                                        letterSpacing: 0.0,
-                                        fontWeight: FlutterFlowTheme.of(context)
-                                            .titleSmall
-                                            .fontWeight,
-                                        fontStyle: FlutterFlowTheme.of(context)
-                                            .titleSmall
-                                            .fontStyle,
-                                      ),
-                                ),
-                                Column(
-                                  mainAxisSize: MainAxisSize.min,
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    // Temporarily commented out voice feature
-                                    // InkWell(
-                                    //   splashColor: Colors.transparent,
-                                    //   focusColor: Colors.transparent,
-                                    //   hoverColor: Colors.transparent,
-                                    //   highlightColor: Colors.transparent,
-                                    //   onTap: () async {
-                                    //     _model.audio = true;
-                                    //     safeSetState(() {});
-                                    //   },
-                                    //   child: Row(
-                                    //     mainAxisSize: MainAxisSize.max,
-                                    //     mainAxisAlignment:
-                                    //         MainAxisAlignment.start,
-                                    //     children: [
-                                    //       Container(
-                                    //         width: 30.0,
-                                    //         decoration: BoxDecoration(),
-                                    //         child: Align(
-                                    //           alignment: AlignmentDirectional(
-                                    //               -1.0, 0.0),
-                                    //           child: Icon(
-                                    //             Icons.mic_rounded,
-                                    //             color:
-                                    //                 FlutterFlowTheme.of(context)
-                                    //                     .primary,
-                                    //             size: 24.0,
-                                    //           ),
-                                    //         ),
-                                    //       ),
-                                    //       Container(
-                                    //         width: 50.0,
-                                    //         decoration: BoxDecoration(),
-                                    //         child: Text(
-                                    //           'Voice',
-                                    //           style:
-                                    //               FlutterFlowTheme.of(context)
-                                    //                   .bodyMedium
-                                    //                   .override(
-                                    //                     font: GoogleFonts.inter(
-                                    //                       fontWeight:
-                                    //                           FlutterFlowTheme.of(
-                                    //                                   context)
-                                    //                               .bodyMedium
-                                    //                               .fontWeight,
-                                    //                       fontStyle:
-                                    //                           FlutterFlowTheme.of(
-                                    //                                   context)
-                                    //                               .bodyMedium
-                                    //                               .fontStyle,
-                                    //                     ),
-                                    //                     letterSpacing: 0.0,
-                                    //                     fontWeight:
-                                    //                         FlutterFlowTheme.of(
-                                    //                                 context)
-                                    //                             .bodyMedium
-                                    //                             .fontWeight,
-                                    //                     fontStyle:
-                                    //                         FlutterFlowTheme.of(
-                                    //                                 context)
-                                    //                             .bodyMedium
-                                    //                             .fontStyle,
-                                    //                   ),
-                                    //         ),
-                                    //       ),
-                                    //     ],
-                                    //   ),
-                                    // ),
-                                    Container(
-                                      width: double.infinity,
-                                      height: 1.0,
-                                      decoration: BoxDecoration(
-                                        color: FlutterFlowTheme.of(context)
-                                            .alternate,
-                                      ),
-                                    ),
-                                    GestureDetector(
-                                      onTap: () async {
-                                        _model.isSendingImage = true;
-                                        _model.select = false;
-                                        safeSetState(() {});
-                                        final selectedMedia = await selectMedia(
-                                          mediaSource: MediaSource.photoGallery,
-                                          multiImage: true,
-                                        );
-                                        if (selectedMedia != null &&
-                                            selectedMedia.every((m) =>
-                                                validateFileFormat(
-                                                    m.storagePath, context))) {
-                                          // Check if more than 10 images selected
-                                          if (selectedMedia.length > 10) {
-                                            ScaffoldMessenger.of(context)
-                                                .showSnackBar(
-                                              SnackBar(
-                                                content: Row(
-                                                  children: [
-                                                    const Icon(Icons.warning,
-                                                        color: Colors.white),
-                                                    const SizedBox(width: 12),
-                                                    Expanded(
-                                                      child: Text(
-                                                          'You can only select up to 10 images at once'),
-                                                    ),
-                                                  ],
-                                                ),
-                                                backgroundColor: Colors.orange,
-                                              ),
-                                            );
-                                            _model.isSendingImage = false;
-                                            safeSetState(() {});
-                                            return;
-                                          }
-                                          safeSetState(() => _model
-                                                  .isDataUploading_uploadData =
-                                              true);
-                                          var selectedUploadedFiles =
-                                              <FFUploadedFile>[];
-
-                                          var downloadUrls = <String>[];
-                                          try {
-                                            selectedUploadedFiles =
-                                                selectedMedia
-                                                    .map((m) => FFUploadedFile(
-                                                          name: m.storagePath
-                                                              .split('/')
-                                                              .last,
-                                                          bytes: m.bytes,
-                                                          height: m.dimensions
-                                                              ?.height,
-                                                          width: m.dimensions
-                                                              ?.width,
-                                                          blurHash: m.blurHash,
-                                                        ))
-                                                    .toList();
-
-                                            downloadUrls = (await Future.wait(
-                                              selectedMedia.map(
-                                                (m) async => await uploadData(
-                                                    m.storagePath, m.bytes),
-                                              ),
-                                            ))
-                                                .where((u) => u != null)
-                                                .map((u) => u!)
-                                                .toList();
-                                          } finally {
-                                            _model.isDataUploading_uploadData =
-                                                false;
-                                          }
-                                          if (selectedUploadedFiles.length ==
-                                                  selectedMedia.length &&
-                                              downloadUrls.length ==
-                                                  selectedMedia.length) {
-                                            safeSetState(() {
-                                              _model.uploadedLocalFiles_uploadData =
-                                                  selectedUploadedFiles;
-                                              _model.uploadedFileUrls_uploadData =
-                                                  downloadUrls;
-                                            });
-                                          } else {
-                                            safeSetState(() {});
-                                            return;
-                                          }
-                                        }
-
-                                        if ((_model.uploadedFileUrls_uploadData
-                                                .isNotEmpty) ==
-                                            true) {
-                                          _model.images = _model
-                                              .uploadedFileUrls_uploadData
-                                              .map((url) => url.toString())
-                                              .toList();
-                                          safeSetState(() {});
-                                        }
-                                        _model.isSendingImage = false;
-                                        safeSetState(() {});
-                                      },
-                                      child: Row(
-                                        mainAxisSize: MainAxisSize.max,
-                                        mainAxisAlignment:
-                                            MainAxisAlignment.start,
-                                        crossAxisAlignment:
-                                            CrossAxisAlignment.center,
-                                        children: [
-                                          Container(
-                                            width: 30.0,
-                                            decoration: const BoxDecoration(),
-                                            child: Align(
-                                              alignment:
-                                                  const AlignmentDirectional(
-                                                      -1.0, 0.0),
-                                              child: Icon(
-                                                Icons.image_rounded,
-                                                color:
-                                                    FlutterFlowTheme.of(context)
-                                                        .primary,
-                                                size: 24.0,
-                                              ),
-                                            ),
-                                          ),
-                                          Container(
-                                            width: 50.0,
-                                            decoration: const BoxDecoration(),
-                                            child: Text(
-                                              'Images',
-                                              style:
-                                                  FlutterFlowTheme.of(context)
-                                                      .bodyMedium
-                                                      .override(
-                                                        letterSpacing: 0.0,
-                                                        fontWeight:
-                                                            FlutterFlowTheme.of(
-                                                                    context)
-                                                                .bodyMedium
-                                                                .fontWeight,
-                                                        fontStyle:
-                                                            FlutterFlowTheme.of(
-                                                                    context)
-                                                                .bodyMedium
-                                                                .fontStyle,
-                                                      ),
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                    Container(
-                                      width: double.infinity,
-                                      height: 1.0,
-                                      decoration: BoxDecoration(
-                                        color: FlutterFlowTheme.of(context)
-                                            .alternate,
-                                      ),
-                                    ),
-                                    GestureDetector(
-                                      onTap: () async {
-                                        _model.isSendingImage = true;
-                                        _model.select = false;
-                                        safeSetState(() {});
-                                        final selectedMedia =
-                                            await selectMediaWithSourceBottomSheet(
-                                          context: context,
-                                          allowPhoto: true,
-                                          allowVideo: true,
-                                        );
-                                        if (selectedMedia != null &&
-                                            selectedMedia.every((m) =>
-                                                validateFileFormat(
-                                                    m.storagePath, context))) {
-                                          safeSetState(() => _model
-                                                  .isDataUploading_uploadDataCamera =
-                                              true);
-                                          var selectedUploadedFiles =
-                                              <FFUploadedFile>[];
-
-                                          var downloadUrls = <String>[];
-                                          try {
-                                            selectedUploadedFiles =
-                                                selectedMedia
-                                                    .map((m) => FFUploadedFile(
-                                                          name: m.storagePath
-                                                              .split('/')
-                                                              .last,
-                                                          bytes: m.bytes,
-                                                          height: m.dimensions
-                                                              ?.height,
-                                                          width: m.dimensions
-                                                              ?.width,
-                                                          blurHash: m.blurHash,
-                                                        ))
-                                                    .toList();
-
-                                            downloadUrls = (await Future.wait(
-                                              selectedMedia.map(
-                                                (m) async => await uploadData(
-                                                    m.storagePath, m.bytes),
-                                              ),
-                                            ))
-                                                .where((u) => u != null)
-                                                .map((u) => u!)
-                                                .toList();
-                                          } finally {
-                                            _model.isDataUploading_uploadDataCamera =
-                                                false;
-                                          }
-                                          if (selectedUploadedFiles.length ==
-                                                  selectedMedia.length &&
-                                              downloadUrls.length ==
-                                                  selectedMedia.length) {
-                                            safeSetState(() {
-                                              _model.uploadedLocalFile_uploadDataCamera =
-                                                  selectedUploadedFiles.first;
-                                              _model.uploadedFileUrl_uploadDataCamera =
-                                                  downloadUrls.first;
-                                            });
-                                          } else {
-                                            safeSetState(() {});
-                                            return;
-                                          }
-                                        }
-
-                                        if (_model
-                                                .uploadedFileUrl_uploadDataCamera !=
-                                            '') {
-                                          _model.image = _model
-                                              .uploadedFileUrl_uploadDataCamera;
-                                          safeSetState(() {});
-                                        }
-                                        _model.isSendingImage = false;
-                                        safeSetState(() {});
-                                      },
-                                      child: Row(
-                                        mainAxisSize: MainAxisSize.max,
-                                        mainAxisAlignment:
-                                            MainAxisAlignment.start,
-                                        crossAxisAlignment:
-                                            CrossAxisAlignment.center,
-                                        children: [
-                                          Container(
-                                            width: 30.0,
-                                            decoration: const BoxDecoration(),
-                                            child: Align(
-                                              alignment:
-                                                  const AlignmentDirectional(
-                                                      -1.0, 0.0),
-                                              child: Icon(
-                                                Icons.camera_alt,
-                                                color:
-                                                    FlutterFlowTheme.of(context)
-                                                        .primary,
-                                                size: 24.0,
-                                              ),
-                                            ),
-                                          ),
-                                          Container(
-                                            width: 60.0,
-                                            decoration: const BoxDecoration(),
-                                            child: Text(
-                                              'Camera',
-                                              style:
-                                                  FlutterFlowTheme.of(context)
-                                                      .bodyMedium
-                                                      .override(
-                                                        letterSpacing: 0.0,
-                                                        fontWeight:
-                                                            FlutterFlowTheme.of(
-                                                                    context)
-                                                                .bodyMedium
-                                                                .fontWeight,
-                                                        fontStyle:
-                                                            FlutterFlowTheme.of(
-                                                                    context)
-                                                                .bodyMedium
-                                                                .fontStyle,
-                                                      ),
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                    Container(
-                                      width: double.infinity,
-                                      height: 1.0,
-                                      decoration: BoxDecoration(
-                                        color: FlutterFlowTheme.of(context)
-                                            .alternate,
-                                      ),
-                                    ),
-                                    GestureDetector(
-                                      onTap: () async {
-                                        _model.select = false;
-                                        safeSetState(() {});
-
-                                        // Get original filename from file picker
-                                        final pickedFiles =
-                                            await FilePicker.platform.pickFiles(
-                                          type: FileType.any,
-                                          withData: true,
-                                          allowMultiple: false,
-                                        );
-
-                                        if (pickedFiles == null ||
-                                            pickedFiles.files.isEmpty) {
-                                          return;
-                                        }
-
-                                        final pickedFile =
-                                            pickedFiles.files.first;
-                                        if (pickedFile.bytes == null) {
-                                          return;
-                                        }
-
-                                        final originalFileName =
-                                            pickedFile.name;
-
-                                        safeSetState(() => _model
-                                                .isDataUploading_uploadDataFile =
-                                            true);
-                                        var selectedUploadedFiles =
-                                            <FFUploadedFile>[];
-
-                                        var downloadUrls = <String>[];
-                                        try {
-                                          // Generate storage path (similar to selectFiles)
-                                          // Format: users/{uid}/uploads/{timestamp}.{ext}
-                                          final currentUserUid =
-                                              currentUserReference?.id ?? '';
-                                          final pathPrefix =
-                                              'users/$currentUserUid/uploads';
-                                          final timestamp = DateTime.now()
-                                              .microsecondsSinceEpoch;
-                                          final ext = originalFileName
-                                                  .contains('.')
-                                              ? originalFileName.split('.').last
-                                              : 'file';
-                                          final storagePath =
-                                              '$pathPrefix/$timestamp.$ext';
-
-                                          // Use the original filename instead of storage path
-                                          selectedUploadedFiles = [
-                                            FFUploadedFile(
-                                              name: originalFileName,
-                                              bytes: pickedFile.bytes!,
-                                            )
-                                          ];
-
-                                          downloadUrls = [
-                                            (await uploadData(storagePath,
-                                                    pickedFile.bytes!)) ??
-                                                ''
-                                          ].where((u) => u.isNotEmpty).toList();
-                                        } finally {
-                                          _model.isDataUploading_uploadDataFile =
-                                              false;
-                                        }
-                                        if (selectedUploadedFiles.length == 1 &&
-                                            downloadUrls.length == 1) {
-                                          safeSetState(() {
-                                            _model.uploadedLocalFile_uploadDataFile =
-                                                selectedUploadedFiles.first;
-                                            _model.uploadedFileUrl_uploadDataFile =
-                                                downloadUrls.first;
-                                          });
-                                        } else {
-                                          safeSetState(() {});
-                                          return;
-                                        }
-
-                                        if (_model
-                                                .uploadedFileUrl_uploadDataFile !=
-                                            '') {
-                                          _model.file = _model
-                                              .uploadedFileUrl_uploadDataFile;
-                                          safeSetState(() {});
-                                        }
-                                      },
-                                      child: Row(
-                                        mainAxisSize: MainAxisSize.max,
-                                        mainAxisAlignment:
-                                            MainAxisAlignment.start,
-                                        children: [
-                                          Container(
-                                            width: 30.0,
-                                            decoration: const BoxDecoration(),
-                                            child: Align(
-                                              alignment:
-                                                  const AlignmentDirectional(
-                                                      -1.0, 0.0),
-                                              child: Icon(
-                                                Icons.attach_file_rounded,
-                                                color:
-                                                    FlutterFlowTheme.of(context)
-                                                        .primary,
-                                                size: 24.0,
-                                              ),
-                                            ),
-                                          ),
-                                          Container(
-                                            width: 50.0,
-                                            decoration: const BoxDecoration(),
-                                            child: Text(
-                                              'File',
-                                              style:
-                                                  FlutterFlowTheme.of(context)
-                                                      .bodyMedium
-                                                      .override(
-                                                        letterSpacing: 0.0,
-                                                        fontWeight:
-                                                            FlutterFlowTheme.of(
-                                                                    context)
-                                                                .bodyMedium
-                                                                .fontWeight,
-                                                        fontStyle:
-                                                            FlutterFlowTheme.of(
-                                                                    context)
-                                                                .bodyMedium
-                                                                .fontStyle,
-                                                      ),
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                    Container(
-                                      width: double.infinity,
-                                      height: 1.0,
-                                      decoration: BoxDecoration(
-                                        color: FlutterFlowTheme.of(context)
-                                            .alternate,
-                                      ),
-                                    ),
-                                    GestureDetector(
-                                      onTap: () async {
-                                        _model.isSendingImage = true;
-                                        _model.select = false;
-                                        safeSetState(() {});
-                                        final selectedMedia =
-                                            await selectMediaWithSourceBottomSheet(
-                                          context: context,
-                                          allowPhoto: false,
-                                          allowVideo: true,
-                                        );
-                                        if (selectedMedia != null &&
-                                            selectedMedia.every((m) =>
-                                                validateFileFormat(
-                                                    m.storagePath, context))) {
-                                          // Store the selected video file locally for preview
-                                          _model.selectedVideoFile =
-                                              selectedMedia.first;
-                                          safeSetState(() {});
-                                        }
-                                        _model.isSendingImage = false;
-                                        safeSetState(() {});
-                                      },
-                                      child: Row(
-                                        mainAxisSize: MainAxisSize.max,
-                                        mainAxisAlignment:
-                                            MainAxisAlignment.start,
-                                        crossAxisAlignment:
-                                            CrossAxisAlignment.center,
-                                        children: [
-                                          Container(
-                                            width: 30.0,
-                                            decoration: const BoxDecoration(),
-                                            child: Align(
-                                              alignment:
-                                                  const AlignmentDirectional(
-                                                      -1.0, 0.0),
-                                              child: Icon(
-                                                Icons.videocam,
-                                                color:
-                                                    FlutterFlowTheme.of(context)
-                                                        .primary,
-                                                size: 24.0,
-                                              ),
-                                            ),
-                                          ),
-                                          Container(
-                                            width: 50.0,
-                                            decoration: const BoxDecoration(),
-                                            child: Text(
-                                              'Video',
-                                              style:
-                                                  FlutterFlowTheme.of(context)
-                                                      .bodyMedium
-                                                      .override(
-                                                        letterSpacing: 0.0,
-                                                        fontWeight:
-                                                            FlutterFlowTheme.of(
-                                                                    context)
-                                                                .bodyMedium
-                                                                .fontWeight,
-                                                        fontStyle:
-                                                            FlutterFlowTheme.of(
-                                                                    context)
-                                                                .bodyMedium
-                                                                .fontStyle,
-                                                      ),
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                  ].divide(const SizedBox(height: 8.0)),
-                                ),
-                              ].divide(const SizedBox(height: 12.0)),
-                            ),
-                          ),
-                        ),
-                      );
-                    } else {
-                      return Stack(
-                        alignment: const AlignmentDirectional(1.0, -1.0),
-                        children: [
-                          Align(
-                            alignment: const AlignmentDirectional(0.0, 0.0),
-                            child: Container(
-                              width: double.infinity,
-                              height: double.infinity,
-                              decoration: BoxDecoration(
-                                color: FlutterFlowTheme.of(context)
-                                    .secondaryBackground,
-                              ),
-                              alignment: const AlignmentDirectional(0.0, 0.0),
-                              child: Column(
-                                mainAxisSize: MainAxisSize.max,
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  Expanded(
-                                    child: Align(
-                                      alignment:
-                                          const AlignmentDirectional(0.0, 0.0),
-                                      child: Container(
-                                        decoration: const BoxDecoration(),
-                                        child: GestureDetector(
-                                          onTap: () async {
-                                            if (_model.recording == false) {
-                                              _model.recording = true;
-                                              _model.text =
-                                                  'Tap the mic to stop recording your voice.';
-                                              safeSetState(() {});
-                                              await requestPermission(
-                                                  microphonePermission);
-                                              if (await getPermissionStatus(
-                                                  microphonePermission)) {
-                                                await startAudioRecording(
-                                                  context,
-                                                  audioRecorder:
-                                                      _model.audioRecorder ??=
-                                                          AudioRecorder(),
-                                                );
-                                              }
-                                              if (animationsMap[
-                                                      'containerOnActionTriggerAnimation2'] !=
-                                                  null) {
-                                                safeSetState(() =>
-                                                    hasContainerTriggered2 =
-                                                        true);
-                                                SchedulerBinding.instance
-                                                    .addPostFrameCallback(
-                                                        (_) async => animationsMap[
-                                                                'containerOnActionTriggerAnimation2']!
-                                                            .controller
-                                                          ..reset()
-                                                          ..repeat());
-                                              }
-                                            } else {
-                                              _model.recording = false;
-                                              safeSetState(() {});
-                                              if (animationsMap[
-                                                      'containerOnActionTriggerAnimation2'] !=
-                                                  null) {
-                                                animationsMap[
-                                                        'containerOnActionTriggerAnimation2']!
-                                                    .controller
-                                                    .reset();
-                                              }
-                                              await stopAudioRecording(
-                                                audioRecorder:
-                                                    _model.audioRecorder,
-                                                audioName: 'recordedFileBytes',
-                                                onRecordingComplete:
-                                                    (audioFilePath,
-                                                        audioBytes) {
-                                                  _model.stop = audioFilePath;
-                                                  _model.recordedFileBytes =
-                                                      audioBytes;
-                                                },
-                                              );
-
-                                              _model.audiopath = functions
-                                                  .converAudioPathToString(
-                                                      _model.stop);
-                                              _model.audio = false;
-                                              _model.select = false;
-                                              safeSetState(() {});
-                                            }
-
-                                            safeSetState(() {});
-                                          },
-                                          child: Container(
-                                            width: 80.0,
-                                            height: 80.0,
-                                            decoration: BoxDecoration(
-                                              color:
-                                                  FlutterFlowTheme.of(context)
-                                                      .primaryBackground,
-                                              shape: BoxShape.circle,
-                                            ),
-                                            child: Icon(
-                                              Icons.mic,
-                                              color:
-                                                  FlutterFlowTheme.of(context)
-                                                      .primary,
-                                              size: 32.0,
-                                            ),
-                                          ),
-                                        ).animateOnActionTrigger(
-                                            animationsMap[
-                                                'containerOnActionTriggerAnimation2']!,
-                                            hasBeenTriggered:
-                                                hasContainerTriggered2),
-                                      ),
-                                    ),
-                                  ),
-                                  Text(
-                                    valueOrDefault<String>(
-                                      _model.text,
-                                      'Tap the mic to record your voice.',
-                                    ),
-                                    style: FlutterFlowTheme.of(context)
-                                        .bodyMedium
-                                        .override(
-                                          letterSpacing: 0.0,
-                                          fontWeight:
-                                              FlutterFlowTheme.of(context)
-                                                  .bodyMedium
-                                                  .fontWeight,
-                                          fontStyle:
-                                              FlutterFlowTheme.of(context)
-                                                  .bodyMedium
-                                                  .fontStyle,
-                                        ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ),
-                          if (_model.recording == false)
-                            Padding(
-                              padding: const EdgeInsetsDirectional.fromSTEB(
-                                  0.0, 9.0, 16.0, 0.0),
-                              child: GestureDetector(
-                                onTap: () async {
-                                  _model.audio = false;
-                                  safeSetState(() {});
-                                },
-                                child: Icon(
-                                  Icons.close_sharp,
-                                  color:
-                                      FlutterFlowTheme.of(context).primaryText,
-                                  size: 24.0,
-                                ),
-                              ),
-                            ),
-                        ],
-                      );
-                    }
-                  },
-                ),
               ),
             ),
           ],
+        ),
+      ),
+    );
+  }
+
+  // Check if chat is a service chat and current user is not lona-service
+  bool _isServiceChatReadOnly() {
+    if (widget.chatReference == null || currentUserReference == null) {
+      return false;
+    }
+
+    final chat = widget.chatReference!;
+    final isServiceChat = chat.isServiceChat;
+    final isLonaService = currentUserReference?.id == 'lona-service';
+
+    return isServiceChat && !isLonaService;
+  }
+
+  // Build read-only message for service chats
+  Widget _buildServiceChatReadOnlyMessage() {
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(22),
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
+        child: Container(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [
+                (Theme.of(context).brightness == Brightness.dark
+                        ? Colors.white
+                        : Colors.black)
+                    .withOpacity(0.05),
+                (Theme.of(context).brightness == Brightness.dark
+                        ? Colors.white
+                        : Colors.black)
+                    .withOpacity(0.02),
+              ],
+            ),
+            borderRadius: BorderRadius.circular(22),
+            border: Border.all(
+              color: (Theme.of(context).brightness == Brightness.dark
+                      ? Colors.white
+                      : Colors.black)
+                  .withOpacity(0.08),
+              width: 0.5,
+            ),
+          ),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          child: Row(
+            children: [
+              Icon(
+                CupertinoIcons.info,
+                size: 16,
+                color:
+                    FlutterFlowTheme.of(context).secondaryText.withOpacity(0.6),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  'Only Lona Service can send messages',
+                  style: TextStyle(
+                    color: FlutterFlowTheme.of(context)
+                        .secondaryText
+                        .withOpacity(0.6),
+                    fontSize: 14,
+                    fontStyle: FontStyle.italic,
+                  ),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );

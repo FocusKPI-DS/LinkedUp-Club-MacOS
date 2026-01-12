@@ -3,11 +3,17 @@ import '/backend/backend.dart';
 import '/backend/schema/enums/enums.dart';
 import '/flutter_flow/flutter_flow_animations.dart';
 import '/flutter_flow/flutter_flow_util.dart';
+import '/flutter_flow/nav/nav.dart' as nav;
 import '/pages/chat/chat_component/chat_thread_component/chat_thread_component_widget.dart';
 import '/pages/mobile_chat/mobile_chat_model.dart';
+import '/pages/mobile_chat/mobile_new_chat_widget.dart';
+import '/pages/mobile_chat/mobile_new_group_chat_widget.dart';
 import '/pages/desktop_chat/chat_controller.dart';
 import '/pages/chat/user_profile_detail/user_profile_detail_widget.dart';
 import '/pages/chat/group_chat_detail/group_chat_detail_widget.dart';
+import '/pages/chat/group_chat_detail/mobile_group_media_widget.dart';
+import '/pages/chat/group_chat_detail/mobile_group_tasks_widget.dart';
+import '/pages/chat/add_group_members/add_group_members_widget.dart';
 import '/components/chat_filter_buttons.dart';
 import '/custom_code/actions/index.dart' as actions;
 import 'dart:async';
@@ -25,6 +31,8 @@ import 'package:get/get.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/services.dart';
+import 'package:emoji_picker_flutter/emoji_picker_flutter.dart';
+import 'package:liquid_glass_renderer/liquid_glass_renderer.dart';
 
 class MobileChatWidget extends StatefulWidget {
   const MobileChatWidget({
@@ -110,14 +118,9 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
       if (loggedIn && currentUserReference != null) {
         unawaited(
           () async {
-            final success = await actions.ensureFcmToken(
+            await actions.ensureFcmToken(
               currentUserReference!,
             );
-            if (success) {
-              print('✅ FCM token ensured from MobileChat page');
-            } else {
-              print('⚠️ Failed to ensure FCM token from MobileChat page');
-            }
           }(),
         );
       }
@@ -144,66 +147,71 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
         // Absorb all scroll notifications to prevent tab bar from minimizing/blurring
         return true;
       },
-      child: AdaptiveScaffold(
-        appBar: null, // No app bar - using custom header instead
-        body: SafeArea(
-          bottom: false,
-          child: Container(
-            color: Color(0xFFF5F5F7),
-            child: RepaintBoundary(
-              child: Column(
-                children: [
-                  // Fixed header section with Chats title, action buttons, search bar, and filters
-                  Container(
-                    color: Color(0xFFF5F5F7),
-                    child: Stack(
-                      clipBehavior: Clip.none,
-                      children: [
-                        // Chats heading in top left
-                        Positioned(
-                          top: 16,
-                          left: 16,
-                          child: Text(
-                            'Chats',
-                            style: TextStyle(
-                              fontSize: 34,
-                              fontWeight: FontWeight.bold,
-                              color: CupertinoColors.label,
+      child: Container(
+        color: Colors
+            .white, // White background for entire page including status bar area
+        child: AdaptiveScaffold(
+          appBar: null, // No app bar - using custom header instead
+          body: SafeArea(
+            bottom: false,
+            child: Container(
+              color: Colors.white, // Changed to white for consistent background
+              child: RepaintBoundary(
+                child: Column(
+                  children: [
+                    // Fixed header section with Chats title, action buttons, search bar, and filters
+                    Container(
+                      color: Colors
+                          .white, // Changed to white for consistent background
+                      child: Stack(
+                        clipBehavior: Clip.none,
+                        children: [
+                          // Chats heading in top left
+                          Positioned(
+                            top: 16,
+                            left: 16,
+                            child: Text(
+                              'Chats',
+                              style: TextStyle(
+                                fontSize: 34,
+                                fontWeight: FontWeight.bold,
+                                color: CupertinoColors.label,
+                              ),
                             ),
                           ),
-                        ),
-                        // Header action buttons
-                        Positioned(
-                          top: 20,
-                          right: 16,
-                          child: _buildHeaderActionButtons(),
-                        ),
-                        // Always visible search bar
-                        Positioned(
-                          top: 70,
-                          left: 0,
-                          right: 0,
-                          child: Padding(
-                            padding: EdgeInsets.symmetric(horizontal: 16.0),
-                            child: _buildAlwaysVisibleSearchBar(),
+                          // Header action buttons
+                          Positioned(
+                            top: 20,
+                            right: 16,
+                            child: _buildHeaderActionButtons(),
                           ),
-                        ),
-                        // Filter buttons below search bar
-                        Positioned(
-                          top: 118,
-                          left: 0,
-                          right: 0,
-                          child: const ChatFilterButtons(),
-                        ),
-                      ],
+                          // Always visible search bar
+                          Positioned(
+                            top: 70,
+                            left: 0,
+                            right: 0,
+                            child: Padding(
+                              padding: EdgeInsets.symmetric(horizontal: 16.0),
+                              child: _buildAlwaysVisibleSearchBar(),
+                            ),
+                          ),
+                          // Filter buttons below search bar
+                          Positioned(
+                            top: 118,
+                            left: 0,
+                            right: 0,
+                            child: const ChatFilterButtons(),
+                          ),
+                        ],
+                      ),
+                      height: 180, // Total height for header section
                     ),
-                    height: 180, // Total height for header section
-                  ),
-                  // Scrollable chat list
-                  Expanded(
-                    child: _buildChatList(),
-                  ),
-                ],
+                    // Scrollable chat list
+                    Expanded(
+                      child: _buildChatList(),
+                    ),
+                  ],
+                ),
               ),
             ),
           ),
@@ -255,18 +263,41 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
   /// Opens a chat in a full-screen modal route (like WhatsApp)
   /// This covers the tab bar completely without needing parent state changes
   void _openChatFullScreen(ChatsRecord chat) {
-    // Set the selected chat so reply/edit actions can access it
-    _model.selectedChat = chat;
+    // Defer state update to avoid blocking navigation
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        setState(() {
+          _model.selectedChat = chat;
+        });
+      }
+    });
 
+    // Push route immediately without waiting for state update
     Navigator.of(context, rootNavigator: true).push(
       CupertinoPageRoute(
         fullscreenDialog: false,
         builder: (context) => _FullScreenChatPage(
           chat: chat,
           onMessageLongPress: _showMessageMenu,
+          shouldPopTwice: widget.initialChat != null, // Pop twice if opened from New Chat
+          onPop: () {
+            // Clear selected chat when route is popped so the same chat can be opened again
+            if (mounted) {
+              setState(() {
+                _model.selectedChat = null;
+              });
+            }
+          },
         ),
       ),
-    );
+    ).then((_) {
+      // Also clear when route completes (handles swipe back on iOS)
+      if (mounted) {
+        setState(() {
+          _model.selectedChat = null;
+        });
+      }
+    });
   }
 
   PreferredSizeWidget _buildChatAppBar() {
@@ -286,27 +317,35 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
             padding: EdgeInsets.symmetric(horizontal: 8),
             child: Row(
               children: [
-                // Floating back button on the left - iOS 26+ style
-                AdaptiveFloatingActionButton(
-                  mini: true,
-                  backgroundColor: Colors.white, // Pure white background
-                  foregroundColor: Color(0xFF007AFF), // System blue icon
-                  onPressed: () {
-                    // If we came from another page (like Connections), pop to go back
-                    // Otherwise, just close the chat to show the chat list
-                    if (widget.initialChat != null &&
-                        Navigator.canPop(context)) {
-                      Navigator.pop(context);
-                    } else {
-                      setState(() {
-                        _model.selectedChat = null;
-                      });
-                      widget.onChatStateChanged?.call(false);
-                    }
-                  },
-                  child: Icon(
-                    CupertinoIcons.chevron_left,
-                    size: 17,
+                // Floating back button on the left - iOS 26+ style with liquid glass effects
+                LiquidStretch(
+                  stretch: 0.5,
+                  interactionScale: 1.05,
+                  child: GlassGlow(
+                    glowColor: Colors.white24,
+                    glowRadius: 1.0,
+                    child: AdaptiveFloatingActionButton(
+                      mini: true,
+                      backgroundColor: Colors.white, // Pure white background
+                      foregroundColor: Color(0xFF007AFF), // System blue icon
+                      onPressed: () {
+                        // If we came from another page (like Connections), pop to go back
+                        // Otherwise, just close the chat to show the chat list
+                        if (widget.initialChat != null &&
+                            Navigator.canPop(context)) {
+                          Navigator.pop(context);
+                        } else {
+                          setState(() {
+                            _model.selectedChat = null;
+                          });
+                          widget.onChatStateChanged?.call(false);
+                        }
+                      },
+                      child: Icon(
+                        CupertinoIcons.chevron_left,
+                        size: 17,
+                      ),
+                    ),
                   ),
                 ),
                 SizedBox(width: 8),
@@ -398,15 +437,24 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
                   ),
                 ),
                 SizedBox(width: 8),
-                // Settings button on the right - iOS 26+ style
-                AdaptiveFloatingActionButton(
-                  mini: true,
-                  backgroundColor: Colors.white, // Pure white like back button
-                  foregroundColor: Color(0xFF007AFF), // System blue icon
-                  onPressed: () => _showChatOptions(chat),
-                  child: Icon(
-                    CupertinoIcons.ellipsis,
-                    size: 17,
+                // Settings button on the right - iOS 26+ style with liquid glass effects
+                LiquidStretch(
+                  stretch: 0.5,
+                  interactionScale: 1.05,
+                  child: GlassGlow(
+                    glowColor: Colors.white24,
+                    glowRadius: 1.0,
+                    child: AdaptiveFloatingActionButton(
+                      mini: true,
+                      backgroundColor:
+                          Colors.white, // Pure white like back button
+                      foregroundColor: Color(0xFF007AFF), // System blue icon
+                      onPressed: () => _showChatOptions(chat),
+                      child: Icon(
+                        CupertinoIcons.ellipsis,
+                        size: 17,
+                      ),
+                    ),
                   ),
                 ),
               ],
@@ -790,6 +838,7 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
     }
   }
 
+
   Widget _buildAdaptiveMenuOption({
     required AdaptivePopupMenuItem<String> item,
     required VoidCallback onTap,
@@ -894,82 +943,139 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
   }
 
   Future<void> _showEmojiMenu(MessagesRecord message) async {
-    final emojis = <String>[
-      '👍',
-      '👏',
-      '🙌',
-      '✅',
-      '💯',
-      '🔥',
-      '❤️',
-      '🤔',
-      '👀',
-      '🎉',
-    ];
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
-    // Show emoji row above the message bubble
-    showDialog(
+    final selected = await showModalBottomSheet<String>(
       context: context,
-      barrierColor: Colors.transparent,
-      builder: (context) => Stack(
-        children: [
-          // Invisible overlay to close when tapped
-          Positioned.fill(
-            child: GestureDetector(
-              onTap: () => Navigator.pop(context),
-              child: Container(color: Colors.transparent),
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (context) => Container(
+        height: MediaQuery.of(context).size.height * 0.45,
+        decoration: BoxDecoration(
+          color: isDark ? const Color(0xFF1C1C1E) : Colors.white,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+        ),
+        child: Column(
+          children: [
+            // Handle bar
+            Container(
+              margin: const EdgeInsets.only(top: 12, bottom: 8),
+              width: 36,
+              height: 5,
+              decoration: BoxDecoration(
+                color: Colors.grey.withOpacity(0.3),
+                borderRadius: BorderRadius.circular(2.5),
+              ),
             ),
-          ),
-          // Emoji row positioned above the message
-          Positioned(
-            bottom: MediaQuery.of(context).size.height *
-                0.3, // Adjust position as needed
-            left: 20,
-            right: 20,
-            child: Material(
-              color: Colors.transparent,
-              child: Container(
-                padding: EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(20),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withOpacity(0.1),
-                      blurRadius: 10,
-                      offset: Offset(0, 2),
+            // Title
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              child: Row(
+                children: [
+                  Text(
+                    'Add Reaction',
+                    style: TextStyle(
+                      fontSize: 17,
+                      fontWeight: FontWeight.w600,
+                      color: isDark ? Colors.white : Colors.black,
                     ),
-                  ],
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: emojis.map((emoji) {
-                    return GestureDetector(
-                      onTap: () {
-                        Navigator.pop(context);
-                        _saveReaction(message, emoji);
-                      },
-                      child: Container(
-                        margin: EdgeInsets.symmetric(horizontal: 2),
-                        padding: EdgeInsets.all(4),
-                        decoration: BoxDecoration(
-                          color: Color(0xFFF2F2F7),
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: Text(
-                          emoji,
-                          style: TextStyle(fontSize: 16),
-                        ),
+                  ),
+                  const Spacer(),
+                  GestureDetector(
+                    onTap: () => Navigator.pop(context),
+                    child: Icon(
+                      CupertinoIcons.xmark_circle_fill,
+                      color: isDark ? Colors.white38 : Colors.black26,
+                      size: 24,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            // Emoji Picker - Full featured
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.only(
+                    bottom: 20.0, left: 8.0), // Add bottom padding to move buttons up, left padding for search button
+                child: EmojiPicker(
+                  onEmojiSelected: (category, emoji) {
+                    Navigator.pop(context, emoji.emoji);
+                  },
+                  config: Config(
+                  height: MediaQuery.of(context).size.height * 0.35,
+                  checkPlatformCompatibility: true,
+                  emojiViewConfig: EmojiViewConfig(
+                    emojiSizeMax: 28,
+                    verticalSpacing: 0,
+                    horizontalSpacing: 0,
+                    gridPadding: EdgeInsets.zero,
+                    recentsLimit: 28,
+                    replaceEmojiOnLimitExceed: true,
+                    noRecents: Text(
+                      'No Recents',
+                      style: TextStyle(
+                        fontSize: 16,
+                        color: isDark ? Colors.white54 : Colors.black54,
                       ),
-                    );
-                  }).toList(),
+                    ),
+                    loadingIndicator: const Center(
+                      child: CupertinoActivityIndicator(),
+                    ),
+                    buttonMode: ButtonMode.CUPERTINO,
+                    backgroundColor:
+                        isDark ? const Color(0xFF1C1C1E) : Colors.white,
+                  ),
+                  skinToneConfig: const SkinToneConfig(
+                    enabled: true,
+                    dialogBackgroundColor: Colors.white,
+                    indicatorColor: Colors.grey,
+                  ),
+                  categoryViewConfig: CategoryViewConfig(
+                    initCategory: Category.RECENT,
+                    backgroundColor:
+                        isDark ? const Color(0xFF1C1C1E) : Colors.white,
+                    indicatorColor: CupertinoColors.activeBlue,
+                    iconColor: isDark ? Colors.white54 : Colors.black45,
+                    iconColorSelected: CupertinoColors.activeBlue,
+                    categoryIcons: const CategoryIcons(
+                      recentIcon: CupertinoIcons.clock,
+                      smileyIcon: CupertinoIcons.smiley,
+                      animalIcon: CupertinoIcons.tortoise,
+                      foodIcon: CupertinoIcons.cart,
+                      activityIcon: CupertinoIcons.sportscourt,
+                      travelIcon: CupertinoIcons.car,
+                      objectIcon: CupertinoIcons.lightbulb,
+                      symbolIcon: CupertinoIcons.heart,
+                      flagIcon: CupertinoIcons.flag,
+                    ),
+                  ),
+                  bottomActionBarConfig: BottomActionBarConfig(
+                    backgroundColor:
+                        isDark ? const Color(0xFF1C1C1E) : Colors.white,
+                    buttonColor: isDark ? Colors.white54 : Colors.black45,
+                    buttonIconColor: isDark ? Colors.white : Colors.black87,
+                    showBackspaceButton: false,
+                    showSearchViewButton: true,
+                  ),
+                  searchViewConfig: SearchViewConfig(
+                    backgroundColor: isDark
+                        ? const Color(0xFF2C2C2E)
+                        : const Color(0xFFF2F2F7),
+                    buttonIconColor: isDark ? Colors.white54 : Colors.black54,
+                    hintText: 'Search emoji...',
+                  ),
+                ),
                 ),
               ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
+
+    if (selected != null && selected.isNotEmpty) {
+      await _saveReaction(message, selected);
+    }
   }
 
   Future<void> _saveReaction(MessagesRecord message, String emoji) async {
@@ -1789,59 +1895,118 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
     );
   }
 
+  // Helper method to wrap buttons with glass effect
+  // Native iOS glass effect with proper glassy border
+  Widget _wrapWithGlassEffect(Widget child) {
+    return LiquidStretch(
+      stretch: 0.5,
+      interactionScale: 1.05,
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(20),
+        child: BackdropFilter(
+          filter: ImageFilter.blur(
+              sigmaX: 15, sigmaY: 15), // Increased blur for better glass effect
+          child: Container(
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(
+                  0.85), // Slightly more transparent for glass effect
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(
+                color: Colors.white.withOpacity(0.6), // Glassy white border
+                width: 1.5,
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color:
+                      Colors.black.withOpacity(0.05), // Subtle shadow for depth
+                  blurRadius: 8,
+                  offset: Offset(0, 2),
+                ),
+              ],
+            ),
+            child: child,
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _buildHeaderActionButtons() {
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        AdaptiveFloatingActionButton(
-          mini: true,
-          backgroundColor: Colors.white, // Pure white like back button
-          foregroundColor: Color(0xFF007AFF), // System blue icon
-          onPressed: () {
-            setState(() {
-              _model.showNewChatScreen = !_model.showNewChatScreen;
-              if (_model.showNewChatScreen) {
-                _model.selectedChat = null;
-                chatController.selectedChat.value = null;
-                _model.newChatSearchController?.clear();
-                _model.showGroupCreation = false;
-                // Clear group creation state
-                _model.groupName = '';
-                _model.selectedMembers = [];
-                _model.groupNameController?.clear();
-                _model.groupMemberSearchController?.clear();
-              }
-            });
+        // + button - liquid glass background with system blue icon
+        AdaptivePopupMenuButton.widget<String>(
+          items: [
+            AdaptivePopupMenuItem(
+              label: 'New Chat',
+              icon: PlatformInfo.isIOS26OrHigher()
+                  ? 'message'
+                  : Icons.chat_bubble_outline,
+              value: 'new_chat',
+            ),
+            AdaptivePopupMenuItem(
+              label: 'New Group Chat',
+              icon: PlatformInfo.isIOS26OrHigher()
+                  ? 'person.2'
+                  : Icons.group_add,
+              value: 'new_group_chat',
+            ),
+          ],
+          onSelected: (index, item) {
+            if (item.value == 'new_chat') {
+              Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (context) => MobileNewChatWidget(),
+                ),
+              );
+            } else if (item.value == 'new_group_chat') {
+              Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (context) => MobileNewGroupChatWidget(),
+                ),
+              );
+            }
           },
-          child: Icon(
-            CupertinoIcons.add,
-            size: 20,
-          ),
-        ),
-        const SizedBox(width: 8.0),
-        AdaptiveFloatingActionButton(
-          mini: true,
-          backgroundColor: Colors.white, // Pure white like back button
-          foregroundColor: Color(0xFF007AFF), // System blue icon
-          onPressed: () {
-            setState(() {
-              _model.showGroupCreation = !_model.showGroupCreation;
-              if (_model.showGroupCreation) {
-                _model.groupName = '';
-                _model.selectedMembers = [];
-                _model.groupNameController?.clear();
-                _model.groupMemberSearchController?.clear();
-                _model.groupImagePath = null;
-                _model.groupImageUrl = null;
-                _model.isUploadingImage = false;
-                _model.showNewChatScreen = false;
-                _model.newChatSearchController?.clear();
-              }
-            });
-          },
-          child: Icon(
-            CupertinoIcons.person_2_fill,
-            size: 20,
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(22),
+            child: BackdropFilter(
+              filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
+              child: Container(
+                width: 44,
+                height: 44,
+                decoration: BoxDecoration(
+                  // 🔮 Ultra Glass - very subtle
+                  gradient: LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [
+                      (Theme.of(context).brightness == Brightness.dark
+                              ? Colors.white
+                              : Colors.black)
+                          .withOpacity(0.05),
+                      (Theme.of(context).brightness == Brightness.dark
+                              ? Colors.white
+                              : Colors.black)
+                          .withOpacity(0.02),
+                    ],
+                  ),
+                  borderRadius: BorderRadius.circular(22),
+                  border: Border.all(
+                    color: (Theme.of(context).brightness == Brightness.dark
+                            ? Colors.white
+                            : Colors.black)
+                        .withOpacity(0.08),
+                    width: 0.5,
+                  ),
+                ),
+                child: Icon(
+                  CupertinoIcons.plus,
+                  size: 22,
+                  color: CupertinoColors.systemBlue,
+                ),
+              ),
+            ),
           ),
         ),
       ],
@@ -1854,6 +2019,7 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
       return Container(
         key: ValueKey(
             'chat_list_${currentTabIndex}_${chatController.searchQuery.value}'),
+        color: Colors.white, // Ensure consistent white background
         child: _buildChatListContentInner(),
       );
     });
@@ -3950,8 +4116,14 @@ class _MobileChatListItemState extends State<_MobileChatListItem>
   bool get wantKeepAlive => true;
 
   // Helper function to format timestamp
-  String _formatTimestamp(DateTime? timestamp) {
-    if (timestamp == null) return 'Unknown';
+  String _formatTimestamp(DateTime? timestamp, {bool isServiceChat = false}) {
+    if (timestamp == null) {
+      // For service chats, show a different message or current time
+      if (isServiceChat) {
+        return DateFormat('MMM d').format(DateTime.now());
+      }
+      return 'Unknown';
+    }
 
     final now = DateTime.now();
     final difference = now.difference(timestamp);
@@ -4180,7 +4352,7 @@ class _MobileChatListItemState extends State<_MobileChatListItem>
                       children: [
                         // Timestamp at top
                         Text(
-                          _formatTimestamp(widget.chat.lastMessageAt),
+                          _formatTimestamp(widget.chat.lastMessageAt, isServiceChat: widget.chat.isServiceChat == true),
                           style: TextStyle(
                             fontFamily: 'SF Pro Text',
                             color: Color(0xFF8E8E93),
@@ -4399,6 +4571,20 @@ class _MobileChatListItemState extends State<_MobileChatListItem>
 
   Widget _getLastMessagePreview(ChatsRecord chat) {
     if (chat.lastMessage.isEmpty) {
+      // Special handling for service chats
+      if (chat.isServiceChat == true) {
+        return Text(
+          'Service messages',
+          style: TextStyle(
+            fontFamily: 'SF Pro Text',
+            color: Color(0xFF8E8E93),
+            fontSize: 15,
+          ),
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+        );
+      }
+
       return Text(
         'No messages',
         style: TextStyle(
@@ -4429,11 +4615,15 @@ class _MobileChatListItemState extends State<_MobileChatListItem>
 class _FullScreenChatPage extends StatefulWidget {
   final ChatsRecord chat;
   final Function(MessagesRecord)? onMessageLongPress;
+  final bool shouldPopTwice;
+  final VoidCallback? onPop;
 
   const _FullScreenChatPage({
     Key? key,
     required this.chat,
     this.onMessageLongPress,
+    this.shouldPopTwice = false,
+    this.onPop,
   }) : super(key: key);
 
   @override
@@ -4443,6 +4633,10 @@ class _FullScreenChatPage extends StatefulWidget {
 class _FullScreenChatPageState extends State<_FullScreenChatPage> {
   @override
   Widget build(BuildContext context) {
+    // Ensure we have a valid context
+    if (!mounted) {
+      return Scaffold(body: Center(child: CircularProgressIndicator()));
+    }
     return Scaffold(
       appBar: _buildAppBar(),
       backgroundColor: Color(0xFFF2F2F7),
@@ -4485,18 +4679,60 @@ class _FullScreenChatPageState extends State<_FullScreenChatPage> {
                 crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
                   SizedBox(width: 8),
-                  // Back button - using AdaptiveFloatingActionButton
-                  AdaptiveFloatingActionButton(
-                    onPressed: () {
-                      print('🔙 Back button clicked!');
-                      Navigator.of(context).pop();
-                    },
-                    mini: true,
-                    backgroundColor: Colors.white,
-                    foregroundColor: CupertinoColors.systemBlue,
-                    child: Icon(
-                      CupertinoIcons.chevron_left,
-                      size: 22,
+                  // Back button - using AdaptiveFloatingActionButton with liquid glass effects
+                  LiquidStretch(
+                    stretch: 0.5,
+                    interactionScale: 1.05,
+                    child: GlassGlow(
+                      glowColor: Colors.white24,
+                      glowRadius: 1.0,
+                      child: AdaptiveFloatingActionButton(
+                        onPressed: () {
+                          print('🔙 Back button clicked! shouldPopTwice: ${widget.shouldPopTwice}');
+                          if (widget.shouldPopTwice) {
+                            // Pop the full-screen chat (pushed with rootNavigator: true)
+                            if (Navigator.of(context, rootNavigator: true).canPop()) {
+                              Navigator.of(context, rootNavigator: true).pop();
+                              print('✅ Popped full-screen chat');
+                            }
+                            // Then pop MobileChatWidget and New Chat page using root context
+                            // Use addPostFrameCallback to ensure the first pop completes
+                            WidgetsBinding.instance.addPostFrameCallback((_) {
+                              final rootContext = nav.appNavigatorKey.currentContext;
+                              if (rootContext != null) {
+                                final navigator = Navigator.of(rootContext);
+                                // Pop MobileChatWidget (the one pushed from New Chat)
+                                if (navigator.canPop()) {
+                                  navigator.pop();
+                                  print('✅ Popped MobileChatWidget');
+                                }
+                                // Pop New Chat page after a frame
+                                WidgetsBinding.instance.addPostFrameCallback((_) {
+                                  if (navigator.canPop()) {
+                                    navigator.pop();
+                                    print('✅ Popped New Chat page');
+                                  }
+                                });
+                              } else {
+                                print('❌ Root context is null');
+                              }
+                            });
+                          } else {
+                            // Clear selected chat before popping
+                            widget.onPop?.call();
+                            if (Navigator.of(context).canPop()) {
+                              Navigator.of(context).pop();
+                            }
+                          }
+                        },
+                        mini: true,
+                        backgroundColor: Colors.white,
+                        foregroundColor: CupertinoColors.systemBlue,
+                        child: Icon(
+                          CupertinoIcons.chevron_left,
+                          size: 22,
+                        ),
+                      ),
                     ),
                   ),
                   SizedBox(width: 4),
@@ -4564,17 +4800,38 @@ class _FullScreenChatPageState extends State<_FullScreenChatPage> {
                     ),
                   ),
                   SizedBox(width: 4),
-                  // More options button - using AdaptivePopupMenuButton
+                  // More options button - iOS native adaptive popup menu
                   AdaptivePopupMenuButton.widget<String>(
                     items: chat.isGroup
                         ? [
                             // Group chat options
                             AdaptivePopupMenuItem(
-                              label: 'View Group Chat',
+                              label: 'Add Members',
                               icon: PlatformInfo.isIOS26OrHigher()
-                                  ? 'person.2.circle'
-                                  : Icons.group,
-                              value: 'view_group',
+                                  ? 'person.badge.plus'
+                                  : Icons.person_add,
+                              value: 'add_members',
+                            ),
+                            AdaptivePopupMenuItem(
+                              label: 'Media',
+                              icon: PlatformInfo.isIOS26OrHigher()
+                                  ? 'photo.on.rectangle'
+                                  : Icons.photo_library,
+                              value: 'media',
+                            ),
+                            AdaptivePopupMenuItem(
+                              label: 'Tasks',
+                              icon: PlatformInfo.isIOS26OrHigher()
+                                  ? 'checklist'
+                                  : Icons.checklist,
+                              value: 'tasks',
+                            ),
+                            AdaptivePopupMenuItem(
+                              label: 'Group Info',
+                              icon: PlatformInfo.isIOS26OrHigher()
+                                  ? 'info.circle'
+                                  : Icons.info_outline,
+                              value: 'group_info',
                             ),
                           ]
                         : [
@@ -4595,24 +4852,43 @@ class _FullScreenChatPageState extends State<_FullScreenChatPage> {
                             ),
                           ],
                     onSelected: (index, item) {
+                      print('🔵 Menu item selected: ${item.value}');
+                      if (Platform.isIOS) {
+                        HapticFeedback.selectionClick();
+                      }
                       if (item.value == 'view_profile') {
-                        _navigateToProfile(chat);
-                      } else if (item.value == 'view_group') {
                         _navigateToProfile(chat);
                       } else if (item.value == 'block_user') {
                         _blockUserFromChat(chat);
+                      } else if (item.value == 'add_members') {
+                        _navigateToAddMembers(chat);
+                      } else if (item.value == 'media') {
+                        _navigateToMedia(chat);
+                      } else if (item.value == 'tasks') {
+                        _navigateToTasks(chat);
+                      } else if (item.value == 'group_info') {
+                        _navigateToProfile(chat);
                       }
                     },
-                    child: AdaptiveFloatingActionButton(
-                      mini: true,
-                      backgroundColor: Colors.white,
-                      foregroundColor: CupertinoColors.systemBlue,
-                      onPressed: () {
-                        // Menu will open automatically
-                      },
-                      child: Icon(
-                        CupertinoIcons.ellipsis,
-                        size: 22,
+                    child: LiquidStretch(
+                      stretch: 0.5,
+                      interactionScale: 1.05,
+                      child: GlassGlow(
+                        glowColor: Colors.white24,
+                        glowRadius: 1.0,
+                        child: Container(
+                          width: 40,
+                          height: 40,
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            shape: BoxShape.circle,
+                          ),
+                          child: Icon(
+                            CupertinoIcons.ellipsis,
+                            size: 22,
+                            color: CupertinoColors.systemBlue,
+                          ),
+                        ),
                       ),
                     ),
                   ),
@@ -4883,6 +5159,38 @@ class _FullScreenChatPageState extends State<_FullScreenChatPage> {
         ),
       );
     }
+  }
+
+  void _navigateToAddMembers(ChatsRecord chat) {
+    if (!chat.isGroup) return;
+    // Navigate to dedicated Add Members page
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (context) => AddGroupMembersWidget(chatDoc: chat),
+      ),
+    );
+  }
+
+  void _navigateToMedia(ChatsRecord chat) {
+    if (!chat.isGroup) return;
+    context.pushNamed(
+      MobileGroupMediaWidget.routeName,
+      queryParameters: {
+        'chatDoc': serializeParam(chat, ParamType.Document),
+      }.withoutNulls,
+      extra: <String, dynamic>{'chatDoc': chat},
+    );
+  }
+
+  void _navigateToTasks(ChatsRecord chat) {
+    if (!chat.isGroup) return;
+    context.pushNamed(
+      MobileGroupTasksWidget.routeName,
+      queryParameters: {
+        'chatDoc': serializeParam(chat, ParamType.Document),
+      }.withoutNulls,
+      extra: <String, dynamic>{'chatDoc': chat},
+    );
   }
 }
 

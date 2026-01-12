@@ -2,6 +2,7 @@ import '/auth/firebase_auth/auth_util.dart';
 import '/backend/backend.dart';
 import '/flutter_flow/flutter_flow_util.dart';
 import '/pages/mobile_chat/mobile_chat_widget.dart';
+import '/pages/connections/add_connections_widget.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'dart:ui';
@@ -20,11 +21,9 @@ class ConnectionsWidget extends StatefulWidget {
 }
 
 class _ConnectionsWidgetState extends State<ConnectionsWidget> {
-  final TextEditingController _searchController = TextEditingController();
   int _selectedTabIndex = 0;
-
+  final TextEditingController _searchController = TextEditingController();
   String _searchQuery = '';
-  bool _showSearch = false;
 
   // Track loading states for each user to prevent multiple operations
   final Set<String> _loadingOperations = <String>{};
@@ -67,68 +66,106 @@ class _ConnectionsWidgetState extends State<ConnectionsWidget> {
   @override
   Widget build(BuildContext context) {
     return CupertinoPageScaffold(
-      backgroundColor: CupertinoColors.systemGroupedBackground,
+      backgroundColor: Colors.white,
       child: SafeArea(
-        child: Column(
-          children: [
-            // Header with title and Add new button
-            Padding(
-              padding: EdgeInsets.fromLTRB(16, 16, 16, 0),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text(
-                    'Connections',
-                    style: CupertinoTheme.of(context)
-                        .textTheme
-                        .navLargeTitleTextStyle
-                        .copyWith(
-                          fontSize: 34,
-                          fontWeight: FontWeight.bold,
-                        ),
-                  ),
-                  AdaptiveFloatingActionButton(
-                    mini: true,
-                    backgroundColor:
-                        Colors.white, // Pure white like back button
-                    foregroundColor: Color(0xFF007AFF), // System blue icon
-                    onPressed: () {
-                      setState(() {
-                        _showSearch = !_showSearch;
-                        if (!_showSearch) {
-                          _searchController.clear();
-                        }
-                      });
-                    },
-                    child: Icon(
-                      CupertinoIcons.add,
-                      size: 20,
+        child: Container(
+          color: Colors.white,
+          child: Column(
+            children: [
+              // Header with title and Add new button
+              Container(
+                color: Colors.white,
+                padding: EdgeInsets.fromLTRB(16, 16, 16, 0),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      'Connections',
+                      style: CupertinoTheme.of(context)
+                          .textTheme
+                          .navLargeTitleTextStyle
+                          .copyWith(
+                            fontSize: 34,
+                            fontWeight: FontWeight.bold,
+                          ),
                     ),
-                  ),
-                ],
-              ),
-            ),
-            SizedBox(height: 20),
-
-            // Search bar (if enabled)
-            if (_showSearch) ...[
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16.0),
-                child: CupertinoSearchTextField(
-                  controller: _searchController,
-                  placeholder: 'Search by name or email...',
-                  style: CupertinoTheme.of(context).textTheme.textStyle,
+                    AdaptiveFloatingActionButton(
+                      mini: true,
+                      backgroundColor:
+                          Colors.white, // Pure white like back button
+                      foregroundColor: Color(0xFF007AFF), // System blue icon
+                      onPressed: () {
+                        context.pushNamed(AddConnectionsWidget.routeName);
+                      },
+                      child: Icon(
+                        CupertinoIcons.add,
+                        size: 20,
+                      ),
+                    ),
+                  ],
                 ),
               ),
-              SizedBox(height: 16),
-            ],
+              SizedBox(height: 20),
 
-            // Filter buttons
-            if (currentUserReference != null)
-              StreamBuilder<UsersRecord>(
-                stream: UsersRecord.getDocument(currentUserReference!),
-                builder: (context, userSnapshot) {
-                  if (!userSnapshot.hasData) {
+              // Filter buttons
+              if (currentUserReference != null)
+                StreamBuilder<UsersRecord>(
+                  stream: UsersRecord.getDocument(currentUserReference!),
+                  builder: (context, userSnapshot) {
+                    if (!userSnapshot.hasData) {
+                      return Container(
+                        padding: const EdgeInsets.only(
+                            left: 0, right: 16.0, top: 8.0, bottom: 8.0),
+                        child: SingleChildScrollView(
+                          scrollDirection: Axis.horizontal,
+                          child: Padding(
+                            padding: const EdgeInsets.only(left: 0),
+                            child: Row(
+                              children: [
+                                _ConnectionFilterButton(
+                                  label: 'My Connections',
+                                  isSelected: _selectedTabIndex == 0,
+                                  badgeCount: 0,
+                                  onTap: () {
+                                    setState(() {
+                                      _selectedTabIndex = 0;
+                                    });
+                                  },
+                                ),
+                                const SizedBox(width: 8.0),
+                                _ConnectionFilterButton(
+                                  label: 'Requests',
+                                  isSelected: _selectedTabIndex == 1,
+                                  badgeCount: 0,
+                                  onTap: () {
+                                    setState(() {
+                                      _selectedTabIndex = 1;
+                                    });
+                                  },
+                                ),
+                                const SizedBox(width: 8.0),
+                                _ConnectionFilterButton(
+                                  label: 'Sent',
+                                  isSelected: _selectedTabIndex == 2,
+                                  badgeCount: 0,
+                                  onTap: () {
+                                    setState(() {
+                                      _selectedTabIndex = 2;
+                                    });
+                                  },
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      );
+                    }
+
+                    final currentUser = userSnapshot.data!;
+                    final incomingRequestsCount =
+                        currentUser.friendRequests.length;
+                    final connectionsCount = currentUser.friends.length;
+
                     return Container(
                       padding: const EdgeInsets.only(
                           left: 0, right: 16.0, top: 8.0, bottom: 8.0),
@@ -141,7 +178,8 @@ class _ConnectionsWidgetState extends State<ConnectionsWidget> {
                               _ConnectionFilterButton(
                                 label: 'My Connections',
                                 isSelected: _selectedTabIndex == 0,
-                                badgeCount: 0,
+                                badgeCount:
+                                    connectionsCount > 0 ? connectionsCount : 0,
                                 onTap: () {
                                   setState(() {
                                     _selectedTabIndex = 0;
@@ -152,7 +190,7 @@ class _ConnectionsWidgetState extends State<ConnectionsWidget> {
                               _ConnectionFilterButton(
                                 label: 'Requests',
                                 isSelected: _selectedTabIndex == 1,
-                                badgeCount: 0,
+                                badgeCount: incomingRequestsCount,
                                 onTap: () {
                                   setState(() {
                                     _selectedTabIndex = 1;
@@ -175,116 +213,136 @@ class _ConnectionsWidgetState extends State<ConnectionsWidget> {
                         ),
                       ),
                     );
-                  }
-
-                  final currentUser = userSnapshot.data!;
-                  final incomingRequestsCount =
-                      currentUser.friendRequests.length;
-                  final connectionsCount = currentUser.friends.length;
-
-                  return Container(
-                    padding: const EdgeInsets.only(
-                        left: 0, right: 16.0, top: 8.0, bottom: 8.0),
-                    child: SingleChildScrollView(
-                      scrollDirection: Axis.horizontal,
-                      child: Padding(
-                        padding: const EdgeInsets.only(left: 0),
-                        child: Row(
-                          children: [
-                            _ConnectionFilterButton(
-                              label: 'My Connections',
-                              isSelected: _selectedTabIndex == 0,
-                              badgeCount:
-                                  connectionsCount > 0 ? connectionsCount : 0,
-                              onTap: () {
-                                setState(() {
-                                  _selectedTabIndex = 0;
-                                });
-                              },
-                            ),
-                            const SizedBox(width: 8.0),
-                            _ConnectionFilterButton(
-                              label: 'Requests',
-                              isSelected: _selectedTabIndex == 1,
-                              badgeCount: incomingRequestsCount,
-                              onTap: () {
-                                setState(() {
-                                  _selectedTabIndex = 1;
-                                });
-                              },
-                            ),
-                            const SizedBox(width: 8.0),
-                            _ConnectionFilterButton(
-                              label: 'Sent',
-                              isSelected: _selectedTabIndex == 2,
-                              badgeCount: 0,
-                              onTap: () {
-                                setState(() {
-                                  _selectedTabIndex = 2;
-                                });
-                              },
-                            ),
-                          ],
-                        ),
+                  },
+                )
+              else
+                Container(
+                  padding: const EdgeInsets.only(
+                      left: 0, right: 16.0, top: 8.0, bottom: 8.0),
+                  child: SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: Padding(
+                      padding: const EdgeInsets.only(left: 0),
+                      child: Row(
+                        children: [
+                          _ConnectionFilterButton(
+                            label: 'My Connections',
+                            isSelected: _selectedTabIndex == 0,
+                            badgeCount: 0,
+                            onTap: () {
+                              setState(() {
+                                _selectedTabIndex = 0;
+                              });
+                            },
+                          ),
+                          const SizedBox(width: 8.0),
+                          _ConnectionFilterButton(
+                            label: 'Requests',
+                            isSelected: _selectedTabIndex == 1,
+                            badgeCount: 0,
+                            onTap: () {
+                              setState(() {
+                                _selectedTabIndex = 1;
+                              });
+                            },
+                          ),
+                          const SizedBox(width: 8.0),
+                          _ConnectionFilterButton(
+                            label: 'Sent',
+                            isSelected: _selectedTabIndex == 2,
+                            badgeCount: 0,
+                            onTap: () {
+                              setState(() {
+                                _selectedTabIndex = 2;
+                              });
+                            },
+                          ),
+                        ],
                       ),
                     ),
-                  );
-                },
-              )
-            else
+                  ),
+                ),
+              SizedBox(height: 16),
+
+              // Search bar
               Container(
-                padding: const EdgeInsets.only(
-                    left: 0, right: 16.0, top: 8.0, bottom: 8.0),
-                child: SingleChildScrollView(
-                  scrollDirection: Axis.horizontal,
-                  child: Padding(
-                    padding: const EdgeInsets.only(left: 0),
-                    child: Row(
-                      children: [
-                        _ConnectionFilterButton(
-                          label: 'My Connections',
-                          isSelected: _selectedTabIndex == 0,
-                          badgeCount: 0,
-                          onTap: () {
-                            setState(() {
-                              _selectedTabIndex = 0;
-                            });
-                          },
-                        ),
-                        const SizedBox(width: 8.0),
-                        _ConnectionFilterButton(
-                          label: 'Requests',
-                          isSelected: _selectedTabIndex == 1,
-                          badgeCount: 0,
-                          onTap: () {
-                            setState(() {
-                              _selectedTabIndex = 1;
-                            });
-                          },
-                        ),
-                        const SizedBox(width: 8.0),
-                        _ConnectionFilterButton(
-                          label: 'Sent',
-                          isSelected: _selectedTabIndex == 2,
-                          badgeCount: 0,
-                          onTap: () {
-                            setState(() {
-                              _selectedTabIndex = 2;
-                            });
-                          },
-                        ),
-                      ],
+                width: double.infinity,
+                padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                color: Colors.white,
+                child: Container(
+                  height: 44,
+                  decoration: BoxDecoration(
+                    color: CupertinoColors.systemGrey6,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: CupertinoColors.separator,
+                      width: 0.5,
+                    ),
+                  ),
+                  child: CupertinoTextField(
+                    controller: _searchController,
+                    onChanged: (value) {
+                      setState(() {
+                        _searchQuery = value.toLowerCase();
+                      });
+                    },
+                    placeholder: 'Search connections',
+                    placeholderStyle: TextStyle(
+                      fontFamily: 'SF Pro Text',
+                      color: CupertinoColors.systemGrey,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w400,
+                      decoration: TextDecoration.none,
+                    ),
+                    padding: EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                    prefix: Padding(
+                      padding: EdgeInsets.only(left: 12, right: 8),
+                      child: Icon(
+                        CupertinoIcons.search,
+                        color: CupertinoColors.systemBlue,
+                        size: 18,
+                      ),
+                    ),
+                    suffix: _searchQuery.isNotEmpty
+                        ? GestureDetector(
+                            onTap: () {
+                              setState(() {
+                                _searchController.clear();
+                                _searchQuery = '';
+                              });
+                            },
+                            child: Padding(
+                              padding: EdgeInsets.only(right: 12),
+                              child: Icon(
+                                CupertinoIcons.xmark_circle_fill,
+                                color: CupertinoColors.systemGrey,
+                                size: 16,
+                              ),
+                            ),
+                          )
+                        : null,
+                    style: TextStyle(
+                      fontFamily: 'SF Pro Text',
+                      color: CupertinoColors.label,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w400,
+                      decoration: TextDecoration.none,
+                    ),
+                    decoration: BoxDecoration(
+                      color: Colors.transparent,
+                      borderRadius: BorderRadius.circular(12),
                     ),
                   ),
                 ),
               ),
-            SizedBox(height: 16),
+              SizedBox(height: 8),
 
-            // Content area
-            Expanded(
-              child: _buildTabContent(),
-            ),
-          ],
+              // Content area
+              Expanded(
+                child: _buildTabContent(),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -308,11 +366,6 @@ class _ConnectionsWidgetState extends State<ConnectionsWidget> {
 
         final currentUser = currentUserSnapshot.data!;
 
-        // Show search results if searching
-        if (_showSearch && _searchQuery.isNotEmpty) {
-          return _buildSearchResults(currentUser);
-        }
-
         // Show tab content based on selected tab
         switch (_selectedTabIndex) {
           case 0:
@@ -324,81 +377,6 @@ class _ConnectionsWidgetState extends State<ConnectionsWidget> {
           default:
             return _buildConnectionsList(currentUser);
         }
-      },
-    );
-  }
-
-  Widget _buildSearchResults(UsersRecord currentUser) {
-    // Show empty state if no search query
-    if (_searchQuery.isEmpty) {
-      return _buildEmptyState(
-        icon: CupertinoIcons.search,
-        title: 'Search for Users',
-        subtitle: 'Enter a name or email to find users',
-      );
-    }
-
-    // Fetch all users and filter client-side for real-time suggestions
-    return StreamBuilder<List<UsersRecord>>(
-      stream: queryUsersRecord(),
-      builder: (context, searchSnapshot) {
-        // Check for errors first
-        if (searchSnapshot.hasError) {
-          print('Error searching users: ${searchSnapshot.error}');
-          return _buildEmptyState(
-            icon: CupertinoIcons.exclamationmark_triangle,
-            title: 'Error Loading Users',
-            subtitle: 'Please check your connection and try again',
-          );
-        }
-        
-        if (!searchSnapshot.hasData) {
-          return Center(
-            child: CupertinoActivityIndicator(),
-          );
-        }
-
-        final allUsers = searchSnapshot.data!;
-        print('DEBUG: Found ${allUsers.length} total users in database');
-        final searchLower = _searchQuery.toLowerCase();
-
-        // Filter users by search query (case-insensitive)
-        final filteredUsers = allUsers.where((user) {
-          if (user.reference == currentUserReference) return false;
-          final displayName = user.displayName.toLowerCase();
-          final email = user.email.toLowerCase();
-          return displayName.contains(searchLower) ||
-              email.contains(searchLower);
-        }).toList();
-
-        if (filteredUsers.isEmpty) {
-          return _buildEmptyState(
-            icon: CupertinoIcons.search,
-            title: 'No Results Found',
-            subtitle: 'Try searching with a different term',
-          );
-        }
-
-        return CupertinoScrollbar(
-          child: ListView.separated(
-            padding: EdgeInsets.symmetric(horizontal: 16),
-            itemCount: filteredUsers.length,
-            separatorBuilder: (context, index) => SizedBox.shrink(),
-            itemBuilder: (context, index) {
-              final user = filteredUsers[index];
-              final isConnected = _isUserConnected(user.reference, currentUser);
-              final isSentRequest =
-                  _isValidSentRequest(user.reference, currentUser);
-              final hasIncomingRequest =
-                  currentUser.friendRequests.contains(user.reference);
-
-              return _buildConnectionCard(user, currentUser,
-                  isConnected: isConnected,
-                  isSentRequest: isSentRequest && !isConnected,
-                  hasIncomingRequest: hasIncomingRequest && !isConnected);
-            },
-          ),
-        );
       },
     );
   }
@@ -429,65 +407,28 @@ class _ConnectionsWidgetState extends State<ConnectionsWidget> {
             ),
           ),
           child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            mainAxisAlignment: MainAxisAlignment.start,
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              Row(
-                children: [
-                  Text(
-                    '${connections.length}',
-                    style: TextStyle(
-                      fontFamily: 'SF Pro Display',
-                      fontSize: 17,
-                      fontWeight: FontWeight.w600,
-                      color: Color(0xFF1A1F36),
-                      letterSpacing: -0.2,
-                    ),
-                  ),
-                  SizedBox(width: 6),
-                  Text(
-                    'connection${connections.length == 1 ? '' : 's'}',
-                    style: TextStyle(
-                      fontFamily: 'SF Pro Display',
-                      fontSize: 15,
-                      fontWeight: FontWeight.w400,
-                      color: Color(0xFF64748B),
-                      letterSpacing: -0.1,
-                    ),
-                  ),
-                ],
+              Text(
+                '${connections.length}',
+                style: TextStyle(
+                  fontFamily: 'SF Pro Display',
+                  fontSize: 17,
+                  fontWeight: FontWeight.w600,
+                  color: Color(0xFF1A1F36),
+                  letterSpacing: -0.2,
+                ),
               ),
-              Material(
-                color: Colors.transparent,
-                child: InkWell(
-                  onTap: () {
-                    // TODO: Implement sort options
-                  },
-                  borderRadius: BorderRadius.circular(6),
-                  child: Padding(
-                    padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(
-                          'Sort by',
-                          style: TextStyle(
-                            fontFamily: 'SF Pro Display',
-                            fontSize: 14,
-                            fontWeight: FontWeight.w500,
-                            color: Color(0xFF2563EB),
-                            letterSpacing: -0.1,
-                          ),
-                        ),
-                        SizedBox(width: 4),
-                        Icon(
-                          CupertinoIcons.chevron_down,
-                          size: 14,
-                          color: Color(0xFF2563EB),
-                        ),
-                      ],
-                    ),
-                  ),
+              SizedBox(width: 6),
+              Text(
+                'connection${connections.length == 1 ? '' : 's'}',
+                style: TextStyle(
+                  fontFamily: 'SF Pro Display',
+                  fontSize: 15,
+                  fontWeight: FontWeight.w400,
+                  color: Color(0xFF64748B),
+                  letterSpacing: -0.1,
                 ),
               ),
             ],
@@ -510,6 +451,19 @@ class _ConnectionsWidgetState extends State<ConnectionsWidget> {
                       return SizedBox.shrink();
                     }
                     final user = userSnapshot.data!;
+
+                    // Filter by search query
+                    if (_searchQuery.isNotEmpty) {
+                      final displayName = user.displayName.toLowerCase();
+                      final email = user.email.toLowerCase();
+                      final bio = user.bio.toLowerCase();
+                      if (!displayName.contains(_searchQuery) &&
+                          !email.contains(_searchQuery) &&
+                          !bio.contains(_searchQuery)) {
+                        return SizedBox.shrink();
+                      }
+                    }
+
                     final isActuallyConnected =
                         _isUserConnected(user.reference, currentUser);
                     return _buildConnectionCard(user, currentUser,
@@ -550,65 +504,28 @@ class _ConnectionsWidgetState extends State<ConnectionsWidget> {
             ),
           ),
           child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            mainAxisAlignment: MainAxisAlignment.start,
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              Row(
-                children: [
-                  Text(
-                    '${requests.length}',
-                    style: TextStyle(
-                      fontFamily: 'SF Pro Display',
-                      fontSize: 17,
-                      fontWeight: FontWeight.w600,
-                      color: Color(0xFF1A1F36),
-                      letterSpacing: -0.2,
-                    ),
-                  ),
-                  SizedBox(width: 6),
-                  Text(
-                    'request${requests.length == 1 ? '' : 's'}',
-                    style: TextStyle(
-                      fontFamily: 'SF Pro Display',
-                      fontSize: 15,
-                      fontWeight: FontWeight.w400,
-                      color: Color(0xFF64748B),
-                      letterSpacing: -0.1,
-                    ),
-                  ),
-                ],
+              Text(
+                '${requests.length}',
+                style: TextStyle(
+                  fontFamily: 'SF Pro Display',
+                  fontSize: 17,
+                  fontWeight: FontWeight.w600,
+                  color: Color(0xFF1A1F36),
+                  letterSpacing: -0.2,
+                ),
               ),
-              Material(
-                color: Colors.transparent,
-                child: InkWell(
-                  onTap: () {
-                    // TODO: Implement sort options
-                  },
-                  borderRadius: BorderRadius.circular(6),
-                  child: Padding(
-                    padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(
-                          'Sort by',
-                          style: TextStyle(
-                            fontFamily: 'SF Pro Display',
-                            fontSize: 14,
-                            fontWeight: FontWeight.w500,
-                            color: Color(0xFF2563EB),
-                            letterSpacing: -0.1,
-                          ),
-                        ),
-                        SizedBox(width: 4),
-                        Icon(
-                          CupertinoIcons.chevron_down,
-                          size: 14,
-                          color: Color(0xFF2563EB),
-                        ),
-                      ],
-                    ),
-                  ),
+              SizedBox(width: 6),
+              Text(
+                'request${requests.length == 1 ? '' : 's'}',
+                style: TextStyle(
+                  fontFamily: 'SF Pro Display',
+                  fontSize: 15,
+                  fontWeight: FontWeight.w400,
+                  color: Color(0xFF64748B),
+                  letterSpacing: -0.1,
                 ),
               ),
             ],
@@ -631,6 +548,19 @@ class _ConnectionsWidgetState extends State<ConnectionsWidget> {
                       return SizedBox.shrink();
                     }
                     final user = userSnapshot.data!;
+
+                    // Filter by search query
+                    if (_searchQuery.isNotEmpty) {
+                      final displayName = user.displayName.toLowerCase();
+                      final email = user.email.toLowerCase();
+                      final bio = user.bio.toLowerCase();
+                      if (!displayName.contains(_searchQuery) &&
+                          !email.contains(_searchQuery) &&
+                          !bio.contains(_searchQuery)) {
+                        return SizedBox.shrink();
+                      }
+                    }
+
                     return _buildRequestCard(user, currentUser);
                   },
                 );
@@ -670,65 +600,28 @@ class _ConnectionsWidgetState extends State<ConnectionsWidget> {
             ),
           ),
           child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            mainAxisAlignment: MainAxisAlignment.start,
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              Row(
-                children: [
-                  Text(
-                    '${sentRequests.length}',
-                    style: TextStyle(
-                      fontFamily: 'SF Pro Display',
-                      fontSize: 17,
-                      fontWeight: FontWeight.w600,
-                      color: Color(0xFF1A1F36),
-                      letterSpacing: -0.2,
-                    ),
-                  ),
-                  SizedBox(width: 6),
-                  Text(
-                    'sent request${sentRequests.length == 1 ? '' : 's'}',
-                    style: TextStyle(
-                      fontFamily: 'SF Pro Display',
-                      fontSize: 15,
-                      fontWeight: FontWeight.w400,
-                      color: Color(0xFF64748B),
-                      letterSpacing: -0.1,
-                    ),
-                  ),
-                ],
+              Text(
+                '${sentRequests.length}',
+                style: TextStyle(
+                  fontFamily: 'SF Pro Display',
+                  fontSize: 17,
+                  fontWeight: FontWeight.w600,
+                  color: Color(0xFF1A1F36),
+                  letterSpacing: -0.2,
+                ),
               ),
-              Material(
-                color: Colors.transparent,
-                child: InkWell(
-                  onTap: () {
-                    // TODO: Implement sort options
-                  },
-                  borderRadius: BorderRadius.circular(6),
-                  child: Padding(
-                    padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(
-                          'Sort by',
-                          style: TextStyle(
-                            fontFamily: 'SF Pro Display',
-                            fontSize: 14,
-                            fontWeight: FontWeight.w500,
-                            color: Color(0xFF2563EB),
-                            letterSpacing: -0.1,
-                          ),
-                        ),
-                        SizedBox(width: 4),
-                        Icon(
-                          CupertinoIcons.chevron_down,
-                          size: 14,
-                          color: Color(0xFF2563EB),
-                        ),
-                      ],
-                    ),
-                  ),
+              SizedBox(width: 6),
+              Text(
+                'sent request${sentRequests.length == 1 ? '' : 's'}',
+                style: TextStyle(
+                  fontFamily: 'SF Pro Display',
+                  fontSize: 15,
+                  fontWeight: FontWeight.w400,
+                  color: Color(0xFF64748B),
+                  letterSpacing: -0.1,
                 ),
               ),
             ],
@@ -756,6 +649,19 @@ class _ConnectionsWidgetState extends State<ConnectionsWidget> {
                     if (!isValidSentRequest) {
                       return SizedBox.shrink();
                     }
+
+                    // Filter by search query
+                    if (_searchQuery.isNotEmpty) {
+                      final displayName = user.displayName.toLowerCase();
+                      final email = user.email.toLowerCase();
+                      final bio = user.bio.toLowerCase();
+                      if (!displayName.contains(_searchQuery) &&
+                          !email.contains(_searchQuery) &&
+                          !bio.contains(_searchQuery)) {
+                        return SizedBox.shrink();
+                      }
+                    }
+
                     return _buildConnectionCard(user, currentUser,
                         isSentRequest: true);
                   },
@@ -867,7 +773,6 @@ class _ConnectionsWidgetState extends State<ConnectionsWidget> {
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                     ),
-
                 ],
               ),
             ),
@@ -882,7 +787,6 @@ class _ConnectionsWidgetState extends State<ConnectionsWidget> {
       ),
     );
   }
-
 
   Widget _buildActionButtons(UsersRecord user, UsersRecord currentUser,
       {bool isConnected = false,

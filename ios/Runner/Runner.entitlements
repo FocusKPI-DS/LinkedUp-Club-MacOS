@@ -12,6 +12,7 @@
 <array>
     <string>applinks:linkedupclub.app.link</string>
     <string>applinks:linkedupclub-alternate.app.link</string>
+    <string>applinks:lona.club</string>
 </array>
 <!-- End of Support for Universal Links -->
 </dict>

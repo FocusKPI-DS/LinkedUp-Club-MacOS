@@ -15,7 +15,7 @@ publish_to: 'none' # Remove this line if you wish to publish to pub.dev
 # In iOS, build-name is used as CFBundleShortVersionString while build-number used as CFBundleVersion.
 # Read more about iOS versioning at
 # https://developer.apple.com/library/archive/documentation/General/Reference/InfoPlistKeyReference/Articles/CoreFoundationKeys.html
-version: 1.8.3+19
+version: 1.8.4+20
 
 
 
@@ -32,6 +32,7 @@ dependencies:
   get: ^4.6.6
   aligned_dialog: 0.0.6
   app_badge_plus: ^1.2.3
+  app_links: ^6.3.2
   assets_audio_player: 
     git:
       url: https://github.com/FlutterFlow/Flutter-AssetsAudioPlayer.git
@@ -64,6 +65,7 @@ dependencies:
   device_info_plus_platform_interface: 7.0.3
   dropdown_button2: 2.3.9
   easy_debounce: 2.0.1
+  emoji_picker_flutter: ^4.4.0
   ff_commons:
     path: ./dependencies/ff_commons # 1.2.0+40
   ff_theme:
@@ -204,6 +206,9 @@ dependencies:
   flutter_quill: ^11.4.2
   flutter_widget_from_html: ^0.15.2
   adaptive_platform_ui: ^0.1.100
+  liquid_glass_ui_design: ^1.0.5
+  liquid_glass_renderer: ^0.2.0-dev.4
+  oc_liquid_glass: ^0.2.1
 
 dependency_overrides:
   http: 1.4.0

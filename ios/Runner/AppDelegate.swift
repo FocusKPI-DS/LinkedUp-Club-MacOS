@@ -102,7 +102,37 @@ import FirebaseMessaging
     let userInfo = response.notification.request.content.userInfo
     print("📱 iOS: Notification tapped")
     print("   Title: \(response.notification.request.content.title)")
+    print("   Body: \(response.notification.request.content.body)")
     print("   UserInfo: \(userInfo)")
+    print("   initialPageName: \(userInfo["initialPageName"] ?? "NOT FOUND")")
+    print("   parameterData: \(userInfo["parameterData"] ?? "NOT FOUND")")
+    
+    // Forward to Firebase Messaging - this should trigger Flutter listeners
+    Messaging.messaging().appDidReceiveMessage(userInfo)
+    
+    // Also manually notify Flutter via method channel if needed
+    if let controller = window?.rootViewController as? FlutterViewController {
+      let notificationChannel = FlutterMethodChannel(
+        name: "com.linkedup.notifications",
+        binaryMessenger: controller.binaryMessenger
+      )
+      
+      // Convert userInfo to a format Flutter can understand
+      var flutterData: [String: Any] = [:]
+      for (key, value) in userInfo {
+        if let stringKey = key as? String {
+          if let stringValue = value as? String {
+            flutterData[stringKey] = stringValue
+          } else if let numberValue = value as? NSNumber {
+            flutterData[stringKey] = numberValue.stringValue
+          }
+        }
+      }
+      
+      notificationChannel.invokeMethod("onNotificationTapped", arguments: flutterData)
+      print("📱 iOS: Sent notification tap to Flutter via method channel")
+    }
+    
     completionHandler()
   }
   

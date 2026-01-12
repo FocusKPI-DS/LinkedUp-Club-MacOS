@@ -30,7 +30,6 @@ Stream<UserTokenInfo> getFcmTokenStream(String userPath) => Stream.value(
         if (settings.authorizationStatus == AuthorizationStatus.authorized) {
           // For macOS and iOS, we need to ensure APNS token is available first
           if (Platform.isMacOS || Platform.isIOS) {
-            print('Waiting for APNS token for FCM token stream...');
 
             String? apnsToken;
             int maxRetries = 10;
@@ -44,7 +43,6 @@ Stream<UserTokenInfo> getFcmTokenStream(String userPath) => Stream.value(
                   break;
                 }
               } catch (e) {
-                print('Attempt ${retryCount + 1}: Waiting for APNS token - $e');
               }
 
               // Exponential backoff
@@ -119,8 +117,11 @@ void triggerPushNotification({
     'timestamp': DateTime.now(),
   };
 
-  print('🔍 About to create document in ff_user_push_notifications');
-  print('🔍 Document data: $pushNotificationData');
+  print('🔍 Creating notification document:');
+  print('   notification_title: "$notificationTitle" (length: ${notificationTitle?.length ?? 0})');
+  print('   notification_text: "$notificationText"');
+  print('   initial_page_name: "$initialPageName"');
+  print('   Full data: $pushNotificationData');
 
   FirebaseFirestore.instance
       .collection(kUserPushNotificationsCollectionName)
