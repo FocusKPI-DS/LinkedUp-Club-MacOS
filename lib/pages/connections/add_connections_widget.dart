@@ -101,8 +101,8 @@ class _AddConnectionsWidgetState extends State<AddConnectionsWidget> {
       // Fetch a larger batch of users to sort by mutual connections
       // Fetch 50 users to have enough to sort and prioritize
       final users = await queryUsersRecordOnce(
-        queryBuilder: (q) => q.limit(50),
-        limit: 50,
+        queryBuilder: (q) => q.limit(100),
+        limit: 100,
       );
 
       // Filter out current user
@@ -127,8 +127,8 @@ class _AddConnectionsWidgetState extends State<AddConnectionsWidget> {
             .compareTo(b.key.displayName.toLowerCase());
       });
 
-      // Take top 12 users
-      final topUsers = usersWithMutuals.take(12).map((e) => e.key).toList();
+      // Take top 30 users
+      final topUsers = usersWithMutuals.take(30).map((e) => e.key).toList();
 
       // Store the last user's document for pagination
       if (topUsers.isNotEmpty) {
@@ -137,7 +137,7 @@ class _AddConnectionsWidgetState extends State<AddConnectionsWidget> {
 
       setState(() {
         _loadedUsers = topUsers;
-        _hasMoreUsers = filteredUsers.length >= 12;
+        _hasMoreUsers = filteredUsers.length >= 30;
         _isInitialLoading = false;
       });
     } catch (e) {
@@ -170,7 +170,7 @@ class _AddConnectionsWidgetState extends State<AddConnectionsWidget> {
       // Fetch next batch of users
       Query query = UsersRecord.collection
           .startAfterDocument(_lastDocument!)
-          .limit(50); // Fetch 50 to have enough to sort
+          .limit(100); // Fetch 100 to have enough to sort
 
       final querySnapshot = await query.get();
       final fetchedUsers = querySnapshot.docs
@@ -205,8 +205,8 @@ class _AddConnectionsWidgetState extends State<AddConnectionsWidget> {
             .compareTo(b.key.displayName.toLowerCase());
       });
 
-      // Take top 12 users from this batch
-      final newUsers = usersWithMutuals.take(12).map((e) => e.key).toList();
+      // Take top 30 users from this batch
+      final newUsers = usersWithMutuals.take(30).map((e) => e.key).toList();
 
       if (newUsers.isNotEmpty) {
         // Store the last user's document for pagination
@@ -214,7 +214,7 @@ class _AddConnectionsWidgetState extends State<AddConnectionsWidget> {
 
         setState(() {
           _loadedUsers.addAll(newUsers);
-          _hasMoreUsers = fetchedUsers.length >= 12;
+          _hasMoreUsers = fetchedUsers.length >= 30;
           _isLoadingMore = false;
         });
       } else {
@@ -517,11 +517,11 @@ class _AddConnectionsWidgetState extends State<AddConnectionsWidget> {
               color: Colors.white,
               child: GridView.builder(
                 padding: EdgeInsets.all(16),
-                gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                  crossAxisCount: 2,
+                gridDelegate: SliverGridDelegateWithMaxCrossAxisExtent(
+                  maxCrossAxisExtent: 280,
                   crossAxisSpacing: 16,
                   mainAxisSpacing: 16,
-                  childAspectRatio: 0.72,
+                  childAspectRatio: 1.05,
                 ),
                 itemCount: sortedUsers.length,
                 itemBuilder: (context, index) {
@@ -1046,11 +1046,11 @@ class _AddConnectionsWidgetState extends State<AddConnectionsWidget> {
           child: GridView.builder(
             controller: _scrollController,
             padding: EdgeInsets.all(16),
-            gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-              crossAxisCount: 2,
+            gridDelegate: SliverGridDelegateWithMaxCrossAxisExtent(
+              maxCrossAxisExtent: 280,
               crossAxisSpacing: 16,
               mainAxisSpacing: 16,
-              childAspectRatio: 0.92,
+              childAspectRatio: 1.05,
             ),
             itemCount: filteredUsers.length + (_isLoadingMore ? 1 : 0),
             itemBuilder: (context, index) {
@@ -1114,7 +1114,7 @@ class _AddConnectionsWidgetState extends State<AddConnectionsWidget> {
         child: ClipRRect(
           borderRadius: BorderRadius.circular(16),
           child: Padding(
-            padding: EdgeInsets.symmetric(horizontal: 12, vertical: 16),
+            padding: EdgeInsets.symmetric(horizontal: 12, vertical: 12),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.center,
               mainAxisSize: MainAxisSize.min,
@@ -1160,7 +1160,7 @@ class _AddConnectionsWidgetState extends State<AddConnectionsWidget> {
                         : _buildInitialsAvatarSmall(user),
                   ),
                 ),
-                SizedBox(height: 10),
+                SizedBox(height: 8),
                 // Name
                 Padding(
                   padding: EdgeInsets.symmetric(horizontal: 8),
@@ -1241,7 +1241,7 @@ class _AddConnectionsWidgetState extends State<AddConnectionsWidget> {
                       ),
                     ),
                   ),
-                if (mutualText.isNotEmpty) SizedBox(height: 8),
+                if (mutualText.isNotEmpty) SizedBox(height: 6),
                 // Connect button or status
                 Container(
                   width: double.infinity,

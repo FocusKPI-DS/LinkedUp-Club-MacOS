@@ -63,12 +63,7 @@ class DesktopChatModel extends FlutterFlowModel {
   bool showNewMessageView = false;
   TextEditingController? newMessageSearchController;
 
-  // Connections view in right panel
-  bool showConnectionsView = false;
-  bool showConnectionsSearch = false;
-  TextEditingController? connectionsSearchController;
-  String connectionsTab = 'connections'; // 'connections', 'requests', or 'sent'
-  UsersRecord? selectedConnectionProfile; // Selected user profile in connections view
+
 
   // Group member search
   TextEditingController? groupMemberSearchController;
@@ -79,7 +74,7 @@ class DesktopChatModel extends FlutterFlowModel {
     searchTextController = TextEditingController();
     groupNameController = TextEditingController();
     newMessageSearchController = TextEditingController();
-    connectionsSearchController = TextEditingController();
+
     groupMemberSearchController = TextEditingController();
     chatThreadComponentModel =
         createModel(context, () => ChatThreadComponentModel());
@@ -92,7 +87,7 @@ class DesktopChatModel extends FlutterFlowModel {
     searchTextController?.dispose();
     groupNameController?.dispose();
     newMessageSearchController?.dispose();
-    connectionsSearchController?.dispose();
+
     groupMemberSearchController?.dispose();
     tabController?.dispose();
     chatThreadComponentModel.dispose();

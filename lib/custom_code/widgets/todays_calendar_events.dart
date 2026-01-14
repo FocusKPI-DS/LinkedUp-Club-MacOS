@@ -427,7 +427,7 @@ class _TodaysCalendarEventsState extends State<TodaysCalendarEvents> {
       return Icon(
         CupertinoIcons.videocam_fill,
         size: 18,
-        color: CupertinoColors.white,
+        color: Color(0xFF2563EB),
       );
     }
     // Location icon if location exists
@@ -435,7 +435,7 @@ class _TodaysCalendarEventsState extends State<TodaysCalendarEvents> {
       return Icon(
         CupertinoIcons.location_fill,
         size: 18,
-        color: CupertinoColors.white,
+        color: Color(0xFF2563EB),
       );
     }
     // Default group/people icon
@@ -443,7 +443,7 @@ class _TodaysCalendarEventsState extends State<TodaysCalendarEvents> {
       return Icon(
         CupertinoIcons.person_3_fill,
         size: 18,
-        color: CupertinoColors.white,
+        color: Color(0xFF2563EB),
       );
     }
   }
@@ -587,7 +587,7 @@ class _TodaysCalendarEventsState extends State<TodaysCalendarEvents> {
             width: 40,
             height: 40,
             decoration: BoxDecoration(
-              color: CupertinoColors.systemPurple.withOpacity(0.15),
+              color: Color(0xFF2563EB).withOpacity(0.11),
               shape: BoxShape.circle,
             ),
             child: Center(

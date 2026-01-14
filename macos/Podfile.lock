@@ -1,5 +1,7 @@
 PODS:
-  - app_badge_plus (1.2.3):
+  - app_badge_plus (1.2.6):
+    - FlutterMacOS
+  - app_links (6.4.1):
     - FlutterMacOS
   - AppAuth (1.7.6):
     - AppAuth/Core (= 1.7.6)
@@ -29,7 +31,11 @@ PODS:
     - FlutterMacOS
   - cupertino_native (0.0.1):
     - FlutterMacOS
+  - desktop_drop (0.0.1):
+    - FlutterMacOS
   - device_info_plus (0.0.1):
+    - FlutterMacOS
+  - emoji_picker_flutter (0.0.1):
     - FlutterMacOS
   - file_picker (0.0.1):
     - FlutterMacOS
@@ -212,16 +218,10 @@ PODS:
   - pdfx (1.0.0):
     - FlutterMacOS
   - PromisesObjC (2.4.0)
-  - purchases_flutter (8.10.1):
-    - FlutterMacOS
-    - PurchasesHybridCommon (= 13.35.0)
-  - PurchasesHybridCommon (13.35.0):
-    - RevenueCat (= 5.27.1)
   - quill_native_bridge_macos (0.0.1):
     - FlutterMacOS
   - record_macos (1.0.0):
     - FlutterMacOS
-  - RevenueCat (5.27.1)
   - share_plus (0.0.1):
     - FlutterMacOS
   - shared_preferences_foundation (0.0.1):
@@ -245,13 +245,16 @@ PODS:
 
 DEPENDENCIES:
   - app_badge_plus (from `Flutter/ephemeral/.symlinks/plugins/app_badge_plus/macos`)
+  - app_links (from `Flutter/ephemeral/.symlinks/plugins/app_links/macos`)
   - assets_audio_player (from `Flutter/ephemeral/.symlinks/plugins/assets_audio_player/macos`)
   - assets_audio_player_web (from `Flutter/ephemeral/.symlinks/plugins/assets_audio_player_web/macos`)
   - audio_session (from `Flutter/ephemeral/.symlinks/plugins/audio_session/macos`)
   - cloud_firestore (from `Flutter/ephemeral/.symlinks/plugins/cloud_firestore/macos`)
   - cloud_functions (from `Flutter/ephemeral/.symlinks/plugins/cloud_functions/macos`)
   - cupertino_native (from `Flutter/ephemeral/.symlinks/plugins/cupertino_native/macos`)
+  - desktop_drop (from `Flutter/ephemeral/.symlinks/plugins/desktop_drop/macos`)
   - device_info_plus (from `Flutter/ephemeral/.symlinks/plugins/device_info_plus/macos`)
+  - emoji_picker_flutter (from `Flutter/ephemeral/.symlinks/plugins/emoji_picker_flutter/macos`)
   - file_picker (from `Flutter/ephemeral/.symlinks/plugins/file_picker/macos`)
   - file_selector_macos (from `Flutter/ephemeral/.symlinks/plugins/file_selector_macos/macos`)
   - firebase_auth (from `Flutter/ephemeral/.symlinks/plugins/firebase_auth/macos`)
@@ -267,7 +270,6 @@ DEPENDENCIES:
   - package_info_plus (from `Flutter/ephemeral/.symlinks/plugins/package_info_plus/macos`)
   - path_provider_foundation (from `Flutter/ephemeral/.symlinks/plugins/path_provider_foundation/darwin`)
   - pdfx (from `Flutter/ephemeral/.symlinks/plugins/pdfx/macos`)
-  - purchases_flutter (from `Flutter/ephemeral/.symlinks/plugins/purchases_flutter/macos`)
   - quill_native_bridge_macos (from `Flutter/ephemeral/.symlinks/plugins/quill_native_bridge_macos/macos`)
   - record_macos (from `Flutter/ephemeral/.symlinks/plugins/record_macos/macos`)
   - share_plus (from `Flutter/ephemeral/.symlinks/plugins/share_plus/macos`)
@@ -311,12 +313,12 @@ SPEC REPOS:
     - nanopb
     - OrderedSet
     - PromisesObjC
-    - PurchasesHybridCommon
-    - RevenueCat
 
 EXTERNAL SOURCES:
   app_badge_plus:
     :path: Flutter/ephemeral/.symlinks/plugins/app_badge_plus/macos
+  app_links:
+    :path: Flutter/ephemeral/.symlinks/plugins/app_links/macos
   assets_audio_player:
     :path: Flutter/ephemeral/.symlinks/plugins/assets_audio_player/macos
   assets_audio_player_web:
@@ -329,8 +331,12 @@ EXTERNAL SOURCES:
     :path: Flutter/ephemeral/.symlinks/plugins/cloud_functions/macos
   cupertino_native:
     :path: Flutter/ephemeral/.symlinks/plugins/cupertino_native/macos
+  desktop_drop:
+    :path: Flutter/ephemeral/.symlinks/plugins/desktop_drop/macos
   device_info_plus:
     :path: Flutter/ephemeral/.symlinks/plugins/device_info_plus/macos
+  emoji_picker_flutter:
+    :path: Flutter/ephemeral/.symlinks/plugins/emoji_picker_flutter/macos
   file_picker:
     :path: Flutter/ephemeral/.symlinks/plugins/file_picker/macos
   file_selector_macos:
@@ -362,8 +368,6 @@ EXTERNAL SOURCES:
     :path: Flutter/ephemeral/.symlinks/plugins/path_provider_foundation/darwin
   pdfx:
     :path: Flutter/ephemeral/.symlinks/plugins/pdfx/macos
-  purchases_flutter:
-    :path: Flutter/ephemeral/.symlinks/plugins/purchases_flutter/macos
   quill_native_bridge_macos:
     :path: Flutter/ephemeral/.symlinks/plugins/quill_native_bridge_macos/macos
   record_macos:
@@ -391,7 +395,8 @@ CHECKOUT OPTIONS:
     :tag: 11.13.0
 
 SPEC CHECKSUMS:
-  app_badge_plus: 60ebdbfa6c11558e89f1ac58d3364cd014a41cd2
+  app_badge_plus: da29ead6d3bd8cdbfffc42da99c6e06225c385d8
+  app_links: 05a6ec2341985eb05e9f97dc63f5837c39895c3f
   AppAuth: d4f13a8fe0baf391b2108511793e4b479691fb73
   AppCheckCore: cc8fd0a3a230ddd401f326489c99990b013f0c4f
   assets_audio_player: 1d253800981ae53f995171cb526faa127af4d0b3
@@ -400,9 +405,11 @@ SPEC CHECKSUMS:
   cloud_firestore: f9c63a7893036af18566495df7d956a204d5ca81
   cloud_functions: 3df4cd145d5f1c070478644fa91837b0698cab8e
   cupertino_native: 69ee8a8bac1c467f04256be9d78899a180287d9a
+  desktop_drop: e0b672a7d84c0a6cbc378595e82cdb15f2970a43
   device_info_plus: 4fb280989f669696856f8b129e4a5e3cd6c48f76
+  emoji_picker_flutter: 51ca408e289d84d1e460016b2a28721ec754fcf7
   file_picker: 7584aae6fa07a041af2b36a2655122d42f578c1a
-  file_selector_macos: 6280b52b459ae6c590af5d78fc35c7267a3c4b31
+  file_selector_macos: 9e9e068e90ebee155097d00e89ae91edb2374db7
   Firebase: 3435bc66b4d494c2f22c79fd3aae4c1db6662327
   firebase_auth: 0c19ce983579df06c13eca090d1c1f0bcdb64cec
   firebase_core: 1095fcf33161d99bc34aa10f7c0d89414a208d15
@@ -444,11 +451,8 @@ SPEC CHECKSUMS:
   path_provider_foundation: 080d55be775b7414fd5a5ef3ac137b97b097e564
   pdfx: 1e79f57f7a6ce2f4a4c30f21fa54d3dc82441b51
   PromisesObjC: f5707f49cb48b9636751c5b2e7d227e43fba9f47
-  purchases_flutter: cad46d5fcfef49be0897cdc7e1bea53bc7eba45d
-  PurchasesHybridCommon: 18288b8ad932cfeb5f142f592d5c65e626a35770
   quill_native_bridge_macos: 2b005cb56902bb740e0cd9620aa399dfac6b4882
   record_macos: 295d70bd5fb47145df78df7b80e6697cd18403c0
-  RevenueCat: 87171c9f2412778354c8523f5625d1fece2560a5
   share_plus: 11c7b7fa7020465584eca3ff6392c5bc1e399d6e
   shared_preferences_foundation: 9e1978ff2562383bd5676f64ec4e9aa8fa06a6f7
   sign_in_with_apple: 6673c03c9e3643f6c8d33601943fbfa9ae99f94e

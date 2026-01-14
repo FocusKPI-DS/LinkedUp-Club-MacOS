@@ -4116,13 +4116,9 @@ class _MobileChatListItemState extends State<_MobileChatListItem>
   bool get wantKeepAlive => true;
 
   // Helper function to format timestamp
-  String _formatTimestamp(DateTime? timestamp, {bool isServiceChat = false}) {
+  String _formatTimestamp(DateTime? timestamp) {
     if (timestamp == null) {
-      // For service chats, show a different message or current time
-      if (isServiceChat) {
-        return DateFormat('MMM d').format(DateTime.now());
-      }
-      return 'Unknown';
+      return '';
     }
 
     final now = DateTime.now();
@@ -4352,7 +4348,7 @@ class _MobileChatListItemState extends State<_MobileChatListItem>
                       children: [
                         // Timestamp at top
                         Text(
-                          _formatTimestamp(widget.chat.lastMessageAt, isServiceChat: widget.chat.isServiceChat == true),
+                          _formatTimestamp(widget.chat.lastMessageAt),
                           style: TextStyle(
                             fontFamily: 'SF Pro Text',
                             color: Color(0xFF8E8E93),

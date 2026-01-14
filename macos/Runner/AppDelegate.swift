@@ -9,7 +9,7 @@ import GoogleSignIn
 @main
 class AppDelegate: FlutterAppDelegate {
   override func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
-    return true
+    return false
   }
 
   override func applicationSupportsSecureRestorableState(_ app: NSApplication) -> Bool {
@@ -57,49 +57,60 @@ class AppDelegate: FlutterAppDelegate {
   }
   
   override func applicationDidFinishLaunching(_ notification: Notification) {
-    // Configure Google Sign-In BEFORE super call to ensure it's ready
-    // This is critical for keychain access and OAuth flow on macOS
+    print("🚀 [AppDelegate] applicationDidFinishLaunching started")
+    
+    // Configure Google Sign-In
     self.configureGoogleSignIn()
     
-    super.applicationDidFinishLaunching(notification)
-    
     // Initialize Firebase
-    FirebaseApp.configure()
+    if FirebaseApp.app() == nil {
+      FirebaseApp.configure()
+      print("✅ [AppDelegate] FirebaseApp.configure() completed")
+    } else {
+      print("✅ [AppDelegate] FirebaseApp already configured")
+    }
     
-    // Set notification delegate before requesting permissions
+    // Set notification delegate
     UNUserNotificationCenter.current().delegate = self
     
-    // Check current authorization status and register accordingly
+    // Request registration immediately to ensure we get a token (if authorized)
+    DispatchQueue.main.async {
+      print("🚀 [AppDelegate] Calling registerForRemoteNotifications (proactive)")
+      NSApplication.shared.registerForRemoteNotifications()
+    }
+    
+    // Check permissions and request if needed
+    print("🚀 [AppDelegate] Checking notification settings...")
     UNUserNotificationCenter.current().getNotificationSettings { settings in
+      print("📱 [AppDelegate] Notification settings status: \(settings.authorizationStatus.rawValue)")
+      
       switch settings.authorizationStatus {
       case .authorized, .provisional:
-        // Already authorized, register for remote notifications
-        print("✅ Notification permission already authorized")
+        print("✅ [AppDelegate] Notification permission already authorized")
         DispatchQueue.main.async {
           NSApplication.shared.registerForRemoteNotifications()
         }
       case .notDetermined:
-        // Request permission first
-        print("📱 Requesting notification permission...")
+        print("📱 [AppDelegate] Requesting notification permission...")
         UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .badge, .sound]) { granted, error in
           if let error = error {
-            print("❌ Notification permission error: \(error.localizedDescription)")
+            print("❌ [AppDelegate] Notification permission error: \(error.localizedDescription)")
             return
           }
           
           if granted {
-            print("✅ Notification permission granted")
+            print("✅ [AppDelegate] Notification permission granted")
             DispatchQueue.main.async {
               NSApplication.shared.registerForRemoteNotifications()
             }
           } else {
-            print("❌ Notification permission denied")
+            print("❌ [AppDelegate] Notification permission denied")
           }
         }
       case .denied:
-        print("❌ Notification permission denied by user")
+        print("❌ [AppDelegate] Notification permission denied by user")
       @unknown default:
-        print("⚠️ Unknown notification authorization status")
+        print("⚠️ [AppDelegate] Unknown notification authorization status")
       }
     }
   }
@@ -172,7 +183,11 @@ class AppDelegate: FlutterAppDelegate {
 extension AppDelegate: UNUserNotificationCenterDelegate {
   func userNotificationCenter(_ center: UNUserNotificationCenter, willPresent notification: UNNotification, withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void) {
     // Show notification even when app is in foreground
-    completionHandler([.alert, .badge, .sound])
+    if #available(macOS 11.0, *) {
+      completionHandler([.banner, .badge, .sound])
+    } else {
+      completionHandler([.alert, .badge, .sound])
+    }
   }
   
   func userNotificationCenter(_ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse, withCompletionHandler completionHandler: @escaping () -> Void) {

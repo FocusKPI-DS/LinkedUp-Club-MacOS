@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:io' show Platform;
+import 'dart:math';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
@@ -12,6 +13,7 @@ import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:google_fonts/google_fonts.dart';
 
 // Import for macOS camera delegate
 import 'package:image_picker_platform_interface/image_picker_platform_interface.dart';
@@ -54,6 +56,10 @@ void main() async {
 
   try {
     GoRouter.optionURLReflectsImperativeAPIs = true;
+
+    // Configure GoogleFonts to use HTTP fetching and disable asset manifest loading
+    // This prevents "Unable to load asset: AssetManifest.json" errors on macOS
+    GoogleFonts.config.allowRuntimeFetching = true;
 
     // Configure image picker for macOS
     if (!kIsWeb && Platform.isMacOS) {
@@ -292,14 +298,15 @@ void _initializePushNotificationsAsync() async {
                 }
                 print('   Converted data: $messageData');
                 print('   initialPageName: ${messageData['initialPageName']}');
-                
+
                 // Create a RemoteMessage manually
                 final message = RemoteMessage(
-                  messageId: messageData['gcm.message_id'] as String? ?? 
-                             messageData['google.c.a.e'] as String?,
+                  messageId: messageData['gcm.message_id'] as String? ??
+                      messageData['google.c.a.e'] as String?,
                   data: messageData,
                 );
-                print('   Created RemoteMessage, calling handleNotificationNavigation...');
+                print(
+                    '   Created RemoteMessage, calling handleNotificationNavigation...');
                 await handleNotificationNavigation(message);
               } else {
                 print('   ⚠️ No data received from iOS');
@@ -307,7 +314,7 @@ void _initializePushNotificationsAsync() async {
             }
           });
           print('✅ Method channel handler set up for iOS notification taps');
-          
+
           // Register for remote notifications after permission is granted
           try {
             // Use method channel to explicitly register for remote notifications
@@ -321,13 +328,36 @@ void _initializePushNotificationsAsync() async {
             });
 
             // Force registration by getting FCM token (this triggers APNS registration)
-            final fcmToken = await messaging.getToken();
-            if (fcmToken != null && currentUserReference != null) {
+            // Force registration by getting FCM token (this triggers APNS registration)
+            // Retry logic for macOS to handle race conditions where APNS token isn't set yet
+            String? fcmToken;
+            int retries = 0;
+            const maxRetries = 5;
+            
+            while (fcmToken == null && retries < maxRetries) {
               try {
-                await actions.ensureFcmToken(currentUserReference!);
+                if (retries > 0) {
+                  await Future.delayed(const Duration(seconds: 2));
+                  print('🔄 Retry ${retries + 1}/$maxRetries getting FCM token...');
+                }
+                fcmToken = await messaging.getToken();
               } catch (e) {
-                print('⚠️ Failed to save FCM token: $e');
+                print('⚠️ Error getting FCM token (attempt ${retries + 1}): $e');
               }
+              retries++;
+            }
+            
+            if (fcmToken != null) {
+              print('✅ FCM Token obtained: ${fcmToken.substring(0, min(10, fcmToken.length))}...');
+              if (currentUserReference != null) {
+                try {
+                  await actions.ensureFcmToken(currentUserReference!);
+                } catch (e) {
+                  print('⚠️ Failed to save FCM token: $e');
+                }
+              }
+            } else {
+              print('❌ Failed to get FCM token after $maxRetries attempts');
             }
           } catch (e) {
             print('⚠️ iOS: Token check failed: $e');
@@ -845,11 +875,11 @@ class _NavBarPageState extends State<NavBarPage> with WidgetsBindingObserver {
       'DesktopChat': 1, // Desktop Chat - for macOS
       'Gmail': 2, // Gmail - for macOS
       'GmailMobile': 2, // Gmail Mobile - for iOS
-      'AIAssistant': 3, // Desktop AI Assistant
-      'MobileAssistant': 3, // Mobile AI Assistant - for iOS
+      // 'AIAssistant': 3, // Desktop AI Assistant - Removed
+      // 'MobileAssistant': 3, // Mobile AI Assistant - Removed
       // 'Discover': 3, // Commented out
-      'Announcements': 3, // News - for desktop (keep for desktop)
-      'Connections': 3, // Connections - for iOS (updated to index 3)
+      'Announcements': 5, // News - for desktop (Index 5 to avoid collision with Connections)
+      'Connections': 3, // Connections - for iOS and Desktop (Index 3)
       'ProfileSettings': 4, // Settings - for macOS
       'MobileSettings': 4, // Settings - for iOS (updated to index 4)
     };
@@ -1122,6 +1152,60 @@ class _NavBarPageState extends State<NavBarPage> with WidgetsBindingObserver {
     }
   }
 
+  Widget _buildConnectionUnreadIndicator() {
+    if (currentUserReference == null) {
+      return SizedBox.shrink();
+    }
+
+    return StreamBuilder<UsersRecord>(
+      stream: UsersRecord.getDocument(currentUserReference!),
+      builder: (context, snapshot) {
+        if (!snapshot.hasData) {
+          return SizedBox.shrink();
+        }
+
+        final user = snapshot.data!;
+        final requestCount = user.friendRequests.length;
+
+        if (requestCount == 0) {
+          return SizedBox.shrink();
+        }
+
+        // Show blue badge with count
+        return Positioned(
+          right: -4,
+          top: -4,
+          child: Container(
+            padding: EdgeInsets.all(3),
+            decoration: BoxDecoration(
+              color: Color(0xFF3B82F6),
+              shape: BoxShape.circle,
+              border: Border.all(
+                color: Colors.white,
+                width: 1.5,
+              ),
+            ),
+            constraints: BoxConstraints(
+              minWidth: 16,
+              minHeight: 16,
+            ),
+            child: Center(
+              child: Text(
+                requestCount > 99 ? '99+' : '$requestCount',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 9,
+                  fontWeight: FontWeight.w700,
+                ),
+                textAlign: TextAlign.center,
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
   Widget _buildNavItemWithTooltip({
     required Map<String, dynamic> item,
     required bool isSelected,
@@ -1139,6 +1223,7 @@ class _NavBarPageState extends State<NavBarPage> with WidgetsBindingObserver {
       }),
       buildNewsUnreadIndicator: _buildNewsUnreadIndicator,
       buildChatUnreadIndicator: _buildChatUnreadIndicator,
+      buildConnectionUnreadIndicator: _buildConnectionUnreadIndicator,
     );
   }
 
@@ -1166,9 +1251,9 @@ class _NavBarPageState extends State<NavBarPage> with WidgetsBindingObserver {
         'page': 'Gmail', // Gmail for macOS and web
       },
       {
-        'icon': 'assets/images/67b27b2cda06e9c69e5d000615c1153f80b09576.png',
-        'label': 'LonaAI',
-        'page': 'AIAssistant',
+        'icon': Icons.people_rounded,
+        'label': 'Connections',
+        'page': 'Connections',
       },
       {
         'icon': Icons.campaign_rounded,
@@ -1310,18 +1395,22 @@ class _NavBarPageState extends State<NavBarPage> with WidgetsBindingObserver {
           // Navigation Items - Top 40% of navbar
           Expanded(
             flex: 4, // TWEAK: Flex value for top 40% - currently 4 (40% = 4/10)
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+            child: ListView(
+              padding: EdgeInsets.zero,
+              shrinkWrap: true, // Allow it to take only needed space if small
               children: navItems.map((item) {
                 final isSelected = navItemToIndex[item['page']] == currentIndex;
 
-                return _buildNavItemWithTooltip(
-                  item: item,
-                  isSelected: isSelected,
-                  navItemToIndex: navItemToIndex,
-                  currentIndex: currentIndex,
-                  tabs: tabs,
-                  safeSetState: safeSetState,
+                return Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 12.0),
+                  child: _buildNavItemWithTooltip(
+                    item: item,
+                    isSelected: isSelected,
+                    navItemToIndex: navItemToIndex,
+                    currentIndex: currentIndex,
+                    tabs: tabs,
+                    safeSetState: safeSetState,
+                  ),
                 );
               }).toList(),
             ),
@@ -1420,41 +1509,56 @@ class _NavBarPageState extends State<NavBarPage> with WidgetsBindingObserver {
                                   ),
                                 ),
                               ),
-                              // Tooltip on hover
                               if (isHovered)
                                 Positioned(
-                                  left: 60, // Position to the right of the icon
+                                  left: 60,
                                   top: 0,
                                   bottom: 0,
                                   child: Center(
-                                    child: Material(
-                                      elevation: 8,
-                                      borderRadius: BorderRadius.circular(6),
-                                      color: Colors.transparent,
-                                      child: Container(
-                                        padding: EdgeInsets.symmetric(
-                                            horizontal: 12, vertical: 6),
-                                        decoration: BoxDecoration(
-                                          color: Colors.white,
-                                          borderRadius:
-                                              BorderRadius.circular(6),
-                                          boxShadow: [
-                                            BoxShadow(
-                                              color: Colors.black
-                                                  .withOpacity(0.15),
-                                              blurRadius: 8,
-                                              offset: Offset(0, 2),
-                                              spreadRadius: 1,
+                                    child: TweenAnimationBuilder<double>(
+                                      duration:
+                                          const Duration(milliseconds: 150),
+                                      tween: Tween(begin: 0.0, end: 1.0),
+                                      builder: (context, value, child) {
+                                        return Opacity(
+                                          opacity: value,
+                                          child: Transform.scale(
+                                            scale: 0.95 + (0.05 * value),
+                                            alignment: Alignment.centerLeft,
+                                            child: child,
+                                          ),
+                                        );
+                                      },
+                                      child: Material(
+                                        elevation: 8,
+                                        borderRadius: BorderRadius.circular(6),
+                                        color: Colors.transparent,
+                                        child: Container(
+                                          padding: const EdgeInsets.symmetric(
+                                              horizontal: 10, vertical: 6),
+                                          decoration: BoxDecoration(
+                                            color: const Color(
+                                                0xFF1E293B), // Premium dark blue-grey
+                                            borderRadius:
+                                                BorderRadius.circular(6),
+                                            boxShadow: [
+                                              BoxShadow(
+                                                color: Colors.black
+                                                    .withOpacity(0.3),
+                                                blurRadius: 8,
+                                                offset: const Offset(0, 2),
+                                                spreadRadius: 0,
+                                              ),
+                                            ],
+                                          ),
+                                          child: Text(
+                                            settingsItem['label'] as String,
+                                            style: GoogleFonts.inter(
+                                              color: Colors.white,
+                                              fontSize: 12,
+                                              fontWeight: FontWeight.w500,
+                                              letterSpacing: 0.2,
                                             ),
-                                          ],
-                                        ),
-                                        child: Text(
-                                          settingsItem['label'] as String,
-                                          style: TextStyle(
-                                            color: Colors.black,
-                                            fontSize: 14,
-                                            fontWeight: FontWeight.w500,
-                                            fontFamily: 'Inter',
                                           ),
                                         ),
                                       ),
@@ -1517,36 +1621,52 @@ class _NavBarPageState extends State<NavBarPage> with WidgetsBindingObserver {
                           // Tooltip on hover
                           if (isHovered)
                             Positioned(
-                              left: 60, // Position to the right of the icon
+                              left: 60,
                               top: 0,
                               bottom: 0,
                               child: Center(
-                                child: Material(
-                                  elevation: 8,
-                                  borderRadius: BorderRadius.circular(6),
-                                  color: Colors.transparent,
-                                  child: Container(
-                                    padding: EdgeInsets.symmetric(
-                                        horizontal: 12, vertical: 6),
-                                    decoration: BoxDecoration(
-                                      color: Colors.white,
-                                      borderRadius: BorderRadius.circular(6),
-                                      boxShadow: [
-                                        BoxShadow(
-                                          color: Colors.black.withOpacity(0.15),
-                                          blurRadius: 8,
-                                          offset: Offset(0, 2),
-                                          spreadRadius: 1,
+                                child: TweenAnimationBuilder<double>(
+                                  duration: const Duration(milliseconds: 150),
+                                  tween: Tween(begin: 0.0, end: 1.0),
+                                  builder: (context, value, child) {
+                                    return Opacity(
+                                      opacity: value,
+                                      child: Transform.scale(
+                                        scale: 0.95 + (0.05 * value),
+                                        alignment: Alignment.centerLeft,
+                                        child: child,
+                                      ),
+                                    );
+                                  },
+                                  child: Material(
+                                    elevation: 8,
+                                    borderRadius: BorderRadius.circular(6),
+                                    color: Colors.transparent,
+                                    child: Container(
+                                      padding: const EdgeInsets.symmetric(
+                                          horizontal: 10, vertical: 6),
+                                      decoration: BoxDecoration(
+                                        color: const Color(
+                                            0xFF1E293B), // Premium dark blue-grey
+                                        borderRadius: BorderRadius.circular(6),
+                                        boxShadow: [
+                                          BoxShadow(
+                                            color:
+                                                Colors.black.withOpacity(0.3),
+                                            blurRadius: 8,
+                                            offset: const Offset(0, 2),
+                                            spreadRadius: 0,
+                                          ),
+                                        ],
+                                      ),
+                                      child: Text(
+                                        'Logout',
+                                        style: GoogleFonts.inter(
+                                          color: Colors.white,
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.w500,
+                                          letterSpacing: 0.2,
                                         ),
-                                      ],
-                                    ),
-                                    child: Text(
-                                      'Logout',
-                                      style: TextStyle(
-                                        color: Colors.black,
-                                        fontSize: 14,
-                                        fontWeight: FontWeight.w500,
-                                        fontFamily: 'Inter',
                                       ),
                                     ),
                                   ),
@@ -1832,6 +1952,7 @@ class _NavItemWithTooltip extends StatefulWidget {
   final VoidCallback onTap;
   final Widget Function() buildNewsUnreadIndicator;
   final Widget Function() buildChatUnreadIndicator;
+  final Widget Function() buildConnectionUnreadIndicator;
 
   const _NavItemWithTooltip({
     required this.item,
@@ -1839,6 +1960,7 @@ class _NavItemWithTooltip extends StatefulWidget {
     required this.onTap,
     required this.buildNewsUnreadIndicator,
     required this.buildChatUnreadIndicator,
+    required this.buildConnectionUnreadIndicator,
   });
 
   @override
@@ -1861,40 +1983,46 @@ class _NavItemWithTooltipState extends State<_NavItemWithTooltip> {
 
     _overlayEntry = OverlayEntry(
       builder: (context) => Positioned(
-        left: position.dx, // Start at left edge of icon
-        top: position.dy +
-            size.height +
-            8, // TWEAK: Gap below icon - currently 8px (increase to move down, decrease to move up)
-        child: SizedBox(
-          width: size.width, // Match icon width
-          child: Align(
-            alignment: Alignment.center, // Center the tooltip
-            child: Material(
-              elevation: 12,
-              borderRadius: BorderRadius.circular(6),
-              color: Colors.transparent,
-              child: Container(
-                padding: EdgeInsets.symmetric(horizontal: 9, vertical: 6),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(6),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withOpacity(0.2),
-                      blurRadius: 10,
-                      offset: Offset(0, 2),
-                      spreadRadius: 1,
-                    ),
-                  ],
-                ),
-                child: Text(
-                  widget.item['label'] as String,
-                  style: TextStyle(
-                    color: Colors.black,
-                    fontSize: 10,
-                    fontWeight: FontWeight.w500,
-                    fontFamily: 'Inter',
+        left: position.dx + size.width + 12, // Position to the right of the icon
+        top: position.dy + (size.height / 2) - 14, // Center vertically with icon
+        child: TweenAnimationBuilder<double>(
+          duration: const Duration(milliseconds: 150),
+          tween: Tween(begin: 0.0, end: 1.0),
+          builder: (context, value, child) {
+            return Opacity(
+              opacity: value,
+              child: Transform.scale(
+                scale: 0.95 + (0.05 * value),
+                alignment: Alignment.centerLeft,
+                child: child,
+              ),
+            );
+          },
+          child: Material(
+            elevation: 8,
+            borderRadius: BorderRadius.circular(6),
+            color: Colors.transparent,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              decoration: BoxDecoration(
+                color: const Color(0xFF1E293B), // Premium dark blue-grey
+                borderRadius: BorderRadius.circular(6),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.3),
+                    blurRadius: 8,
+                    offset: const Offset(0, 2),
+                    spreadRadius: 0,
                   ),
+                ],
+              ),
+              child: Text(
+                widget.item['label'] as String,
+                style: GoogleFonts.inter(
+                  color: Colors.white,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w500,
+                  letterSpacing: 0.2,
                 ),
               ),
             ),
@@ -1997,6 +2125,9 @@ class _NavItemWithTooltipState extends State<_NavItemWithTooltip> {
                     // Red dot indicator for Chat button
                     if (widget.item['page'] == 'DesktopChat')
                       widget.buildChatUnreadIndicator(),
+                    // Blue badge for Connections button
+                    if (widget.item['page'] == 'Connections')
+                      widget.buildConnectionUnreadIndicator(),
                   ],
                 ),
               ),

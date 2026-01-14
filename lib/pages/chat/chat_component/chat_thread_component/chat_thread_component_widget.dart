@@ -37,6 +37,8 @@ import 'package:record/record.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:emoji_picker_flutter/emoji_picker_flutter.dart';
 import 'package:liquid_glass_renderer/liquid_glass_renderer.dart';
+import 'package:desktop_drop/desktop_drop.dart';
+import 'package:cross_file/cross_file.dart';
 import 'chat_thread_component_model.dart';
 export 'chat_thread_component_model.dart';
 
@@ -73,6 +75,7 @@ class _ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget>
   bool _hasMoreOlderMessages = true;
   String? _currentChatId; // Track current chat to reset pagination on change
   static const int _messagesPerPage = 50;
+  bool _isDragging = false;
 
   @override
   void setState(VoidCallback callback) {
@@ -87,6 +90,13 @@ class _ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget>
 
     _model.messageTextController ??= TextEditingController();
     _model.messageFocusNode ??= FocusNode();
+    _model.messageFocusNode!.addListener(() {
+      if (_model.messageFocusNode!.hasFocus && _model.showEmojiPicker) {
+        setState(() {
+          _model.showEmojiPicker = false;
+        });
+      }
+    });
     _model.scrollController ??= ScrollController();
 
     // Add scroll listener for pagination
@@ -497,6 +507,7 @@ class _ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget>
       _model.editingMessage = null;
       _model.messageTextController?.clear();
       _model.replyingToMessage = null;
+      _model.showEmojiPicker = false;
       safeSetState(() {});
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -586,8 +597,16 @@ class _ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget>
       }
 
       // Create message data
+      String finalContent = messageText;
+      // For file messages, use the original filename as content if no caption provided
+      if (hasFile && (messageText.isEmpty || messageText.trim().isEmpty)) {
+        if (_model.uploadedLocalFile_uploadDataFile.name != null) {
+          finalContent = _model.uploadedLocalFile_uploadDataFile.name!;
+        }
+      }
+
       final messageData = <String, dynamic>{
-        'content': messageText,
+        'content': finalContent,
         'sender_ref': currentUserReference,
         'sender_name': currentUserDisplayName.isNotEmpty
             ? currentUserDisplayName
@@ -618,7 +637,7 @@ class _ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget>
 
       // Add file if present
       if (hasFile) {
-        messageData['file'] = _model.file;
+        messageData['attachment_url'] = _model.file;
         // Try to get original filename from uploaded file
         if (_model.uploadedLocalFile_uploadDataFile.name != null) {
           messageData['file_name'] =
@@ -639,7 +658,7 @@ class _ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget>
       await messageRef.set(messageData);
 
       // Determine last message text for chat metadata
-      String lastMessageText = messageText;
+      String lastMessageText = finalContent;
       if (lastMessageText.isEmpty) {
         if (hasImages || hasSingleImage) {
           lastMessageText = '📷 Photo';
@@ -702,6 +721,7 @@ class _ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget>
       _model.uploadedLocalFiles_uploadData.clear();
       _model.uploadedFileUrl_uploadDataCamera = '';
       _model.uploadedFileUrl_uploadDataFile = '';
+      _model.showEmojiPicker = false;
 
       safeSetState(() {});
     } catch (e) {
@@ -946,129 +966,297 @@ class _ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget>
     safeSetState(() {});
   }
 
-  void _showEmojiPicker() {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.transparent,
-      isScrollControlled: true,
-      builder: (context) => Container(
-        height: MediaQuery.of(context).size.height * 0.45,
-        decoration: BoxDecoration(
-          color: isDark ? const Color(0xFF1C1C1E) : Colors.white,
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+  /// Handle files dropped via drag-and-drop
+  Future<void> _handleDroppedFiles(List<XFile> droppedFiles) async {
+    if (droppedFiles.isEmpty) return;
+    
+    // Check if it's a service chat (read-only)
+    if (_isServiceChatReadOnly()) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Row(
+            children: const [
+              Icon(Icons.info_outline, color: Colors.white),
+              SizedBox(width: 12),
+              Expanded(child: Text('Cannot send files in service chat')),
+            ],
+          ),
+          backgroundColor: Colors.orange,
         ),
-        child: Column(
-          children: [
-            // Handle bar
-            Container(
-              margin: const EdgeInsets.only(top: 12, bottom: 8),
-              width: 36,
-              height: 5,
-              decoration: BoxDecoration(
-                color: Colors.grey.withOpacity(0.3),
-                borderRadius: BorderRadius.circular(2.5),
-              ),
+      );
+      return;
+    }
+
+    // Separate images from other files
+    final imageExtensions = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 'heic'];
+    final imageFiles = <XFile>[];
+    final otherFiles = <XFile>[];
+
+    for (final file in droppedFiles) {
+      final ext = file.path.split('.').last.toLowerCase();
+      if (imageExtensions.contains(ext)) {
+        imageFiles.add(file);
+      } else {
+        otherFiles.add(file);
+      }
+    }
+
+    // Handle images (up to 10)
+    if (imageFiles.isNotEmpty) {
+      if (imageFiles.length > 10) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Row(
+              children: const [
+                Icon(Icons.warning, color: Colors.white),
+                SizedBox(width: 12),
+                Expanded(child: Text('You can only upload up to 10 images at once')),
+              ],
             ),
-            // Emoji Picker - Full featured like WhatsApp
-            Expanded(
-              child: Padding(
-                padding: const EdgeInsets.only(
-                    bottom: 20.0,
-                    left:
-                        8.0), // Add bottom padding to move buttons up, left padding for search button
-                child: EmojiPicker(
-                  onEmojiSelected: (category, emoji) {
-                    _insertEmoji(emoji.emoji);
-                  },
-                  onBackspacePressed: () {
-                    final controller = _model.messageTextController;
-                    if (controller != null && controller.text.isNotEmpty) {
-                      final text = controller.text;
-                      final selection = controller.selection;
-                      if (selection.start > 0) {
-                        // Handle emoji deletion (emojis can be multiple chars)
-                        final newText = text.substring(0, selection.start - 1) +
-                            text.substring(selection.end);
-                        controller.value = TextEditingValue(
-                          text: newText,
-                          selection: TextSelection.collapsed(
-                            offset: selection.start - 1,
-                          ),
-                        );
-                      }
-                    }
-                  },
-                  config: Config(
-                    height: MediaQuery.of(context).size.height * 0.38,
-                    checkPlatformCompatibility: true,
-                    emojiViewConfig: EmojiViewConfig(
-                      emojiSizeMax: 28,
-                      verticalSpacing: 0,
-                      horizontalSpacing: 0,
-                      gridPadding: EdgeInsets.zero,
-                      recentsLimit: 28,
-                      replaceEmojiOnLimitExceed: true,
-                      noRecents: Text(
-                        'No Recents',
-                        style: TextStyle(
-                          fontSize: 16,
-                          color: isDark ? Colors.white54 : Colors.black54,
-                        ),
+            backgroundColor: Colors.orange,
+          ),
+        );
+        return;
+      }
+
+      _model.isSendingImage = true;
+      safeSetState(() {});
+
+      try {
+        safeSetState(() => _model.isDataUploading_uploadData = true);
+        var selectedUploadedFiles = <FFUploadedFile>[];
+        var downloadUrls = <String>[];
+
+        // Read bytes and upload each image
+        for (final file in imageFiles) {
+          final bytes = await file.readAsBytes();
+          final selectedFile = FFUploadedFile(
+            name: file.name,
+            bytes: bytes,
+          );
+          selectedUploadedFiles.add(selectedFile);
+
+          // Generate storage path
+          final currentUserUid = currentUserReference?.id ?? '';
+          final pathPrefix = 'users/$currentUserUid/uploads';
+          final timestamp = DateTime.now().microsecondsSinceEpoch;
+          final ext = file.name.contains('.') ? file.name.split('.').last : 'jpg';
+          final storagePath = '$pathPrefix/$timestamp.$ext';
+
+          final downloadUrl = await uploadData(storagePath, bytes);
+          if (downloadUrl != null) {
+            downloadUrls.add(downloadUrl);
+          }
+        }
+
+        _model.isDataUploading_uploadData = false;
+
+        if (selectedUploadedFiles.length == imageFiles.length &&
+            downloadUrls.length == imageFiles.length) {
+          safeSetState(() {
+            _model.uploadedLocalFiles_uploadData = selectedUploadedFiles;
+            _model.uploadedFileUrls_uploadData = downloadUrls;
+          });
+
+          _model.images = downloadUrls.map((url) => url.toString()).toList();
+          safeSetState(() {});
+        }
+      } catch (e) {
+        debugPrint('Error uploading images: $e');
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error uploading images: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      } finally {
+        _model.isSendingImage = false;
+        safeSetState(() {});
+      }
+    }
+
+    // Handle other files (one at a time)
+    if (otherFiles.isNotEmpty) {
+      if (otherFiles.length > 1) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Row(
+              children: const [
+                Icon(Icons.info_outline, color: Colors.white),
+                SizedBox(width: 12),
+                Expanded(child: Text('You can only upload one file at a time')),
+              ],
+            ),
+            backgroundColor: Colors.blue,
+          ),
+        );
+      }
+
+      final file = otherFiles.first;
+      try {
+        final bytes = await file.readAsBytes();
+        final originalFileName = file.name;
+
+        safeSetState(() => _model.isDataUploading_uploadDataFile = true);
+        var selectedUploadedFiles = <FFUploadedFile>[];
+        var downloadUrls = <String>[];
+
+        // Generate storage path
+        final currentUserUid = currentUserReference?.id ?? '';
+        final pathPrefix = 'users/$currentUserUid/uploads';
+        final timestamp = DateTime.now().microsecondsSinceEpoch;
+        final ext = originalFileName.contains('.')
+            ? originalFileName.split('.').last
+            : 'file';
+        final storagePath = '$pathPrefix/$timestamp.$ext';
+
+        selectedUploadedFiles = [
+          FFUploadedFile(
+            name: originalFileName,
+            bytes: bytes,
+          )
+        ];
+
+        final downloadUrl = await uploadData(storagePath, bytes);
+        if (downloadUrl != null) {
+           downloadUrls = [downloadUrl];
+        }
+
+        _model.isDataUploading_uploadDataFile = false;
+
+        if (selectedUploadedFiles.length == 1 && downloadUrls.length == 1) {
+          safeSetState(() {
+            _model.uploadedLocalFile_uploadDataFile = selectedUploadedFiles.first;
+            _model.uploadedFileUrl_uploadDataFile = downloadUrls.first;
+          });
+
+          _model.file = _model.uploadedFileUrl_uploadDataFile;
+          safeSetState(() {});
+        }
+      } catch (e) {
+        debugPrint('Error uploading file: $e');
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error uploading file: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      } finally {
+        safeSetState(() {});
+      }
+    }
+  }
+
+  void _toggleEmojiPicker() {
+    // Close keyboard if open
+    if (_model.messageFocusNode?.hasFocus ?? false) {
+      _model.messageFocusNode?.unfocus();
+    }
+    
+    setState(() {
+      _model.showEmojiPicker = !_model.showEmojiPicker;
+    });
+  }
+
+  Widget _buildInlineEmojiPicker() {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    
+    return Container(
+      height: 320,
+      color: isDark ? const Color(0xFF1C1C1E) : Colors.white,
+      child: Column(
+        children: [
+          // Emoji Picker - Full featured like WhatsApp
+          Expanded(
+            child: EmojiPicker(
+              onEmojiSelected: (category, emoji) {
+                _insertEmoji(emoji.emoji);
+              },
+              onBackspacePressed: () {
+                final controller = _model.messageTextController;
+                if (controller != null && controller.text.isNotEmpty) {
+                  final text = controller.text;
+                  final selection = controller.selection;
+                  if (selection.start > 0) {
+                    // Handle emoji deletion (emojis can be multiple chars)
+                    final newText = text.substring(0, selection.start - 1) +
+                        text.substring(selection.end);
+                    controller.value = TextEditingValue(
+                      text: newText,
+                      selection: TextSelection.collapsed(
+                        offset: selection.start - 1,
                       ),
-                      loadingIndicator: const Center(
-                        child: CupertinoActivityIndicator(),
-                      ),
-                      buttonMode: ButtonMode.CUPERTINO,
-                      backgroundColor:
-                          isDark ? const Color(0xFF1C1C1E) : Colors.white,
-                    ),
-                    skinToneConfig: const SkinToneConfig(
-                      enabled: true,
-                      dialogBackgroundColor: Colors.white,
-                      indicatorColor: Colors.grey,
-                    ),
-                    categoryViewConfig: CategoryViewConfig(
-                      initCategory: Category.RECENT,
-                      backgroundColor:
-                          isDark ? const Color(0xFF1C1C1E) : Colors.white,
-                      indicatorColor: FlutterFlowTheme.of(context).primary,
-                      iconColor: isDark ? Colors.white54 : Colors.black45,
-                      iconColorSelected: FlutterFlowTheme.of(context).primary,
-                      categoryIcons: const CategoryIcons(
-                        recentIcon: CupertinoIcons.clock,
-                        smileyIcon: CupertinoIcons.smiley,
-                        animalIcon: CupertinoIcons.tortoise,
-                        foodIcon: CupertinoIcons.cart,
-                        activityIcon: CupertinoIcons.sportscourt,
-                        travelIcon: CupertinoIcons.car,
-                        objectIcon: CupertinoIcons.lightbulb,
-                        symbolIcon: CupertinoIcons.heart,
-                        flagIcon: CupertinoIcons.flag,
-                      ),
-                    ),
-                    bottomActionBarConfig: BottomActionBarConfig(
-                      backgroundColor:
-                          isDark ? const Color(0xFF1C1C1E) : Colors.white,
-                      buttonColor: isDark ? Colors.white54 : Colors.black45,
-                      buttonIconColor: isDark ? Colors.white : Colors.black87,
-                      showBackspaceButton: true,
-                      showSearchViewButton: true,
-                    ),
-                    searchViewConfig: SearchViewConfig(
-                      backgroundColor: isDark
-                          ? const Color(0xFF2C2C2E)
-                          : const Color(0xFFF2F2F7),
-                      buttonIconColor: isDark ? Colors.white54 : Colors.black54,
-                      hintText: 'Search emoji...',
+                    );
+                  }
+                }
+              },
+              config: Config(
+                height: 320,
+                checkPlatformCompatibility: true,
+                emojiViewConfig: EmojiViewConfig(
+                  emojiSizeMax: 28,
+                  verticalSpacing: 0,
+                  horizontalSpacing: 0,
+                  gridPadding: EdgeInsets.zero,
+                  recentsLimit: 28,
+                  replaceEmojiOnLimitExceed: true,
+                  noRecents: Text(
+                    'No Recents',
+                    style: TextStyle(
+                      fontSize: 16,
+                      color: isDark ? Colors.white54 : Colors.black54,
                     ),
                   ),
+                  loadingIndicator: const Center(
+                    child: CupertinoActivityIndicator(),
+                  ),
+                  buttonMode: ButtonMode.CUPERTINO,
+                  backgroundColor:
+                      isDark ? const Color(0xFF1C1C1E) : Colors.white,
+                ),
+                skinToneConfig: const SkinToneConfig(
+                  enabled: true,
+                  dialogBackgroundColor: Colors.white,
+                  indicatorColor: Colors.grey,
+                ),
+                categoryViewConfig: CategoryViewConfig(
+                  initCategory: Category.RECENT,
+                  backgroundColor:
+                      isDark ? const Color(0xFF1C1C1E) : Colors.white,
+                  indicatorColor: FlutterFlowTheme.of(context).primary,
+                  iconColor: isDark ? Colors.white54 : Colors.black45,
+                  iconColorSelected: FlutterFlowTheme.of(context).primary,
+                  categoryIcons: const CategoryIcons(
+                    recentIcon: CupertinoIcons.clock,
+                    smileyIcon: CupertinoIcons.smiley,
+                    animalIcon: CupertinoIcons.tortoise,
+                    foodIcon: CupertinoIcons.cart,
+                    activityIcon: CupertinoIcons.sportscourt,
+                    travelIcon: CupertinoIcons.car,
+                    objectIcon: CupertinoIcons.lightbulb,
+                    symbolIcon: CupertinoIcons.heart,
+                    flagIcon: CupertinoIcons.flag,
+                  ),
+                ),
+                bottomActionBarConfig: BottomActionBarConfig(
+                  backgroundColor:
+                      isDark ? const Color(0xFF1C1C1E) : Colors.white,
+                  buttonColor: isDark ? Colors.white54 : Colors.black45,
+                  buttonIconColor: isDark ? Colors.white : Colors.black87,
+                  showBackspaceButton: true,
+                  showSearchViewButton: true,
+                ),
+                searchViewConfig: SearchViewConfig(
+                  backgroundColor: isDark
+                      ? const Color(0xFF2C2C2E)
+                      : const Color(0xFFF2F2F7),
+                  buttonIconColor: isDark ? Colors.white54 : Colors.black54,
+                  hintText: 'Search emoji...',
                 ),
               ),
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
@@ -1144,9 +1332,30 @@ class _ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget>
       );
     });
 
-    return GestureDetector(
+    return DropTarget(
+      onDragEntered: (details) {
+        if (!_isServiceChatReadOnly()) {
+          setState(() => _isDragging = true);
+        }
+      },
+      onDragExited: (details) {
+        setState(() => _isDragging = false);
+      },
+      onDragDone: (details) async {
+        setState(() => _isDragging = false);
+        if (!_isServiceChatReadOnly()) {
+          await _handleDroppedFiles(details.files);
+        }
+      },
+      child: Stack(
+        children: [
+          GestureDetector(
       onTap: () async {
         _model.select = false;
+        // Close emoji picker on tap outside
+        if (_model.showEmojiPicker) {
+          _model.showEmojiPicker = false;
+        }
         safeSetState(() {});
       },
       child: Container(
@@ -1297,7 +1506,7 @@ class _ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget>
                           // Add extra padding at top when loading older messages
                           padding: EdgeInsets.only(
                             top: 120 + (_isLoadingOlderMessages ? 50 : 0),
-                            bottom: 100,
+                            bottom: 100 + (_model.showEmojiPicker ? 320 : 0),
                           ),
                           reverse: true,
                           shrinkWrap: false, // Better performance when false
@@ -1444,10 +1653,20 @@ class _ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget>
             // FLOATING INPUT BAR - OVERLAYS SCROLLING CONTENT
             // Messages scroll BEHIND this, shadows visible through glass
             // ═══════════════════════════════════════════════════════════
+            // Emoji Picker Panel (Bottom Layer)
+            if (_model.showEmojiPicker)
+              Positioned(
+                left: 0,
+                right: 0,
+                bottom: 0,
+                height: 320,
+                child: _buildInlineEmojiPicker(),
+              ),
+
             Positioned(
               left: 0,
               right: 0,
-              bottom: 0,
+              bottom: _model.showEmojiPicker ? 320 : 0,
               child: SafeArea(
                 top: false,
                 child: Column(
@@ -2063,7 +2282,7 @@ class _ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget>
                                           children: [
                                             // Emoji Button
                                             GestureDetector(
-                                              onTap: () => _showEmojiPicker(),
+                                              onTap: () => _toggleEmojiPicker(),
                                               child: Padding(
                                                 padding: const EdgeInsets.only(
                                                     left: 12, bottom: 10),
@@ -2191,6 +2410,167 @@ class _ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget>
           ],
         ),
       ),
+    ),
+    if (_isDragging)
+      Positioned.fill(
+        child: Container(
+          decoration: BoxDecoration(
+            color: CupertinoColors.systemBlue.withOpacity(0.15),
+            border: Border.all(
+              color: CupertinoColors.systemBlue,
+              width: 3.0,
+            ),
+          ),
+          child: Center(
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 24),
+              decoration: BoxDecoration(
+                color: Theme.of(context).brightness == Brightness.dark
+                    ? Colors.black.withOpacity(0.8)
+                    : Colors.white.withOpacity(0.95),
+                borderRadius: BorderRadius.circular(20),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.2),
+                    blurRadius: 20,
+                    offset: const Offset(0, 8),
+                  ),
+                ],
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    Icons.cloud_upload_rounded,
+                    size: 64,
+                    color: CupertinoColors.systemBlue,
+                  ),
+                  const SizedBox(height: 16),
+                  Text(
+                    'Drop files to upload',
+                    style: TextStyle(
+                      color: Theme.of(context).brightness == Brightness.dark
+                          ? Colors.white
+                          : Colors.black87,
+                      fontSize: 20,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Images, PDFs, and documents supported',
+                    style: TextStyle(
+                      color: Theme.of(context).brightness == Brightness.dark
+                          ? Colors.white70
+                          : Colors.black54,
+                      fontSize: 14,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    if (_model.isDataUploading_uploadData ||
+        _model.isDataUploading_uploadDataFile ||
+        _model.isDataUploading_uploadDataVideo ||
+        _model.isDataUploading_uploadDataCamera ||
+        _model.isSendingImage == true)
+      Positioned.fill(
+        child: Container(
+          color: Colors.black.withOpacity(0.4),
+          child: Center(
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 30),
+              decoration: BoxDecoration(
+                color: Theme.of(context).brightness == Brightness.dark
+                    ? const Color(0xFF1E1E1E).withOpacity(0.9)
+                    : Colors.white.withOpacity(0.95),
+                borderRadius: BorderRadius.circular(24),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.2),
+                    blurRadius: 30,
+                    offset: const Offset(0, 10),
+                  ),
+                ],
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  // Creative combined animation
+                  Stack(
+                    alignment: Alignment.center,
+                    children: [
+                      Icon(
+                        CupertinoIcons.cloud_fill,
+                        size: 70,
+                        color: CupertinoColors.systemBlue.withOpacity(0.2),
+                      ).animate(onPlay: (c) => c.repeat(reverse: true)).scale(
+                            begin: const Offset(0.9, 0.9),
+                            end: const Offset(1.1, 1.1),
+                            duration: 1000.ms,
+                            curve: Curves.easeInOut,
+                          ),
+                      Icon(
+                        CupertinoIcons.arrow_up_circle_fill,
+                        size: 40,
+                        color: CupertinoColors.systemBlue,
+                      )
+                          .animate(onPlay: (c) => c.repeat())
+                          .moveY(
+                            begin: 10,
+                            end: -10,
+                            duration: 800.ms,
+                            curve: Curves.easeInOut,
+                          )
+                          .fadeIn(duration: 400.ms)
+                          .then()
+                          .fadeOut(duration: 400.ms, delay: 400.ms),
+                    ],
+                  ),
+                  const SizedBox(height: 20),
+                  Text(
+                    'Uploading...',
+                    style: TextStyle(
+                      color: Theme.of(context).brightness == Brightness.dark
+                          ? Colors.white
+                          : Colors.black87,
+                      fontSize: 18,
+                      fontWeight: FontWeight.w600,
+                      letterSpacing: 0.5,
+                    ),
+                  )
+                      .animate(onPlay: (c) => c.repeat())
+                      .shimmer(
+                        duration: 1500.ms,
+                        color: CupertinoColors.systemBlue.withOpacity(0.5),
+                        size: 0.5,
+                      ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Just a moment',
+                    style: TextStyle(
+                      color: Theme.of(context).brightness == Brightness.dark
+                          ? Colors.white54
+                          : Colors.black45,
+                      fontSize: 13,
+                    ),
+                  ),
+                ],
+              ),
+            ).animate().scale(
+                  duration: 400.ms,
+                  curve: Curves.easeOutBack,
+                  begin: const Offset(0.8, 0.8),
+                  end: const Offset(1.0, 1.0),
+                ),
+          ),
+        ),
+      ).animate().fadeIn(duration: 200.ms),
+      ],
+    ),
     );
   }
 

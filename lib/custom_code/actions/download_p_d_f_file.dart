@@ -11,7 +11,8 @@ import 'package:flutter/material.dart';
 // Begin custom action code
 // DO NOT REMOVE OR MODIFY THE CODE ABOVE!
 
-import 'dart:io' show File;
+import 'dart:io' show File, Platform;
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:http/http.dart' as http;
 import 'package:path/path.dart' as p;
@@ -61,9 +62,31 @@ Future<String?> downloadPDFFile(
       name = 'document_${DateTime.now().millisecondsSinceEpoch}.pdf';
     }
 
-    final dir = await getApplicationDocumentsDirectory();
-    final filePath = p.join(dir.path, name);
-    final file = File(filePath);
+    String filePath;
+    File file;
+
+    // Desktop: Prompt user to save file
+    if (!kIsWeb && (Platform.isMacOS || Platform.isWindows || Platform.isLinux)) {
+      final String? outputFile = await FilePicker.platform.saveFile(
+        dialogTitle: 'Save PDF',
+        fileName: name,
+        allowedExtensions: ['pdf'],
+        type: FileType.custom,
+      );
+
+      if (outputFile == null) {
+        // User canceled
+        return null;
+      }
+      filePath = outputFile;
+      file = File(filePath);
+    } else {
+      // Mobile: Save to documents directory
+      final dir = await getApplicationDocumentsDirectory();
+      filePath = p.join(dir.path, name);
+      file = File(filePath);
+    }
+
     await file.writeAsBytes(resp.bodyBytes);
     debugPrint('File downloaded to $filePath');
 
@@ -83,7 +106,7 @@ Future<String?> downloadPDFFile(
         context: context,
         builder: (ctx) => AlertDialog(
           title: const Text('Download complete'),
-          content: Text('Open “$name” now?'),
+          content: Text('Open “${p.basename(filePath)}” now?'),
           actions: [
             TextButton(
                 onPressed: () => Navigator.of(ctx).pop(false),

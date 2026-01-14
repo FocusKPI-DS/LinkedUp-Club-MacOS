@@ -27,9 +27,11 @@ class UserProfileDetailWidget extends StatefulWidget {
   const UserProfileDetailWidget({
     super.key,
     required this.user,
+    this.onClose,
   });
 
   final UsersRecord? user;
+  final VoidCallback? onClose;
 
   static String routeName = 'UserProfileDetail';
   static String routePath = '/userProfileDetail';
@@ -181,13 +183,19 @@ class _UserProfileDetailWidgetState extends State<UserProfileDetailWidget> {
                                 borderRadius: 20.0,
                                 buttonSize: 40.0,
                                 icon: Icon(
-                                  Icons.arrow_back,
+                                  widget.onClose != null
+                                      ? Icons.close
+                                      : Icons.arrow_back,
                                   color:
                                       FlutterFlowTheme.of(context).primaryText,
                                   size: 24.0,
                                 ),
                                 onPressed: () async {
-                                  context.safePop();
+                                  if (widget.onClose != null) {
+                                    widget.onClose!();
+                                  } else {
+                                    context.safePop();
+                                  }
                                 },
                               ),
                               Column(

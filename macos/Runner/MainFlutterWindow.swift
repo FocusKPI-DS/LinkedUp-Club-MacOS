@@ -1,7 +1,7 @@
 import Cocoa
 import FlutterMacOS
 
-class MainFlutterWindow: NSWindow {
+class MainFlutterWindow: NSWindow, NSWindowDelegate {
   override func awakeFromNib() {
     // Set white background immediately to prevent black screen
     self.backgroundColor = NSColor.white
@@ -18,11 +18,18 @@ class MainFlutterWindow: NSWindow {
     self.acceptsMouseMovedEvents = true
     
     super.awakeFromNib()
+    
+    self.delegate = self
   }
 
   
   override func scrollWheel(with event: NSEvent) {
     // Enable smooth scrolling with trackpad
     super.scrollWheel(with: event)
+  }
+  
+  func windowShouldClose(_ sender: NSWindow) -> Bool {
+    NSApplication.shared.hide(nil)
+    return false
   }
 }

@@ -102,6 +102,7 @@ dependencies:
   font_awesome_flutter: 10.7.0
   from_css_color: 2.0.0
   geolocator: ^10.1.0
+  desktop_drop: ^0.4.4
   go_router: 12.1.3
   google_api_headers: 4.5.3
   google_fonts: 6.1.0
@@ -141,7 +142,7 @@ dependencies:
   path_provider_platform_interface: 2.1.2
   path_provider_windows: 2.3.0
   pdfx: 2.9.2
-  permission_handler: 12.0.0+1
+  permission_handler: ^12.0.1
   permission_handler_android: 13.0.1
   permission_handler_apple: 9.4.7
   permission_handler_html: 0.1.3+5
@@ -204,7 +205,7 @@ dependencies:
   cupertino_icons: ^1.0.0
   cupertino_native: ^0.1.1
   flutter_quill: ^11.4.2
-  flutter_widget_from_html: ^0.15.2
+  flutter_widget_from_html: ^0.17.1
   adaptive_platform_ui: ^0.1.100
   liquid_glass_ui_design: ^1.0.5
   liquid_glass_renderer: ^0.2.0-dev.4
@@ -286,3 +287,18 @@ flutter:
   # For details regarding fonts from package dependencies,
   # see https://flutter.dev/custom-fonts/#from-packages
 
+  # Bundled Inter font to prevent google_fonts AssetManifest.json errors
+  fonts:
+    - family: Inter
+      fonts:
+        - asset: assets/fonts/Inter-Regular.ttf
+        - asset: assets/fonts/Inter-Italic.ttf
+          style: italic
+        - asset: assets/fonts/Inter-Light.ttf
+          weight: 300
+        - asset: assets/fonts/Inter-Medium.ttf
+          weight: 500
+        - asset: assets/fonts/Inter-SemiBold.ttf
+          weight: 600
+        - asset: assets/fonts/Inter-Bold.ttf
+          weight: 700

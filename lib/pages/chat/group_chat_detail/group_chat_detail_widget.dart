@@ -3435,19 +3435,24 @@ class _GroupChatDetailWidgetState extends State<GroupChatDetailWidget>
                                                                             (context,
                                                                                 snapshot) {
                                                                           // Customize what your widget looks like when it's loading.
-                                                                          if (!snapshot
-                                                                              .hasData) {
+                                                                          if (snapshot.connectionState ==
+                                                                              ConnectionState.waiting) {
                                                                             return Center(
                                                                               child: SizedBox(
-                                                                                width: 50.0,
-                                                                                height: 50.0,
+                                                                                width: 32.0,
+                                                                                height: 32.0,
                                                                                 child: CircularProgressIndicator(
+                                                                                  strokeWidth: 2.0,
                                                                                   valueColor: AlwaysStoppedAnimation<Color>(
                                                                                     FlutterFlowTheme.of(context).primary,
                                                                                   ),
                                                                                 ),
                                                                               ),
                                                                             );
+                                                                          }
+
+                                                                          if (snapshot.hasError || !snapshot.hasData) {
+                                                                            return const SizedBox.shrink();
                                                                           }
 
                                                                           final rowUsersRecord =

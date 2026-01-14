@@ -15,7 +15,7 @@ echo "📦 Building Flutter web app..."
 flutter clean
 rm -rf build/web
 flutter pub get
-flutter build web --release --web-renderer canvaskit --base-href /app/
+flutter build web --release --base-href /app/
 
 # Step 3: Copy Flutter build to Next.js output under /app
 echo "📋 Copying Flutter app to /app directory..."

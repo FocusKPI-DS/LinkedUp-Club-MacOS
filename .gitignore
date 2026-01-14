@@ -13,3 +13,8 @@ build/
 # OS
 .DS_Store
 Thumbs.db
+
+# Firebase Service Account Keys (SENSITIVE!)
+firebase/functions/serviceAccountKey.json
+firebase/functions/linkedup-c3e29-firebase-adminsdk-*.json
+*-firebase-adminsdk-*.json

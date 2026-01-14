@@ -77,29 +77,65 @@ class _ConnectionsWidgetState extends State<ConnectionsWidget> {
                 color: Colors.white,
                 padding: EdgeInsets.fromLTRB(16, 16, 16, 0),
                 child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Text(
-                      'Connections',
-                      style: CupertinoTheme.of(context)
-                          .textTheme
-                          .navLargeTitleTextStyle
-                          .copyWith(
-                            fontSize: 34,
-                            fontWeight: FontWeight.bold,
-                          ),
+                    Expanded(
+                      child: Text(
+                        'Connections',
+                        style: CupertinoTheme.of(context)
+                            .textTheme
+                            .navLargeTitleTextStyle
+                            .copyWith(
+                              fontSize: 34,
+                              fontWeight: FontWeight.bold,
+                            ),
+                      ),
                     ),
-                    AdaptiveFloatingActionButton(
-                      mini: true,
-                      backgroundColor:
-                          Colors.white, // Pure white like back button
-                      foregroundColor: Color(0xFF007AFF), // System blue icon
-                      onPressed: () {
-                        context.pushNamed(AddConnectionsWidget.routeName);
-                      },
-                      child: Icon(
-                        CupertinoIcons.add,
-                        size: 20,
+                    Material(
+                      color: Colors.transparent,
+                      child: InkWell(
+                        onTap: () {
+                          context.pushNamed(AddConnectionsWidget.routeName);
+                        },
+                        borderRadius: BorderRadius.circular(12),
+                        child: Container(
+                          padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(
+                              color: Color(0xFFE5E7EB),
+                              width: 1,
+                            ),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withOpacity(0.05),
+                                blurRadius: 4,
+                                offset: Offset(0, 2),
+                              ),
+                            ],
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(
+                                CupertinoIcons.add,
+                                color: Color(0xFF007AFF),
+                                size: 18,
+                              ),
+                              SizedBox(width: 8),
+                              Text(
+                                'Add New',
+                                style: TextStyle(
+                                  fontFamily: 'SF Pro Text',
+                                  color: Color(0xFF007AFF),
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w600,
+                                  decoration: TextDecoration.none,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
                       ),
                     ),
                   ],
@@ -107,158 +143,63 @@ class _ConnectionsWidgetState extends State<ConnectionsWidget> {
               ),
               SizedBox(height: 20),
 
-              // Filter buttons
+              // Filter Segmented Control
               if (currentUserReference != null)
                 StreamBuilder<UsersRecord>(
                   stream: UsersRecord.getDocument(currentUserReference!),
                   builder: (context, userSnapshot) {
-                    if (!userSnapshot.hasData) {
-                      return Container(
-                        padding: const EdgeInsets.only(
-                            left: 0, right: 16.0, top: 8.0, bottom: 8.0),
-                        child: SingleChildScrollView(
-                          scrollDirection: Axis.horizontal,
-                          child: Padding(
-                            padding: const EdgeInsets.only(left: 0),
-                            child: Row(
-                              children: [
-                                _ConnectionFilterButton(
-                                  label: 'My Connections',
-                                  isSelected: _selectedTabIndex == 0,
-                                  badgeCount: 0,
-                                  onTap: () {
-                                    setState(() {
-                                      _selectedTabIndex = 0;
-                                    });
-                                  },
-                                ),
-                                const SizedBox(width: 8.0),
-                                _ConnectionFilterButton(
-                                  label: 'Requests',
-                                  isSelected: _selectedTabIndex == 1,
-                                  badgeCount: 0,
-                                  onTap: () {
-                                    setState(() {
-                                      _selectedTabIndex = 1;
-                                    });
-                                  },
-                                ),
-                                const SizedBox(width: 8.0),
-                                _ConnectionFilterButton(
-                                  label: 'Sent',
-                                  isSelected: _selectedTabIndex == 2,
-                                  badgeCount: 0,
-                                  onTap: () {
-                                    setState(() {
-                                      _selectedTabIndex = 2;
-                                    });
-                                  },
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
-                      );
-                    }
+                    final connectionsCount =
+                        userSnapshot.hasData ? userSnapshot.data!.friends.length : 0;
+                    final incomingRequestsCount = userSnapshot.hasData
+                        ? userSnapshot.data!.friendRequests.length
+                        : 0;
 
-                    final currentUser = userSnapshot.data!;
-                    final incomingRequestsCount =
-                        currentUser.friendRequests.length;
-                    final connectionsCount = currentUser.friends.length;
-
-                    return Container(
-                      padding: const EdgeInsets.only(
-                          left: 0, right: 16.0, top: 8.0, bottom: 8.0),
-                      child: SingleChildScrollView(
-                        scrollDirection: Axis.horizontal,
-                        child: Padding(
-                          padding: const EdgeInsets.only(left: 0),
-                          child: Row(
-                            children: [
-                              _ConnectionFilterButton(
-                                label: 'My Connections',
-                                isSelected: _selectedTabIndex == 0,
-                                badgeCount:
-                                    connectionsCount > 0 ? connectionsCount : 0,
-                                onTap: () {
-                                  setState(() {
-                                    _selectedTabIndex = 0;
-                                  });
-                                },
-                              ),
-                              const SizedBox(width: 8.0),
-                              _ConnectionFilterButton(
-                                label: 'Requests',
-                                isSelected: _selectedTabIndex == 1,
-                                badgeCount: incomingRequestsCount,
-                                onTap: () {
-                                  setState(() {
-                                    _selectedTabIndex = 1;
-                                  });
-                                },
-                              ),
-                              const SizedBox(width: 8.0),
-                              _ConnectionFilterButton(
-                                label: 'Sent',
-                                isSelected: _selectedTabIndex == 2,
-                                badgeCount: 0,
-                                onTap: () {
-                                  setState(() {
-                                    _selectedTabIndex = 2;
-                                  });
-                                },
-                              ),
-                            ],
-                          ),
+                    return Padding(
+                      padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                      child: Container(
+                        width: double.infinity,
+                        child: CupertinoSlidingSegmentedControl<int>(
+                          backgroundColor: Color(0xFFF1F5F9),
+                          thumbColor: Colors.white,
+                          groupValue: _selectedTabIndex,
+                          children: {
+                            0: _buildSegment('My Connections', connectionsCount, 0),
+                            1: _buildSegment('Requests', incomingRequestsCount, 1),
+                            2: _buildSegment('Sent', 0, 2),
+                          },
+                          onValueChanged: (value) {
+                            if (value != null) {
+                              setState(() {
+                                _selectedTabIndex = value;
+                              });
+                            }
+                          },
                         ),
                       ),
                     );
                   },
                 )
               else
-                Container(
-                  padding: const EdgeInsets.only(
-                      left: 0, right: 16.0, top: 8.0, bottom: 8.0),
-                  child: SingleChildScrollView(
-                    scrollDirection: Axis.horizontal,
-                    child: Padding(
-                      padding: const EdgeInsets.only(left: 0),
-                      child: Row(
-                        children: [
-                          _ConnectionFilterButton(
-                            label: 'My Connections',
-                            isSelected: _selectedTabIndex == 0,
-                            badgeCount: 0,
-                            onTap: () {
-                              setState(() {
-                                _selectedTabIndex = 0;
-                              });
-                            },
-                          ),
-                          const SizedBox(width: 8.0),
-                          _ConnectionFilterButton(
-                            label: 'Requests',
-                            isSelected: _selectedTabIndex == 1,
-                            badgeCount: 0,
-                            onTap: () {
-                              setState(() {
-                                _selectedTabIndex = 1;
-                              });
-                            },
-                          ),
-                          const SizedBox(width: 8.0),
-                          _ConnectionFilterButton(
-                            label: 'Sent',
-                            isSelected: _selectedTabIndex == 2,
-                            badgeCount: 0,
-                            onTap: () {
-                              setState(() {
-                                _selectedTabIndex = 2;
-                              });
-                            },
-                          ),
-                        ],
-                      ),
+                Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  child: Container(
+                    width: double.infinity,
+                    child: CupertinoSlidingSegmentedControl<int>(
+                      backgroundColor: Color(0xFFF1F5F9),
+                      thumbColor: Colors.white,
+                      groupValue: _selectedTabIndex,
+                      children: {
+                        0: _buildSegment('My Connections', 0, 0),
+                        1: _buildSegment('Requests', 0, 1),
+                        2: _buildSegment('Sent', 0, 2),
+                      },
+                      onValueChanged: (value) {
+                        if (value != null) {
+                          setState(() {
+                            _selectedTabIndex = value;
+                          });
+                        }
+                      },
                     ),
                   ),
                 ),
@@ -1535,6 +1476,55 @@ class _ConnectionsWidgetState extends State<ConnectionsWidget> {
     } finally {
       _stopOperation(userId);
     }
+  }
+
+  Widget _buildSegment(String label, int count, int index) {
+    return Container(
+      padding: EdgeInsets.symmetric(vertical: 8),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Text(
+            label,
+            style: TextStyle(
+              fontFamily: 'SF Pro Text',
+              fontSize: 15,
+              fontWeight: _selectedTabIndex == index ? FontWeight.w600 : FontWeight.w500,
+              color: _selectedTabIndex == index ? Color(0xFF007AFF) : Color(0xFF64748B),
+              decoration: TextDecoration.none,
+            ),
+          ),
+          if (count > 0) ...[
+            SizedBox(width: 6),
+            Container(
+              padding: EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+              decoration: BoxDecoration(
+                color: _selectedTabIndex == index ? Color(0xFF007AFF) : Color(0xFFE2E8F0),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              constraints: BoxConstraints(
+                minWidth: 18,
+                minHeight: 18,
+              ),
+              child: Center(
+                child: Text(
+                  count > 99 ? '99+' : count.toString(),
+                  style: TextStyle(
+                    fontFamily: 'SF Pro Text',
+                    fontSize: 11,
+                    fontWeight: FontWeight.bold,
+                    color: _selectedTabIndex == index ? Colors.white : Color(0xFF64748B),
+                    decoration: TextDecoration.none,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
   }
 
   void _showSuccessMessage(String message) {

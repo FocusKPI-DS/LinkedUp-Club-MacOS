@@ -7,7 +7,7 @@ echo ""
 
 # Build Flutter web
 echo "📦 Building Flutter web..."
-flutter build web --release --web-renderer canvaskit
+flutter build web --release
 
 echo ""
 echo "🔥 Deploying to Firebase..."

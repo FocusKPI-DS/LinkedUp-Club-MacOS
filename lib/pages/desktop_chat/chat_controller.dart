@@ -159,12 +159,6 @@ class ChatController extends GetxController {
     // Then check Firestore state
     if (currentUserReference == null) return false;
 
-    // Special handling for service chats - they should show as unread if they have any messages
-    // and the user hasn't explicitly marked them as read
-    if (chat.isServiceChat == true) {
-      return chat.lastMessage.isNotEmpty;
-    }
-
     bool hasUnread = !chat.lastMessageSeen.contains(currentUserReference) &&
         chat.lastMessage.isNotEmpty &&
         chat.lastMessageSent != currentUserReference;
@@ -185,14 +179,6 @@ class ChatController extends GetxController {
       return Stream.value(0);
     }
 
-    // Special handling for service chats - count all messages as unread
-    if (chat.isServiceChat == true) {
-      // For service chats, count all messages in the chat
-      return chat.reference
-          .collection('messages')
-          .snapshots()
-          .map((snapshot) => snapshot.docs.length);
-    }
 
     // If user has seen the last message, no unread messages
     if (chat.lastMessageSeen.contains(currentUserReference)) {
@@ -427,11 +413,11 @@ class ChatController extends GetxController {
 
   // Get filtered chats based on search and tab
   List<ChatsRecord> get filteredChats {
-    List<ChatsRecord> filteredChats = List.from(chats);
+    List<ChatsRecord> filteredChatsList = List.from(chats);
 
     // Hide chats with no messages (temporary chats only appear when selected)
     // But always show service chats regardless of message count
-    filteredChats = filteredChats.where((chat) {
+    filteredChatsList = filteredChatsList.where((chat) {
       if (chat.isServiceChat == true) {
         return true; // Always show service chats
       }
@@ -441,59 +427,60 @@ class ChatController extends GetxController {
       return true;
     }).toList();
 
-    // Filter by search query
+    // 1. Filter by chat filter (All, Unread, DM, Groups, Service)
+    if (chatFilter.value == 'Unread') {
+      filteredChatsList = filteredChatsList.where((chat) => hasUnreadMessages(chat)).toList();
+    } else if (chatFilter.value == 'DM') {
+      filteredChatsList = filteredChatsList.where((chat) => !chat.isGroup).toList();
+    } else if (chatFilter.value == 'Groups') {
+      filteredChatsList = filteredChatsList.where((chat) => chat.isGroup).toList();
+    } else if (chatFilter.value == 'Service') {
+      filteredChatsList = filteredChatsList.where((chat) => chat.isServiceChat == true).toList();
+    } else {
+      // Fallback to selected tab if filter is 'All' or unknown
+      if (selectedTabIndex.value == 1) {
+        // Direct messages only
+        filteredChatsList = filteredChatsList.where((chat) => !chat.isGroup).toList();
+      } else if (selectedTabIndex.value == 2) {
+        // Groups only
+        filteredChatsList = filteredChatsList.where((chat) => chat.isGroup).toList();
+      }
+      // If selectedTabIndex is 0 (All), we show everything
+    }
+
+    // 2. Filter by search query
     if (searchQuery.value.isNotEmpty) {
       final query = searchQuery.value.toLowerCase();
-      filteredChats = filteredChats.where((chat) {
-        if (chat.isGroup) {
-          return chat.title.toLowerCase().contains(query);
-        } else {
-          // For direct chats, we'll filter in the UI based on user data
+      filteredChatsList = filteredChatsList.where((chat) {
+        // Check chat title (for groups or if title is set)
+        if (chat.title.toLowerCase().contains(query)) {
           return true;
         }
+        
+        // Check last message
+        if (chat.lastMessage.toLowerCase().contains(query)) {
+          return true;
+        }
+
+        // Check description
+        if (chat.description.toLowerCase().contains(query)) {
+          return true;
+        }
+
+        // For direct chats, check search_names which contains member names
+        if (chat.searchNames.isNotEmpty) {
+          return chat.searchNames.any((name) => name.toLowerCase().contains(query));
+        }
+        
+        return false; 
       }).toList();
     }
 
-    // Filter by chat filter (All, Unread, DM, Groups) - takes precedence over tab
-    if (chatFilter.value == 'Unread') {
-      // Show only chats with unread messages
-      filteredChats = filteredChats.where((chat) => hasUnreadMessages(chat)).toList();
-    } else if (chatFilter.value == 'DM') {
-      // Direct messages only
-      filteredChats = filteredChats.where((chat) => !chat.isGroup).toList();
-    } else if (chatFilter.value == 'Groups') {
-      // Groups only
-      filteredChats = filteredChats.where((chat) => chat.isGroup).toList();
-      // Note: Service chats are not groups, so they won't appear in Groups filter
-    } else if (chatFilter.value == 'Service') {
-      // Service messages only
-      filteredChats = filteredChats.where((chat) => chat.isServiceChat == true).toList();
-    } else if (chatFilter.value == 'All') {
-      // All - show direct messages and groups (service chats only show in Service filter)
-      filteredChats = filteredChats.where((chat) => !chat.isServiceChat).toList();
-    } else {
-      // Fallback to selected tab (for backward compatibility)
-      if (selectedTabIndex.value == 0) {
-        // All - show both direct messages and groups (no filtering)
-        // filteredChats remains unchanged
-      } else if (selectedTabIndex.value == 1) {
-        // Direct messages only
-        filteredChats = filteredChats.where((chat) => !chat.isGroup).toList();
-      } else if (selectedTabIndex.value == 2) {
-        // Groups only
-        filteredChats = filteredChats.where((chat) => chat.isGroup).toList();
-      }
-    }
-
-    // Sort chats: Pinned chats at the top, then service chats, then by last message time
-    filteredChats.sort((a, b) {
+    // 3. Sort chats: Pinned chats at the top, then by last message time (like WhatsApp)
+    filteredChatsList.sort((a, b) {
       // First, sort by pinned status (pinned chats come first)
       if (a.isPin != b.isPin) {
         return a.isPin ? -1 : 1;
-      }
-      // Then, service chats come before regular chats
-      if (a.isServiceChat != b.isServiceChat) {
-        return a.isServiceChat ? -1 : 1;
       }
       // Then sort by last message time (most recent first)
       if (a.lastMessageAt != null && b.lastMessageAt != null) {
@@ -506,9 +493,9 @@ class ChatController extends GetxController {
     });
 
     // Update tab title with unread count
-    _updateTabTitle(filteredChats);
+    _updateTabTitle(filteredChatsList);
 
-    return filteredChats;
+    return filteredChatsList;
   }
 
   // Refresh chats

@@ -15,9 +15,11 @@ class GroupActionTasksWidget extends StatefulWidget {
   const GroupActionTasksWidget({
     super.key,
     required this.chatDoc,
+    this.onClose,
   });
 
   final ChatsRecord? chatDoc;
+  final VoidCallback? onClose;
 
   static String routeName = 'GroupActionTasks';
   static String routePath = '/group-action-tasks';
@@ -84,7 +86,20 @@ class _GroupActionTasksWidgetState extends State<GroupActionTasksWidget> {
                   backgroundColor:
                       FlutterFlowTheme.of(context).secondaryBackground,
                   automaticallyImplyLeading: false,
-                  leading: const SizedBox.shrink(),
+                  leading: IconButton(
+                    icon: Icon(
+                      widget.onClose != null ? Icons.close : Icons.arrow_back,
+                      color: FlutterFlowTheme.of(context).primaryText,
+                      size: 24,
+                    ),
+                    onPressed: () {
+                      if (widget.onClose != null) {
+                        widget.onClose!();
+                      } else {
+                        Navigator.pop(context);
+                      }
+                    },
+                  ),
                   title: Text(
                     'Action Tasks',
                     style: FlutterFlowTheme.of(context).headlineMedium.override(

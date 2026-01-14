@@ -50,11 +50,11 @@ async function performWebSearch(query) {
   try {
     console.log(`🔍 Searching for: "${query}"`);
     const fetch = await import("node-fetch");
-    
+
     // Use Tavily Search API (better results than DuckDuckGo)
     // Free tier: 1000 requests/month
     const tavilyKey = functions.config().tavily?.key;
-    
+
     if (tavilyKey) {
       // Use Tavily API
       const response = await fetch.default("https://api.tavily.com/search", {
@@ -69,10 +69,10 @@ async function performWebSearch(query) {
           max_results: 3
         })
       });
-      
+
       const data = await response.json();
       console.log("🔍 Tavily search response:", JSON.stringify(data).substring(0, 300));
-      
+
       const results = [];
       if (data.results && data.results.length > 0) {
         data.results.forEach(result => {
@@ -83,7 +83,7 @@ async function performWebSearch(query) {
           });
         });
       }
-      
+
       console.log(`🔍 Found ${results.length} results using Tavily`);
       return results;
     } else {
@@ -91,7 +91,7 @@ async function performWebSearch(query) {
       console.log("⚠️ No Tavily key found, using DuckDuckGo fallback");
       const response = await fetch.default(`https://api.duckduckgo.com/?q=${encodeURIComponent(query)}&format=json&no_redirect=1`);
       const data = await response.json();
-      
+
       // Extract relevant URLs and titles
       const results = [];
       if (data.AbstractText) {
@@ -101,7 +101,7 @@ async function performWebSearch(query) {
           snippet: data.AbstractText
         });
       }
-      
+
       // Add related topics if available
       if (data.RelatedTopics && data.RelatedTopics.length > 0) {
         data.RelatedTopics.slice(0, 2).forEach(topic => {
@@ -114,7 +114,7 @@ async function performWebSearch(query) {
           }
         });
       }
-      
+
       console.log(`🔍 Found ${results.length} results using DuckDuckGo fallback`);
       return results;
     }
@@ -130,7 +130,7 @@ async function performWebSearch(query) {
 async function extractAndSaveActionItems({ summary, chatId, chatData, userId, requestingUserRef }) {
   try {
     console.log("🤖 TaskManagerAI: Starting action item extraction...");
-    
+
     const openaiApiKey = functions.config().openai?.key;
     if (!openaiApiKey) {
       console.error("OpenAI API key not configured");
@@ -160,16 +160,16 @@ async function extractAndSaveActionItems({ summary, chatId, chatData, userId, re
         }
         return null;
       });
-      
+
       const names = await Promise.all(memberPromises);
       memberNames.push(...names.filter(n => n !== null));
     }
 
     // Get actual group name for prompt
     const actualGroupName = chatData.title || chatData.group_name || chatData.name || "Group Chat";
-    
+
     // Build member names list for prompt
-    const memberNamesText = memberNames.length > 0 
+    const memberNamesText = memberNames.length > 0
       ? `\n\nEXACT MEMBER NAMES (USE THESE EXACT NAMES ONLY - DO NOT GUESS OR USE PARTIAL NAMES):\n${memberNames.map((n, i) => `${i + 1}. ${n}`).join('\n')}\n\nCRITICAL: When assigning tasks, use ONLY the exact names from this list. If a name appears in the summary as "Mitansh" but the exact name is "Mitansh Patel", you MUST use "Mitansh Patel". Do NOT use partial names or guess names.`
       : '';
 
@@ -254,7 +254,7 @@ QUALITY + SAFETY CHECKS BEFORE RETURNING:
       console.log("Response was:", responseContent);
       return; // Exit if JSON parsing fails
     }
-    
+
     const actionItems = parsed.actionItems || [];
 
     if (actionItems.length === 0) {
@@ -269,7 +269,7 @@ QUALITY + SAFETY CHECKS BEFORE RETURNING:
     // Always use the actual chat/group name - never use generic "Group" or AI guesses
     const groupName = chatData.title || chatData.group_name || chatData.name || "Group Chat";
     const workspaceRef = chatData.workspace_ref;
-    
+
     // Log the actual group name being used
     console.log(`📋 Using actual group name: "${groupName}" for chat: ${chatId}`);
 
@@ -288,7 +288,7 @@ QUALITY + SAFETY CHECKS BEFORE RETURNING:
         .replace(/[\p{P}\p{S}]/gu, ' ') // Remove punctuation
         .replace(/\s+/g, ' ') // Normalize whitespace
         .trim();
-      
+
       // Sort words to catch word order variations (e.g., "gmail calendar integration" vs "integration gmail calendar")
       const words = normalized.split(' ').filter(w => w.length > 2); // Filter out very short words
       return words.sort().join(' ');
@@ -310,7 +310,7 @@ QUALITY + SAFETY CHECKS BEFORE RETURNING:
 
     // Create batch to save all non-duplicate action items
     const batch = firestore.batch();
-    
+
     // Track keys within this batch to avoid duplicates in the same run
     const batchTitleKeys = new Set();
     let createdCount = 0;
@@ -321,32 +321,32 @@ QUALITY + SAFETY CHECKS BEFORE RETURNING:
         console.log(`⚠️ Skipping task with empty normalized title: "${item.title}"`);
         continue; // skip empty titles
       }
-      
+
       // Check against existing tasks AND tasks in this batch
       if (existingTitleKeys.has(incomingKey) || batchTitleKeys.has(incomingKey)) {
         console.log(`⚠️ Skipping duplicate task: "${item.title}" (normalized: "${incomingKey}")`);
         continue; // Duplicate: skip creating
       }
-      
+
       // Track this key to dedupe within the same run as well
       existingTitleKeys.add(incomingKey);
       batchTitleKeys.add(incomingKey);
       createdCount++;
-      
+
       // Create action item document
       const actionItemRef = firestore.collection("action_items").doc();
-      
+
       // Map involvedPeople names to exact member names
       const exactInvolvedPeople = [];
       if (item.involvedPeople && item.involvedPeople.length > 0 && memberNames.length > 0) {
         for (const nameFromAI of item.involvedPeople) {
           // Find exact match or closest match from member names
-          const exactMatch = memberNames.find(memberName => 
+          const exactMatch = memberNames.find(memberName =>
             memberName.toLowerCase() === nameFromAI.toLowerCase() ||
             memberName.toLowerCase().includes(nameFromAI.toLowerCase()) ||
             nameFromAI.toLowerCase().includes(memberName.toLowerCase().split(' ')[0])
           );
-          
+
           if (exactMatch) {
             exactInvolvedPeople.push(exactMatch);
           } else {
@@ -360,7 +360,7 @@ QUALITY + SAFETY CHECKS BEFORE RETURNING:
       // Always use the actual group name - never use AI's groupName guess
       // The AI might return "Group" or generic names, but we have the actual chat name
       const actualGroupName = groupName; // Use the real chat name, not AI's guess
-      
+
       const actionItemData = {
         title: item.title || "",
         group_name: actualGroupName, // Always use actual chat name, ignore AI's groupName
@@ -494,11 +494,11 @@ exports.sendReactionNotificationTrigger = functions
     try {
       const beforeData = change.before.data();
       const afterData = change.after.data();
-      
+
       // Check if reactions_by_user field changed
       const beforeReactions = beforeData.reactions_by_user || {};
       const afterReactions = afterData.reactions_by_user || {};
-      
+
       // Find new reactions added
       const newReactions = {};
       for (const [userId, emojis] of Object.entries(afterReactions)) {
@@ -508,29 +508,29 @@ exports.sendReactionNotificationTrigger = functions
           newReactions[userId] = newEmojis;
         }
       }
-      
+
       // If no new reactions, skip
       if (Object.keys(newReactions).length === 0) {
         return;
       }
-      
+
       // Get message author info
       const messageAuthorRef = afterData.sender_ref;
       if (!messageAuthorRef) {
         console.log('No sender_ref found for message');
         return;
       }
-      
+
       // Get chat info for workspace context
       const chatDoc = await firestore.doc(`chats/${context.params.chatId}`).get();
       if (!chatDoc.exists) {
         console.log('Chat document not found');
         return;
       }
-      
+
       const chatData = chatDoc.data();
       const workspaceRef = chatData.workspace_ref;
-      
+
       // Get workspace name
       let workspaceName = "Unknown Workspace";
       if (workspaceRef) {
@@ -543,14 +543,14 @@ exports.sendReactionNotificationTrigger = functions
           console.log('Error getting workspace name:', e);
         }
       }
-      
+
       // Send notification for each new reaction
       for (const [reactingUserId, emojis] of Object.entries(newReactions)) {
         // Don't notify the person who reacted
         if (reactingUserId === messageAuthorRef.id) {
           continue;
         }
-        
+
         // Get reacting user's name
         let reactingUserName = "Someone";
         try {
@@ -561,7 +561,7 @@ exports.sendReactionNotificationTrigger = functions
         } catch (e) {
           console.log('Error getting reacting user name:', e);
         }
-        
+
         // Create notification for each emoji
         for (const emoji of emojis) {
           const notificationData = {
@@ -578,12 +578,12 @@ exports.sendReactionNotificationTrigger = functions
             sender: firestore.doc(`users/${reactingUserId}`),
             timestamp: admin.firestore.FieldValue.serverTimestamp(),
           };
-          
+
           // Add to notifications collection to trigger the existing notification system
           await firestore.collection(kUserPushNotificationsCollection).add(notificationData);
         }
       }
-      
+
     } catch (e) {
       console.log(`Error in reaction notification trigger: ${e}`);
     }
@@ -687,7 +687,7 @@ exports.sendLonaServiceMessageTrigger = functions
   .onCreate(async (snapshot, context) => {
     try {
       const messageData = snapshot.data();
-      
+
       // Verify sender is lona-service
       const senderRef = messageData.sender_ref;
       if (!senderRef) {
@@ -705,7 +705,7 @@ exports.sendLonaServiceMessageTrigger = functions
 
       // Get message content
       const messageContent = messageData.content || messageData.text || 'New message from Lona Service';
-      
+
       // Determine message preview text
       let messagePreview = messageContent;
       if (messageData.images && messageData.images.length > 0) {
@@ -721,7 +721,7 @@ exports.sendLonaServiceMessageTrigger = functions
       // Query all users from Firestore
       const usersSnapshot = await firestore.collection('users').get();
       const userRefs = usersSnapshot.docs.map(doc => doc.ref);
-      
+
       if (userRefs.length === 0) {
         console.log('No users found to notify');
         return;
@@ -730,15 +730,17 @@ exports.sendLonaServiceMessageTrigger = functions
       console.log(`📤 Broadcasting to ${userRefs.length} users`);
 
       // Update the service chat document with last message info
+      // Use the message's created_at timestamp if available, otherwise use server timestamp
       const chatRef = firestore.doc('chats/lona-service-chat');
+      const messageTimestamp = messageData.created_at || admin.firestore.FieldValue.serverTimestamp();
       await chatRef.update({
         last_message: messagePreview,
-        last_message_at: admin.firestore.FieldValue.serverTimestamp(),
+        last_message_at: messageTimestamp,
         last_message_sent: senderRef,
         last_message_type: messageData.message_type || 'text',
         last_message_seen: [senderRef], // Only lona-service has seen it
       });
-      console.log(`✅ Updated chat document with last message info`);
+      console.log(`✅ Updated chat document with last message info (timestamp: ${messageData.created_at ? 'from message' : 'server'})`);
 
       // Create push notification document
       const notificationData = {
@@ -757,7 +759,7 @@ exports.sendLonaServiceMessageTrigger = functions
 
       await firestore.collection(kUserPushNotificationsCollection).add(notificationData);
       console.log(`✅ Lona Service message broadcast notification created for ${userRefs.length} users`);
-      
+
     } catch (e) {
       console.log(`❌ Error in Lona Service message trigger: ${e}`);
     }
@@ -773,36 +775,36 @@ exports.sendConnectionRequestNotificationTrigger = functions
   .onUpdate(async (change, context) => {
     try {
       console.log(`🔔 Connection request trigger fired for user: ${context.params.userId}`);
-      
+
       const beforeData = change.before.data();
       const afterData = change.after.data();
-      
+
       // Check if friend_requests field exists and changed
       const beforeFriendRequests = beforeData.friend_requests || [];
       const afterFriendRequests = afterData.friend_requests || [];
-      
+
       // Better comparison for DocumentReference arrays
       const beforeCount = Array.isArray(beforeFriendRequests) ? beforeFriendRequests.length : 0;
       const afterCount = Array.isArray(afterFriendRequests) ? afterFriendRequests.length : 0;
-      
+
       console.log(`friend_requests - Before count: ${beforeCount}, After count: ${afterCount}`);
-      
+
       // Early return if friend_requests didn't change or is empty
       if (beforeCount === afterCount && afterCount === 0) {
         console.log(`friend_requests is empty and didn't change, skipping notification`);
         return;
       }
-      
+
       // If count didn't increase, no new requests
       if (afterCount <= beforeCount) {
         console.log(`friend_requests count didn't increase (${beforeCount} -> ${afterCount}), skipping notification`);
         return;
       }
-      
+
       // friend_requests arrays already retrieved above
       console.log(`Before friend_requests type: ${Array.isArray(beforeFriendRequests) ? 'array' : typeof beforeFriendRequests}`);
       console.log(`After friend_requests type: ${Array.isArray(afterFriendRequests) ? 'array' : typeof afterFriendRequests}`);
-      
+
       // Debug: Log the actual data structure
       if (beforeFriendRequests.length > 0) {
         console.log(`Before first item type:`, typeof beforeFriendRequests[0]);
@@ -812,7 +814,7 @@ exports.sendConnectionRequestNotificationTrigger = functions
         console.log(`After first item type:`, typeof afterFriendRequests[0]);
         console.log(`After first item:`, afterFriendRequests[0]);
       }
-      
+
       // Convert to IDs for comparison (DocumentReference objects have .id property)
       const beforeIds = beforeFriendRequests.map(ref => {
         if (ref && typeof ref === 'object' && ref.id) {
@@ -824,7 +826,7 @@ exports.sendConnectionRequestNotificationTrigger = functions
         }
         return null;
       }).filter(Boolean);
-      
+
       const afterIds = afterFriendRequests.map(ref => {
         if (ref && typeof ref === 'object' && ref.id) {
           return ref.id;
@@ -835,17 +837,17 @@ exports.sendConnectionRequestNotificationTrigger = functions
         }
         return null;
       }).filter(Boolean);
-      
+
       console.log(`Before IDs:`, beforeIds);
       console.log(`After IDs:`, afterIds);
-      
+
       // Find new connection requests (users added to friend_requests array)
       const newRequestIds = afterIds.filter(
         (afterId) => !beforeIds.includes(afterId)
       );
-      
+
       console.log(`New request IDs:`, newRequestIds);
-      
+
       // Convert back to DocumentReference objects from afterFriendRequests
       const newRequests = afterFriendRequests.filter((ref) => {
         let refId = null;
@@ -858,31 +860,31 @@ exports.sendConnectionRequestNotificationTrigger = functions
         }
         return refId && newRequestIds.includes(refId);
       });
-      
+
       // If no new requests, skip
       if (newRequests.length === 0) {
         console.log(`No new connection requests detected for user ${context.params.userId}`);
         return;
       }
-      
+
       console.log(`Found ${newRequests.length} new connection request(s) for user ${context.params.userId}`);
-      
+
       // Get the recipient user (the one who received the request)
       const recipientUserId = context.params.userId;
       const recipientUserRef = firestore.doc(`users/${recipientUserId}`);
-      
+
       // Check if recipient has connection request notifications enabled
       const recipientUserDoc = await recipientUserRef.get();
       if (!recipientUserDoc.exists) {
         console.log('Recipient user document not found');
         return;
       }
-      
+
       const recipientData = recipientUserDoc.data();
       // Connection request notifications are always enabled (important notifications)
       // We don't check connection_requests_enabled setting - connection requests are always notified
       console.log(`✅ Processing connection request notification for user ${recipientUserId}`);
-      
+
       // Process each new connection request
       for (const senderRef of newRequests) {
         try {
@@ -898,7 +900,7 @@ exports.sendConnectionRequestNotificationTrigger = functions
             console.log('Invalid senderRef format:', senderRef);
             continue;
           }
-          
+
           // Get sender's display name
           let senderName = "Someone";
           try {
@@ -914,7 +916,7 @@ exports.sendConnectionRequestNotificationTrigger = functions
           } catch (e) {
             console.log('Error getting sender name:', e);
           }
-          
+
           // Create notification data
           const notificationData = {
             notification_title: senderName,
@@ -930,10 +932,10 @@ exports.sendConnectionRequestNotificationTrigger = functions
             sender: senderRefPath ? firestore.doc(senderRefPath) : null,
             timestamp: admin.firestore.FieldValue.serverTimestamp(),
           };
-          
+
           // Add to notifications collection to trigger the existing notification system
           await firestore.collection(kUserPushNotificationsCollection).add(notificationData);
-          
+
           console.log(`✅ Connection request notification sent: ${senderName} -> ${recipientUserId}`);
         } catch (e) {
           console.log(`❌ Error sending connection request notification:`, e);
@@ -942,6 +944,121 @@ exports.sendConnectionRequestNotificationTrigger = functions
       }
     } catch (e) {
       console.log(`Error in connection request notification trigger: ${e}`);
+    }
+  });
+
+// Trigger for connection accepted notifications
+exports.sendConnectionAcceptedNotificationTrigger = functions
+  .runWith({
+    timeoutSeconds: 60,
+    memory: "256MB",
+  })
+  .firestore.document('users/{userId}')
+  .onUpdate(async (change, context) => {
+    try {
+      const beforeData = change.before.data();
+      const afterData = change.after.data();
+
+      // Check if friends field exists and changed
+      const beforeFriends = beforeData.friends || [];
+      const afterFriends = afterData.friends || [];
+
+      // Better comparison for DocumentReference arrays
+      const beforeCount = Array.isArray(beforeFriends) ? beforeFriends.length : 0;
+      const afterCount = Array.isArray(afterFriends) ? afterFriends.length : 0;
+
+      // Early return if friends count didn't increase
+      if (afterCount <= beforeCount) {
+        return;
+      }
+
+      console.log(`🔔 Connection accepted trigger fired for user: ${context.params.userId}`);
+
+      // Convert to IDs for comparison
+      const beforeIds = beforeFriends.map(ref => {
+        if (ref && typeof ref === 'object' && ref.id) return ref.id;
+        else if (typeof ref === 'string') return ref.split('/').pop();
+        return null;
+      }).filter(Boolean);
+
+      const afterIds = afterFriends.map(ref => {
+        if (ref && typeof ref === 'object' && ref.id) return ref.id;
+        else if (typeof ref === 'string') return ref.split('/').pop();
+        return null;
+      }).filter(Boolean);
+
+      // Find new friends (users added to friends array)
+      const newFriendIds = afterIds.filter(id => !beforeIds.includes(id));
+
+      if (newFriendIds.length === 0) {
+        return;
+      }
+
+      console.log(`Found ${newFriendIds.length} new connection(s) for user ${context.params.userId}`);
+
+      // Get the accepter user (the one who accepted the request)
+      const accepterUserId = context.params.userId;
+      const accepterUserRef = firestore.doc(`users/${accepterUserId}`);
+
+      // Get accepter's name for the notification
+      let accepterName = "Someone";
+      if (afterData.display_name || afterData.name) {
+        accepterName = afterData.display_name || afterData.name;
+      }
+
+      // Check for previous incoming requests to confirm this was an acceptance
+      const beforeFriendRequests = beforeData.friend_requests || [];
+      const beforeRequestIds = beforeFriendRequests.map(ref => {
+        if (ref && typeof ref === 'object' && ref.id) return ref.id;
+        else if (typeof ref === 'string') return ref.split('/').pop();
+        return null;
+      }).filter(Boolean);
+
+      // Process each new friend
+      for (const friendId of newFriendIds) {
+        // We only want to notify if this was a result of accepting a request
+        // So check if this friend was previously in the friend_requests list
+        // OR check if we have to be less strict due to race conditions (batch updates remove request same time)
+        // Since we are looking at 'before' data for requests, it should be there.
+
+        const wasInRequests = beforeRequestIds.includes(friendId);
+
+        if (!wasInRequests) {
+          console.log(`User ${friendId} was not in friend_requests, skipping (might be direct add or sync)`);
+          continue;
+        }
+
+        try {
+          // The recipient of the notification is the person who sent the request (newFriend)
+          const validRecipientRef = firestore.doc(`users/${friendId}`);
+
+          // Create notification data
+          const notificationData = {
+            notification_title: accepterName,
+            notification_text: "accepted your connection request",
+            notification_image_url: afterData.photo_url || "",
+            notification_sound: "default",
+            user_refs: validRecipientRef.path,
+            initial_page_name: "Connections", // Or Profile
+            parameter_data: JSON.stringify({
+              userId: accepterUserId,
+              userRef: accepterUserRef.path,
+            }),
+            sender: accepterUserRef,
+            timestamp: admin.firestore.FieldValue.serverTimestamp(),
+          };
+
+          // Add to notifications collection
+          await firestore.collection(kUserPushNotificationsCollection).add(notificationData);
+
+          console.log(`✅ Connection accepted notification sent: ${accepterName} -> ${friendId}`);
+        } catch (e) {
+          console.log(`❌ Error sending connection accepted notification to ${friendId}:`, e);
+        }
+      }
+
+    } catch (e) {
+      console.log(`Error in connection accepted notification trigger: ${e}`);
     }
   });
 
@@ -954,7 +1071,7 @@ async function sendPushNotifications(snapshot) {
   const parameterData = notificationData.parameter_data || "";
   const targetAudience = notificationData.target_audience || "";
   const initialPageName = notificationData.initial_page_name || "";
-  
+
   console.log("🔍 DEBUG: Original notification data:", {
     title,
     body,
@@ -1039,6 +1156,10 @@ async function sendPushNotifications(snapshot) {
         },
       },
       apns: {
+        headers: {
+          "apns-priority": "10",
+          "apns-push-type": "alert",
+        },
         payload: {
           aps: {
             alert: {
@@ -1052,6 +1173,7 @@ async function sendPushNotifications(snapshot) {
             },
             badge: 1,
             'mutable-content': 1,
+            'content-available': 1,
           },
         },
       },
@@ -1630,7 +1752,7 @@ exports.processAIMention = functions
 
     try {
       const { chatRef, messageContent, senderName } = data;
-      
+
       if (!chatRef || !messageContent) {
         throw new functions.https.HttpsError(
           "invalid-argument",
@@ -1659,11 +1781,11 @@ exports.processAIMention = functions
       }
 
       const chatData = chatDoc.data();
-      
+
       // Fetch event info and messages in parallel
       const [eventInfo, messagesSnapshot] = await Promise.all([
         // Get event information if available
-        chatData.event_ref ? 
+        chatData.event_ref ?
           chatData.event_ref.get().then(eventDoc => {
             if (eventDoc.exists) {
               const eventData = eventDoc.data();
@@ -1680,7 +1802,7 @@ exports.processAIMention = functions
             }
             return null;
           }) : Promise.resolve(null),
-        
+
         // Get last 20 messages for context (increased from 10 for better context in non-event chats)
         firestore
           .doc(chatRef)
@@ -1705,7 +1827,7 @@ exports.processAIMention = functions
 
       // Prepare context for OpenAI
       let systemPrompt = "You are Linkai, an AI assistant for the LinkedUp event networking app. ";
-      
+
       if (eventInfo) {
         systemPrompt += "You help users with questions about events, schedules, speakers, and general event information. Be friendly, helpful, and concise in your responses.";
         systemPrompt += `\n\nCurrent Event Information:
@@ -1732,7 +1854,7 @@ Categories: ${eventInfo.category.join(", ")}`;
       } else {
         // Non-event group chat context
         systemPrompt += "You are participating in a general group chat. Be friendly, helpful, and engaging. You can discuss various topics, answer questions, and help facilitate conversations among group members. Be concise and natural in your responses.";
-        
+
         // Add group chat info if available
         if (chatData.group_name) {
           systemPrompt += `\n\nGroup Chat: ${chatData.group_name}`;
@@ -1815,11 +1937,11 @@ Categories: ${eventInfo.category.join(", ")}`;
 
       // Create message and update chat in parallel using batch for atomicity
       const batch = firestore.batch();
-      
+
       const messageRef = firestore.doc(chatRef).collection("messages").doc();
       batch.set(messageRef, messageData);
       batch.update(firestore.doc(chatRef), chatUpdateData);
-      
+
       await batch.commit();
 
       return {
@@ -1830,12 +1952,12 @@ Categories: ${eventInfo.category.join(", ")}`;
 
     } catch (error) {
       console.error("Error in processAIMention:", error);
-      
+
       // Return a more specific error based on the type
       if (error instanceof functions.https.HttpsError) {
         throw error;
       }
-      
+
       throw new functions.https.HttpsError(
         "internal",
         error.message || "An error occurred processing the AI mention"
@@ -1864,7 +1986,7 @@ exports.dailySummary = functions
 
     try {
       const { chatId } = data;
-      
+
       if (!chatId) {
         throw new functions.https.HttpsError(
           "invalid-argument",
@@ -1874,7 +1996,7 @@ exports.dailySummary = functions
 
       // Get chat document and verify permissions
       const chatDoc = await firestore.collection("chats").doc(chatId).get();
-      
+
       if (!chatDoc.exists) {
         throw new functions.https.HttpsError(
           "not-found",
@@ -1923,7 +2045,7 @@ exports.dailySummary = functions
       if (messagesSnapshot.empty) {
         // Create or get DM chat between SummerAI and the requesting user
         const requestingUserRef = firestore.doc(`users/${userId}`);
-        
+
         // Check if DM already exists between SummerAI and the user
         const existingDMs = await firestore
           .collection("chats")
@@ -1934,12 +2056,12 @@ exports.dailySummary = functions
         let dmChatRef = null;
         for (const dmDoc of existingDMs.docs) {
           const dmData = dmDoc.data();
-          if (dmData.members && 
-              dmData.members.length === 2 && 
-              dmData.members.some(memberRef => {
-                const memberPath = typeof memberRef === 'string' ? memberRef : memberRef.path;
-                return memberPath.includes(userId);
-              })) {
+          if (dmData.members &&
+            dmData.members.length === 2 &&
+            dmData.members.some(memberRef => {
+              const memberPath = typeof memberRef === 'string' ? memberRef : memberRef.path;
+              return memberPath.includes(userId);
+            })) {
             dmChatRef = dmDoc.ref;
             break;
           }
@@ -1997,9 +2119,9 @@ exports.dailySummary = functions
           console.error("Error sending push notification:", notificationError);
         }
 
-        return { 
+        return {
           success: true,
-          message: "No messages found in the last 24 hours" 
+          message: "No messages found in the last 24 hours"
         };
       }
 
@@ -2015,10 +2137,10 @@ exports.dailySummary = functions
         })
         .filter((msg) => {
           // Filter out AI messages (SummerAI, Linkai AI, etc.)
-          const isAIMessage = msg.senderType === "ai" || 
-                            msg.sender === "SummerAI" || 
-                            msg.sender === "Linkai AI" ||
-                            msg.sender === "LonaAI";
+          const isAIMessage = msg.senderType === "ai" ||
+            msg.sender === "SummerAI" ||
+            msg.sender === "Linkai AI" ||
+            msg.sender === "LonaAI";
           return !isAIMessage; // Only keep non-AI messages
         });
 
@@ -2026,7 +2148,7 @@ exports.dailySummary = functions
       if (recentMessages.length === 0) {
         // Create or get DM chat between SummerAI and the requesting user
         const requestingUserRef = firestore.doc(`users/${userId}`);
-        
+
         // Check if DM already exists between SummerAI and the user
         const existingDMs = await firestore
           .collection("chats")
@@ -2037,12 +2159,12 @@ exports.dailySummary = functions
         let dmChatRef = null;
         for (const dmDoc of existingDMs.docs) {
           const dmData = dmDoc.data();
-          if (dmData.members && 
-              dmData.members.length === 2 && 
-              dmData.members.some(memberRef => {
-                const memberPath = typeof memberRef === 'string' ? memberRef : memberRef.path;
-                return memberPath.includes(userId);
-              })) {
+          if (dmData.members &&
+            dmData.members.length === 2 &&
+            dmData.members.some(memberRef => {
+              const memberPath = typeof memberRef === 'string' ? memberRef : memberRef.path;
+              return memberPath.includes(userId);
+            })) {
             dmChatRef = dmDoc.ref;
             break;
           }
@@ -2100,9 +2222,9 @@ exports.dailySummary = functions
           console.error("Error sending push notification:", notificationError);
         }
 
-        return { 
+        return {
           success: true,
-          message: "No user messages found in the last 24 hours" 
+          message: "No user messages found in the last 24 hours"
         };
       }
 
@@ -2264,16 +2386,16 @@ exports.dailySummary = functions
               const query = JSON.parse(toolCall.function.arguments).query;
               console.log(`Executing web search for: ${query}`);
               const results = await performWebSearch(query);
-              
+
               // Format results
-              const formattedResults = results.map((result, idx) => 
+              const formattedResults = results.map((result, idx) =>
                 `${idx + 1}. [${result.title}](${result.url}) - ${result.snippet}`
               ).join('\n');
-              
+
               console.log(`📄 Formatted search results (${results.length} items):\n${formattedResults.substring(0, 200)}`);
-              
+
               searchResults += `\n\n**Search Results for "${query}":**\n${formattedResults}`;
-              
+
               // Add tool result to messages
               messages.push({
                 role: "tool",
@@ -2293,7 +2415,7 @@ exports.dailySummary = functions
 
       // Create or get DM chat between SummerAI and the requesting user
       const requestingUserRef = firestore.doc(`users/${userId}`);
-      
+
       // Check if DM already exists between SummerAI and the user in the same workspace
       const existingDMs = await firestore
         .collection("chats")
@@ -2305,12 +2427,12 @@ exports.dailySummary = functions
       let dmChatRef = null;
       for (const dmDoc of existingDMs.docs) {
         const dmData = dmDoc.data();
-        if (dmData.members && 
-            dmData.members.length === 2 && 
-            dmData.members.some(memberRef => {
-              const memberPath = typeof memberRef === 'string' ? memberRef : memberRef.path;
-              return memberPath.includes(userId);
-            })) {
+        if (dmData.members &&
+          dmData.members.length === 2 &&
+          dmData.members.some(memberRef => {
+            const memberPath = typeof memberRef === 'string' ? memberRef : memberRef.path;
+            return memberPath.includes(userId);
+          })) {
           dmChatRef = dmDoc.ref;
           break;
         }
@@ -2357,11 +2479,11 @@ exports.dailySummary = functions
 
       // Create message in DM and update DM chat using batch for atomicity
       const batch = firestore.batch();
-      
+
       const messageRef = dmChatRef.collection("messages").doc();
       batch.set(messageRef, messageData);
       batch.update(dmChatRef, dmChatUpdateData);
-      
+
       await batch.commit();
 
       // ==========================================
@@ -2409,12 +2531,12 @@ exports.dailySummary = functions
 
     } catch (error) {
       console.error("Error in dailySummary:", error);
-      
+
       // Return a more specific error based on the type
       if (error instanceof functions.https.HttpsError) {
         throw error;
       }
-      
+
       throw new functions.https.HttpsError(
         "internal",
         error.message || "An error occurred generating the daily summary"
@@ -2437,7 +2559,7 @@ exports.InGroupSummer = functions
   .timeZone("America/New_York") // EST timezone
   .onRun(async (context) => {
     console.log('Starting scheduled daily group summary generation...');
-    
+
     try {
       // Get OpenAI API key
       const openaiApiKey = functions.config().openai?.key;
@@ -2483,7 +2605,7 @@ exports.InGroupSummer = functions
           const yesterday = new Date();
           yesterday.setDate(yesterday.getDate() - 1);
           yesterday.setHours(0, 0, 0, 0);
-          
+
           const today = new Date();
           today.setHours(0, 0, 0, 0);
 
@@ -2513,10 +2635,10 @@ exports.InGroupSummer = functions
             })
             .filter((msg) => {
               // Filter out AI messages (SummerAI, Linkai AI, etc.)
-              const isAIMessage = msg.senderType === "ai" || 
-                                msg.sender === "SummerAI" || 
-                                msg.sender === "Linkai AI" ||
-                                msg.sender === "LonaAI";
+              const isAIMessage = msg.senderType === "ai" ||
+                msg.sender === "SummerAI" ||
+                msg.sender === "Linkai AI" ||
+                msg.sender === "LonaAI";
               return !isAIMessage; // Only keep non-AI messages
             });
 
@@ -2676,28 +2798,28 @@ exports.InGroupSummer = functions
             if (responseMessage.tool_calls && responseMessage.tool_calls.length > 0) {
               // Handle tool calls
               for (const toolCall of responseMessage.tool_calls) {
-              if (toolCall.function.name === "web_search") {
-                const query = JSON.parse(toolCall.function.arguments).query;
-                console.log(`Executing web search for: ${query}`);
-                const results = await performWebSearch(query);
-                
-                // Format results
-                const formattedResults = results.map((result, idx) => 
-                  `${idx + 1}. [${result.title}](${result.url}) - ${result.snippet}`
-                ).join('\n');
-                
-                console.log(`📄 Formatted search results (${results.length} items):\n${formattedResults.substring(0, 200)}`);
-                
-                searchResults += `\n\n**Search Results for "${query}":**\n${formattedResults}`;
-                
-                // Add tool result to messages
-                messages.push({
-                  role: "tool",
-                  tool_call_id: toolCall.id,
-                  content: formattedResults
-                });
-                searchCompleted = true; // Mark that search is done
-              }
+                if (toolCall.function.name === "web_search") {
+                  const query = JSON.parse(toolCall.function.arguments).query;
+                  console.log(`Executing web search for: ${query}`);
+                  const results = await performWebSearch(query);
+
+                  // Format results
+                  const formattedResults = results.map((result, idx) =>
+                    `${idx + 1}. [${result.title}](${result.url}) - ${result.snippet}`
+                  ).join('\n');
+
+                  console.log(`📄 Formatted search results (${results.length} items):\n${formattedResults.substring(0, 200)}`);
+
+                  searchResults += `\n\n**Search Results for "${query}":**\n${formattedResults}`;
+
+                  // Add tool result to messages
+                  messages.push({
+                    role: "tool",
+                    tool_call_id: toolCall.id,
+                    content: formattedResults
+                  });
+                  searchCompleted = true; // Mark that search is done
+                }
               }
             } else {
               // No tool calls, we have the final answer
@@ -2730,15 +2852,15 @@ exports.InGroupSummer = functions
 
           // Create message and update chat using batch for atomicity
           const batch = firestore.batch();
-          
+
           const messageRef = firestore.doc(chatRef).collection("messages").doc();
           batch.set(messageRef, messageData);
           batch.update(firestore.doc(chatRef), chatUpdateData);
-          
+
           await batch.commit();
 
           console.log(`Successfully sent scheduled daily summary to chat: ${chatRef}`);
-          
+
           // ==========================================
           // TASKMANAGERAI: Extract and save action items for each member
           // ==========================================
@@ -2758,7 +2880,7 @@ exports.InGroupSummer = functions
                   console.error(`Error creating tasks for member ${memberRef.path}:`, memberError);
                 }
               });
-              
+
               // Create tasks for all members in parallel
               // Wait for completion to ensure tasks are created successfully
               try {
@@ -2773,7 +2895,7 @@ exports.InGroupSummer = functions
             console.error("Error extracting action items:", taskError);
             // Don't fail the whole operation if task extraction fails
           }
-          
+
         } catch (error) {
           console.error(`Error processing chat ${chatDoc.ref.path}:`, error);
         }
@@ -2790,7 +2912,7 @@ exports.InGroupSummer = functions
       }
 
       console.log('Completed scheduled daily group summary generation');
-      
+
     } catch (error) {
       console.error("Error in InGroupSummer:", error);
     }

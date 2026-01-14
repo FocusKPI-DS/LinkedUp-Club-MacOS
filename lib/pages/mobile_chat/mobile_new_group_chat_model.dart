@@ -40,3 +40,4 @@ class MobileNewGroupChatModel extends FlutterFlowModel {
 
 
 
+

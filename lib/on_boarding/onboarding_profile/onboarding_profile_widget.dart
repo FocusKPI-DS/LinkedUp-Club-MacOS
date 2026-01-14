@@ -3669,12 +3669,11 @@ class _OnboardingProfileWidgetState extends State<OnboardingProfileWidget>
                 ),
               ),
               // Connect button
-              Expanded(
-                child: Padding(
-                  padding: const EdgeInsetsDirectional.fromSTEB(12.0, 0.0, 12.0, 16.0),
-                  child: SizedBox(
-                    width: double.infinity,
-                    child: isConnected
+              Padding(
+                padding: const EdgeInsetsDirectional.fromSTEB(12.0, 0.0, 12.0, 16.0),
+                child: SizedBox(
+                  width: double.infinity,
+                  child: isConnected
                         ? Container(
                             padding: const EdgeInsets.symmetric(vertical: 8.0),
                             decoration: BoxDecoration(
@@ -3761,7 +3760,6 @@ class _OnboardingProfileWidgetState extends State<OnboardingProfileWidget>
                               ),
                   ),
                 ),
-              ),
             ],
           ),
         );

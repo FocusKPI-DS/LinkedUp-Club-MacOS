@@ -47,6 +47,9 @@ class ChatThreadComponentModel
   String mentionQuery = '';
   List<UsersRecord> filteredMembers = [];
 
+  // Emoji picker state
+  bool showEmojiPicker = false;
+
   List<DocumentReference> userSend = [];
   void addToUserSend(DocumentReference item) => userSend.add(item);
   void removeFromUserSend(DocumentReference item) => userSend.remove(item);

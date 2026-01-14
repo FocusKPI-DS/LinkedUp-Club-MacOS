@@ -32,7 +32,14 @@ Future<void> setupAppBadgeListener() async {
     final userPath = currentUserReference!.path;
     final userId = currentUserReference!.id;
     
-    // Listen to all succeeded notifications and filter client-side
+    /* 
+    ❌ This listener is causing "Permission Denied" errors because we cannot query 'user_refs' (String) 
+    server-side to match security rules. The current query fetches ALL 'succeeded' notifications 
+    which strictly violates the privacy rules we just enforced.
+    
+    Until we can migrate 'user_refs' to an Array or add a 'receiver_uid' field, 
+    we must disable this real-time listener to prevent log spam and crashes.
+    
     FirebaseFirestore.instance
         .collection('ff_user_push_notifications')
         .where('status', isEqualTo: 'succeeded')
@@ -51,6 +58,8 @@ Future<void> setupAppBadgeListener() async {
 
       print('App badge updated to: $unreadCount');
     });
+    */
+    print('⚠️ App badge listener disabled to prevent Firestore permission errors');
 
     print('App badge listener setup complete');
   } catch (e) {

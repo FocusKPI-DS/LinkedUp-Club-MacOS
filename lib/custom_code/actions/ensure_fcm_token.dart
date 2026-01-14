@@ -167,6 +167,8 @@ Future<bool> ensureFcmToken(DocumentReference userRef) async {
       return false;
     }
 
+    print('✅ Got FCM token: ${token.substring(0, min(10, token.length))}...');
+    
     // Get device info
     String deviceType = 'unknown';
     if (!kIsWeb) {
@@ -178,6 +180,8 @@ Future<bool> ensureFcmToken(DocumentReference userRef) async {
         deviceType = 'macOS';
       }
     }
+    
+    print('🔍 Checking Firestore for existing token ($deviceType)...');
 
     // Check if fcm_tokens subcollection exists and has this token
     final fcmTokensRef = userRef.collection('fcm_tokens');
@@ -186,26 +190,31 @@ Future<bool> ensureFcmToken(DocumentReference userRef) async {
 
     if (existingTokenQuery.docs.isEmpty) {
       // Token doesn't exist, add it
+      print('📝 Token not found, adding new token to Firestore...');
       await fcmTokensRef.add({
         'fcm_token': token,
         'device_type': deviceType,
         'created_at': FieldValue.serverTimestamp(),
       });
+      print('✅ New token saved successfully!');
     } else {
       // Token exists, update it if needed
+      print('📝 Token found, updating existing record...');
       await existingTokenQuery.docs.first.reference.update({
         'fcm_token': token,
         'device_type': deviceType,
       });
+      print('✅ Existing token updated successfully!');
     }
 
     // Subscribe to News topic (mobile platforms only)
     try {
-      if (!kIsWeb && (Platform.isAndroid || Platform.isIOS)) {
+      if (!kIsWeb && (Platform.isAndroid || Platform.isIOS || Platform.isMacOS)) {
         await FirebaseMessaging.instance.subscribeToTopic('news');
+        print('✅ Subscribed to news topic');
       }
     } catch (e) {
-      // Failed to subscribe to topic
+      print('❌ Failed to subscribe to topic: $e');
     }
 
     // Also listen for token refresh
@@ -226,19 +235,21 @@ Future<bool> ensureFcmToken(DocumentReference userRef) async {
 
         // Re-subscribe to topic after token refresh
         try {
-          if (!kIsWeb && (Platform.isAndroid || Platform.isIOS)) {
+          if (!kIsWeb && (Platform.isAndroid || Platform.isIOS || Platform.isMacOS)) {
             await FirebaseMessaging.instance.subscribeToTopic('news');
+            print('✅ Subscribed to news topic (after refresh)');
           }
         } catch (e) {
-          // Failed to re-subscribe
+          print('❌ Failed to re-subscribe: $e');
         }
       } catch (e) {
-        // Error during token refresh
+        print('❌ Error during token refresh: $e');
       }
     });
 
     return true;
   } catch (e) {
+    print('❌ ensureFcmToken failed: $e');
     return false;
   }
 }

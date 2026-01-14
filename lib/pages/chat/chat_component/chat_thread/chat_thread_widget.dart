@@ -1268,9 +1268,12 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
       );
     }
 
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final availableWidth = constraints.maxWidth;
+        return Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
         if (isMe)
           Align(
             alignment: const AlignmentDirectional(1.0, 0.0),
@@ -1294,7 +1297,7 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
                         Flexible(
                           child: Container(
                             constraints: BoxConstraints(
-                              maxWidth: MediaQuery.of(context).size.width * 0.7,
+                              maxWidth: availableWidth * 0.7,
                             ),
                             child: Column(
                               mainAxisSize: MainAxisSize.min,
@@ -1364,10 +1367,7 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
                                               duration: const Duration(
                                                   milliseconds: 300),
                                               constraints: BoxConstraints(
-                                                maxWidth: MediaQuery.of(context)
-                                                        .size
-                                                        .width *
-                                                    0.75,
+                                                maxWidth: availableWidth * 0.7,
                                               ),
                                               decoration: BoxDecoration(
                                                 color: Colors.white,
@@ -1703,13 +1703,9 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
                                                             children: [
                                                               // Image bubble container
                                                               Container(
-                                                                constraints:
+                                                                    constraints:
                                                                     BoxConstraints(
-                                                                  maxWidth: MediaQuery.of(
-                                                                              context)
-                                                                          .size
-                                                                          .width *
-                                                                      0.7,
+                                                                  maxWidth: availableWidth * 0.7,
                                                                   maxHeight:
                                                                       400.0,
                                                                 ),
@@ -2236,8 +2232,7 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
                         Flexible(
                           child: Container(
                             constraints: BoxConstraints(
-                              maxWidth: MediaQuery.of(context).size.width *
-                                  (widget.isGroup ? 0.7 : 0.8),
+                              maxWidth: availableWidth * 0.7,
                             ),
                             child: Column(
                               mainAxisSize: MainAxisSize.min,
@@ -2307,10 +2302,7 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
                                               duration: const Duration(
                                                   milliseconds: 300),
                                               constraints: BoxConstraints(
-                                                maxWidth: MediaQuery.of(context)
-                                                        .size
-                                                        .width *
-                                                    0.75,
+                                                maxWidth: availableWidth * 0.7,
                                               ),
                                               decoration: BoxDecoration(
                                                 color: Colors.white,
@@ -3132,6 +3124,8 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
           .divide(const SizedBox(height: 2.0))
           .addToStart(const SizedBox(height: 8.0))
           .addToEnd(const SizedBox(height: 8.0)),
+    );
+      },
     );
   }
 
