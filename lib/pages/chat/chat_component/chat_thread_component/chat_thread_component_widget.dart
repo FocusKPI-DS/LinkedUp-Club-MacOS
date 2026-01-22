@@ -146,18 +146,19 @@ class _ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget>
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       safeSetState(() {});
-      // Mark messages as read when chat thread is displayed
-      _markMessagesAsRead();
+      // NOTE: Removed auto mark-as-read to prevent badge flickering
+      // Messages should only be marked as read when user explicitly interacts
+      // _markMessagesAsRead();
     });
   }
 
   @override
   void didUpdateWidget(ChatThreadComponentWidget oldWidget) {
     super.didUpdateWidget(oldWidget);
-    // If chat reference changed, mark messages as read
-    if (oldWidget.chatReference?.reference != widget.chatReference?.reference) {
-      _markMessagesAsRead();
-    }
+    // NOTE: Removed auto mark-as-read to prevent badge flickering
+    // if (oldWidget.chatReference?.reference != widget.chatReference?.reference) {
+    //   _markMessagesAsRead();
+    // }
   }
 
   /// Marks messages as read for the current chat
@@ -993,7 +994,12 @@ class _ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget>
     final otherFiles = <XFile>[];
 
     for (final file in droppedFiles) {
-      final ext = file.path.split('.').last.toLowerCase();
+      // Use file.name instead of file.path to get the correct extension
+      // Handle cases where file.name might be empty or not have extension
+      String fileName = file.name.isNotEmpty ? file.name : file.path.split('/').last;
+      final ext = fileName.contains('.') 
+          ? fileName.split('.').last.toLowerCase() 
+          : '';
       if (imageExtensions.contains(ext)) {
         imageFiles.add(file);
       } else {
@@ -1323,14 +1329,8 @@ class _ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget>
       _resetPagination();
     }
 
-    // Mark messages as read when widget is built/displayed - debounced to avoid multiple calls
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      EasyDebounce.debounce(
-        'markMessagesAsRead',
-        const Duration(milliseconds: 500),
-        () => _markMessagesAsRead(),
-      );
-    });
+    // NOTE: Removed automatic mark-as-read during build to prevent badge flickering
+    // Messages are only marked as read in initState and didUpdateWidget
 
     return DropTarget(
       onDragEntered: (details) {
@@ -1374,14 +1374,7 @@ class _ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget>
                           .limit(_messagesPerPage), // Load initial 50 messages
                     ),
                     builder: (context, snapshot) {
-                      // Mark messages as read when messages are loaded - debounced to avoid multiple calls
-                      if (snapshot.hasData && snapshot.data!.isNotEmpty) {
-                        EasyDebounce.debounce(
-                          'markMessagesAsRead',
-                          const Duration(milliseconds: 500),
-                          () => _markMessagesAsRead(),
-                        );
-                      }
+                      // NOTE: Removed automatic mark-as-read during stream update to prevent badge flickering
                       // Customize what your widget looks like when it's loading.
                       if (!snapshot.hasData) {
                         return Center(
@@ -1447,54 +1440,6 @@ class _ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget>
                         return bTime.compareTo(aTime);
                       });
 
-                      // Calculate unread messages using isReadBy field on each message
-                      final chat = widget.chatReference;
-                      int unreadCount = 0;
-                      int? unreadSeparatorIndex;
-
-                      if (chat != null && currentUserReference != null) {
-                        // Find unread messages and determine separator position
-                        // Messages are in descending order (newest first, index 0 = newest)
-                        // ListView has reverse: true, so:
-                        // - Index 0 (newest) appears at bottom of screen
-                        // - Last index (oldest) appears at top of screen
-                        // We want separator above unread messages (which are at bottom)
-
-                        int?
-                            firstUnreadIndex; // Index of the newest unread message
-
-                        // Iterate through messages from newest to oldest
-                        // Count ALL unread messages and find where to place the separator
-                        for (int i = 0;
-                            i < listViewMessagesRecordList.length;
-                            i++) {
-                          final message = listViewMessagesRecordList[i];
-
-                          // Message is unread if:
-                          // 1. Current user is NOT in the isReadBy list
-                          // 2. It wasn't sent by the current user (don't count own messages)
-                          // 3. It's not a system message
-                          final isUnread = message.senderRef !=
-                                  currentUserReference &&
-                              !message.isSystemMessage &&
-                              !message.isReadBy.contains(currentUserReference);
-
-                          if (isUnread) {
-                            unreadCount++;
-                            // Track the first (newest) unread message index
-                            if (firstUnreadIndex == null) {
-                              firstUnreadIndex = i;
-                            }
-                          }
-                        }
-
-                        // The separator should appear right before the first (newest) unread message
-                        // Since ListView has reverse: true, this will appear above unread messages
-                        // Insert separator at firstUnreadIndex (right before first unread)
-                        if (firstUnreadIndex != null && unreadCount > 0) {
-                          unreadSeparatorIndex = firstUnreadIndex;
-                        }
-                      }
 
                       return GestureDetector(
                         onTap: () async {
@@ -1518,7 +1463,6 @@ class _ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget>
                           addRepaintBoundaries:
                               true, // Add repaint boundaries for better performance
                           itemCount: listViewMessagesRecordList.length +
-                              (unreadSeparatorIndex != null ? 1 : 0) +
                               (_isLoadingOlderMessages ? 1 : 0),
                           itemBuilder: (context, listViewIndex) {
                             // Show loading indicator at the top (first item in reversed list)
@@ -1535,60 +1479,9 @@ class _ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget>
                             }
 
                             // Adjust index if loading indicator is shown
-                            int adjustedIndex = _isLoadingOlderMessages
+                            int messageIndex = _isLoadingOlderMessages
                                 ? listViewIndex - 1
                                 : listViewIndex;
-
-                            // Calculate the actual message index accounting for separator
-                            // The separator is inserted right before the first (newest) unread message
-                            int messageIndex = adjustedIndex;
-
-                            // Insert separator right before first unread message
-                            if (unreadSeparatorIndex != null &&
-                                listViewIndex == unreadSeparatorIndex) {
-                              return Container(
-                                margin: EdgeInsets.symmetric(vertical: 16.0),
-                                child: Center(
-                                  child: Container(
-                                    padding: EdgeInsets.symmetric(
-                                        horizontal: 12.0, vertical: 6.0),
-                                    decoration: BoxDecoration(
-                                      color: FlutterFlowTheme.of(context)
-                                          .primary
-                                          .withOpacity(0.1),
-                                      borderRadius: BorderRadius.circular(20.0),
-                                      border: Border.all(
-                                        color: FlutterFlowTheme.of(context)
-                                            .primary
-                                            .withOpacity(0.3),
-                                        width: 1.0,
-                                      ),
-                                    ),
-                                    child: Text(
-                                      unreadCount == 1
-                                          ? '1 unread message'
-                                          : '$unreadCount unread messages',
-                                      style: FlutterFlowTheme.of(context)
-                                          .bodySmall
-                                          .override(
-                                            fontFamily: 'Inter',
-                                            color: FlutterFlowTheme.of(context)
-                                                .primary,
-                                            fontSize: 12.0,
-                                            fontWeight: FontWeight.w600,
-                                            letterSpacing: 0.0,
-                                          ),
-                                    ),
-                                  ),
-                                ),
-                              );
-                            }
-
-                            // Adjust message index if separator was inserted before this position
-                            if (unreadSeparatorIndex != null &&
-                                listViewIndex > unreadSeparatorIndex) {
-                              messageIndex = listViewIndex - 1;
-                            }
 
                             if (messageIndex < 0 ||
                                 messageIndex >=

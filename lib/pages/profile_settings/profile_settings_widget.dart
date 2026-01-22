@@ -18,6 +18,7 @@ import 'dart:io';
 import 'dart:math';
 import '/index.dart';
 import 'profile_settings_model.dart';
+import '/pages/user_summary/user_summary_widget.dart';
 
 class ProfileSettingsWidget extends StatefulWidget {
   const ProfileSettingsWidget({super.key});
@@ -368,6 +369,27 @@ class _ProfileSettingsWidgetState extends State<ProfileSettingsWidget> {
   }
 
   Widget _buildPersonalInformationContent() {
+    // Check if user is authenticated
+    if (currentUserReference == null) {
+      return Container(
+        padding: EdgeInsets.all(24),
+        child: Center(
+          child: Text(
+            'Please log in to edit your profile',
+            style: FlutterFlowTheme.of(context).bodyLarge,
+          ),
+        ),
+      );
+    }
+
+    // Show the exact same UserSummaryWidget, but editable
+    return UserSummaryWidget(
+      userRef: currentUserReference,
+      isEditable: true,
+    );
+  }
+
+  Widget _buildEditableUserSummary() {
     return StreamBuilder<UsersRecord>(
       stream: UsersRecord.getDocument(currentUserReference!),
       builder: (context, userSnapshot) {
@@ -405,41 +427,685 @@ class _ProfileSettingsWidgetState extends State<ProfileSettingsWidget> {
           _model.websiteController?.text =
               user.snapshotData['website']?.toString() ?? '';
         }
-        if (_model.roleController?.text.isEmpty ?? true) {
-          _model.roleController?.text = '';
+
+        // Initialize interests controller if needed
+        if (_model.interestsController == null) {
+          _model.interestsController = TextEditingController(
+            text: user.interests.join(', '),
+          );
         }
 
-        // Get user's role from workspace
-        return StreamBuilder<UsersRecord>(
-          stream: UsersRecord.getDocument(currentUserReference!),
-          builder: (context, snapshot) {
-            String userRole = '';
-
-            if (snapshot.hasData &&
-                snapshot.data!.currentWorkspaceRef != null) {
-              return StreamBuilder<List<WorkspaceMembersRecord>>(
-                stream: queryWorkspaceMembersRecord(
-                  queryBuilder: (workspaceMembers) => workspaceMembers
-                      .where('workspace_ref',
-                          isEqualTo: snapshot.data!.currentWorkspaceRef)
-                      .where('user_ref', isEqualTo: currentUserReference),
-                ),
-                builder: (context, membersSnapshot) {
-                  if (membersSnapshot.hasData &&
-                      membersSnapshot.data!.isNotEmpty) {
-                    userRole = membersSnapshot.data!.first.role;
-                  }
-
-                  return _buildModernProfileLayout(user, userRole);
-                },
-              );
-            }
-
-            return _buildModernProfileLayout(user, userRole);
-          },
-        );
+        return _buildEditableUserSummaryContent(user);
       },
     );
+  }
+
+  Widget _buildEditableUserSummaryContent(UsersRecord user) {
+    final coverPhotoUrl = _getCoverPhotoUrl(user);
+
+    return SingleChildScrollView(
+      child: Column(
+        children: [
+          // Cover Photo Section
+          Container(
+            height: 200,
+            width: double.infinity,
+            child: Stack(
+              children: [
+                _buildEditableCoverPhoto(coverPhotoUrl),
+                if (_model.isEditingProfile)
+                  Positioned(
+                    top: 16,
+                    right: 16,
+                    child: _buildCoverPhotoEditButton(),
+                  ),
+              ],
+            ),
+          ),
+
+          // Profile Info Section
+          Container(
+            color: Colors.white,
+            padding: EdgeInsets.only(bottom: 24),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Profile Photo and Name Section
+                Transform.translate(
+                  offset: Offset(0, -60),
+                  child: Padding(
+                    padding: EdgeInsets.symmetric(horizontal: 16),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // Profile Photo
+                        Center(
+                          child: Stack(
+                            children: [
+                              Container(
+                                width: 120,
+                                height: 120,
+                                child: ClipRRect(
+                                  borderRadius: BorderRadius.circular(60),
+                                  child: user.photoUrl.isNotEmpty
+                                      ? CachedNetworkImage(
+                                          imageUrl: user.photoUrl,
+                                          width: 120,
+                                          height: 120,
+                                          fit: BoxFit.cover,
+                                          placeholder: (context, url) =>
+                                              _buildInitialsAvatar(user),
+                                          errorWidget: (context, url, error) =>
+                                              _buildInitialsAvatar(user),
+                                        )
+                                      : _buildInitialsAvatar(user),
+                                ),
+                              ),
+                              if (_model.isEditingProfile)
+                                Positioned(
+                                  bottom: 4,
+                                  right: 4,
+                                  child: InkWell(
+                                    onTap: () => context.pushNamed(
+                                        EditProfileWidget.routeName),
+                                    child: Container(
+                                      width: 32,
+                                      height: 32,
+                                      decoration: BoxDecoration(
+                                        color: Color(0xFF0077B5),
+                                        shape: BoxShape.circle,
+                                        border: Border.all(
+                                          color: Colors.white,
+                                          width: 2,
+                                        ),
+                                        boxShadow: [
+                                          BoxShadow(
+                                            color: Colors.black.withOpacity(0.15),
+                                            blurRadius: 4,
+                                            offset: Offset(0, 2),
+                                          ),
+                                        ],
+                                      ),
+                                      child: Icon(
+                                        Icons.camera_alt_rounded,
+                                        color: Colors.white,
+                                        size: 16,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                            ],
+                          ),
+                        ),
+                        SizedBox(height: 16),
+
+                        // Name - Editable
+                        Center(
+                          child: _model.isEditingProfile
+                              ? Container(
+                                  width: double.infinity,
+                                  constraints: BoxConstraints(maxWidth: 400),
+                                  child: TextField(
+                                    controller: _model.displayNameController,
+                                    style: TextStyle(
+                                      fontFamily: 'SF Pro Display',
+                                      fontSize: 24,
+                                      fontWeight: FontWeight.w700,
+                                      color: Color(0xFF000000),
+                                    ),
+                                    textAlign: TextAlign.center,
+                                    decoration: InputDecoration(
+                                      hintText: 'Enter your name',
+                                      border: OutlineInputBorder(
+                                        borderRadius: BorderRadius.circular(8),
+                                      ),
+                                      focusedBorder: OutlineInputBorder(
+                                        borderRadius: BorderRadius.circular(8),
+                                        borderSide: BorderSide(
+                                          color: Color(0xFF0077B5),
+                                          width: 2,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                )
+                              : Text(
+                                  user.displayName.isNotEmpty
+                                      ? user.displayName
+                                      : 'Unknown User',
+                                  style: TextStyle(
+                                    fontFamily: 'SF Pro Display',
+                                    fontSize: 24,
+                                    fontWeight: FontWeight.w700,
+                                    color: Color(0xFF000000),
+                                  ),
+                                  textAlign: TextAlign.center,
+                                ),
+                        ),
+                        SizedBox(height: 6),
+
+                        // Bio or Email - Editable
+                        Center(
+                          child: _model.isEditingProfile
+                              ? Container(
+                                  width: double.infinity,
+                                  constraints: BoxConstraints(maxWidth: 500),
+                                  child: TextField(
+                                    controller: _model.bioController,
+                                    maxLines: 3,
+                                    style: TextStyle(
+                                      fontFamily: 'SF Pro Display',
+                                      fontSize: 15,
+                                      fontWeight: FontWeight.w400,
+                                      color: Color(0xFF666666),
+                                    ),
+                                    textAlign: TextAlign.center,
+                                    decoration: InputDecoration(
+                                      hintText: 'Tell us about yourself...',
+                                      border: OutlineInputBorder(
+                                        borderRadius: BorderRadius.circular(8),
+                                      ),
+                                      focusedBorder: OutlineInputBorder(
+                                        borderRadius: BorderRadius.circular(8),
+                                        borderSide: BorderSide(
+                                          color: Color(0xFF0077B5),
+                                          width: 2,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                )
+                              : (user.bio.isNotEmpty
+                                  ? Text(
+                                      user.bio,
+                                      style: TextStyle(
+                                        fontFamily: 'SF Pro Display',
+                                        fontSize: 15,
+                                        fontWeight: FontWeight.w400,
+                                        color: Color(0xFF666666),
+                                      ),
+                                      textAlign: TextAlign.center,
+                                    )
+                                  : Text(
+                                      user.email,
+                                      style: TextStyle(
+                                        fontFamily: 'SF Pro Display',
+                                        fontSize: 15,
+                                        fontWeight: FontWeight.w400,
+                                        color: Color(0xFF666666),
+                                      ),
+                                      textAlign: TextAlign.center,
+                                    )),
+                        ),
+
+                        // Location - Editable
+                        SizedBox(height: 8),
+                        Center(
+                          child: _model.isEditingProfile
+                              ? Container(
+                                  width: double.infinity,
+                                  constraints: BoxConstraints(maxWidth: 300),
+                                  child: TextField(
+                                    controller: _model.locationController,
+                                    style: TextStyle(
+                                      fontFamily: 'SF Pro Display',
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.w400,
+                                      color: Color(0xFF666666),
+                                    ),
+                                    textAlign: TextAlign.center,
+                                    decoration: InputDecoration(
+                                      hintText: 'Enter your location',
+                                      prefixIcon: Icon(
+                                        Icons.location_on_outlined,
+                                        size: 16,
+                                        color: Color(0xFF666666),
+                                      ),
+                                      border: OutlineInputBorder(
+                                        borderRadius: BorderRadius.circular(8),
+                                      ),
+                                      focusedBorder: OutlineInputBorder(
+                                        borderRadius: BorderRadius.circular(8),
+                                        borderSide: BorderSide(
+                                          color: Color(0xFF0077B5),
+                                          width: 2,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                )
+                              : (user.location.isNotEmpty
+                                  ? Row(
+                                      mainAxisAlignment:
+                                          MainAxisAlignment.center,
+                                      children: [
+                                        Icon(
+                                          Icons.location_on_outlined,
+                                          size: 14,
+                                          color: Color(0xFF666666),
+                                        ),
+                                        SizedBox(width: 4),
+                                        Text(
+                                          user.location,
+                                          style: TextStyle(
+                                            fontFamily: 'SF Pro Display',
+                                            fontSize: 14,
+                                            fontWeight: FontWeight.w400,
+                                            color: Color(0xFF666666),
+                                          ),
+                                        ),
+                                      ],
+                                    )
+                                  : SizedBox.shrink()),
+                        ),
+
+                        // Email
+                        if (user.email.isNotEmpty) ...[
+                          SizedBox(height: 8),
+                          Center(
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Icon(
+                                  Icons.mail_outline,
+                                  size: 14,
+                                  color: Color(0xFF666666),
+                                ),
+                                SizedBox(width: 4),
+                                Text(
+                                  user.email,
+                                  style: TextStyle(
+                                    fontFamily: 'SF Pro Display',
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w400,
+                                    color: Color(0xFF666666),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+
+                        // Website - Editable
+                        SizedBox(height: 8),
+                        Center(
+                          child: _model.isEditingProfile
+                              ? Container(
+                                  width: double.infinity,
+                                  constraints: BoxConstraints(maxWidth: 400),
+                                  child: TextField(
+                                    controller: _model.websiteController,
+                                    style: TextStyle(
+                                      fontFamily: 'SF Pro Display',
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.w400,
+                                      color: Color(0xFF666666),
+                                    ),
+                                    textAlign: TextAlign.center,
+                                    decoration: InputDecoration(
+                                      hintText: 'https://example.com',
+                                      prefixIcon: Icon(
+                                        Icons.language_outlined,
+                                        size: 16,
+                                        color: Color(0xFF666666),
+                                      ),
+                                      border: OutlineInputBorder(
+                                        borderRadius: BorderRadius.circular(8),
+                                      ),
+                                      focusedBorder: OutlineInputBorder(
+                                        borderRadius: BorderRadius.circular(8),
+                                        borderSide: BorderSide(
+                                          color: Color(0xFF0077B5),
+                                          width: 2,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                )
+                              : (_model.websiteController?.text.isNotEmpty ??
+                                      false
+                                  ? Row(
+                                      mainAxisAlignment:
+                                          MainAxisAlignment.center,
+                                      children: [
+                                        Text(
+                                          'Website: ',
+                                          style: TextStyle(
+                                            fontFamily: 'SF Pro Display',
+                                            fontSize: 14,
+                                            fontWeight: FontWeight.w600,
+                                            color: Color(0xFF000000),
+                                          ),
+                                        ),
+                                        Text(
+                                          _model.websiteController!.text,
+                                          style: TextStyle(
+                                            fontFamily: 'SF Pro Display',
+                                            fontSize: 14,
+                                            fontWeight: FontWeight.w400,
+                                            color: Color(0xFF666666),
+                                          ),
+                                        ),
+                                      ],
+                                    )
+                                  : SizedBox.shrink()),
+                        ),
+
+                        // Connections Count
+                        SizedBox(height: 8),
+                        Center(
+                          child: Text(
+                            '${user.friends.length} connection${user.friends.length == 1 ? '' : 's'}',
+                            style: TextStyle(
+                              fontFamily: 'SF Pro Display',
+                              fontSize: 14,
+                              fontWeight: FontWeight.w400,
+                              color: Color(0xFF666666),
+                            ),
+                          ),
+                        ),
+
+                        // Interests Section - Editable
+                        if (user.interests.isNotEmpty || _model.isEditingProfile) ...[
+                          SizedBox(height: 24),
+                          Center(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.center,
+                              children: [
+                                Text(
+                                  'Interests',
+                                  style: TextStyle(
+                                    fontFamily: 'SF Pro Display',
+                                    fontSize: 18,
+                                    fontWeight: FontWeight.w700,
+                                    color: Color(0xFF000000),
+                                  ),
+                                ),
+                                SizedBox(height: 12),
+                                _model.isEditingProfile
+                                    ? Container(
+                                        width: double.infinity,
+                                        constraints:
+                                            BoxConstraints(maxWidth: 500),
+                                        child: TextField(
+                                          controller: _model.interestsController,
+                                          style: TextStyle(
+                                            fontFamily: 'SF Pro Display',
+                                            fontSize: 14,
+                                            fontWeight: FontWeight.w400,
+                                            color: Color(0xFF000000),
+                                          ),
+                                          decoration: InputDecoration(
+                                            hintText:
+                                                'Enter interests separated by commas',
+                                            border: OutlineInputBorder(
+                                              borderRadius:
+                                                  BorderRadius.circular(8),
+                                            ),
+                                            focusedBorder: OutlineInputBorder(
+                                              borderRadius:
+                                                  BorderRadius.circular(8),
+                                              borderSide: BorderSide(
+                                                color: Color(0xFF0077B5),
+                                                width: 2,
+                                              ),
+                                            ),
+                                          ),
+                                        ),
+                                      )
+                                    : Wrap(
+                                        spacing: 8,
+                                        runSpacing: 8,
+                                        alignment: WrapAlignment.center,
+                                        children: user.interests.map((interest) {
+                                          return Container(
+                                            padding: EdgeInsets.symmetric(
+                                                horizontal: 14, vertical: 8),
+                                            decoration: BoxDecoration(
+                                              color: Colors.white,
+                                              borderRadius:
+                                                  BorderRadius.circular(20),
+                                              border: Border.all(
+                                                color: Color(0xFFE5E7EB),
+                                                width: 1,
+                                              ),
+                                            ),
+                                            child: Text(
+                                              interest,
+                                              style: TextStyle(
+                                                fontFamily: 'SF Pro Display',
+                                                fontSize: 14,
+                                                fontWeight: FontWeight.w500,
+                                                color: Color(0xFF000000),
+                                              ),
+                                            ),
+                                          );
+                                        }).toList(),
+                                      ),
+                              ],
+                            ),
+                          ),
+                        ],
+
+                        // Action Buttons
+                        SizedBox(height: 24),
+                        Center(
+                          child: _model.isEditingProfile
+                              ? Row(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    FFButtonWidget(
+                                      onPressed: () {
+                                        setState(() {
+                                          _model.isEditingProfile = false;
+                                        });
+                                      },
+                                      text: 'Cancel',
+                                      options: FFButtonOptions(
+                                        height: 40,
+                                        padding: EdgeInsetsDirectional.fromSTEB(
+                                            24, 0, 24, 0),
+                                        color: Colors.transparent,
+                                        textStyle: FlutterFlowTheme.of(context)
+                                            .titleSmall
+                                            .override(
+                                              fontFamily: 'Inter',
+                                              color: Color(0xFF0077B5),
+                                              fontSize: 14,
+                                              fontWeight: FontWeight.w600,
+                                            ),
+                                        elevation: 0,
+                                        borderSide: BorderSide(
+                                          color: Color(0xFF0077B5),
+                                          width: 1,
+                                        ),
+                                        borderRadius: BorderRadius.circular(20),
+                                      ),
+                                    ),
+                                    SizedBox(width: 16),
+                                    FFButtonWidget(
+                                      onPressed: () async {
+                                        await _saveUserSummaryChanges(user);
+                                      },
+                                      text: 'Save',
+                                      options: FFButtonOptions(
+                                        height: 40,
+                                        padding: EdgeInsetsDirectional.fromSTEB(
+                                            24, 0, 24, 0),
+                                        color: Color(0xFF0077B5),
+                                        textStyle: FlutterFlowTheme.of(context)
+                                            .titleSmall
+                                            .override(
+                                              fontFamily: 'Inter',
+                                              color: Colors.white,
+                                              fontSize: 14,
+                                              fontWeight: FontWeight.w600,
+                                            ),
+                                        elevation: 0,
+                                        borderRadius: BorderRadius.circular(20),
+                                      ),
+                                    ),
+                                  ],
+                                )
+                              : FFButtonWidget(
+                                  onPressed: () {
+                                    setState(() {
+                                      _model.isEditingProfile = true;
+                                    });
+                                  },
+                                  text: 'Edit Profile',
+                                  icon: Icon(Icons.edit_outlined,
+                                      size: 16, color: Colors.white),
+                                  options: FFButtonOptions(
+                                    height: 40,
+                                    padding: EdgeInsetsDirectional.fromSTEB(
+                                        24, 0, 24, 0),
+                                    color: Color(0xFF0077B5),
+                                    textStyle: FlutterFlowTheme.of(context)
+                                        .titleSmall
+                                        .override(
+                                          fontFamily: 'Inter',
+                                          color: Colors.white,
+                                          fontSize: 14,
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                    elevation: 0,
+                                    borderRadius: BorderRadius.circular(20),
+                                  ),
+                                ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+          SizedBox(height: 24),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildEditableCoverPhoto(String? coverPhotoUrl) {
+    if (coverPhotoUrl != null && coverPhotoUrl.isNotEmpty) {
+      return CachedNetworkImage(
+        imageUrl: coverPhotoUrl,
+        fit: BoxFit.cover,
+        width: double.infinity,
+        height: double.infinity,
+        placeholder: (context, url) => _buildEditableDefaultGradient(),
+        errorWidget: (context, url, error) => _buildEditableDefaultGradient(),
+      );
+    }
+    return _buildEditableDefaultGradient();
+  }
+
+  Widget _buildEditableDefaultGradient() {
+    return Container(
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            Color(0xFF0077B5), // LinkedIn blue
+            Color(0xFF004182),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildInitialsAvatar(UsersRecord user) {
+    final initials = user.displayName.isNotEmpty
+        ? user.displayName
+            .split(' ')
+            .map((name) => name.isNotEmpty ? name[0] : '')
+            .take(2)
+            .join()
+            .toUpperCase()
+        : 'U';
+
+    return Container(
+      width: 120,
+      height: 120,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            Color(0xFF0077B5),
+            Color(0xFF004182),
+          ],
+        ),
+        border: Border.all(
+          color: Colors.white,
+          width: 4,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.1),
+            blurRadius: 10,
+            offset: Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Center(
+        child: Text(
+          initials,
+          style: TextStyle(
+            color: Colors.white,
+            fontSize: 40,
+            fontWeight: FontWeight.w600,
+            letterSpacing: 1,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _saveUserSummaryChanges(UsersRecord user) async {
+    try {
+      // Parse interests from comma-separated string
+      List<String> interests = [];
+      if (_model.interestsController?.text.isNotEmpty ?? false) {
+        interests = _model.interestsController!.text
+            .split(',')
+            .map((e) => e.trim())
+            .where((e) => e.isNotEmpty)
+            .toList();
+      }
+
+      await user.reference.update({
+        'display_name': _model.displayNameController?.text ?? user.displayName,
+        'location': _model.locationController?.text ?? user.location,
+        'bio': _model.bioController?.text ?? user.bio,
+        'website': _model.websiteController?.text ?? '',
+        'interests': interests,
+      });
+
+      // Exit edit mode
+      if (mounted) {
+        setState(() {
+          _model.isEditingProfile = false;
+        });
+      }
+
+      // Show success message
+      _showSuccessSnackBar('Profile updated successfully!');
+    } catch (e) {
+      // Handle error and exit edit mode
+      if (mounted) {
+        setState(() {
+          _model.isEditingProfile = false;
+        });
+      }
+
+      // Show error message
+      _showErrorSnackBar('Failed to update profile. Please try again.');
+    }
   }
 
   Widget _buildModernProfileLayout(UsersRecord user, String role) {

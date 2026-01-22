@@ -26,6 +26,7 @@ import '/pages/mobile_chat/mobile_chat_widget.dart';
 import '/pages/mobile_settings/mobile_settings_widget.dart';
 import '/pages/profile_settings/profile_settings_widget.dart';
 import '/pages/invite_friends/invite_friends_widget.dart';
+import '/pages/user_summary/user_summary_widget.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'dart:io' show Platform;
 import 'package:branchio_dynamic_linking_akp5u6/index.dart'
@@ -389,6 +390,18 @@ GoRouter createRouter(AppStateNotifier appStateNotifier) {
           user: params.getParam(
             'user',
             ParamType.Document,
+          ),
+        ),
+      ),
+      FFRoute(
+        name: UserSummaryWidget.routeName,
+        path: UserSummaryWidget.routePath,
+        requireAuth: true,
+        builder: (context, params) => UserSummaryWidget(
+          userRef: params.getParam(
+            'userRef',
+            ParamType.DocumentReference,
+            collectionNamePath: ['users'],
           ),
         ),
       ),

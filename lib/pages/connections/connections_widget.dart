@@ -619,111 +619,116 @@ class _ConnectionsWidgetState extends State<ConnectionsWidget> {
       {bool isConnected = false,
       bool isSentRequest = false,
       bool hasIncomingRequest = false}) {
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        border: Border(
-          bottom: BorderSide(
-            color: Color(0xFFE5E7EB),
-            width: 1,
+    return GestureDetector(
+      onTap: () {
+        _viewUserProfile(user);
+      },
+      child: Container(
+        decoration: BoxDecoration(
+          color: Colors.white,
+          border: Border(
+            bottom: BorderSide(
+              color: Color(0xFFE5E7EB),
+              width: 1,
+            ),
           ),
         ),
-      ),
-      child: Padding(
-        padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // User avatar
-            Container(
-              width: 48,
-              height: 48,
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(28),
-                child: user.photoUrl.isNotEmpty
-                    ? CachedNetworkImage(
-                        imageUrl: user.photoUrl,
-                        width: 48,
-                        height: 48,
-                        fit: BoxFit.cover,
-                        placeholder: (context, url) => Container(
+        child: Padding(
+          padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // User avatar
+              Container(
+                width: 48,
+                height: 48,
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(28),
+                  child: user.photoUrl.isNotEmpty
+                      ? CachedNetworkImage(
+                          imageUrl: user.photoUrl,
                           width: 48,
                           height: 48,
-                          decoration: BoxDecoration(
-                            color: Color(0xFFF1F5F9),
-                            shape: BoxShape.circle,
+                          fit: BoxFit.cover,
+                          placeholder: (context, url) => Container(
+                            width: 48,
+                            height: 48,
+                            decoration: BoxDecoration(
+                              color: Color(0xFFF1F5F9),
+                              shape: BoxShape.circle,
+                            ),
+                            child: Icon(
+                              CupertinoIcons.person_fill,
+                              color: Color(0xFF64748B),
+                              size: 24,
+                            ),
                           ),
-                          child: Icon(
-                            CupertinoIcons.person_fill,
-                            color: Color(0xFF64748B),
-                            size: 24,
-                          ),
+                          errorWidget: (context, url, error) =>
+                              _buildInitialsAvatar(user),
+                        )
+                      : _buildInitialsAvatar(user),
+                ),
+              ),
+              SizedBox(width: 10),
+
+              // User info
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      user.displayName.isNotEmpty
+                          ? user.displayName
+                          : 'Unknown User',
+                      style: TextStyle(
+                        fontFamily: 'SF Pro Display',
+                        color: Color(0xFF000000),
+                        fontSize: 15,
+                        fontWeight: FontWeight.w600,
+                        letterSpacing: -0.2,
+                        height: 1.2,
+                      ),
+                    ),
+                    SizedBox(height: 2),
+
+                    // Bio or job title (can span multiple lines)
+                    if (user.bio.isNotEmpty)
+                      Text(
+                        user.bio,
+                        style: TextStyle(
+                          fontFamily: 'SF Pro Display',
+                          color: Color(0xFF666666),
+                          fontSize: 13,
+                          fontWeight: FontWeight.w400,
+                          height: 1.3,
                         ),
-                        errorWidget: (context, url, error) =>
-                            _buildInitialsAvatar(user),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
                       )
-                    : _buildInitialsAvatar(user),
-              ),
-            ),
-            SizedBox(width: 10),
-
-            // User info
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    user.displayName.isNotEmpty
-                        ? user.displayName
-                        : 'Unknown User',
-                    style: TextStyle(
-                      fontFamily: 'SF Pro Display',
-                      color: Color(0xFF000000),
-                      fontSize: 15,
-                      fontWeight: FontWeight.w600,
-                      letterSpacing: -0.2,
-                      height: 1.2,
-                    ),
-                  ),
-                  SizedBox(height: 2),
-
-                  // Bio or job title (can span multiple lines)
-                  if (user.bio.isNotEmpty)
-                    Text(
-                      user.bio,
-                      style: TextStyle(
-                        fontFamily: 'SF Pro Display',
-                        color: Color(0xFF666666),
-                        fontSize: 13,
-                        fontWeight: FontWeight.w400,
-                        height: 1.3,
+                    else
+                      Text(
+                        user.email,
+                        style: TextStyle(
+                          fontFamily: 'SF Pro Display',
+                          color: Color(0xFF666666),
+                          fontSize: 13,
+                          fontWeight: FontWeight.w400,
+                          height: 1.3,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                       ),
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                    )
-                  else
-                    Text(
-                      user.email,
-                      style: TextStyle(
-                        fontFamily: 'SF Pro Display',
-                        color: Color(0xFF666666),
-                        fontSize: 13,
-                        fontWeight: FontWeight.w400,
-                        height: 1.3,
-                      ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                ],
+                  ],
+                ),
               ),
-            ),
 
-            // Action buttons (icon buttons)
-            _buildActionButtons(user, currentUser,
-                isConnected: isConnected,
-                isSentRequest: isSentRequest,
-                hasIncomingRequest: hasIncomingRequest),
-          ],
+              // Action buttons (icon buttons)
+              _buildActionButtons(user, currentUser,
+                  isConnected: isConnected,
+                  isSentRequest: isSentRequest,
+                  hasIncomingRequest: hasIncomingRequest),
+            ],
+          ),
         ),
       ),
     );
@@ -1268,9 +1273,16 @@ class _ConnectionsWidgetState extends State<ConnectionsWidget> {
   }
 
   void _viewUserProfile(UsersRecord user) {
-    // Navigate to user profile detail page
-    print('Viewing profile of ${user.displayName}');
-    // TODO: Implement profile navigation
+    // Navigate to user summary page
+    context.pushNamed(
+      'UserSummary',
+      queryParameters: {
+        'userRef': serializeParam(user.reference, ParamType.DocumentReference),
+      }.withoutNulls,
+      extra: <String, dynamic>{
+        'userRef': user.reference,
+      },
+    );
   }
 
   Future<void> _sendConnectionRequest(UsersRecord user) async {

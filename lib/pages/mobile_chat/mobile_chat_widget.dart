@@ -64,7 +64,9 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
   void initState() {
     super.initState();
     _model = createModel(context, () => MobileChatModel());
-    chatController = Get.put(ChatController());
+    // Use Get.put with permanent: true to keep controller persistent across navigation
+    // This preserves knownUnreadChats and locallySeenChats state
+    chatController = Get.put(ChatController(), permanent: true);
 
     _model.tabController = TabController(
       vsync: this,
@@ -135,7 +137,10 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
   @override
   void dispose() {
     _model.dispose();
-    Get.delete<ChatController>();
+    // DON'T delete ChatController - keep it persistent across navigation
+    // This preserves knownUnreadChats and locallySeenChats state
+    // The controller will be cleaned up when app closes
+    // Get.delete<ChatController>();
     super.dispose();
   }
 

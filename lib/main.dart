@@ -101,7 +101,7 @@ void main() async {
     }
 
     // Initialize Branch SDK (only on supported platforms)
-    if (!kIsWeb && (Platform.isIOS || Platform.isAndroid)) {
+    if (!kIsWeb && (Platform.isIOS || Platform.isAndroid || Platform.isMacOS)) {
       try {
         // Initialize Branch SDK configuration
         branchio_dynamic_linking_akp5u6_library_values.FFLibraryValues()
@@ -333,22 +333,25 @@ void _initializePushNotificationsAsync() async {
             String? fcmToken;
             int retries = 0;
             const maxRetries = 5;
-            
+
             while (fcmToken == null && retries < maxRetries) {
               try {
                 if (retries > 0) {
                   await Future.delayed(const Duration(seconds: 2));
-                  print('🔄 Retry ${retries + 1}/$maxRetries getting FCM token...');
+                  print(
+                      '🔄 Retry ${retries + 1}/$maxRetries getting FCM token...');
                 }
                 fcmToken = await messaging.getToken();
               } catch (e) {
-                print('⚠️ Error getting FCM token (attempt ${retries + 1}): $e');
+                print(
+                    '⚠️ Error getting FCM token (attempt ${retries + 1}): $e');
               }
               retries++;
             }
-            
+
             if (fcmToken != null) {
-              print('✅ FCM Token obtained: ${fcmToken.substring(0, min(10, fcmToken.length))}...');
+              print(
+                  '✅ FCM Token obtained: ${fcmToken.substring(0, min(10, fcmToken.length))}...');
               if (currentUserReference != null) {
                 try {
                   await actions.ensureFcmToken(currentUserReference!);
@@ -878,7 +881,8 @@ class _NavBarPageState extends State<NavBarPage> with WidgetsBindingObserver {
       // 'AIAssistant': 3, // Desktop AI Assistant - Removed
       // 'MobileAssistant': 3, // Mobile AI Assistant - Removed
       // 'Discover': 3, // Commented out
-      'Announcements': 5, // News - for desktop (Index 5 to avoid collision with Connections)
+      'Announcements':
+          5, // News - for desktop (Index 5 to avoid collision with Connections)
       'Connections': 3, // Connections - for iOS and Desktop (Index 3)
       'ProfileSettings': 4, // Settings - for macOS
       'MobileSettings': 4, // Settings - for iOS (updated to index 4)
@@ -1009,8 +1013,8 @@ class _NavBarPageState extends State<NavBarPage> with WidgetsBindingObserver {
 
         // Show red dot indicator
         return Positioned(
-          right: -4,
-          top: -2,
+          right: -6,
+          top: -6,
           child: Container(
             width: 8,
             height: 8,
@@ -1018,7 +1022,7 @@ class _NavBarPageState extends State<NavBarPage> with WidgetsBindingObserver {
               color: Colors.red,
               shape: BoxShape.circle,
               border: Border.all(
-                color: Color(0xFF2D3142), // Background color of navbar
+                color: Colors.white,
                 width: 1.5,
               ),
             ),
@@ -1033,123 +1037,50 @@ class _NavBarPageState extends State<NavBarPage> with WidgetsBindingObserver {
       return SizedBox.shrink();
     }
 
-    // Try to use ChatController if available, otherwise fall back to chat-level counting
+    // Use ChatController for consistent unread count logic
+    // Initialize ChatController if not already available (for macOS/desktop)
+    // Use permanent: true to keep controller persistent across navigation
+    ChatController chatController;
     try {
-      final chatController = Get.find<ChatController>();
-
-      return StreamBuilder<int>(
-        stream: chatController.getTotalUnreadMessageCount(),
-        builder: (context, snapshot) {
-          if (!snapshot.hasData || snapshot.data == null) {
-            return SizedBox.shrink();
-          }
-
-          final unreadCount = snapshot.data!;
-
-          if (unreadCount == 0) {
-            return SizedBox.shrink();
-          }
-
-          // Show blue badge with total unread message count
-          return Positioned(
-            right: -4,
-            top: -4,
-            child: Container(
-              padding: EdgeInsets.symmetric(
-                  horizontal: unreadCount > 99 ? 4 : 3, vertical: 3),
-              decoration: BoxDecoration(
-                color: Color(0xFF3B82F6),
-                shape: BoxShape.circle,
-                border: Border.all(
-                  color: Colors.white,
-                  width: 1.5,
-                ),
-              ),
-              constraints: BoxConstraints(
-                minWidth: 18,
-                minHeight: 18,
-              ),
-              child: Center(
-                child: Text(
-                  unreadCount > 99 ? '99+' : '$unreadCount',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: unreadCount > 99 ? 8 : 9,
-                    fontWeight: FontWeight.w700,
-                  ),
-                  textAlign: TextAlign.center,
-                ),
-              ),
-            ),
-          );
-        },
-      );
+      chatController = Get.find<ChatController>();
     } catch (e) {
-      // ChatController not available, use fallback method
-      return StreamBuilder<List<ChatsRecord>>(
-        stream: queryChatsRecord(
-          queryBuilder: (chats) => chats
-              .where('members', arrayContains: currentUserReference)
-              .orderBy('last_message_at', descending: true),
-        ),
-        builder: (context, snapshot) {
-          if (!snapshot.hasData) {
-            return SizedBox.shrink();
-          }
+      // ChatController not found, create it as permanent to preserve state
+      chatController = Get.put(ChatController(), permanent: true);
+    }
 
-          final chats = snapshot.data!;
-          if (chats.isEmpty) {
-            return SizedBox.shrink();
-          }
+    return StreamBuilder<int>(
+      stream: chatController.getTotalUnreadMessageCount(),
+      builder: (context, snapshot) {
+        // Show nothing while loading or if no data
+        if (!snapshot.hasData || snapshot.data == null) {
+          return SizedBox.shrink();
+        }
 
-          // Count chats with unread messages (fallback)
-          int unreadChatCount = 0;
-          for (final chat in chats) {
-            if (chat.lastMessage.isNotEmpty &&
-                chat.lastMessageSent != currentUserReference &&
-                !chat.lastMessageSeen.contains(currentUserReference)) {
-              unreadChatCount++;
-            }
-          }
+        final unreadCount = snapshot.data!;
 
-          if (unreadChatCount == 0) {
-            return SizedBox.shrink();
-          }
+        if (unreadCount == 0) {
+          return SizedBox.shrink();
+        }
 
-          // Show blue badge with count
-          return Positioned(
-            right: -4,
-            top: -4,
-            child: Container(
-              padding: EdgeInsets.all(3),
-              decoration: BoxDecoration(
-                color: Color(0xFF3B82F6),
-                shape: BoxShape.circle,
-                border: Border.all(
-                  color: Colors.white,
-                  width: 1.5,
-                ),
-              ),
-              constraints: BoxConstraints(
-                minWidth: 16,
-                minHeight: 16,
-              ),
-              child: Center(
-                child: Text(
-                  unreadChatCount > 99 ? '99+' : '$unreadChatCount',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 9,
-                    fontWeight: FontWeight.w700,
-                  ),
-                  textAlign: TextAlign.center,
-                ),
+        // Show simple blue dot indicator (no number)
+        return Positioned(
+          right: -6,
+          top: -6,
+          child: Container(
+            width: 10,
+            height: 10,
+            decoration: BoxDecoration(
+              color: Color(0xFF3B82F6),
+              shape: BoxShape.circle,
+              border: Border.all(
+                color: Colors.white,
+                width: 1.5,
               ),
             ),
-          );
-        },
-      );
-    }
+          ),
+        );
+      },
+    );
   }
 
   Widget _buildConnectionUnreadIndicator() {
@@ -1173,8 +1104,8 @@ class _NavBarPageState extends State<NavBarPage> with WidgetsBindingObserver {
 
         // Show blue badge with count
         return Positioned(
-          right: -4,
-          top: -4,
+          right: -6,
+          top: -6,
           child: Container(
             padding: EdgeInsets.all(3),
             decoration: BoxDecoration(
@@ -1260,149 +1191,194 @@ class _NavBarPageState extends State<NavBarPage> with WidgetsBindingObserver {
         'label': 'News',
         'page': 'Announcements',
       },
+      {
+        'icon': Icons.settings_outlined,
+        'label': 'Settings',
+        'page': 'ProfileSettings',
+      },
     ];
 
-    // Settings button (separated to place at bottom)
-    final settingsItem = {
-      'icon': Icons.settings_outlined,
-      'label': 'Settings',
-      'page': 'ProfileSettings', // Desktop settings for macOS/web
-    };
-
     return Container(
-      width: 70,
+      width: 72,
       height: double.infinity,
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: Color(0xFFF8F9FA), // Subtle gray background like Teams
         border: Border(
           right: BorderSide(
-            color: Color(0xFFE5E7EB),
+            color: Color(0xFFE1E4E8), // Softer border
             width: 1,
           ),
         ),
       ),
       child: Column(
         children: [
-          // User Profile Photo at top
+          // User Avatar at top - Microsoft Teams style
           if (currentUserReference != null)
             Container(
               margin: EdgeInsets.only(top: 16, bottom: 20),
-              child: InkWell(
-                onTap: () {
-                  context.pushNamed(MobileSettingsWidget.routeName);
-                },
-                borderRadius: BorderRadius.circular(24),
-                child: StreamBuilder<UsersRecord>(
-                  stream: UsersRecord.getDocument(currentUserReference!),
-                  builder: (context, userSnapshot) {
-                    final isOnline = userSnapshot.hasData &&
-                        userSnapshot.data != null &&
-                        userSnapshot.data!.isOnline;
+              child: Material(
+                color: Colors.transparent,
+                child: InkWell(
+                  onTap: () {
+                    context.pushNamed(MobileSettingsWidget.routeName);
+                  },
+                  borderRadius: BorderRadius.circular(12),
+                  hoverColor: Color(0xFFE8EBED).withOpacity(0.5),
+                  child: Container(
+                    padding: EdgeInsets.all(2),
+                    child: StreamBuilder<UsersRecord>(
+                      stream: UsersRecord.getDocument(currentUserReference!),
+                      builder: (context, userSnapshot) {
+                        final isOnline = userSnapshot.hasData &&
+                            userSnapshot.data != null &&
+                            userSnapshot.data!.isOnline;
 
-                    return Stack(
-                      clipBehavior: Clip.none,
-                      children: [
-                        currentUserPhoto.isNotEmpty
-                            ? ClipOval(
-                                child: CachedNetworkImage(
-                                  imageUrl: currentUserPhoto,
-                                  width: 48,
-                                  height: 48,
-                                  fit: BoxFit.cover,
-                                  placeholder: (context, url) => Container(
-                                    width: 48,
-                                    height: 48,
-                                    color: Color(0xFFE5E7EB),
-                                    child: Icon(
-                                      Icons.person,
-                                      color: Color(0xFF64748B),
-                                      size: 24,
-                                    ),
-                                  ),
-                                  errorWidget: (context, url, error) =>
-                                      Container(
-                                    width: 48,
-                                    height: 48,
-                                    color: Color(0xFF2563EB),
-                                    child: Center(
-                                      child: Text(
-                                        currentUserDisplayName.isNotEmpty
-                                            ? currentUserDisplayName[0]
-                                                .toUpperCase()
-                                            : 'U',
-                                        style: TextStyle(
-                                          color: Colors.white,
-                                          fontSize: 20,
-                                          fontWeight: FontWeight.w700,
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                              )
-                            : Container(
-                                width: 48,
-                                height: 48,
-                                decoration: BoxDecoration(
-                                  shape: BoxShape.circle,
-                                  color: Color(0xFF2563EB),
-                                ),
-                                child: Center(
-                                  child: Text(
-                                    currentUserDisplayName.isNotEmpty
-                                        ? currentUserDisplayName[0]
-                                            .toUpperCase()
-                                        : 'U',
-                                    style: TextStyle(
-                                      color: Colors.white,
-                                      fontSize: 20,
-                                      fontWeight: FontWeight.w700,
-                                    ),
-                                  ),
-                                ),
-                              ),
-                        // Green dot indicator for online status (like Slack)
-                        if (isOnline)
-                          Positioned(
-                            right: -1,
-                            bottom: -1,
-                            child: Container(
-                              width: 16,
-                              height: 16,
+                        return Stack(
+                          clipBehavior: Clip.none,
+                          children: [
+                            Container(
+                              width: 48,
+                              height: 48,
                               decoration: BoxDecoration(
-                                color: Color(0xFF10B981), // Green color
                                 shape: BoxShape.circle,
                                 border: Border.all(
                                   color: Colors.white,
-                                  width: 3,
+                                  width: 2,
                                 ),
                                 boxShadow: [
                                   BoxShadow(
-                                    color: Color(0xFF10B981).withOpacity(0.3),
-                                    blurRadius: 4,
-                                    spreadRadius: 1,
+                                    color: Colors.black.withOpacity(0.08),
+                                    blurRadius: 8,
+                                    offset: Offset(0, 2),
                                   ),
                                 ],
                               ),
+                              child: currentUserPhoto.isNotEmpty
+                                  ? ClipOval(
+                                      child: CachedNetworkImage(
+                                        imageUrl: currentUserPhoto,
+                                        width: 48,
+                                        height: 48,
+                                        fit: BoxFit.cover,
+                                        placeholder: (context, url) =>
+                                            Container(
+                                          width: 48,
+                                          height: 48,
+                                          decoration: BoxDecoration(
+                                            shape: BoxShape.circle,
+                                            color: Color(0xFFE8EBED),
+                                          ),
+                                          child: Icon(
+                                            Icons.person,
+                                            color: Color(0xFF6B7280),
+                                            size: 24,
+                                          ),
+                                        ),
+                                        errorWidget: (context, url, error) =>
+                                            Container(
+                                          width: 48,
+                                          height: 48,
+                                          decoration: BoxDecoration(
+                                            shape: BoxShape.circle,
+                                            gradient: LinearGradient(
+                                              colors: [
+                                                Color(0xFF2563EB),
+                                                Color(0xFF1D4ED8),
+                                              ],
+                                              begin: Alignment.topLeft,
+                                              end: Alignment.bottomRight,
+                                            ),
+                                          ),
+                                          child: Center(
+                                            child: Text(
+                                              currentUserDisplayName.isNotEmpty
+                                                  ? currentUserDisplayName[0]
+                                                      .toUpperCase()
+                                                  : 'U',
+                                              style: TextStyle(
+                                                color: Colors.white,
+                                                fontSize: 18,
+                                                fontWeight: FontWeight.w600,
+                                                letterSpacing: 0.5,
+                                              ),
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                    )
+                                  : Container(
+                                      width: 48,
+                                      height: 48,
+                                      decoration: BoxDecoration(
+                                        shape: BoxShape.circle,
+                                        gradient: LinearGradient(
+                                          colors: [
+                                            Color(0xFF2563EB),
+                                            Color(0xFF1D4ED8),
+                                          ],
+                                          begin: Alignment.topLeft,
+                                          end: Alignment.bottomRight,
+                                        ),
+                                      ),
+                                      child: Center(
+                                        child: Text(
+                                          currentUserDisplayName.isNotEmpty
+                                              ? currentUserDisplayName[0]
+                                                  .toUpperCase()
+                                              : 'U',
+                                          style: TextStyle(
+                                            color: Colors.white,
+                                            fontSize: 18,
+                                            fontWeight: FontWeight.w600,
+                                            letterSpacing: 0.5,
+                                          ),
+                                        ),
+                                      ),
+                                    ),
                             ),
-                          ),
-                      ],
-                    );
-                  },
+                            // Online status indicator - Teams style
+                            if (isOnline)
+                              Positioned(
+                                right: 0,
+                                bottom: 0,
+                                child: Container(
+                                  width: 14,
+                                  height: 14,
+                                  decoration: BoxDecoration(
+                                    color: Color(0xFF10B981),
+                                    shape: BoxShape.circle,
+                                    border: Border.all(
+                                      color: Colors.white,
+                                      width: 2.5,
+                                    ),
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color:
+                                            Color(0xFF10B981).withOpacity(0.3),
+                                        blurRadius: 4,
+                                        spreadRadius: 1,
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                          ],
+                        );
+                      },
+                    ),
+                  ),
                 ),
               ),
             ),
-          // Navigation Items - Top 40% of navbar
+          // Navigation Items - Microsoft Teams style
           Expanded(
-            flex: 4, // TWEAK: Flex value for top 40% - currently 4 (40% = 4/10)
-            child: ListView(
-              padding: EdgeInsets.zero,
-              shrinkWrap: true, // Allow it to take only needed space if small
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.start,
               children: navItems.map((item) {
                 final isSelected = navItemToIndex[item['page']] == currentIndex;
 
                 return Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 12.0),
+                  padding: const EdgeInsets.symmetric(vertical: 2.0),
                   child: _buildNavItemWithTooltip(
                     item: item,
                     isSelected: isSelected,
@@ -1415,270 +1391,115 @@ class _NavBarPageState extends State<NavBarPage> with WidgetsBindingObserver {
               }).toList(),
             ),
           ),
-          // Spacer to push settings and logout to bottom - 60% of navbar
-          Expanded(
-            flex:
-                6, // TWEAK: Flex value for bottom 60% - currently 6 (60% = 6/10)
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.end,
-              children: [
-                // Horizontal divider line above Settings
-                Container(
-                  width: 75,
-                  height: 1,
-                  margin: EdgeInsets.only(
-                      bottom:
-                          16), // TWEAK: Spacing above Settings - currently 16px
-                  decoration: BoxDecoration(
-                    color: Color.fromARGB(255, 120, 125,
-                        142), // TWEAK: Divider color - currently light grey
-                  ),
-                ),
-                // Settings Button
-                Builder(
-                  builder: (context) {
-                    final isSelected =
-                        navItemToIndex[settingsItem['page']] == currentIndex;
-                    return StatefulBuilder(
-                      builder: (context, setState) {
-                        bool isHovered = false;
+          // Logout Button at bottom - Microsoft Teams style
+          Container(
+            margin: EdgeInsets.only(bottom: 16),
+            child: StatefulBuilder(
+              builder: (context, setState) {
+                bool isHovered = false;
 
-                        return MouseRegion(
-                          onEnter: (_) => setState(() => isHovered = true),
-                          onExit: (_) => setState(() => isHovered = false),
-                          child: Stack(
-                            clipBehavior: Clip.none,
-                            children: [
-                              Container(
-                                // TWEAK: Square size - currently 48x48 (perfect square)
-                                width: 48,
-                                height: 48,
-                                margin: EdgeInsets.only(
-                                    bottom:
-                                        12), // TWEAK: Spacing between Settings and Logout
-                                child: Material(
-                                  color: Colors.transparent,
-                                  child: InkWell(
-                                    onTap: () => safeSetState(() {
-                                      _currentPage = null;
-                                      _setCurrentPageName(
-                                          settingsItem['page'] as String, tabs);
-                                    }),
-                                    borderRadius: BorderRadius.circular(12),
-                                    child: Container(
-                                      // TWEAK: Square size - currently 48x48 (perfect square)
-                                      width: 48,
-                                      height: 48,
-                                      decoration: BoxDecoration(
-                                        color: isSelected
-                                            ? Color.fromRGBO(250, 252, 255,
-                                                1) // Very light cyan tint
-                                            : Colors.transparent,
-                                        borderRadius: BorderRadius.circular(12),
-                                        border: isSelected
-                                            ? Border.all(
-                                                color: Color.fromRGBO(230, 235,
-                                                    245, 1), // Light border
-                                                width: 1,
-                                              )
-                                            : null,
-                                        boxShadow: isSelected
-                                            ? [
-                                                BoxShadow(
-                                                  color: Color.fromRGBO(
-                                                      16,
-                                                      184,
-                                                      239,
-                                                      0.08), // Subtle cyan shadow
-                                                  blurRadius: 4,
-                                                  offset: Offset(0, 1),
-                                                  spreadRadius: 0,
-                                                ),
-                                              ]
-                                            : null,
-                                      ),
-                                      child: Center(
-                                        child: Icon(
-                                          settingsItem['icon'] as IconData,
-                                          color:
-                                              Color(0xFF64748B), // Always grey
-                                          size: 28,
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                              ),
-                              if (isHovered)
-                                Positioned(
-                                  left: 60,
-                                  top: 0,
-                                  bottom: 0,
-                                  child: Center(
-                                    child: TweenAnimationBuilder<double>(
-                                      duration:
-                                          const Duration(milliseconds: 150),
-                                      tween: Tween(begin: 0.0, end: 1.0),
-                                      builder: (context, value, child) {
-                                        return Opacity(
-                                          opacity: value,
-                                          child: Transform.scale(
-                                            scale: 0.95 + (0.05 * value),
-                                            alignment: Alignment.centerLeft,
-                                            child: child,
-                                          ),
-                                        );
-                                      },
-                                      child: Material(
-                                        elevation: 8,
-                                        borderRadius: BorderRadius.circular(6),
-                                        color: Colors.transparent,
-                                        child: Container(
-                                          padding: const EdgeInsets.symmetric(
-                                              horizontal: 10, vertical: 6),
-                                          decoration: BoxDecoration(
-                                            color: const Color(
-                                                0xFF1E293B), // Premium dark blue-grey
-                                            borderRadius:
-                                                BorderRadius.circular(6),
-                                            boxShadow: [
-                                              BoxShadow(
-                                                color: Colors.black
-                                                    .withOpacity(0.3),
-                                                blurRadius: 8,
-                                                offset: const Offset(0, 2),
-                                                spreadRadius: 0,
-                                              ),
-                                            ],
-                                          ),
-                                          child: Text(
-                                            settingsItem['label'] as String,
-                                            style: GoogleFonts.inter(
-                                              color: Colors.white,
-                                              fontSize: 12,
-                                              fontWeight: FontWeight.w500,
-                                              letterSpacing: 0.2,
-                                            ),
-                                          ),
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                            ],
-                          ),
-                        );
-                      },
-                    );
-                  },
-                ),
-                // Logout Button
-                StatefulBuilder(
-                  builder: (context, setState) {
-                    bool isHovered = false;
-
-                    return MouseRegion(
-                      onEnter: (_) => setState(() => isHovered = true),
-                      onExit: (_) => setState(() => isHovered = false),
-                      child: Stack(
-                        clipBehavior: Clip.none,
-                        children: [
-                          Container(
-                            // TWEAK: Square size - currently 48x48 (perfect square)
-                            width: 48,
-                            height: 48,
-                            margin: EdgeInsets.zero,
-                            child: Material(
-                              color: Colors.transparent,
-                              child: InkWell(
-                                onTap: () async {
-                                  await authManager.signOut();
-                                  if (context.mounted) {
-                                    context.goNamedAuth(
-                                        'OnBoarding', context.mounted);
-                                  }
-                                },
+                return MouseRegion(
+                  onEnter: (_) => setState(() => isHovered = true),
+                  onExit: (_) => setState(() => isHovered = false),
+                  child: Stack(
+                    clipBehavior: Clip.none,
+                    children: [
+                      Container(
+                        width: 48,
+                        height: 48,
+                        margin: EdgeInsets.zero,
+                        child: Material(
+                          color: Colors.transparent,
+                          child: InkWell(
+                            onTap: () async {
+                              await authManager.signOut();
+                              if (context.mounted) {
+                                context.goNamedAuth(
+                                    'OnBoarding', context.mounted);
+                              }
+                            },
+                            borderRadius: BorderRadius.circular(12),
+                            hoverColor: Color(0xFFFEE2E2).withOpacity(0.6),
+                            child: AnimatedContainer(
+                              duration: Duration(milliseconds: 150),
+                              width: 48,
+                              height: 48,
+                              decoration: BoxDecoration(
+                                color: isHovered
+                                    ? Color(0xFFFEE2E2).withOpacity(0.3)
+                                    : Colors.transparent,
                                 borderRadius: BorderRadius.circular(12),
-                                child: Container(
-                                  // TWEAK: Square size - currently 48x48 (perfect square)
-                                  width: 48,
-                                  height: 48,
-                                  decoration: BoxDecoration(
-                                    color: Color(0xFFF1F5F9),
-                                    borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: Center(
+                                child: Icon(
+                                  Icons.logout_rounded,
+                                  color: isHovered
+                                      ? Color(0xFFDC2626)
+                                      : Color(0xFF6B7280),
+                                  size: 22,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                      // Tooltip on hover
+                      if (isHovered)
+                        Positioned(
+                          left: 56,
+                          top: 0,
+                          bottom: 0,
+                          child: Center(
+                            child: TweenAnimationBuilder<double>(
+                              duration: const Duration(milliseconds: 150),
+                              tween: Tween(begin: 0.0, end: 1.0),
+                              builder: (context, value, child) {
+                                return Opacity(
+                                  opacity: value,
+                                  child: Transform.scale(
+                                    scale: 0.95 + (0.05 * value),
+                                    alignment: Alignment.centerLeft,
+                                    child: child,
                                   ),
-                                  child: Center(
-                                    child: Icon(
-                                      Icons.logout,
-                                      color: Color(0xFF64748B),
-                                      size: 24,
+                                );
+                              },
+                              child: Material(
+                                elevation: 8,
+                                borderRadius: BorderRadius.circular(6),
+                                color: Colors.transparent,
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 10, vertical: 6),
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFF1E293B),
+                                    borderRadius: BorderRadius.circular(6),
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color: Colors.black.withOpacity(0.3),
+                                        blurRadius: 8,
+                                        offset: const Offset(0, 2),
+                                        spreadRadius: 0,
+                                      ),
+                                    ],
+                                  ),
+                                  child: Text(
+                                    'Logout',
+                                    style: GoogleFonts.inter(
+                                      color: Colors.white,
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w500,
+                                      letterSpacing: 0.2,
                                     ),
                                   ),
                                 ),
                               ),
                             ),
                           ),
-                          // Tooltip on hover
-                          if (isHovered)
-                            Positioned(
-                              left: 60,
-                              top: 0,
-                              bottom: 0,
-                              child: Center(
-                                child: TweenAnimationBuilder<double>(
-                                  duration: const Duration(milliseconds: 150),
-                                  tween: Tween(begin: 0.0, end: 1.0),
-                                  builder: (context, value, child) {
-                                    return Opacity(
-                                      opacity: value,
-                                      child: Transform.scale(
-                                        scale: 0.95 + (0.05 * value),
-                                        alignment: Alignment.centerLeft,
-                                        child: child,
-                                      ),
-                                    );
-                                  },
-                                  child: Material(
-                                    elevation: 8,
-                                    borderRadius: BorderRadius.circular(6),
-                                    color: Colors.transparent,
-                                    child: Container(
-                                      padding: const EdgeInsets.symmetric(
-                                          horizontal: 10, vertical: 6),
-                                      decoration: BoxDecoration(
-                                        color: const Color(
-                                            0xFF1E293B), // Premium dark blue-grey
-                                        borderRadius: BorderRadius.circular(6),
-                                        boxShadow: [
-                                          BoxShadow(
-                                            color:
-                                                Colors.black.withOpacity(0.3),
-                                            blurRadius: 8,
-                                            offset: const Offset(0, 2),
-                                            spreadRadius: 0,
-                                          ),
-                                        ],
-                                      ),
-                                      child: Text(
-                                        'Logout',
-                                        style: GoogleFonts.inter(
-                                          color: Colors.white,
-                                          fontSize: 12,
-                                          fontWeight: FontWeight.w500,
-                                          letterSpacing: 0.2,
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                              ),
-                            ),
-                        ],
-                      ),
-                    );
-                  },
-                ),
-              ],
+                        ),
+                    ],
+                  ),
+                );
+              },
             ),
           ),
           // Bottom spacing
@@ -1983,8 +1804,10 @@ class _NavItemWithTooltipState extends State<_NavItemWithTooltip> {
 
     _overlayEntry = OverlayEntry(
       builder: (context) => Positioned(
-        left: position.dx + size.width + 12, // Position to the right of the icon
-        top: position.dy + (size.height / 2) - 14, // Center vertically with icon
+        left:
+            position.dx + size.width + 12, // Position to the right of the icon
+        top:
+            position.dy + (size.height / 2) - 14, // Center vertically with icon
         child: TweenAnimationBuilder<double>(
           duration: const Duration(milliseconds: 150),
           tween: Tween(begin: 0.0, end: 1.0),
@@ -2050,90 +1873,114 @@ class _NavItemWithTooltipState extends State<_NavItemWithTooltip> {
     return MouseRegion(
       onEnter: (_) => _showTooltip(),
       onExit: (_) => _hideTooltip(),
-      child: Container(
+      child: Stack(
         key: _iconKey,
-        // TWEAK: Square size - currently 48x48 (perfect square)
-        width: 48,
-        height: 48,
-        margin: EdgeInsets.zero,
-        child: Material(
-          color: Colors.transparent,
-          child: InkWell(
-            onTap: widget.onTap,
-            borderRadius: BorderRadius.circular(12),
-            child: Container(
-              // TWEAK: Square size - currently 48x48 (perfect square)
-              width: 48,
-              height: 48,
-              decoration: BoxDecoration(
-                color: widget.isSelected
-                    ? Color.fromRGBO(250, 252, 255, 1) // Very light cyan tint
-                    : Colors.transparent,
-                borderRadius: BorderRadius.circular(12),
-                border: widget.isSelected
-                    ? Border.all(
-                        color: Color.fromRGBO(230, 235, 245, 1), // Light border
-                        width: 1,
-                      )
-                    : null,
-                boxShadow: widget.isSelected
-                    ? [
-                        BoxShadow(
-                          color: Color.fromRGBO(
-                              16, 184, 239, 0.08), // Subtle cyan shadow
-                          blurRadius: 4,
-                          offset: Offset(0, 1),
-                          spreadRadius: 0,
-                        ),
-                      ]
-                    : null,
-              ),
-              child: Center(
-                child: Stack(
-                  clipBehavior: Clip.none,
-                  children: [
-                    widget.item['icon'] is String
-                        ? Center(
-                            child: Container(
-                              // TWEAK: Icon size for image assets - currently 28
-                              width: 28,
-                              height: 28,
-                              child: Image.asset(
-                                widget.item['icon'] as String,
-                                width: 28,
-                                height: 28,
-                                fit: BoxFit.contain,
-                              ),
-                            ),
-                          )
-                        : widget.item['icon'] is IconData
-                            ? Icon(
-                                widget.item['icon'] as IconData,
-                                color: Color(0xFF64748B), // Always grey
-                                // TWEAK: Icon size for IconData - currently 28
-                                size: 28,
-                              )
-                            : FaIcon(
-                                widget.item['icon'] as IconData,
-                                color: Color(0xFF64748B), // Always grey
-                                // TWEAK: Icon size for FaIcon - currently 24
-                                size: 24,
-                              ),
-                    // Red dot indicator for News button
-                    if (widget.item['page'] == 'Announcements')
-                      widget.buildNewsUnreadIndicator(),
-                    // Red dot indicator for Chat button
-                    if (widget.item['page'] == 'DesktopChat')
-                      widget.buildChatUnreadIndicator(),
-                    // Blue badge for Connections button
-                    if (widget.item['page'] == 'Connections')
-                      widget.buildConnectionUnreadIndicator(),
+        clipBehavior: Clip.none,
+        children: [
+          // Left accent bar for selected state (Microsoft Teams style)
+          if (widget.isSelected)
+            Positioned(
+              left: 0,
+              top: 6,
+              bottom: 6,
+              child: Container(
+                width: 3,
+                decoration: BoxDecoration(
+                  color: Color(0xFF2563EB),
+                  borderRadius: BorderRadius.only(
+                    topRight: Radius.circular(2),
+                    bottomRight: Radius.circular(2),
+                  ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Color(0xFF2563EB).withOpacity(0.4),
+                      blurRadius: 4,
+                      spreadRadius: 0.5,
+                    ),
                   ],
                 ),
               ),
             ),
+          Container(
+            width: 56,
+            height: 48,
+            margin: EdgeInsets.symmetric(horizontal: 8),
+            child: Material(
+              color: Colors.transparent,
+              child: InkWell(
+                onTap: widget.onTap,
+                borderRadius: BorderRadius.circular(12),
+                hoverColor: Color(0xFFE8EBED).withOpacity(0.6),
+                child: AnimatedContainer(
+                  duration: Duration(milliseconds: 200),
+                  curve: Curves.easeOutCubic,
+                  width: 56,
+                  height: 48,
+                  decoration: BoxDecoration(
+                    color: widget.isSelected
+                        ? Color(0xFFE8EBED)
+                            .withOpacity(0.5) // Subtle selected background
+                        : Colors.transparent,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Center(
+                    child: SizedBox(
+                      width: 24,
+                      height: 24,
+                      child: Stack(
+                        clipBehavior: Clip.none,
+                        children: [
+                          widget.item['icon'] is String
+                              ? Center(
+                                  child: Container(
+                                    width: 24,
+                                    height: 24,
+                                    child: Image.asset(
+                                      widget.item['icon'] as String,
+                                      width: 24,
+                                      height: 24,
+                                      fit: BoxFit.contain,
+                                      color: widget.isSelected
+                                          ? Color(0xFF2563EB)
+                                          : Color(0xFF6B7280),
+                                    ),
+                                  ),
+                                )
+                              : widget.item['icon'] is IconData
+                                  ? Icon(
+                                      widget.item['icon'] as IconData,
+                                      color: widget.isSelected
+                                          ? Color(
+                                              0xFF2563EB) // Blue when selected
+                                          : Color(
+                                              0xFF6B7280), // Darker gray when not
+                                      size: 24,
+                                    )
+                                  : FaIcon(
+                                      widget.item['icon'] as IconData,
+                                      color: widget.isSelected
+                                          ? Color(0xFF2563EB)
+                                          : Color(0xFF6B7280),
+                                      size: 22,
+                                    ),
+                          // Red dot indicator for News button
+                          if (widget.item['page'] == 'Announcements')
+                            widget.buildNewsUnreadIndicator(),
+                          // Blue dot indicator for Chat button
+                          if (widget.item['page'] == 'DesktopChat')
+                            widget.buildChatUnreadIndicator(),
+                          // Blue badge for Connections button
+                          if (widget.item['page'] == 'Connections')
+                            widget.buildConnectionUnreadIndicator(),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
           ),
-        ),
+        ],
       ),
     );
   }

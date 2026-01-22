@@ -419,6 +419,11 @@ class _PaginatedNotificationsState extends State<PaginatedNotifications> {
       isClickable = parameterData != null && parameterData.isNotEmpty;
     }
 
+    // Check if this is a group chat notification
+    bool isGroupChatNotification = pageName?.toLowerCase() == 'chatdetail' &&
+        notification['notification_title'] != null &&
+        notification['notification_title'] != senderName;
+
     return InkWell(
       onTap: isClickable ? () => _handleNotificationTap(notification) : null,
       child: Opacity(
@@ -444,15 +449,24 @@ class _PaginatedNotificationsState extends State<PaginatedNotifications> {
                                 color: Colors.black87,
                               ),
                               children: [
-                                TextSpan(
-                                  text: senderName,
-                                  style: const TextStyle(
-                                      fontWeight: FontWeight.w600),
-                                ),
+                                // For group chat notifications, show group name on line 1
+                                if (isGroupChatNotification)
+                                  TextSpan(
+                                    text: notification['notification_title'] ??
+                                        '',
+                                    style: const TextStyle(
+                                        fontWeight: FontWeight.w600),
+                                  )
+                                // For other notifications, show sender name
+                                else
+                                  TextSpan(
+                                    text: senderName,
+                                    style: const TextStyle(
+                                        fontWeight: FontWeight.w600),
+                                  ),
                                 // Only show notification title if it's not a chat notification
-                                if (notification['initial_page_name']
-                                        ?.toLowerCase() !=
-                                    'chatdetail')
+                                if (pageName?.toLowerCase() != 'chatdetail' &&
+                                    !isGroupChatNotification)
                                   TextSpan(
                                     text:
                                         ' ${notification['notification_title'] ?? ''}',
@@ -472,9 +486,23 @@ class _PaginatedNotificationsState extends State<PaginatedNotifications> {
                         ),
                       ],
                     ),
+                    // For group chat notifications, show "New Message" on line 2
+                    if (isGroupChatNotification) ...[
+                      const SizedBox(height: 4),
+                      Text(
+                        'New Message',
+                        style: TextStyle(
+                          fontSize: 14,
+                          color: Colors.grey[600],
+                          height: 1.3,
+                        ),
+                      ),
+                    ],
                     const SizedBox(height: 4),
                     Text(
-                      _getNotificationText(notification),
+                      _getNotificationText(notification,
+                          senderName: senderName,
+                          isGroupChat: isGroupChatNotification),
                       style: TextStyle(
                         fontSize: 14,
                         color: Colors.grey[700],
@@ -493,10 +521,17 @@ class _PaginatedNotificationsState extends State<PaginatedNotifications> {
     );
   }
 
-  String _getNotificationText(Map<String, dynamic> notification) {
+  String _getNotificationText(Map<String, dynamic> notification,
+      {String? senderName, bool isGroupChat = false}) {
     String? pageName = notification['initial_page_name'];
 
-    // For chat notifications, show "sent a new Message"
+    // For group chat notifications, show "SenderName: message"
+    if (isGroupChat && senderName != null) {
+      String messageText = notification['notification_text'] ?? '';
+      return '$senderName: $messageText';
+    }
+
+    // For other chat notifications (DMs), just show the message
     if (pageName?.toLowerCase() == 'chatdetail') {
       return notification['notification_text'] ?? '';
     }

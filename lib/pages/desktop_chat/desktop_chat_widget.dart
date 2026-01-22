@@ -10,6 +10,8 @@ import '/pages/chat/user_profile_detail/user_profile_detail_widget.dart';
 import '/pages/chat/group_chat_detail/group_chat_detail_widget.dart';
 import '/pages/chat/group_action_tasks/group_action_tasks_widget.dart';
 import '/pages/chat/all_pending_requests/all_pending_requests_widget.dart';
+import '/pages/chat/calling_screen/calling_screen_widget.dart';
+import '/pages/user_summary/user_summary_widget.dart';
 import 'dart:async';
 import 'dart:io';
 import 'dart:ui';
@@ -30,6 +32,11 @@ import 'package:cloud_functions/cloud_functions.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:branchio_dynamic_linking_akp5u6/custom_code/actions/index.dart'
+    as branchio_dynamic_linking_akp5u6_actions;
+import 'package:branchio_dynamic_linking_akp5u6/flutter_flow/custom_functions.dart'
+    as branchio_dynamic_linking_akp5u6_functions;
+import '/custom_code/actions/index.dart' as actions;
 
 class DesktopChatWidget extends StatefulWidget {
   const DesktopChatWidget({Key? key}) : super(key: key);
@@ -49,6 +56,9 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
   // Track previous friends count for notifications
   int _previousFriendsCount = 0;
   StreamSubscription<DocumentSnapshot>? _userSubscription;
+  
+  // Subscription to chatController.selectedChat for syncing with model
+  StreamSubscription<ChatsRecord?>? _selectedChatSubscription;
 
   // Presence system for online status (like Slack)
   Timer? _inactivityTimer;
@@ -59,7 +69,9 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     _model = createModel(context, () => DesktopChatModel());
-    chatController = Get.put(ChatController());
+    // Use Get.put with permanent: true to keep controller persistent across navigation
+    // This preserves knownUnreadChats and locallySeenChats state
+    chatController = Get.put(ChatController(), permanent: true);
 
     _model.tabController = TabController(
       vsync: this,
@@ -83,6 +95,29 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
           ),
         ],
       ),
+    });
+
+    // Listen to chatController.selectedChat changes and sync with model
+    // This allows external code to select chats by calling chatController.selectChat()
+    _selectedChatSubscription = chatController.selectedChat.listen((selectedChat) {
+      if (mounted) {
+        setState(() {
+          if (selectedChat != null) {
+            // Clear all panels and views
+            _clearAllViews();
+            _model.showGroupInfoPanel = false;
+            _model.groupInfoChat = null;
+            _model.showUserProfilePanel = false;
+            _model.userProfileUser = null;
+            _model.showTasksPanel = false;
+            // Set the selected chat
+            _model.selectedChat = selectedChat;
+            print('DesktopChat: Synced selectedChat to model: ${selectedChat.reference.id}');
+          } else {
+            _model.selectedChat = null;
+          }
+        });
+      }
     });
 
     // Initialize presence system after a delay to ensure user is loaded
@@ -168,10 +203,14 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _inactivityTimer?.cancel();
+    _selectedChatSubscription?.cancel();
     // Set user to offline when disposing
     _updateOnlineStatus(false);
     _model.dispose();
-    Get.delete<ChatController>();
+    // DON'T delete ChatController - keep it persistent across navigation
+    // This preserves knownUnreadChats and locallySeenChats state
+    // The controller will be cleaned up when app closes
+    // Get.delete<ChatController>();
     super.dispose();
   }
 
@@ -201,30 +240,156 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
   }
 
   Widget _buildLeftSidebar() {
-    final screenWidth = MediaQuery.of(context).size.width;
-    final sidebarWidth =
-        (screenWidth * 0.3).clamp(200.0, 500.0); // Min 200px, Max 500px
+    // Use collapsed width or stored width
+    final currentWidth = _model.isSidebarCollapsed 
+        ? DesktopChatModel.collapsedSidebarWidth 
+        : _model.sidebarWidth;
 
-    return Container(
-      width: sidebarWidth,
+    return AnimatedContainer(
+      duration: Duration(milliseconds: 200),
+      curve: Curves.easeOutCubic,
+      width: currentWidth,
       height: double.infinity,
-      decoration: BoxDecoration(
-        color: Color.fromRGBO(
-            250, 252, 255, 1), // Very light cyan tint, close to white
-        border: Border(
-          right: BorderSide(
-            color: Color.fromRGBO(230, 235, 245, 1), // Light border
-            width: 1,
-          ),
-        ),
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.max,
+      child: Stack(
         children: [
-          _buildHeader(),
-          _buildNavigationTabs(),
-          _buildSearchBar(),
-          _buildChatList(),
+          // Main sidebar content
+          if (!_model.isSidebarCollapsed)
+            Container(
+              width: double.infinity,
+              height: double.infinity,
+              decoration: BoxDecoration(
+                color: Color.fromRGBO(250, 252, 255, 1),
+                border: Border(
+                  right: BorderSide(
+                    color: Color.fromRGBO(230, 235, 245, 1),
+                    width: 1,
+                  ),
+                ),
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.max,
+                children: [
+                  _buildHeader(),
+                  _buildNavigationTabs(),
+                  _buildSearchBar(),
+                  _buildChatList(),
+                ],
+              ),
+            ),
+          // Drag handle for resizing (positioned on right edge)
+          if (!_model.isSidebarCollapsed)
+            Positioned(
+              right: 0,
+              top: 0,
+              bottom: 0,
+              child: MouseRegion(
+                cursor: SystemMouseCursors.resizeColumn,
+                child: GestureDetector(
+                  onHorizontalDragUpdate: (details) {
+                    setState(() {
+                      _model.sidebarWidth = (_model.sidebarWidth + details.delta.dx)
+                          .clamp(DesktopChatModel.minSidebarWidth, DesktopChatModel.maxSidebarWidth);
+                    });
+                  },
+                  child: Container(
+                    width: 6,
+                    color: Colors.transparent,
+                    child: Center(
+                      child: Container(
+                        width: 3,
+                        height: 40,
+                        decoration: BoxDecoration(
+                          color: Color(0xFFD1D5DB),
+                          borderRadius: BorderRadius.circular(2),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          // Collapse button (positioned at bottom right of sidebar)
+          if (!_model.isSidebarCollapsed)
+            Positioned(
+              right: 12,
+              bottom: 12,
+              child: Tooltip(
+                message: 'Collapse sidebar',
+                child: GestureDetector(
+                  onTap: () {
+                    setState(() {
+                      _model.isSidebarCollapsed = true;
+                    });
+                  },
+                  child: Container(
+                    width: 28,
+                    height: 28,
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(6),
+                      border: Border.all(color: Color(0xFFE5E7EB), width: 1),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.05),
+                          blurRadius: 4,
+                          offset: Offset(0, 1),
+                        ),
+                      ],
+                    ),
+                    child: Icon(
+                      Icons.chevron_left_rounded,
+                      color: Color(0xFF64748B),
+                      size: 18,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          // Expand button (shown when collapsed)
+          if (_model.isSidebarCollapsed)
+            Positioned(
+              left: 0,
+              top: 0,
+              bottom: 0,
+              child: Container(
+                width: 24,
+                decoration: BoxDecoration(
+                  color: Color.fromRGBO(250, 252, 255, 1),
+                  border: Border(
+                    right: BorderSide(
+                      color: Color.fromRGBO(230, 235, 245, 1),
+                      width: 1,
+                    ),
+                  ),
+                ),
+                child: Center(
+                  child: Tooltip(
+                    message: 'Expand sidebar',
+                    child: GestureDetector(
+                      onTap: () {
+                        setState(() {
+                          _model.isSidebarCollapsed = false;
+                        });
+                      },
+                      child: Container(
+                        width: 20,
+                        height: 40,
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(4),
+                          border: Border.all(color: Color(0xFFE5E7EB), width: 1),
+                        ),
+                        child: Icon(
+                          Icons.chevron_right_rounded,
+                          color: Color(0xFF64748B),
+                          size: 16,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
         ],
       ),
     );
@@ -588,23 +753,31 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
                     chatController.selectedChat.value?.reference ==
                         chat.reference;
 
-                return _ChatListItem(
-                  key: ValueKey('chat_item_${chat.reference.id}'),
-                  chat: chat,
-                  isSelected: isSelected,
-                  onTap: () {
-                    setState(() {
-                      _clearAllViews();
-                      _model.selectedChat = chat;
-                    });
-                    chatController.selectChat(chat);
-                  },
-                  hasUnreadMessages: chatController.hasUnreadMessages(chat),
-                  chatController: chatController,
-                  onPin: _handlePinChat,
-                  onDelete: _handleDeleteChat,
-                  onMute: _handleMuteNotifications,
-                );
+                return Obx(() {
+                  // Make hasUnreadMessages reactive by accessing observables
+                  final _ = chatController.chats.length;
+                  final __ = chatController.locallySeenChats.length;
+                  final ___ = chatController.knownUnreadChats.length;
+                  final hasUnread = chatController.hasUnreadMessages(chat);
+                  
+                  return _ChatListItem(
+                    key: ValueKey('chat_item_${chat.reference.id}'),
+                    chat: chat,
+                    isSelected: isSelected,
+                    onTap: () {
+                      setState(() {
+                        _clearAllViews();
+                        _model.selectedChat = chat;
+                      });
+                      chatController.selectChat(chat);
+                    },
+                    hasUnreadMessages: hasUnread,
+                    chatController: chatController,
+                    onPin: _handlePinChat,
+                    onDelete: _handleDeleteChat,
+                    onMute: _handleMuteNotifications,
+                  );
+                });
               },
             );
         }
@@ -1750,12 +1923,17 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
               ),
             ),
           ),
-          // Invite friends button
+          // Invite friends buttons
           Container(
             width: double.infinity,
             padding: EdgeInsetsDirectional.fromSTEB(32, 12, 32, 12),
-            child: Center(
-              child: InviteFriendsButtonWidget(),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                InviteFriendsButtonWidget(),
+                SizedBox(width: 16),
+                _buildEmailInviteButton(),
+              ],
             ),
           ),
           // Suggested connections list
@@ -2390,6 +2568,8 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
               ),
             ),
           ],
+          // Audio/Video call icons removed for macOS (Zego not supported)
+          // Call icons will show on iOS, Android, and Web builds
           // More options button
           chat.isGroup
               ? Tooltip(
@@ -2681,6 +2861,7 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
 
   Widget _buildHeaderAvatar(ChatsRecord chat) {
     if (chat.isGroup) {
+      // For group chats, show the group logo
       return Container(
         width: 40,
         height: 40,
@@ -2751,83 +2932,99 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
             isOnline = userSnapshot.data?.isOnline ?? false;
           }
 
-          return Stack(
-            clipBehavior: Clip.none,
-            children: [
-              Container(
-                width: 40,
-                height: 40,
-                decoration: BoxDecoration(
-                  color: Color(0xFF3B82F6),
-                  shape: BoxShape.circle,
-                ),
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(20),
-                  child: CachedNetworkImage(
-                    imageUrl: imageUrl,
-                    width: 40,
-                    height: 40,
-                    fit: BoxFit.cover,
-                    memCacheWidth: 80,
-                    memCacheHeight: 80,
-                    maxWidthDiskCache: 80,
-                    maxHeightDiskCache: 80,
-                    filterQuality: FilterQuality.high,
-                    placeholder: (context, url) => Container(
-                      width: 40,
-                      height: 40,
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        shape: BoxShape.circle,
-                      ),
-                      child: Icon(
-                        Icons.person,
-                        color: Color(0xFF6B7280),
-                        size: 18,
-                      ),
-                    ),
-                    errorWidget: (context, url, error) => Container(
-                      width: 40,
-                      height: 40,
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        shape: BoxShape.circle,
-                      ),
-                      child: Icon(
-                        Icons.person,
-                        color: Color(0xFF6B7280),
-                        size: 18,
-                      ),
-                    ),
+          return InkWell(
+            onTap: () {
+              if (!otherUserRef.path.contains('ai_agent_summerai')) {
+                context.pushNamed(
+                  'UserSummary',
+                  queryParameters: {
+                    'userRef': serializeParam(otherUserRef, ParamType.DocumentReference),
+                  }.withoutNulls,
+                  extra: <String, dynamic>{
+                    'userRef': otherUserRef,
+                  },
+                );
+              }
+            },
+            borderRadius: BorderRadius.circular(20),
+            child: Stack(
+              clipBehavior: Clip.none,
+              children: [
+                Container(
+                  width: 40,
+                  height: 40,
+                  decoration: BoxDecoration(
+                    color: Color(0xFF3B82F6),
+                    shape: BoxShape.circle,
                   ),
-                ),
-              ),
-              // Green dot indicator for online status
-              if (isOnline && !otherUserRef.path.contains('ai_agent_summerai'))
-                Positioned(
-                  right: -1,
-                  bottom: -1,
-                  child: Container(
-                    width: 14,
-                    height: 14,
-                    decoration: BoxDecoration(
-                      color: Color(0xFF10B981), // Green color
-                      shape: BoxShape.circle,
-                      border: Border.all(
-                        color: Colors.white,
-                        width: 2.5,
-                      ),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Color(0xFF10B981).withOpacity(0.3),
-                          blurRadius: 4,
-                          spreadRadius: 1,
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(20),
+                    child: CachedNetworkImage(
+                      imageUrl: imageUrl,
+                      width: 40,
+                      height: 40,
+                      fit: BoxFit.cover,
+                      memCacheWidth: 80,
+                      memCacheHeight: 80,
+                      maxWidthDiskCache: 80,
+                      maxHeightDiskCache: 80,
+                      filterQuality: FilterQuality.high,
+                      placeholder: (context, url) => Container(
+                        width: 40,
+                        height: 40,
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          shape: BoxShape.circle,
                         ),
-                      ],
+                        child: Icon(
+                          Icons.person,
+                          color: Color(0xFF6B7280),
+                          size: 18,
+                        ),
+                      ),
+                      errorWidget: (context, url, error) => Container(
+                        width: 40,
+                        height: 40,
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          shape: BoxShape.circle,
+                        ),
+                        child: Icon(
+                          Icons.person,
+                          color: Color(0xFF6B7280),
+                          size: 18,
+                        ),
+                      ),
                     ),
                   ),
                 ),
-            ],
+                // Green dot indicator for online status
+                if (isOnline && !otherUserRef.path.contains('ai_agent_summerai'))
+                  Positioned(
+                    right: -1,
+                    bottom: -1,
+                    child: Container(
+                      width: 14,
+                      height: 14,
+                      decoration: BoxDecoration(
+                        color: Color(0xFF10B981), // Green color
+                        shape: BoxShape.circle,
+                        border: Border.all(
+                          color: Colors.white,
+                          width: 2.5,
+                        ),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Color(0xFF10B981).withOpacity(0.3),
+                            blurRadius: 4,
+                            spreadRadius: 1,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+              ],
+            ),
           );
         },
       );
@@ -3112,6 +3309,24 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
     }
   }
 
+  void _showCallingScreen(ChatsRecord chat, {required bool isVideoCall}) {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      barrierColor: Colors.transparent,
+      builder: (context) => Dialog.fullscreen(
+        backgroundColor: Colors.transparent,
+        child: CallingScreenWidget(
+          chat: chat,
+          isVideoCall: isVideoCall,
+          onEndCall: () {
+            Navigator.of(context).pop();
+          },
+        ),
+      ),
+    );
+  }
+
   void _viewGroupChat(ChatsRecord chat) async {
     if (!chat.isGroup) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -3244,6 +3459,153 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
       ),
     );
   }
+
+  Widget _buildEmailInviteButton() {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: () => _showEmailInviteDialog(),
+        borderRadius: BorderRadius.circular(20.0),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(20.0),
+          child: BackdropFilter(
+            filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
+            child: Container(
+              padding: const EdgeInsets.all(12.0),
+              decoration: BoxDecoration(
+                color: CupertinoColors.white.withOpacity(0.7),
+                borderRadius: BorderRadius.circular(20.0),
+                border: Border.all(
+                  color: CupertinoColors.white.withOpacity(0.8),
+                  width: 1.5,
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: CupertinoColors.black.withOpacity(0.1),
+                    blurRadius: 10,
+                    offset: const Offset(0, 4),
+                    spreadRadius: 0,
+                  ),
+                ],
+              ),
+              child: Icon(
+                CupertinoIcons.mail_solid,
+                color: CupertinoColors.systemBlue,
+                size: 20.0,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _showEmailInviteDialog() {
+    final emailController = TextEditingController();
+    
+    showCupertinoDialog(
+      context: context,
+      builder: (dialogContext) => CupertinoAlertDialog(
+        title: Text('Invite via Email'),
+        content: Padding(
+          padding: const EdgeInsets.only(top: 10.0),
+          child: CupertinoTextField(
+            controller: emailController,
+            placeholder: 'Recipient Email',
+            keyboardType: TextInputType.emailAddress,
+          ),
+        ),
+        actions: [
+          CupertinoDialogAction(
+            child: Text('Cancel'),
+            onPressed: () => Navigator.pop(dialogContext),
+          ),
+          CupertinoDialogAction(
+            child: Text('Send Invite'),
+            onPressed: () async {
+              final email = emailController.text.trim();
+              if (email.isEmpty || !email.contains('@')) {
+                Navigator.pop(dialogContext);
+                return;
+              }
+              Navigator.pop(dialogContext);
+
+              try {
+                final userUid = currentUserUid.isNotEmpty
+                    ? currentUserUid
+                    : (currentUserReference?.id ?? '');
+                final referralLink = 'https://lona.club/invite/$userUid';
+
+                await actions.sendResendInvite(
+                  email: email,
+                  senderName: currentUserDisplayName,
+                  referralLink: referralLink,
+                );
+                
+                // Show green tick overlay
+                _showSuccessTick();
+              } catch (e) {
+                // Silently fail
+              }
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showSuccessTick() {
+    final overlay = Overlay.of(context);
+    late OverlayEntry entry;
+    
+    entry = OverlayEntry(
+      builder: (context) => Positioned(
+        top: 50,
+        left: 0,
+        right: 0,
+        child: Center(
+          child: TweenAnimationBuilder<double>(
+            tween: Tween(begin: 0.0, end: 1.0),
+            duration: Duration(milliseconds: 300),
+            builder: (context, value, child) {
+              return Opacity(
+                opacity: value,
+                child: Transform.scale(
+                  scale: value,
+                  child: Container(
+                    padding: EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: Color(0xFF10B981),
+                      shape: BoxShape.circle,
+                      boxShadow: [
+                        BoxShadow(
+                          color: Color(0xFF10B981).withOpacity(0.3),
+                          blurRadius: 20,
+                          spreadRadius: 5,
+                        ),
+                      ],
+                    ),
+                    child: Icon(
+                      Icons.check,
+                      color: Colors.white,
+                      size: 32,
+                    ),
+                  ),
+                ),
+              );
+            },
+          ),
+        ),
+      ),
+    );
+    
+    overlay.insert(entry);
+    
+    // Remove after 1.5 seconds
+    Future.delayed(Duration(milliseconds: 1500), () {
+      entry.remove();
+    });
+  }
 }
 
 // Optimized chat list item widget to prevent flickering
@@ -3359,41 +3721,23 @@ class _ChatListItemState extends State<_ChatListItem>
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
-                    // Unread message count badge
+                    // Normal Badge (Blue dot)
                     if (widget.hasUnreadMessages)
-                      StreamBuilder<int>(
-                        stream: widget.chatController
-                            .getUnreadMessageCount(widget.chat),
-                        builder: (context, snapshot) {
-                          final unreadCount = snapshot.data ?? 0;
-                          if (unreadCount == 0) {
-                            return SizedBox.shrink();
-                          }
-                          return Container(
-                            margin: EdgeInsets.only(right: 8),
-                            padding: EdgeInsets.symmetric(
-                                horizontal: 6, vertical: 2),
-                            decoration: BoxDecoration(
-                              color: Color(0xFF3B82F6), // Blue background
-                              borderRadius: BorderRadius.circular(10),
+                      Container(
+                        width: 10,
+                        height: 10,
+                        margin: EdgeInsets.only(right: 8),
+                        decoration: BoxDecoration(
+                          color: Color(0xFF3B82F6),
+                          shape: BoxShape.circle,
+                          boxShadow: [
+                            BoxShadow(
+                              color: Color(0x4D3B82F6),
+                              blurRadius: 4,
+                              spreadRadius: 1,
                             ),
-                            constraints: BoxConstraints(
-                              minWidth: 18,
-                              minHeight: 18,
-                            ),
-                            child: Center(
-                              child: Text(
-                                unreadCount > 99 ? '99+' : '$unreadCount',
-                                style: TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 10,
-                                  fontWeight: FontWeight.w700,
-                                ),
-                                textAlign: TextAlign.center,
-                              ),
-                            ),
-                          );
-                        },
+                          ],
+                        ),
                       ),
                     // Timestamp
                     Text(
@@ -3760,6 +4104,53 @@ class _ChatListItemState extends State<_ChatListItem>
       );
     }
 
+    // For group chats, show sender name
+    if (chat.isGroup && chat.lastMessageSent != null) {
+      return StreamBuilder<UsersRecord>(
+        stream: UsersRecord.getDocument(chat.lastMessageSent!),
+        builder: (context, snapshot) {
+          String prefix = '';
+          if (snapshot.hasData && snapshot.data != null) {
+            final senderName = snapshot.data!.displayName;
+            // Get first name only
+            final firstName = senderName.split(' ').first;
+            // Check if it's the current user
+            if (chat.lastMessageSent == currentUserReference) {
+              prefix = 'You: ';
+            } else {
+              prefix = '$firstName: ';
+            }
+          }
+          return Text.rich(
+            TextSpan(
+              children: [
+                TextSpan(
+                  text: prefix,
+                  style: TextStyle(
+                    fontFamily: 'Inter',
+                    color: isSelected ? Color(0xFF6B7280) : Color(0xFF374151),
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                TextSpan(
+                  text: chat.lastMessage,
+                  style: TextStyle(
+                    fontFamily: 'Inter',
+                    color: isSelected ? Color(0xFF9CA3AF) : Color(0xFF6B7280),
+                    fontSize: 12,
+                  ),
+                ),
+              ],
+            ),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          );
+        },
+      );
+    }
+
+    // For DMs, just show the message
     return Text(
       chat.lastMessage,
       style: TextStyle(

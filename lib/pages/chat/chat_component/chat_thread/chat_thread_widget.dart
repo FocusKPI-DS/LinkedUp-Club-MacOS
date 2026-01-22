@@ -1362,13 +1362,17 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
                                           }
 
                                           // Regular message with bubble
+                                          // If message has image, use fixed width like WhatsApp
+                                          final hasImage = widget.message?.image != null && 
+                                                          widget.message!.image.isNotEmpty;
                                           return _withMessageMenu(
                                             bubble: AnimatedContainer(
                                               duration: const Duration(
                                                   milliseconds: 300),
                                               constraints: BoxConstraints(
-                                                maxWidth: availableWidth * 0.7,
+                                                maxWidth: hasImage ? 280.0 : availableWidth * 0.7,
                                               ),
+                                              width: hasImage ? 280.0 : null, // Fixed width when has image
                                               decoration: BoxDecoration(
                                                 color: Colors.white,
                                                 borderRadius:
@@ -1701,14 +1705,15 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
                                                             clipBehavior:
                                                                 Clip.none,
                                                             children: [
-                                                              // Image bubble container
+                                                              // Image bubble container (WhatsApp style: fixed width)
                                                               Container(
                                                                     constraints:
                                                                     BoxConstraints(
-                                                                  maxWidth: availableWidth * 0.7,
+                                                                  maxWidth: 280.0, // Fixed width like WhatsApp
                                                                   maxHeight:
                                                                       400.0,
                                                                 ),
+                                                                width: 280.0, // Fixed width
                                                                 margin:
                                                                     const EdgeInsets
                                                                         .only(
@@ -2297,13 +2302,17 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
                                           }
 
                                           // Regular message with bubble
+                                          // If message has image, use fixed width like WhatsApp
+                                          final hasImage = widget.message?.image != null && 
+                                                          widget.message!.image.isNotEmpty;
                                           return _withMessageMenu(
                                             bubble: AnimatedContainer(
                                               duration: const Duration(
                                                   milliseconds: 300),
                                               constraints: BoxConstraints(
-                                                maxWidth: availableWidth * 0.7,
+                                                maxWidth: hasImage ? 280.0 : availableWidth * 0.7,
                                               ),
+                                              width: hasImage ? 280.0 : null, // Fixed width when has image
                                               decoration: BoxDecoration(
                                                 color: Colors.white,
                                                 borderRadius:
@@ -2641,18 +2650,15 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
                                                             clipBehavior:
                                                                 Clip.none,
                                                             children: [
-                                                              // Image bubble container
+                                                              // Image bubble container (WhatsApp style: fixed width)
                                                               Container(
                                                                 constraints:
                                                                     BoxConstraints(
-                                                                  maxWidth: MediaQuery.of(
-                                                                              context)
-                                                                          .size
-                                                                          .width *
-                                                                      0.7,
+                                                                  maxWidth: 280.0, // Fixed width like WhatsApp
                                                                   maxHeight:
                                                                       400.0,
                                                                 ),
+                                                                width: 280.0, // Fixed width
                                                                 margin:
                                                                     const EdgeInsets
                                                                         .only(

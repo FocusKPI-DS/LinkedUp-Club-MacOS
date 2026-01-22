@@ -689,43 +689,31 @@ class _TodaysCalendarEventsState extends State<TodaysCalendarEvents> {
             )
           else if (_todayEvents.isEmpty)
             const SizedBox.shrink() // Hide completely if no events
-          else ...[
-            // White card container for schedule items
-            Container(
-              padding: EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: CupertinoColors.systemBackground,
-                borderRadius: BorderRadius.circular(14),
-                boxShadow: [
-                  BoxShadow(
-                    color: CupertinoColors.black.withOpacity(0.05),
-                    blurRadius: 10,
-                    offset: const Offset(0, 2),
-                    spreadRadius: 0,
-                  ),
-                ],
-              ),
-              child: Column(
-                children: [
-                  // Meeting cards - show up to 3
-                  ...List.generate(
-                    _todayEvents.length > 3 ? 3 : _todayEvents.length,
-                    (index) {
-                      final isLast = index == (_todayEvents.length > 3 ? 2 : _todayEvents.length - 1);
-                      return Column(
-                        children: [
-                          _buildMeetingCard(_todayEvents[index], index),
-                          if (!isLast && _todayEvents.length > 1)
-                            Container(
-                              height: 1,
-                              margin: EdgeInsets.symmetric(vertical: 8),
-                              color: CupertinoColors.separator.withOpacity(0.3),
-                            ),
-                        ],
-                      );
-                    },
-                  ),
-                ],
+          else ...[ 
+            // Schedule items (parent provides card container)
+            SizedBox(
+              height: _todayEvents.length > 3 ? 260 : null, // Fixed height only when scrolling needed
+              child: SingleChildScrollView(
+                physics: _todayEvents.length > 3 
+                    ? const ClampingScrollPhysics() 
+                    : const NeverScrollableScrollPhysics(),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: List.generate(_todayEvents.length, (index) {
+                    final isLast = index == _todayEvents.length - 1;
+                    return Column(
+                      children: [
+                        _buildMeetingCard(_todayEvents[index], index),
+                        if (!isLast)
+                          Container(
+                            height: 1,
+                            margin: EdgeInsets.symmetric(vertical: 8),
+                            color: CupertinoColors.separator.withOpacity(0.3),
+                          ),
+                      ],
+                    );
+                  }),
+                ),
               ),
             ),
           ],

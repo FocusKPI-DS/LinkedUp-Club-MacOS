@@ -12,6 +12,7 @@ exports.newsOnCreate = require('./newsNotifications').newsOnCreate;
 
 // Export workspace invitation email function
 exports.sendWorkspaceInviteEmail = require('./sendWorkspaceInviteEmail').sendWorkspaceInviteEmail;
+exports.sendInviteEmail = require('./sendInviteEmail').sendInviteEmail;
 
 // Export Gmail integration functions
 exports.gmailOAuth = require('./gmailIntegration').gmailOAuth;
@@ -1088,6 +1089,89 @@ async function sendPushNotifications(snapshot) {
   // Use the original title and body - no workspace logic needed
   let formattedBody = body;
   let formattedTitle = title;
+  let formattedBodyIOS = body; // Separate body for iOS/macOS
+  let formattedImageUrlIOS = imageUrl; // Separate image URL for iOS/macOS
+
+  // Check if this is a group chat notification and get sender name for iOS/macOS formatting
+  // Group chat: ChatDetail notification where title (group name) is different from sender name
+  const isChatNotification = initialPageName === 'ChatDetail' && notificationData.sender && title && title !== '';
+  
+  if (isChatNotification) {
+    try {
+      // Get sender's display name
+      let senderName = "Someone";
+      const senderRef = notificationData.sender;
+      
+      if (senderRef) {
+        // Handle both DocumentReference and string path
+        let senderDocRef;
+        if (typeof senderRef === 'object' && senderRef.path) {
+          senderDocRef = firestore.doc(senderRef.path);
+        } else if (typeof senderRef === 'string') {
+          senderDocRef = firestore.doc(senderRef);
+        } else if (senderRef.id) {
+          senderDocRef = firestore.doc(`users/${senderRef.id}`);
+        }
+        
+        if (senderDocRef) {
+          const senderDoc = await senderDocRef.get();
+          if (senderDoc.exists) {
+            const senderData = senderDoc.data();
+            senderName = senderData.display_name || senderData.name || "Someone";
+          }
+        }
+      }
+      
+      // Check if it's a group chat (title is different from sender name)
+      // For group chats: title = group name, senderName = sender's name (different)
+      // For DMs: title = sender's name, senderName = sender's name (same)
+      const isGroupChat = title.toLowerCase() !== senderName.toLowerCase();
+      
+      if (isGroupChat) {
+        // Format iOS/macOS body for group chats: "Username: Message content"
+        formattedBodyIOS = `${senderName}: ${body}`;
+        console.log(`📱 Formatted iOS/macOS notification for group chat: "${formattedBodyIOS}"`);
+        
+        // Get group logo from chat document
+        try {
+          let chatDocPath = null;
+          // Parse parameter_data to get chatDoc path
+          if (parameterData) {
+            try {
+              const params = JSON.parse(parameterData);
+              chatDocPath = params.chatDoc;
+            } catch (e) {
+              console.log('Error parsing parameter_data:', e);
+            }
+          }
+          
+          if (chatDocPath) {
+            const chatDocRef = firestore.doc(chatDocPath);
+            const chatDoc = await chatDocRef.get();
+            if (chatDoc.exists) {
+              const chatData = chatDoc.data();
+              const groupImageUrl = chatData.chat_image_url || '';
+              // Only use group logo if it exists and is not empty
+              if (groupImageUrl && groupImageUrl.trim() !== '') {
+                formattedImageUrlIOS = groupImageUrl;
+                console.log(`🖼️ Using group logo for iOS/macOS notification: "${formattedImageUrlIOS}"`);
+              } else {
+                // No group logo found, keep original imageUrl (formattedImageUrlIOS already equals imageUrl)
+                console.log('No group logo found, using original imageUrl');
+              }
+            }
+          }
+        } catch (e) {
+          console.log('Error getting group logo from chat document:', e);
+          // Keep original imageUrl if error (formattedImageUrlIOS already equals imageUrl)
+        }
+      }
+    } catch (e) {
+      console.log('Error getting sender name for chat notification:', e);
+      // Fallback to original body if error
+      formattedBodyIOS = body;
+    }
+  }
 
   if (status !== "" && status !== "started") {
     console.log(`Already processed ${snapshot.ref.path}. Skipping...`);
@@ -1140,7 +1224,8 @@ async function sendPushNotifications(snapshot) {
   var messageBatches = [];
   for (let i = 0; i < tokensArr.length; i += 500) {
     const tokensBatch = tokensArr.slice(i, Math.min(i + 500, tokensArr.length));
-    const messages = {
+    // Build message object
+    const messageObj = {
       notification: {
         title: formattedTitle,
         body: formattedBody,
@@ -1164,7 +1249,7 @@ async function sendPushNotifications(snapshot) {
           aps: {
             alert: {
               title: formattedTitle,
-              body: formattedBody,
+              body: formattedBodyIOS, // Use formatted body for iOS/macOS
             },
             sound: {
               name: 'Glass',
@@ -1179,6 +1264,18 @@ async function sendPushNotifications(snapshot) {
       },
       tokens: tokensBatch,
     };
+    
+    // Add image for iOS/macOS group chats using fcm_options
+    // Only add if we have a group logo (different from original imageUrl)
+    // If no group logo exists, formattedImageUrlIOS will equal imageUrl, so fcm_options won't be added
+    // and the original notification.imageUrl will be used instead
+    if (formattedImageUrlIOS && formattedImageUrlIOS !== imageUrl && formattedImageUrlIOS.trim() !== '') {
+      messageObj.fcm_options = {
+        image: formattedImageUrlIOS, // Use group logo for iOS/macOS group chats
+      };
+    }
+    
+    const messages = messageObj;
     messageBatches.push(messages);
   }
 

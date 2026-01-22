@@ -63,8 +63,12 @@ class DesktopChatModel extends FlutterFlowModel {
   bool showNewMessageView = false;
   TextEditingController? newMessageSearchController;
 
-
-
+  // Sidebar resize/collapse state
+  double sidebarWidth = 320.0; // Default width
+  bool isSidebarCollapsed = false;
+  static const double minSidebarWidth = 240.0;
+  static const double maxSidebarWidth = 500.0;
+  static const double collapsedSidebarWidth = 0.0;
   // Group member search
   TextEditingController? groupMemberSearchController;
 

@@ -35,6 +35,7 @@ export '/pages/chat/group_chat_detail/mobile_group_tasks_widget.dart'
     show MobileGroupTasksWidget;
 export '/pages/chat/user_profile_detail/user_profile_detail_widget.dart'
     show UserProfileDetailWidget;
+export '/pages/user_summary/user_summary_widget.dart' show UserSummaryWidget;
 export '/pages/chat/chat/chat_widget.dart' show ChatWidget;
 export '/pages/chat/chat_group_creation/chat_group_creation_widget.dart'
     show ChatGroupCreationWidget;

@@ -29,6 +29,7 @@ class ProfileSettingsModel extends FlutterFlowModel<ProfileSettingsWidget> {
   TextEditingController? bioController;
   TextEditingController? websiteController;
   TextEditingController? roleController;
+  TextEditingController? interestsController;
 
   /// Workspace creation
   bool _isCreatingWorkspace = false;
@@ -61,6 +62,7 @@ class ProfileSettingsModel extends FlutterFlowModel<ProfileSettingsWidget> {
     bioController = TextEditingController();
     websiteController = TextEditingController();
     roleController = TextEditingController();
+    interestsController = TextEditingController();
     workspaceNameController = TextEditingController();
     workspaceDescriptionController = TextEditingController();
     deleteConfirmationController = TextEditingController();
@@ -77,6 +79,7 @@ class ProfileSettingsModel extends FlutterFlowModel<ProfileSettingsWidget> {
     bioController?.dispose();
     websiteController?.dispose();
     roleController?.dispose();
+    interestsController?.dispose();
     workspaceNameController?.dispose();
     workspaceDescriptionController?.dispose();
     deleteConfirmationController?.dispose();

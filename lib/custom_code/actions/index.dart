@@ -55,3 +55,4 @@ export 'gmail_check_for_new_emails.dart' show gmailCheckForNewEmails;
 // export 'gmail_setup_watch.dart' show gmailSetupWatch;
 // export 'gmail_renew_watch.dart' show gmailRenewWatch;
 export 'calendar_list_events.dart' show calendarListEvents;
+export 'send_resend_invite.dart' show sendResendInvite;

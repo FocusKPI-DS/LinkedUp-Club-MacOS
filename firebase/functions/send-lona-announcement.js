@@ -56,18 +56,12 @@ async function sendLonaAnnouncement() {
     // ═══════════════════════════════════════════════════════════════
     // ANNOUNCEMENT MESSAGE - EDIT THIS!
     // ═══════════════════════════════════════════════════════════════
-    const announcementMessage = `🎉 New iOS Update Available!
+    const announcementMessage = `🎉 New Update Available!
 
-We've just released an exciting new update on the App Store! 
+We've just released a new macOS update (16.1) and pushed an iOS update last week!
 
-✨ What's New:
-• Improved performance & stability
-• Bug fixes and enhancements
-• New features for better communication
-
-📲 Update now to get the latest version and enjoy a smoother experience!
-
-👉 Open the App Store and update Lona today!`;
+Update your app now to get the latest features and improvements!
+Appstore Link: https://apps.apple.com/us/app/lona-club/id6747595642`;
     // ═══════════════════════════════════════════════════════════════
 
     try {

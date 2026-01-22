@@ -21,6 +21,11 @@ import 'package:flutter_animate/flutter_animate.dart';
 import 'package:provider/provider.dart';
 import 'home_model.dart';
 export 'home_model.dart';
+import 'package:branchio_dynamic_linking_akp5u6/custom_code/actions/index.dart'
+    as branchio_dynamic_linking_akp5u6_actions;
+import 'package:branchio_dynamic_linking_akp5u6/flutter_flow/custom_functions.dart'
+    as branchio_dynamic_linking_akp5u6_functions;
+import 'package:get/get.dart';
 
 import 'package:adaptive_platform_ui/adaptive_platform_ui.dart';
 import 'package:liquid_glass_renderer/liquid_glass_renderer.dart';
@@ -220,27 +225,51 @@ class _HomeWidgetState extends State<HomeWidget> with TickerProviderStateMixin {
                   ),
                 ),
               ),
-              // Invite friends button in top right
+              // Invite friends buttons in top right
               Positioned(
                 top: 32,
                 right: 32,
-                child: LiquidStretch(
-                  stretch: 0.5,
-                  interactionScale: 1.05,
-                  child: GlassGlow(
-                    glowColor: Colors.white24,
-                    glowRadius: 1.0,
-                    child: AdaptiveFloatingActionButton(
-                      mini: true,
-                      backgroundColor: Colors.white,
-                      foregroundColor: Color(0xFF007AFF),
-                      onPressed: () => _showInviteDialog(context),
-                      child: Icon(
-                        CupertinoIcons.person_add_solid,
-                        size: 17,
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    LiquidStretch(
+                      stretch: 0.5,
+                      interactionScale: 1.05,
+                      child: GlassGlow(
+                        glowColor: Colors.white24,
+                        glowRadius: 1.0,
+                        child: AdaptiveFloatingActionButton(
+                          mini: true,
+                          backgroundColor: Colors.white,
+                          foregroundColor: Color(0xFF007AFF),
+                          onPressed: () => _showEmailInviteDialog(),
+                          child: Icon(
+                            CupertinoIcons.mail_solid,
+                            size: 17,
+                          ),
+                        ),
                       ),
                     ),
-                  ),
+                    const SizedBox(width: 12),
+                    LiquidStretch(
+                      stretch: 0.5,
+                      interactionScale: 1.05,
+                      child: GlassGlow(
+                        glowColor: Colors.white24,
+                        glowRadius: 1.0,
+                        child: AdaptiveFloatingActionButton(
+                          mini: true,
+                          backgroundColor: Colors.white,
+                          foregroundColor: Color(0xFF007AFF),
+                          onPressed: () => _showInviteDialog(context),
+                          child: Icon(
+                            CupertinoIcons.person_add_solid,
+                            size: 17,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ],
@@ -287,32 +316,35 @@ class _HomeWidgetState extends State<HomeWidget> with TickerProviderStateMixin {
                         TextSpan(
                           text: '$greeting, ',
                           style: const TextStyle(
-                            fontFamily: 'Inter',
+                            fontFamily: '.SF Pro Display',
                             color: Color(0xFF1E293B),
-                            fontSize: 40, // Increased from 28
+                            fontSize: 32,
                             fontWeight: FontWeight.w700,
+                            letterSpacing: -0.5,
                           ),
                         ),
                         TextSpan(
                           text: userName,
                           style: const TextStyle(
-                            fontFamily: 'Inter',
+                            fontFamily: '.SF Pro Display',
                             color: Color(0xFF2563EB),
-                            fontSize: 40, // Increased from 28
+                            fontSize: 32,
                             fontWeight: FontWeight.w700,
+                            letterSpacing: -0.5,
                           ),
                         ),
                       ],
                     ),
                   ),
-                  const SizedBox(height: 12), // Increased spacing
+                  const SizedBox(height: 8),
                   const Text(
                     "Here's your command center for today.",
                     style: TextStyle(
-                      fontFamily: 'Inter',
+                      fontFamily: '.SF Pro Text',
                       color: Color(0xFF64748B),
-                      fontSize: 20, // Increased from 16
+                      fontSize: 16,
                       fontWeight: FontWeight.w400,
+                      letterSpacing: -0.2,
                     ),
                   ),
                 ],
@@ -324,7 +356,22 @@ class _HomeWidgetState extends State<HomeWidget> with TickerProviderStateMixin {
   }
 
   Widget _buildTodaysCalendarSection(BuildContext context) {
-    return const TodaysCalendarEvents();
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFFE5E7EB), width: 1),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.04),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: const TodaysCalendarEvents(),
+    );
   }
 
 
@@ -382,7 +429,129 @@ class _HomeWidgetState extends State<HomeWidget> with TickerProviderStateMixin {
     );
   }
 
+  void _showEmailInviteDialog() {
+    final emailController = TextEditingController();
+    
+    showCupertinoDialog(
+      context: context,
+      builder: (dialogContext) => CupertinoAlertDialog(
+        title: Text('Invite via Email'),
+        content: Padding(
+          padding: const EdgeInsets.only(top: 10.0),
+          child: CupertinoTextField(
+            controller: emailController,
+            placeholder: 'Recipient Email',
+            keyboardType: TextInputType.emailAddress,
+          ),
+        ),
+        actions: [
+          CupertinoDialogAction(
+            child: Text('Cancel'),
+            onPressed: () => Navigator.pop(dialogContext),
+          ),
+          CupertinoDialogAction(
+            child: Text('Send Invite'),
+            onPressed: () async {
+              final email = emailController.text.trim();
+              if (email.isEmpty || !email.contains('@')) {
+                Navigator.pop(dialogContext);
+                return;
+              }
+              Navigator.pop(dialogContext);
+
+              try {
+                final userUid = currentUserUid.isNotEmpty
+                    ? currentUserUid
+                    : (currentUserReference?.id ?? '');
+                final referralLink = 'https://lona.club/invite/$userUid';
+
+                await actions.sendResendInvite(
+                  email: email,
+                  senderName: currentUserDisplayName,
+                  referralLink: referralLink,
+                );
+                
+                // Show green tick overlay
+                _showSuccessTick();
+              } catch (e) {
+                // Silently fail
+              }
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showSuccessTick() {
+    final overlay = Overlay.of(context);
+    late OverlayEntry entry;
+    
+    entry = OverlayEntry(
+      builder: (context) => Positioned(
+        top: 50,
+        left: 0,
+        right: 0,
+        child: Center(
+          child: TweenAnimationBuilder<double>(
+            tween: Tween(begin: 0.0, end: 1.0),
+            duration: Duration(milliseconds: 300),
+            builder: (context, value, child) {
+              return Opacity(
+                opacity: value,
+                child: Transform.scale(
+                  scale: value,
+                  child: Container(
+                    padding: EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: Color(0xFF10B981),
+                      shape: BoxShape.circle,
+                      boxShadow: [
+                        BoxShadow(
+                          color: Color(0xFF10B981).withOpacity(0.3),
+                          blurRadius: 20,
+                          spreadRadius: 5,
+                        ),
+                      ],
+                    ),
+                    child: Icon(
+                      Icons.check,
+                      color: Colors.white,
+                      size: 32,
+                    ),
+                  ),
+                ),
+              );
+            },
+          ),
+        ),
+      ),
+    );
+    
+    overlay.insert(entry);
+    
+    // Remove after 1.5 seconds
+    Future.delayed(Duration(milliseconds: 1500), () {
+      entry.remove();
+    });
+  }
+
   Widget _buildSummerAITasksSection(BuildContext context) {
-    return const SummerAITodos();
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFFE5E7EB), width: 1),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.04),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: const SummerAITodos(),
+    );
   }
 }
