@@ -151,10 +151,7 @@
     </div>
     
     <div class="buttons" id="buttons">
-      <button class="btn btn-primary" id="appStoreBtn" onclick="goToAppStore()">
-        Continue to App Store
-      </button>
-      <button class="btn btn-secondary" id="webAppBtn" onclick="goToWebApp()">
+      <button class="btn btn-primary" id="webAppBtn" onclick="goToWebApp()">
         Continue on Web
       </button>
     </div>
@@ -185,7 +182,7 @@
         return;
       }
 
-      // Store referral UID in localStorage (for both app and web)
+      // Store referral UID in localStorage (for web)
       try {
         localStorage.setItem('pending_referrer_uid', uid);
         console.log('Stored referral UID:', uid);
@@ -262,41 +259,8 @@
       // Load referrer info immediately
       loadReferrerInfo();
 
-      // App Store URL
-      window.appStoreUrl = 'https://apps.apple.com/us/app/lona-club/id6747595642';
-      
       // Web app URL
       window.webAppUrl = 'https://lona.club/app';
-      
-      // Function to go to App Store
-      window.goToAppStore = function() {
-        const userAgent = navigator.userAgent || navigator.vendor || window.opera;
-        const isIOS = /iPad|iPhone|iPod/.test(userAgent) && !window.MSStream;
-        const isAndroid = /android/i.test(userAgent);
-        
-        // Try Universal Link/App Link first
-        if (isIOS || isAndroid) {
-          const appLink = 'lona://invite/' + uid;
-          try {
-            const iframe = document.createElement('iframe');
-            iframe.style.display = 'none';
-            iframe.style.width = '0';
-            iframe.style.height = '0';
-            iframe.src = appLink;
-            document.body.appendChild(iframe);
-            setTimeout(function() {
-              if (iframe.parentNode) {
-                iframe.parentNode.removeChild(iframe);
-              }
-            }, 100);
-          } catch (e) {
-            console.log('App Link attempt failed:', e);
-          }
-        }
-        
-        // Redirect to App Store
-        window.location.href = window.appStoreUrl;
-      };
       
       // Function to go to Web App
       window.goToWebApp = function() {

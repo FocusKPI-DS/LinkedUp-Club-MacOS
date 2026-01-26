@@ -9,6 +9,8 @@ import '/pages/desktop_chat/chat_controller.dart';
 import '/pages/chat/user_profile_detail/user_profile_detail_widget.dart';
 import '/pages/chat/group_chat_detail/group_chat_detail_widget.dart';
 import '/pages/chat/group_action_tasks/group_action_tasks_widget.dart';
+import '/pages/chat/add_group_members/add_group_members_widget.dart';
+import '/pages/chat/group_chat_detail/group_media_links_docs_widget.dart';
 import '/pages/chat/all_pending_requests/all_pending_requests_widget.dart';
 import '/pages/chat/calling_screen/calling_screen_widget.dart';
 import '/pages/user_summary/user_summary_widget.dart';
@@ -56,7 +58,7 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
   // Track previous friends count for notifications
   int _previousFriendsCount = 0;
   StreamSubscription<DocumentSnapshot>? _userSubscription;
-  
+
   // Subscription to chatController.selectedChat for syncing with model
   StreamSubscription<ChatsRecord?>? _selectedChatSubscription;
 
@@ -99,7 +101,8 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
 
     // Listen to chatController.selectedChat changes and sync with model
     // This allows external code to select chats by calling chatController.selectChat()
-    _selectedChatSubscription = chatController.selectedChat.listen((selectedChat) {
+    _selectedChatSubscription =
+        chatController.selectedChat.listen((selectedChat) {
       if (mounted) {
         setState(() {
           if (selectedChat != null) {
@@ -112,7 +115,8 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
             _model.showTasksPanel = false;
             // Set the selected chat
             _model.selectedChat = selectedChat;
-            print('DesktopChat: Synced selectedChat to model: ${selectedChat.reference.id}');
+            print(
+                'DesktopChat: Synced selectedChat to model: ${selectedChat.reference.id}');
           } else {
             _model.selectedChat = null;
           }
@@ -241,8 +245,8 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
 
   Widget _buildLeftSidebar() {
     // Use collapsed width or stored width
-    final currentWidth = _model.isSidebarCollapsed 
-        ? DesktopChatModel.collapsedSidebarWidth 
+    final currentWidth = _model.isSidebarCollapsed
+        ? DesktopChatModel.collapsedSidebarWidth
         : _model.sidebarWidth;
 
     return AnimatedContainer(
@@ -287,8 +291,10 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
                 child: GestureDetector(
                   onHorizontalDragUpdate: (details) {
                     setState(() {
-                      _model.sidebarWidth = (_model.sidebarWidth + details.delta.dx)
-                          .clamp(DesktopChatModel.minSidebarWidth, DesktopChatModel.maxSidebarWidth);
+                      _model.sidebarWidth =
+                          (_model.sidebarWidth + details.delta.dx).clamp(
+                              DesktopChatModel.minSidebarWidth,
+                              DesktopChatModel.maxSidebarWidth);
                     });
                   },
                   child: Container(
@@ -377,7 +383,8 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
                         decoration: BoxDecoration(
                           color: Colors.white,
                           borderRadius: BorderRadius.circular(4),
-                          border: Border.all(color: Color(0xFFE5E7EB), width: 1),
+                          border:
+                              Border.all(color: Color(0xFFE5E7EB), width: 1),
                         ),
                         child: Icon(
                           Icons.chevron_right_rounded,
@@ -508,7 +515,6 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
                     ),
                   ),
                 ),
-
               ],
             ),
           ],
@@ -755,11 +761,14 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
 
                 return Obx(() {
                   // Make hasUnreadMessages reactive by accessing observables
+                  // CRITICAL: Access selectedChat to ensure updates when chat is opened/closed
                   final _ = chatController.chats.length;
                   final __ = chatController.locallySeenChats.length;
                   final ___ = chatController.knownUnreadChats.length;
+                  final ____ = chatController.selectedChat.value?.reference
+                      .id; // Access selectedChat for reactivity
                   final hasUnread = chatController.hasUnreadMessages(chat);
-                  
+
                   return _ChatListItem(
                     key: ValueKey('chat_item_${chat.reference.id}'),
                     chat: chat,
@@ -2239,18 +2248,6 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
     );
   }
 
-
-
-
-
-
-
-
-
-
-
-
-
   Widget _buildRightPanel() {
     // Determine if any right-side panel should be shown
     final showAnyPanel = _model.showGroupCreation ||
@@ -2511,77 +2508,150 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
           Expanded(
             child: _buildHeaderName(chat),
           ),
-          // AI Assistant icon (only for group chats)
-          if (chat.isGroup) ...[
-            Tooltip(
-              message: 'Get Personal Daily Summary',
-              child: InkWell(
-                onTap: _model.isGeneratingSummary
-                    ? null
-                    : () async {
-                        await _generateDailySummary(chat);
-                      },
-                borderRadius: BorderRadius.circular(8),
-                child: Padding(
-                  padding: EdgeInsetsDirectional.fromSTEB(0, 0, 12, 0),
-                  child: _model.isGeneratingSummary
-                      ? SizedBox(
-                          width: 28,
-                          height: 28,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2.5,
-                            valueColor: AlwaysStoppedAnimation<Color>(
-                              Color(0xFF3B82F6),
-                            ),
-                          ),
-                        )
-                      : Image.asset(
-                          'assets/images/software-agent.png',
-                          width: 28,
-                          height: 28,
-                          fit: BoxFit.contain,
-                        ),
-                ),
-              ),
-            ),
-            // Tasks button next to SummerAI icon
-            TextButton(
-              onPressed: () {
-                setState(() {
-                  _model.showTasksPanel = !_model.showTasksPanel;
-                });
+          // Google Meet icon
+          Tooltip(
+            message: 'Start a Google Meet',
+            child: InkWell(
+              onTap: () async {
+                // Open Google Meet
+                final meetUrl = 'https://meet.google.com/new';
+                final uri = Uri.parse(meetUrl);
+                if (await canLaunchUrl(uri)) {
+                  await launchUrl(uri, mode: LaunchMode.externalApplication);
+                }
               },
-              style: TextButton.styleFrom(
-                padding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                minimumSize: Size(0, 0),
-                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                foregroundColor: Color(0xFF2563EB),
-              ),
-              child: Text(
-                'Tasks',
-                style: TextStyle(
-                  fontFamily: 'Inter',
-                  fontSize: 14,
-                  fontWeight: FontWeight.w600,
-                  color: Color(0xFF2563EB),
+              borderRadius: BorderRadius.circular(8),
+              child: Padding(
+                padding: EdgeInsetsDirectional.fromSTEB(0, 0, 12, 0),
+                child: Image.asset(
+                  'assets/images/gmeet.png',
+                  width: 28,
+                  height: 28,
+                  fit: BoxFit.contain,
                 ),
               ),
             ),
-          ],
+          ),
           // Audio/Video call icons removed for macOS (Zego not supported)
           // Call icons will show on iOS, Android, and Web builds
-          // More options button
+          // More options button - dropdown menu for group chats
           chat.isGroup
-              ? Tooltip(
-                  message: 'Group Info',
-                  child: IconButton(
-                    icon: Icon(
-                      Icons.more_vert,
-                      color: Color(0xFF9CA3AF),
-                      size: 20,
-                    ),
-                    onPressed: () => _viewGroupChat(chat),
+              ? PopupMenuButton<String>(
+                  onSelected: (String value) {
+                    if (value == 'add_members') {
+                      _navigateToAddMembers(chat);
+                    } else if (value == 'media') {
+                      _navigateToMedia(chat);
+                    } else if (value == 'tasks') {
+                      _navigateToTasks(chat);
+                    } else if (value == 'group_info') {
+                      _viewGroupChat(chat);
+                    }
+                  },
+                  itemBuilder: (BuildContext context) {
+                    // Group chat options
+                    return <PopupMenuEntry<String>>[
+                      PopupMenuItem<String>(
+                        value: 'add_members',
+                        child: Row(
+                          children: [
+                            Icon(
+                              Icons.person_add,
+                              color: Color(0xFF374151),
+                              size: 18,
+                            ),
+                            SizedBox(width: 12),
+                            Text(
+                              'Add Members',
+                              style: TextStyle(
+                                fontFamily: 'Inter',
+                                color: Color(0xFF111827),
+                                fontSize: 14,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      PopupMenuItem<String>(
+                        value: 'media',
+                        child: Row(
+                          children: [
+                            Icon(
+                              Icons.photo_library,
+                              color: Color(0xFF374151),
+                              size: 18,
+                            ),
+                            SizedBox(width: 12),
+                            Text(
+                              'Media',
+                              style: TextStyle(
+                                fontFamily: 'Inter',
+                                color: Color(0xFF111827),
+                                fontSize: 14,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      PopupMenuItem<String>(
+                        value: 'tasks',
+                        child: Row(
+                          children: [
+                            Icon(
+                              Icons.checklist,
+                              color: Color(0xFF374151),
+                              size: 18,
+                            ),
+                            SizedBox(width: 12),
+                            Text(
+                              'Tasks',
+                              style: TextStyle(
+                                fontFamily: 'Inter',
+                                color: Color(0xFF111827),
+                                fontSize: 14,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      PopupMenuItem<String>(
+                        value: 'group_info',
+                        child: Row(
+                          children: [
+                            Icon(
+                              Icons.info_outline,
+                              color: Color(0xFF374151),
+                              size: 18,
+                            ),
+                            SizedBox(width: 12),
+                            Text(
+                              'Group Info',
+                              style: TextStyle(
+                                fontFamily: 'Inter',
+                                color: Color(0xFF111827),
+                                fontSize: 14,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ];
+                  },
+                  icon: Icon(
+                    Icons.more_vert,
+                    color: Color(0xFF9CA3AF),
+                    size: 20,
                   ),
+                  tooltip: 'More options',
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  color: Colors.white,
+                  elevation: 8,
                 )
               : PopupMenuButton<String>(
                   onSelected: (String value) {
@@ -2938,7 +3008,8 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
                 context.pushNamed(
                   'UserSummary',
                   queryParameters: {
-                    'userRef': serializeParam(otherUserRef, ParamType.DocumentReference),
+                    'userRef': serializeParam(
+                        otherUserRef, ParamType.DocumentReference),
                   }.withoutNulls,
                   extra: <String, dynamic>{
                     'userRef': otherUserRef,
@@ -2999,7 +3070,8 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
                   ),
                 ),
                 // Green dot indicator for online status
-                if (isOnline && !otherUserRef.path.contains('ai_agent_summerai'))
+                if (isOnline &&
+                    !otherUserRef.path.contains('ai_agent_summerai'))
                   Positioned(
                     right: -1,
                     bottom: -1,
@@ -3353,6 +3425,31 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
     }
   }
 
+  void _navigateToAddMembers(ChatsRecord chat) {
+    if (!chat.isGroup) return;
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (context) => AddGroupMembersWidget(chatDoc: chat),
+      ),
+    );
+  }
+
+  void _navigateToMedia(ChatsRecord chat) {
+    if (!chat.isGroup) return;
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (context) => GroupMediaLinksDocsWidget(chatDoc: chat),
+      ),
+    );
+  }
+
+  void _navigateToTasks(ChatsRecord chat) {
+    if (!chat.isGroup) return;
+    setState(() {
+      _model.showTasksPanel = true;
+    });
+  }
+
   void _handlePinChat(ChatsRecord chat) async {
     try {
       final newPinStatus = !chat.isPin;
@@ -3502,7 +3599,7 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
 
   void _showEmailInviteDialog() {
     final emailController = TextEditingController();
-    
+
     showCupertinoDialog(
       context: context,
       builder: (dialogContext) => CupertinoAlertDialog(
@@ -3541,7 +3638,7 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
                   senderName: currentUserDisplayName,
                   referralLink: referralLink,
                 );
-                
+
                 // Show green tick overlay
                 _showSuccessTick();
               } catch (e) {
@@ -3557,7 +3654,7 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
   void _showSuccessTick() {
     final overlay = Overlay.of(context);
     late OverlayEntry entry;
-    
+
     entry = OverlayEntry(
       builder: (context) => Positioned(
         top: 50,
@@ -3598,9 +3695,9 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
         ),
       ),
     );
-    
+
     overlay.insert(entry);
-    
+
     // Remove after 1.5 seconds
     Future.delayed(Duration(milliseconds: 1500), () {
       entry.remove();

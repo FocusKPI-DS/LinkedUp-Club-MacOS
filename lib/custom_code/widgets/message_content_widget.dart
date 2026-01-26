@@ -16,17 +16,39 @@ class MessageContentWidget extends StatelessWidget {
   final void Function(String, String?, String?)? onTapLink;
   final MarkdownStyleSheet? styleSheet;
 
-  /// Parse content and extract mentions - highlight ONLY @mentions
+  /// Parse content and extract mentions - highlight @mentions in BOLD BLUE
+  /// WhatsApp-style: Only the @username portion is colored, not following text
   List<InlineSpan> _buildTextWithMentions() {
     final List<InlineSpan> spans = [];
-    // Match @ followed by word characters (including spaces in names like "@John Doe")
-    final mentionRegex = RegExp(r'@(\w+(?:\s+\w+)*)');
+    
+    // Match patterns:
+    // 1. @FirstName (capitalized) - e.g., @Mitansh
+    // 2. @FirstName LastName (both capitalized) - e.g., @Mitansh Patel
+    // 3. @linkai or @LinkAI (special AI assistant - case insensitive)
+    // 4. @word (single lowercase word for usernames) - e.g., @mike
+    final mentionRegex = RegExp(
+      r'@(?:linkai|[A-Z][a-zA-Z]*(?:\s+[A-Z][a-zA-Z]*)?|[a-z]+)',
+    );
     int lastMatchEnd = 0;
 
-    // Base black style for normal text
+    // Base style for normal text - black
     const baseBlackStyle = TextStyle(
-      fontSize: 14.0,
-      color: Color(0xFF1F2937), // Black
+      fontSize: 17.0,
+      fontFamily: 'SF Pro Text',
+      color: Color(0xFF000000), // Black for regular text
+      letterSpacing: -0.4,
+      fontWeight: FontWeight.w400,
+      height: 1.3,
+    );
+
+    // Style for @mentions - Bold Blue (iOS system blue)
+    const mentionStyle = TextStyle(
+      fontSize: 17.0,
+      fontFamily: 'SF Pro Text',
+      color: Color(0xFF007AFF), // iOS system blue
+      letterSpacing: -0.4,
+      fontWeight: FontWeight.w600, // Bold
+      height: 1.3,
     );
 
     final matches = mentionRegex.allMatches(content).toList();
@@ -50,10 +72,10 @@ class MessageContentWidget extends StatelessWidget {
         ));
       }
 
-      // Add @mention - plain black, no special styling
+      // Add @mention - BOLD and BLUE
       spans.add(TextSpan(
         text: match.group(0), // Full match including @
-        style: baseBlackStyle, // Same as normal text - plain black
+        style: mentionStyle, // Bold blue style
       ));
 
       lastMatchEnd = match.end;
@@ -89,30 +111,18 @@ class MessageContentWidget extends StatelessWidget {
     final hasMentions = content.contains(RegExp(r'@\w+'));
 
     if (hasMentions) {
-      // Completely isolate from ANY parent styles - use Container to break inheritance
-      return Container(
-        child: DefaultTextStyle(
+      // Render message with styled @mentions (bold blue) and normal text (black)
+      return SelectableText.rich(
+        TextSpan(
           style: const TextStyle(
-            color: Color(0xFF1F2937), // FORCE black - overrides ANY parent
-            fontSize: 14.0,
-            fontWeight: FontWeight.normal,
-            decoration: TextDecoration.none,
+            color: Color(0xFF000000), // Default black
+            fontSize: 17.0,
+            fontFamily: 'SF Pro Text',
+            fontWeight: FontWeight.w400,
+            letterSpacing: -0.4,
+            height: 1.3,
           ),
-          child: Builder(
-            builder: (context) {
-              // Create completely isolated TextSpan tree
-              return SelectableText.rich(
-                TextSpan(
-                  style: const TextStyle(
-                    color: Color(0xFF1F2937), // Explicitly black - no inheritance
-                    fontSize: 14.0,
-                    fontWeight: FontWeight.normal,
-                  ),
-                  children: _buildTextWithMentions(),
-                ),
-              );
-            },
-          ),
+          children: _buildTextWithMentions(),
         ),
       );
     }

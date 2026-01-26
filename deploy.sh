@@ -23,6 +23,16 @@ rm -rf nextjs-landing/out/app
 mkdir -p nextjs-landing/out/app
 cp -r build/web/* nextjs-landing/out/app/
 
+# Step 3.5: Fix flutter_bootstrap_js placeholder in index.html
+echo "🔧 Fixing flutter_bootstrap_js reference..."
+if [ -f "nextjs-landing/out/app/index.html" ]; then
+  # Replace the entire script block containing the placeholder with the actual script tag
+  perl -i -0pe 's/<script>\s*\{\s*\{\s*flutter_bootstrap_js\s*\}\s*\}\s*<\/script>/<script src="flutter_bootstrap.js"><\/script>/gs' nextjs-landing/out/app/index.html
+  echo "✅ Fixed index.html"
+else
+  echo "⚠️  Warning: index.html not found in app directory"
+fi
+
 # Step 4: Deploy to Firebase
 echo "🔥 Deploying to Firebase..."
 firebase deploy --only hosting

@@ -933,75 +933,77 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
             Expanded(
               child: Padding(
                 padding: const EdgeInsets.only(
-                    bottom: 20.0, left: 8.0), // Add bottom padding to move buttons up, left padding for search button
+                    bottom: 20.0,
+                    left:
+                        8.0), // Add bottom padding to move buttons up, left padding for search button
                 child: EmojiPicker(
                   onEmojiSelected: (category, emoji) {
                     Navigator.pop(context, emoji.emoji);
                   },
                   config: Config(
-                  height: MediaQuery.of(context).size.height * 0.35,
-                  checkPlatformCompatibility: true,
-                  emojiViewConfig: EmojiViewConfig(
-                    emojiSizeMax: 28,
-                    verticalSpacing: 0,
-                    horizontalSpacing: 0,
-                    gridPadding: EdgeInsets.zero,
-                    recentsLimit: 28,
-                    replaceEmojiOnLimitExceed: true,
-                    noRecents: Text(
-                      'No Recents',
-                      style: TextStyle(
-                        fontSize: 16,
-                        color: isDark ? Colors.white54 : Colors.black54,
+                    height: MediaQuery.of(context).size.height * 0.35,
+                    checkPlatformCompatibility: true,
+                    emojiViewConfig: EmojiViewConfig(
+                      emojiSizeMax: 28,
+                      verticalSpacing: 0,
+                      horizontalSpacing: 0,
+                      gridPadding: EdgeInsets.zero,
+                      recentsLimit: 28,
+                      replaceEmojiOnLimitExceed: true,
+                      noRecents: Text(
+                        'No Recents',
+                        style: TextStyle(
+                          fontSize: 16,
+                          color: isDark ? Colors.white54 : Colors.black54,
+                        ),
+                      ),
+                      loadingIndicator: const Center(
+                        child: CupertinoActivityIndicator(),
+                      ),
+                      buttonMode: ButtonMode.CUPERTINO,
+                      backgroundColor:
+                          isDark ? const Color(0xFF1C1C1E) : Colors.white,
+                    ),
+                    skinToneConfig: const SkinToneConfig(
+                      enabled: true,
+                      dialogBackgroundColor: Colors.white,
+                      indicatorColor: Colors.grey,
+                    ),
+                    categoryViewConfig: CategoryViewConfig(
+                      initCategory: Category.RECENT,
+                      backgroundColor:
+                          isDark ? const Color(0xFF1C1C1E) : Colors.white,
+                      indicatorColor: FlutterFlowTheme.of(context).primary,
+                      iconColor: isDark ? Colors.white54 : Colors.black45,
+                      iconColorSelected: FlutterFlowTheme.of(context).primary,
+                      categoryIcons: const CategoryIcons(
+                        recentIcon: CupertinoIcons.clock,
+                        smileyIcon: CupertinoIcons.smiley,
+                        animalIcon: CupertinoIcons.tortoise,
+                        foodIcon: CupertinoIcons.cart,
+                        activityIcon: CupertinoIcons.sportscourt,
+                        travelIcon: CupertinoIcons.car,
+                        objectIcon: CupertinoIcons.lightbulb,
+                        symbolIcon: CupertinoIcons.heart,
+                        flagIcon: CupertinoIcons.flag,
                       ),
                     ),
-                    loadingIndicator: const Center(
-                      child: CupertinoActivityIndicator(),
+                    bottomActionBarConfig: BottomActionBarConfig(
+                      backgroundColor:
+                          isDark ? const Color(0xFF1C1C1E) : Colors.white,
+                      buttonColor: isDark ? Colors.white54 : Colors.black45,
+                      buttonIconColor: isDark ? Colors.white : Colors.black87,
+                      showBackspaceButton: false,
+                      showSearchViewButton: true,
                     ),
-                    buttonMode: ButtonMode.CUPERTINO,
-                    backgroundColor:
-                        isDark ? const Color(0xFF1C1C1E) : Colors.white,
-                  ),
-                  skinToneConfig: const SkinToneConfig(
-                    enabled: true,
-                    dialogBackgroundColor: Colors.white,
-                    indicatorColor: Colors.grey,
-                  ),
-                  categoryViewConfig: CategoryViewConfig(
-                    initCategory: Category.RECENT,
-                    backgroundColor:
-                        isDark ? const Color(0xFF1C1C1E) : Colors.white,
-                    indicatorColor: FlutterFlowTheme.of(context).primary,
-                    iconColor: isDark ? Colors.white54 : Colors.black45,
-                    iconColorSelected: FlutterFlowTheme.of(context).primary,
-                    categoryIcons: const CategoryIcons(
-                      recentIcon: CupertinoIcons.clock,
-                      smileyIcon: CupertinoIcons.smiley,
-                      animalIcon: CupertinoIcons.tortoise,
-                      foodIcon: CupertinoIcons.cart,
-                      activityIcon: CupertinoIcons.sportscourt,
-                      travelIcon: CupertinoIcons.car,
-                      objectIcon: CupertinoIcons.lightbulb,
-                      symbolIcon: CupertinoIcons.heart,
-                      flagIcon: CupertinoIcons.flag,
+                    searchViewConfig: SearchViewConfig(
+                      backgroundColor: isDark
+                          ? const Color(0xFF2C2C2E)
+                          : const Color(0xFFF2F2F7),
+                      buttonIconColor: isDark ? Colors.white54 : Colors.black54,
+                      hintText: 'Search emoji...',
                     ),
                   ),
-                  bottomActionBarConfig: BottomActionBarConfig(
-                    backgroundColor:
-                        isDark ? const Color(0xFF1C1C1E) : Colors.white,
-                    buttonColor: isDark ? Colors.white54 : Colors.black45,
-                    buttonIconColor: isDark ? Colors.white : Colors.black87,
-                    showBackspaceButton: false,
-                    showSearchViewButton: true,
-                  ),
-                  searchViewConfig: SearchViewConfig(
-                    backgroundColor: isDark
-                        ? const Color(0xFF2C2C2E)
-                        : const Color(0xFFF2F2F7),
-                    buttonIconColor: isDark ? Colors.white54 : Colors.black54,
-                    hintText: 'Search emoji...',
-                  ),
-                ),
                 ),
               ),
             ),
@@ -1274,50 +1276,49 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
         return Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-        if (isMe)
-          Align(
-            alignment: const AlignmentDirectional(1.0, 0.0),
-            child: Builder(
-              builder: (context) => GestureDetector(
-                onTap: () async {
-                  await actions.closekeyboard();
-                  await widget.action?.call();
-                },
-                onLongPress: _openReportDialog,
-                child: Container(
-                  width: double.infinity,
-                  decoration: const BoxDecoration(),
-                  child: Padding(
-                    padding: const EdgeInsets.all(8.0),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      mainAxisAlignment: MainAxisAlignment.end,
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Flexible(
-                          child: Container(
-                            constraints: BoxConstraints(
-                              maxWidth: availableWidth * 0.7,
-                            ),
-                            child: Column(
-                              mainAxisSize: MainAxisSize.min,
-                              crossAxisAlignment: CrossAxisAlignment.end,
-                              children: [
-                                Align(
-                                  alignment:
-                                      const AlignmentDirectional(1.0, -1.0),
-                                  child: Padding(
-                                    padding:
-                                        const EdgeInsetsDirectional.fromSTEB(
-                                            12.0, 0.0, 12.0, 0.0),
-                                    child: GestureDetector(
-                                      onLongPress: _copyContentIfAny,
-                                      child: Builder(
-                                        builder: (context) {
-                                          final content =
-                                              widget.message?.content ?? '';
-                                          final isOnlyEmojis =
-                                              _containsOnlyEmojis(content) &&
+            if (isMe)
+              Align(
+                alignment: const AlignmentDirectional(1.0, 0.0),
+                child: Builder(
+                  builder: (context) => GestureDetector(
+                    onTap: () async {
+                      await actions.closekeyboard();
+                      await widget.action?.call();
+                    },
+                    onLongPress: _openReportDialog,
+                    child: Container(
+                      width: double.infinity,
+                      decoration: const BoxDecoration(),
+                      child: Padding(
+                        padding: const EdgeInsets.all(8.0),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          mainAxisAlignment: MainAxisAlignment.end,
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Flexible(
+                              child: Container(
+                                constraints: BoxConstraints(
+                                  maxWidth: availableWidth * 0.7,
+                                ),
+                                child: Column(
+                                  mainAxisSize: MainAxisSize.min,
+                                  crossAxisAlignment: CrossAxisAlignment.end,
+                                  children: [
+                                    Align(
+                                      alignment:
+                                          const AlignmentDirectional(1.0, -1.0),
+                                      child: Padding(
+                                        padding: const EdgeInsetsDirectional
+                                            .fromSTEB(12.0, 0.0, 12.0, 0.0),
+                                        child: GestureDetector(
+                                          onLongPress: _copyContentIfAny,
+                                          child: Builder(
+                                            builder: (context) {
+                                              final content =
+                                                  widget.message?.content ?? '';
+                                              final isOnlyEmojis = _containsOnlyEmojis(
+                                                      content) &&
                                                   (widget.message?.image ==
                                                           null ||
                                                       widget.message?.image ==
@@ -1340,462 +1341,467 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
                                                           .isEmpty ??
                                                       true);
 
-                                          if (isOnlyEmojis &&
-                                              content.isNotEmpty) {
-                                            // WhatsApp style: Just emojis in bigger size, no bubble
-                                            return _withMessageMenu(
-                                              bubble: Padding(
-                                                padding:
-                                                    const EdgeInsets.symmetric(
+                                              if (isOnlyEmojis &&
+                                                  content.isNotEmpty) {
+                                                // WhatsApp style: Just emojis in bigger size, no bubble
+                                                return _withMessageMenu(
+                                                  bubble: Padding(
+                                                    padding: const EdgeInsets
+                                                        .symmetric(
                                                         horizontal: 8.0,
                                                         vertical: 4.0),
-                                                child: Text(
-                                                  content,
-                                                  style: const TextStyle(
-                                                    fontSize:
-                                                        48.0, // Larger size for emojis
-                                                    height: 1.2,
+                                                    child: Text(
+                                                      content,
+                                                      style: const TextStyle(
+                                                        fontSize:
+                                                            48.0, // Larger size for emojis
+                                                        height: 1.2,
+                                                      ),
+                                                    ),
                                                   ),
-                                                ),
-                                              ),
-                                            );
-                                          }
+                                                );
+                                              }
 
-                                          // Regular message with bubble
-                                          // If message has image, use fixed width like WhatsApp
-                                          final hasImage = widget.message?.image != null && 
-                                                          widget.message!.image.isNotEmpty;
-                                          return _withMessageMenu(
-                                            bubble: AnimatedContainer(
-                                              duration: const Duration(
-                                                  milliseconds: 300),
-                                              constraints: BoxConstraints(
-                                                maxWidth: hasImage ? 280.0 : availableWidth * 0.7,
-                                              ),
-                                              width: hasImage ? 280.0 : null, // Fixed width when has image
-                                              decoration: BoxDecoration(
-                                                color: Colors.white,
-                                                borderRadius:
-                                                    BorderRadius.circular(18.0),
-                                                border: Border.all(
-                                                  color: Colors.black
-                                                      .withOpacity(0.08),
-                                                  width: 1.0,
-                                                ),
-                                                boxShadow: widget.isHighlighted
-                                                    ? [
-                                                        BoxShadow(
-                                                          color: const Color(
-                                                                  0xFF007AFF)
-                                                              .withOpacity(0.4),
-                                                          blurRadius: 8.0,
-                                                          spreadRadius: 2.0,
-                                                        ),
-                                                      ]
-                                                    : null,
-                                              ),
-                                              child: Padding(
-                                                padding:
-                                                    const EdgeInsets.symmetric(
+                                              // Regular message with bubble
+                                              // If message has image, use fixed width like WhatsApp
+                                              final hasImage =
+                                                  widget.message?.image !=
+                                                          null &&
+                                                      widget.message!.image
+                                                          .isNotEmpty;
+                                              return _withMessageMenu(
+                                                bubble: AnimatedContainer(
+                                                  duration: const Duration(
+                                                      milliseconds: 300),
+                                                  constraints: BoxConstraints(
+                                                    maxWidth: hasImage
+                                                        ? 280.0
+                                                        : availableWidth * 0.7,
+                                                  ),
+                                                  width: hasImage
+                                                      ? 280.0
+                                                      : null, // Fixed width when has image
+                                                  decoration: BoxDecoration(
+                                                    color: Colors.white,
+                                                    borderRadius:
+                                                        BorderRadius.circular(
+                                                            18.0),
+                                                    border: Border.all(
+                                                      color: Colors.black
+                                                          .withOpacity(0.08),
+                                                      width: 1.0,
+                                                    ),
+                                                    boxShadow: widget
+                                                            .isHighlighted
+                                                        ? [
+                                                            BoxShadow(
+                                                              color: const Color(
+                                                                      0xFF007AFF)
+                                                                  .withOpacity(
+                                                                      0.4),
+                                                              blurRadius: 8.0,
+                                                              spreadRadius: 2.0,
+                                                            ),
+                                                          ]
+                                                        : null,
+                                                  ),
+                                                  child: Padding(
+                                                    padding: const EdgeInsets
+                                                        .symmetric(
                                                         horizontal: 14.0,
                                                         vertical: 10.0),
-                                                child: Column(
-                                                  mainAxisSize:
-                                                      MainAxisSize.min,
-                                                  crossAxisAlignment:
-                                                      CrossAxisAlignment.start,
-                                                  children: [
-                                                    // Reply indicator
-                                                    if (widget.message
-                                                                ?.replyTo !=
-                                                            null &&
-                                                        widget.message
-                                                                ?.replyTo !=
-                                                            '')
-                                                      GestureDetector(
-                                                        onTap: () =>
-                                                            _scrollToRepliedMessage(),
-                                                        child: Container(
-                                                          constraints:
-                                                              const BoxConstraints(
-                                                            maxWidth: 280.0,
-                                                          ),
-                                                          margin:
-                                                              const EdgeInsets
-                                                                  .only(
-                                                                  bottom: 8.0),
-                                                          padding:
-                                                              const EdgeInsets
-                                                                  .symmetric(
-                                                                  horizontal:
-                                                                      10.0,
-                                                                  vertical:
-                                                                      6.0),
-                                                          decoration:
-                                                              BoxDecoration(
-                                                            color: const Color(
-                                                                0xFFF0F2F5),
-                                                            borderRadius:
-                                                                BorderRadius
-                                                                    .circular(
-                                                                        10.0),
-                                                            border:
-                                                                const Border(
-                                                              left: BorderSide(
-                                                                color: Color(
-                                                                    0xFF007AFF),
-                                                                width: 3.0,
-                                                              ),
-                                                            ),
-                                                          ),
-                                                          child: Row(
-                                                            mainAxisSize:
-                                                                MainAxisSize
-                                                                    .min,
-                                                            children: [
-                                                              Expanded(
-                                                                child: Column(
-                                                                  crossAxisAlignment:
-                                                                      CrossAxisAlignment
-                                                                          .start,
-                                                                  mainAxisSize:
-                                                                      MainAxisSize
-                                                                          .min,
-                                                                  children: [
-                                                                    Text(
-                                                                      widget.message
-                                                                              ?.replyToSender ??
-                                                                          'Unknown',
-                                                                      style:
-                                                                          const TextStyle(
-                                                                        fontFamily:
-                                                                            'SF Pro Text',
-                                                                        color: Color(
-                                                                            0xFF007AFF),
-                                                                        fontSize:
-                                                                            13.0,
-                                                                        fontWeight:
-                                                                            FontWeight.w600,
-                                                                      ),
-                                                                    ),
-                                                                    const SizedBox(
-                                                                        height:
-                                                                            2.0),
-                                                                    Text(
-                                                                      widget.message
-                                                                              ?.replyToContent ??
-                                                                          '',
-                                                                      style:
-                                                                          const TextStyle(
-                                                                        fontFamily:
-                                                                            'SF Pro Text',
-                                                                        color: Color(
-                                                                            0xFF667781),
-                                                                        fontSize:
-                                                                            13.0,
-                                                                      ),
-                                                                      maxLines:
-                                                                          1,
-                                                                      overflow:
-                                                                          TextOverflow
-                                                                              .ellipsis,
-                                                                    ),
-                                                                  ],
-                                                                ),
-                                                              ),
-                                                            ],
-                                                          ),
-                                                        ),
-                                                      ),
-                                                    // Only show content if there's no file attachment (file name is shown in the file card)
-                                                    if (widget.message
-                                                                ?.content !=
-                                                            null &&
-                                                        widget.message
-                                                                ?.content !=
-                                                            '' &&
-                                                        (widget.message
-                                                                    ?.attachmentUrl ==
-                                                                null ||
+                                                    child: Column(
+                                                      mainAxisSize:
+                                                          MainAxisSize.min,
+                                                      crossAxisAlignment:
+                                                          CrossAxisAlignment
+                                                              .start,
+                                                      children: [
+                                                        // Reply indicator
+                                                        if (widget.message
+                                                                    ?.replyTo !=
+                                                                null &&
                                                             widget.message
-                                                                    ?.attachmentUrl ==
-                                                                ''))
-                                                      custom_widgets
-                                                          .MessageContentWidget(
-                                                        content: valueOrDefault<
-                                                            String>(
-                                                          widget
-                                                              .message?.content,
-                                                          'I\'m at the venue now. Here\'s the map with the room highlighted:',
-                                                        ),
-                                                        senderName: widget.name,
-                                                        onTapLink: (text, url,
-                                                            title) async {
-                                                          if (url != null) {
-                                                            await _launchURL(
-                                                                url);
-                                                          }
-                                                        },
-                                                        styleSheet:
-                                                            MarkdownStyleSheet(
-                                                          // iOS native text styling
-                                                          p: const TextStyle(
-                                                            fontFamily:
-                                                                'SF Pro Text',
-                                                            color: Color(
-                                                                0xFF000000),
-                                                            fontSize: 17.0,
-                                                            letterSpacing: -0.4,
-                                                            fontWeight:
-                                                                FontWeight.w400,
-                                                            height: 1.3,
-                                                          ),
-                                                          a: const TextStyle(
-                                                            fontFamily:
-                                                                'SF Pro Text',
-                                                            color: Color(
-                                                                0xFF007AFF),
-                                                            fontSize: 17.0,
-                                                            letterSpacing: -0.4,
-                                                            fontWeight:
-                                                                FontWeight.w400,
-                                                            decoration:
-                                                                TextDecoration
-                                                                    .underline,
-                                                          ),
-                                                          code: const TextStyle(
-                                                            fontFamily:
-                                                                'SF Mono',
-                                                            color: Color(
-                                                                0xFF000000),
-                                                            fontSize: 15.0,
-                                                          ),
-                                                          codeblockDecoration:
-                                                              BoxDecoration(
-                                                            color: const Color(
-                                                                0xFFE5E7EB),
-                                                            borderRadius:
-                                                                BorderRadius
-                                                                    .circular(
-                                                                        6),
-                                                          ),
-                                                          strong:
-                                                              const TextStyle(
-                                                            fontFamily:
-                                                                'SF Pro Text',
-                                                            color: Color(
-                                                                0xFF000000),
-                                                            fontSize: 17.0,
-                                                            fontWeight:
-                                                                FontWeight.w600,
-                                                          ),
-                                                          em: const TextStyle(
-                                                            fontFamily:
-                                                                'SF Pro Text',
-                                                            color: Color(
-                                                                0xFF000000),
-                                                            fontSize: 17.0,
-                                                            fontStyle: FontStyle
-                                                                .italic,
-                                                            fontWeight:
-                                                                FontWeight.w400,
-                                                          ),
-                                                          tableBody:
-                                                              const TextStyle(
-                                                            fontFamily:
-                                                                'SF Pro Text',
-                                                            color: Color(
-                                                                0xFF000000),
-                                                            fontSize: 15.0,
-                                                            fontWeight:
-                                                                FontWeight.w400,
-                                                          ),
-                                                          tableHead:
-                                                              const TextStyle(
-                                                            fontFamily:
-                                                                'SF Pro Text',
-                                                            color: Color(
-                                                                0xFF000000),
-                                                            fontSize: 15.0,
-                                                            fontWeight:
-                                                                FontWeight.w600,
-                                                          ),
-                                                        ),
-                                                      ),
-                                                    // Edited indicator
-                                                    if (widget.message
-                                                            ?.isEdited ==
-                                                        true)
-                                                      Padding(
-                                                        padding:
-                                                            const EdgeInsetsDirectional
-                                                                .fromSTEB(0.0,
-                                                                4.0, 0.0, 0.0),
-                                                        child: Row(
-                                                          mainAxisSize:
-                                                              MainAxisSize.min,
-                                                          children: [
-                                                            Text(
-                                                              'edited',
-                                                              style: TextStyle(
-                                                                fontFamily:
-                                                                    'SF Pro Text',
+                                                                    ?.replyTo !=
+                                                                '')
+                                                          GestureDetector(
+                                                            onTap: () =>
+                                                                _scrollToRepliedMessage(),
+                                                            child: Container(
+                                                              constraints:
+                                                                  const BoxConstraints(
+                                                                maxWidth: 280.0,
+                                                              ),
+                                                              margin:
+                                                                  const EdgeInsets
+                                                                      .only(
+                                                                      bottom:
+                                                                          8.0),
+                                                              padding:
+                                                                  const EdgeInsets
+                                                                      .symmetric(
+                                                                      horizontal:
+                                                                          10.0,
+                                                                      vertical:
+                                                                          6.0),
+                                                              decoration:
+                                                                  BoxDecoration(
                                                                 color: const Color(
-                                                                    0xFF8E8E93),
-                                                                fontSize: 11.0,
-                                                                fontStyle:
-                                                                    FontStyle
-                                                                        .italic,
-                                                              ),
-                                                            ),
-                                                            if (widget.message
-                                                                    ?.editedAt !=
-                                                                null) ...[
-                                                              Text(
-                                                                ' • ',
-                                                                style:
-                                                                    const TextStyle(
-                                                                  fontFamily:
-                                                                      'SF Pro Text',
-                                                                  color: Color(
-                                                                      0xFF8E8E93),
-                                                                  fontSize:
-                                                                      11.0,
-                                                                ),
-                                                              ),
-                                                              Text(
-                                                                dateTimeFormat(
-                                                                    'MMM d, h:mm a',
-                                                                    widget
-                                                                        .message!
-                                                                        .editedAt!),
-                                                                style:
-                                                                    const TextStyle(
-                                                                  fontFamily:
-                                                                      'SF Pro Text',
-                                                                  color: Color(
-                                                                      0xFF8E8E93),
-                                                                  fontSize:
-                                                                      11.0,
-                                                                  fontStyle:
-                                                                      FontStyle
-                                                                          .italic,
-                                                                ),
-                                                              ),
-                                                            ],
-                                                          ],
-                                                        ),
-                                                      ),
-                                                    if (widget.message?.image !=
-                                                            null &&
-                                                        widget.message?.image !=
-                                                            '')
-                                                      OverflowBox(
-                                                        maxWidth:
-                                                            double.infinity,
-                                                        alignment:
-                                                            AlignmentDirectional
-                                                                .centerStart,
-                                                        child: Padding(
-                                                          padding:
-                                                              const EdgeInsets
-                                                                  .only(
-                                                                  left: 40.0),
-                                                          child: Stack(
-                                                            clipBehavior:
-                                                                Clip.none,
-                                                            children: [
-                                                              // Image bubble container (WhatsApp style: fixed width)
-                                                              Container(
-                                                                    constraints:
-                                                                    BoxConstraints(
-                                                                  maxWidth: 280.0, // Fixed width like WhatsApp
-                                                                  maxHeight:
-                                                                      400.0,
-                                                                ),
-                                                                width: 280.0, // Fixed width
-                                                                margin:
-                                                                    const EdgeInsets
-                                                                        .only(
-                                                                  bottom: 4.0,
-                                                                ),
-                                                                decoration:
-                                                                    BoxDecoration(
-                                                                  color: const Color(
-                                                                      0xFFE5E7EB),
-                                                                  borderRadius:
-                                                                      BorderRadius
-                                                                          .only(
-                                                                    topLeft: Radius
+                                                                    0xFFF0F2F5),
+                                                                borderRadius:
+                                                                    BorderRadius
                                                                         .circular(
-                                                                            8.0),
-                                                                    topRight: Radius
-                                                                        .circular(
-                                                                            8.0),
-                                                                    bottomLeft:
-                                                                        Radius.circular(
-                                                                            8.0),
-                                                                    bottomRight: Radius.circular((widget.message?.content !=
-                                                                                null &&
-                                                                            widget
-                                                                                .message!.content.isNotEmpty &&
-                                                                            (widget.message?.attachmentUrl == null ||
-                                                                                widget.message?.attachmentUrl == ''))
-                                                                        ? 0.0
-                                                                        : 8.0),
+                                                                            10.0),
+                                                                border:
+                                                                    const Border(
+                                                                  left:
+                                                                      BorderSide(
+                                                                    color: Color(
+                                                                        0xFF007AFF),
+                                                                    width: 3.0,
                                                                   ),
                                                                 ),
-                                                                child:
-                                                                    GestureDetector(
-                                                                  onTap:
-                                                                      () async {
-                                                                    await Navigator
-                                                                        .push(
-                                                                      context,
-                                                                      PageTransition(
-                                                                        type: PageTransitionType
-                                                                            .fade,
-                                                                        child:
-                                                                            FlutterFlowExpandedImageView(
-                                                                          image:
-                                                                              CachedNetworkImage(
-                                                                            fadeInDuration:
-                                                                                const Duration(milliseconds: 300),
-                                                                            fadeOutDuration:
-                                                                                const Duration(milliseconds: 300),
-                                                                            imageUrl:
-                                                                                valueOrDefault<String>(
-                                                                              widget.message?.image,
-                                                                              'https://firebasestorage.googleapis.com/v0/b/linkedup-c3e29.firebasestorage.app/o/asset%2Fdefault-user.png?alt=media&token=35d4da12-13b0-4f43-8b8e-375e6e126683',
-                                                                            ),
-                                                                            fit:
-                                                                                BoxFit.contain,
-                                                                          ),
-                                                                          allowRotation:
-                                                                              false,
-                                                                          tag: valueOrDefault<
-                                                                              String>(
-                                                                            widget.message?.image,
-                                                                            'https://firebasestorage.googleapis.com/v0/b/linkedup-c3e29.firebasestorage.app/o/asset%2Fdefault-user.png?alt=media&token=35d4da12-13b0-4f43-8b8e-375e6e126683',
-                                                                          ),
-                                                                          useHeroAnimation:
-                                                                              true,
-                                                                        ),
-                                                                      ),
-                                                                    );
-                                                                  },
-                                                                  child: Hero(
-                                                                    tag: valueOrDefault<
-                                                                        String>(
-                                                                      widget
-                                                                          .message
-                                                                          ?.image,
-                                                                      'https://firebasestorage.googleapis.com/v0/b/linkedup-c3e29.firebasestorage.app/o/asset%2Fdefault-user.png?alt=media&token=35d4da12-13b0-4f43-8b8e-375e6e126683',
-                                                                    ),
-                                                                    transitionOnUserGestures:
-                                                                        true,
+                                                              ),
+                                                              child: Row(
+                                                                mainAxisSize:
+                                                                    MainAxisSize
+                                                                        .min,
+                                                                children: [
+                                                                  Expanded(
                                                                     child:
-                                                                        ClipRRect(
+                                                                        Column(
+                                                                      crossAxisAlignment:
+                                                                          CrossAxisAlignment
+                                                                              .start,
+                                                                      mainAxisSize:
+                                                                          MainAxisSize
+                                                                              .min,
+                                                                      children: [
+                                                                        Text(
+                                                                          widget.message?.replyToSender ??
+                                                                              'Unknown',
+                                                                          style:
+                                                                              const TextStyle(
+                                                                            fontFamily:
+                                                                                'SF Pro Text',
+                                                                            color:
+                                                                                Color(0xFF007AFF),
+                                                                            fontSize:
+                                                                                13.0,
+                                                                            fontWeight:
+                                                                                FontWeight.w600,
+                                                                          ),
+                                                                        ),
+                                                                        const SizedBox(
+                                                                            height:
+                                                                                2.0),
+                                                                        Text(
+                                                                          widget.message?.replyToContent ??
+                                                                              '',
+                                                                          style:
+                                                                              const TextStyle(
+                                                                            fontFamily:
+                                                                                'SF Pro Text',
+                                                                            color:
+                                                                                Color(0xFF667781),
+                                                                            fontSize:
+                                                                                13.0,
+                                                                          ),
+                                                                          maxLines:
+                                                                              1,
+                                                                          overflow:
+                                                                              TextOverflow.ellipsis,
+                                                                        ),
+                                                                      ],
+                                                                    ),
+                                                                  ),
+                                                                ],
+                                                              ),
+                                                            ),
+                                                          ),
+                                                        // Show content if it exists and doesn't look like a filename
+                                                        // When there's a file attachment, show content only if it's actual text (not filename)
+                                                        if (widget.message
+                                                                    ?.content !=
+                                                                null &&
+                                                            widget
+                                                                .message!
+                                                                .content
+                                                                .isNotEmpty) ...[
+                                                          Builder(
+                                                            builder: (context) {
+                                                              final content =
+                                                                  widget
+                                                                      .message!
+                                                                      .content;
+                                                              final hasAttachment = widget
+                                                                          .message
+                                                                          ?.attachmentUrl !=
+                                                                      null &&
+                                                                  widget
+                                                                      .message!
+                                                                      .attachmentUrl
+                                                                      .isNotEmpty;
+                                                              // Check if content looks like a filename (has extension, short, few words)
+                                                              final looksLikeFilename = hasAttachment &&
+                                                                  content
+                                                                      .contains(
+                                                                          '.') &&
+                                                                  !content
+                                                                      .contains(
+                                                                          '/') &&
+                                                                  !content
+                                                                      .contains(
+                                                                          '\\') &&
+                                                                  content.length <
+                                                                      200 &&
+                                                                  content
+                                                                          .split(
+                                                                              ' ')
+                                                                          .length <
+                                                                      8;
+
+                                                              // Only show content if it doesn't look like a filename
+                                                              if (!looksLikeFilename) {
+                                                                return custom_widgets
+                                                                    .MessageContentWidget(
+                                                                  content:
+                                                                      content,
+                                                                  senderName:
+                                                                      widget
+                                                                          .name,
+                                                                  onTapLink: (text,
+                                                                      url,
+                                                                      title) async {
+                                                                    if (url !=
+                                                                        null) {
+                                                                      await _launchURL(
+                                                                          url);
+                                                                    }
+                                                                  },
+                                                                  styleSheet:
+                                                                      MarkdownStyleSheet(
+                                                                    // iOS native text styling
+                                                                    p: const TextStyle(
+                                                                      fontFamily:
+                                                                          'SF Pro Text',
+                                                                      color: Color(
+                                                                          0xFF000000),
+                                                                      fontSize:
+                                                                          17.0,
+                                                                      letterSpacing:
+                                                                          -0.4,
+                                                                      fontWeight:
+                                                                          FontWeight
+                                                                              .w400,
+                                                                      height:
+                                                                          1.3,
+                                                                    ),
+                                                                    a: const TextStyle(
+                                                                      fontFamily:
+                                                                          'SF Pro Text',
+                                                                      color: Color(
+                                                                          0xFF007AFF),
+                                                                      fontSize:
+                                                                          17.0,
+                                                                      letterSpacing:
+                                                                          -0.4,
+                                                                      fontWeight:
+                                                                          FontWeight
+                                                                              .w400,
+                                                                      decoration:
+                                                                          TextDecoration
+                                                                              .underline,
+                                                                    ),
+                                                                    code:
+                                                                        const TextStyle(
+                                                                      fontFamily:
+                                                                          'SF Mono',
+                                                                      color: Color(
+                                                                          0xFF000000),
+                                                                      fontSize:
+                                                                          15.0,
+                                                                    ),
+                                                                    codeblockDecoration:
+                                                                        BoxDecoration(
+                                                                      color: const Color(
+                                                                          0xFFE5E7EB),
+                                                                      borderRadius:
+                                                                          BorderRadius.circular(
+                                                                              6),
+                                                                    ),
+                                                                    strong:
+                                                                        const TextStyle(
+                                                                      fontFamily:
+                                                                          'SF Pro Text',
+                                                                      color: Color(
+                                                                          0xFF000000),
+                                                                      fontSize:
+                                                                          17.0,
+                                                                      fontWeight:
+                                                                          FontWeight
+                                                                              .w600,
+                                                                    ),
+                                                                    em: const TextStyle(
+                                                                      fontFamily:
+                                                                          'SF Pro Text',
+                                                                      color: Color(
+                                                                          0xFF000000),
+                                                                      fontSize:
+                                                                          17.0,
+                                                                      fontStyle:
+                                                                          FontStyle
+                                                                              .italic,
+                                                                      fontWeight:
+                                                                          FontWeight
+                                                                              .w400,
+                                                                    ),
+                                                                    tableBody:
+                                                                        const TextStyle(
+                                                                      fontFamily:
+                                                                          'SF Pro Text',
+                                                                      color: Color(
+                                                                          0xFF000000),
+                                                                      fontSize:
+                                                                          15.0,
+                                                                      fontWeight:
+                                                                          FontWeight
+                                                                              .w400,
+                                                                    ),
+                                                                    tableHead:
+                                                                        const TextStyle(
+                                                                      fontFamily:
+                                                                          'SF Pro Text',
+                                                                      color: Color(
+                                                                          0xFF000000),
+                                                                      fontSize:
+                                                                          15.0,
+                                                                      fontWeight:
+                                                                          FontWeight
+                                                                              .w600,
+                                                                    ),
+                                                                  ),
+                                                                );
+                                                              }
+                                                              return SizedBox
+                                                                  .shrink();
+                                                            },
+                                                          ),
+                                                        ],
+                                                        // Edited indicator
+                                                        if (widget.message
+                                                                ?.isEdited ==
+                                                            true)
+                                                          Padding(
+                                                            padding:
+                                                                const EdgeInsetsDirectional
+                                                                    .fromSTEB(
+                                                                    0.0,
+                                                                    4.0,
+                                                                    0.0,
+                                                                    0.0),
+                                                            child: Row(
+                                                              mainAxisSize:
+                                                                  MainAxisSize
+                                                                      .min,
+                                                              children: [
+                                                                Text(
+                                                                  'edited',
+                                                                  style:
+                                                                      TextStyle(
+                                                                    fontFamily:
+                                                                        'SF Pro Text',
+                                                                    color: const Color(
+                                                                        0xFF8E8E93),
+                                                                    fontSize:
+                                                                        11.0,
+                                                                    fontStyle:
+                                                                        FontStyle
+                                                                            .italic,
+                                                                  ),
+                                                                ),
+                                                                if (widget
+                                                                        .message
+                                                                        ?.editedAt !=
+                                                                    null) ...[
+                                                                  Text(
+                                                                    ' • ',
+                                                                    style:
+                                                                        const TextStyle(
+                                                                      fontFamily:
+                                                                          'SF Pro Text',
+                                                                      color: Color(
+                                                                          0xFF8E8E93),
+                                                                      fontSize:
+                                                                          11.0,
+                                                                    ),
+                                                                  ),
+                                                                  Text(
+                                                                    dateTimeFormat(
+                                                                        'MMM d, h:mm a',
+                                                                        widget
+                                                                            .message!
+                                                                            .editedAt!),
+                                                                    style:
+                                                                        const TextStyle(
+                                                                      fontFamily:
+                                                                          'SF Pro Text',
+                                                                      color: Color(
+                                                                          0xFF8E8E93),
+                                                                      fontSize:
+                                                                          11.0,
+                                                                      fontStyle:
+                                                                          FontStyle
+                                                                              .italic,
+                                                                    ),
+                                                                  ),
+                                                                ],
+                                                              ],
+                                                            ),
+                                                          ),
+                                                        if (widget.message
+                                                                    ?.image !=
+                                                                null &&
+                                                            widget.message
+                                                                    ?.image !=
+                                                                '')
+                                                          OverflowBox(
+                                                            maxWidth:
+                                                                double.infinity,
+                                                            alignment:
+                                                                AlignmentDirectional
+                                                                    .centerStart,
+                                                            child: Padding(
+                                                              padding:
+                                                                  const EdgeInsets
+                                                                      .only(
+                                                                      left:
+                                                                          40.0),
+                                                              child: Stack(
+                                                                clipBehavior:
+                                                                    Clip.none,
+                                                                children: [
+                                                                  // Image bubble container (WhatsApp style: fixed width)
+                                                                  Container(
+                                                                    constraints:
+                                                                        BoxConstraints(
+                                                                      maxWidth:
+                                                                          280.0, // Fixed width like WhatsApp
+                                                                      maxHeight:
+                                                                          400.0,
+                                                                    ),
+                                                                    width:
+                                                                        280.0, // Fixed width
+                                                                    margin:
+                                                                        const EdgeInsets
+                                                                            .only(
+                                                                      bottom:
+                                                                          4.0,
+                                                                    ),
+                                                                    decoration:
+                                                                        BoxDecoration(
+                                                                      color: const Color(
+                                                                          0xFFE5E7EB),
                                                                       borderRadius:
                                                                           BorderRadius
                                                                               .only(
@@ -1811,881 +1817,64 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
                                                                             ? 0.0
                                                                             : 8.0),
                                                                       ),
+                                                                    ),
+                                                                    child:
+                                                                        GestureDetector(
+                                                                      onTap:
+                                                                          () async {
+                                                                        await Navigator
+                                                                            .push(
+                                                                          context,
+                                                                          PageTransition(
+                                                                            type:
+                                                                                PageTransitionType.fade,
+                                                                            child:
+                                                                                FlutterFlowExpandedImageView(
+                                                                              image: CachedNetworkImage(
+                                                                                fadeInDuration: const Duration(milliseconds: 300),
+                                                                                fadeOutDuration: const Duration(milliseconds: 300),
+                                                                                imageUrl: valueOrDefault<String>(
+                                                                                  widget.message?.image,
+                                                                                  'https://firebasestorage.googleapis.com/v0/b/linkedup-c3e29.firebasestorage.app/o/asset%2Fdefault-user.png?alt=media&token=35d4da12-13b0-4f43-8b8e-375e6e126683',
+                                                                                ),
+                                                                                fit: BoxFit.contain,
+                                                                              ),
+                                                                              allowRotation: false,
+                                                                              tag: valueOrDefault<String>(
+                                                                                widget.message?.image,
+                                                                                'https://firebasestorage.googleapis.com/v0/b/linkedup-c3e29.firebasestorage.app/o/asset%2Fdefault-user.png?alt=media&token=35d4da12-13b0-4f43-8b8e-375e6e126683',
+                                                                              ),
+                                                                              useHeroAnimation: true,
+                                                                            ),
+                                                                          ),
+                                                                        );
+                                                                      },
                                                                       child:
-                                                                          CachedNetworkImage(
-                                                                        fadeInDuration:
-                                                                            const Duration(milliseconds: 300),
-                                                                        fadeOutDuration:
-                                                                            const Duration(milliseconds: 300),
-                                                                        imageUrl:
-                                                                            valueOrDefault<String>(
+                                                                          Hero(
+                                                                        tag: valueOrDefault<
+                                                                            String>(
                                                                           widget
                                                                               .message
                                                                               ?.image,
                                                                           'https://firebasestorage.googleapis.com/v0/b/linkedup-c3e29.firebasestorage.app/o/asset%2Fdefault-user.png?alt=media&token=35d4da12-13b0-4f43-8b8e-375e6e126683',
                                                                         ),
-                                                                        width: double
-                                                                            .infinity,
-                                                                        height:
-                                                                            double.infinity,
-                                                                        fit: BoxFit
-                                                                            .cover,
-                                                                        errorWidget: (context,
-                                                                                error,
-                                                                                stackTrace) =>
-                                                                            Container(
-                                                                          width:
-                                                                              double.infinity,
-                                                                          height:
-                                                                              200.0,
-                                                                          color:
-                                                                              const Color(0xFFE5E7EB),
-                                                                          child:
-                                                                              Icon(
-                                                                            Icons.broken_image,
-                                                                            color:
-                                                                                Colors.grey,
-                                                                          ),
-                                                                        ),
-                                                                      ),
-                                                                    ),
-                                                                  ),
-                                                                ),
-                                                              ),
-                                                            ],
-                                                          ),
-                                                        ),
-                                                      ),
-                                                    if (widget.message?.video !=
-                                                            null &&
-                                                        widget.message?.video !=
-                                                            '')
-                                                      Container(
-                                                        width: 265.0,
-                                                        height: 200.0,
-                                                        decoration:
-                                                            BoxDecoration(
-                                                          color: const Color(
-                                                              0xFFE5E7EB),
-                                                          borderRadius:
-                                                              BorderRadius
-                                                                  .circular(
-                                                                      8.0),
-                                                        ),
-                                                        child:
-                                                            VideoMessageWidget(
-                                                          videoUrl: widget
-                                                                  .message
-                                                                  ?.video ??
-                                                              '',
-                                                          width: 265.0,
-                                                          height: 200.0,
-                                                          isOwnMessage: isMe,
-                                                        ),
-                                                      ),
-                                                    if ((widget.message
-                                                                    ?.images !=
-                                                                null &&
-                                                            (widget.message
-                                                                    ?.images)!
-                                                                .isNotEmpty) ==
-                                                        true)
-                                                      Material(
-                                                        color:
-                                                            Colors.transparent,
-                                                        elevation: 0.0,
-                                                        shape:
-                                                            RoundedRectangleBorder(
-                                                          borderRadius:
-                                                              BorderRadius
-                                                                  .circular(
-                                                                      8.0),
-                                                        ),
-                                                        child: Container(
-                                                          width: 265.0,
-                                                          decoration:
-                                                              BoxDecoration(
-                                                            color: Colors
-                                                                .transparent,
-                                                            borderRadius:
-                                                                BorderRadius
-                                                                    .circular(
-                                                                        8.0),
-                                                          ),
-                                                          child: Builder(
-                                                            builder: (context) {
-                                                              final multipleImages =
-                                                                  widget.message
-                                                                          ?.images
-                                                                          .toList() ??
-                                                                      [];
-                                                              return Column(
-                                                                mainAxisSize:
-                                                                    MainAxisSize
-                                                                        .min,
-                                                                children: List
-                                                                    .generate(
-                                                                  multipleImages
-                                                                      .length,
-                                                                  (multipleImagesIndex) {
-                                                                    final multipleImagesItem =
-                                                                        multipleImages[
-                                                                            multipleImagesIndex];
-                                                                    return Stack(
-                                                                      clipBehavior:
-                                                                          Clip.none,
-                                                                      children: [
-                                                                        // Image container
-                                                                        GestureDetector(
-                                                                          onTap:
-                                                                              () async {
-                                                                            await Navigator.push(
-                                                                              context,
-                                                                              PageTransition(
-                                                                                type: PageTransitionType.fade,
-                                                                                child: FlutterFlowExpandedImageView(
-                                                                                  image: CachedNetworkImage(
-                                                                                    fadeInDuration: const Duration(milliseconds: 300),
-                                                                                    fadeOutDuration: const Duration(milliseconds: 300),
-                                                                                    imageUrl: valueOrDefault<String>(
-                                                                                      multipleImagesItem,
-                                                                                      'https://firebasestorage.googleapis.com/v0/b/linkedup-c3e29.firebasestorage.app/o/asset%2Fdefault-user.png?alt=media&token=35d4da12-13b0-4f43-8b8e-375e6e126683',
-                                                                                    ),
-                                                                                    fit: BoxFit.contain,
-                                                                                    errorWidget: (context, error, stackTrace) => Image.asset(
-                                                                                      'assets/images/error_image.png',
-                                                                                      fit: BoxFit.contain,
-                                                                                    ),
-                                                                                  ),
-                                                                                  allowRotation: false,
-                                                                                  tag: valueOrDefault<String>(
-                                                                                    multipleImagesItem,
-                                                                                    'https://firebasestorage.googleapis.com/v0/b/linkedup-c3e29.firebasestorage.app/o/asset%2Fdefault-user.png?alt=media&token=35d4da12-13b0-4f43-8b8e-375e6e126683$multipleImagesIndex',
-                                                                                  ),
-                                                                                  useHeroAnimation: true,
-                                                                                ),
-                                                                              ),
-                                                                            );
-                                                                          },
-                                                                          child:
-                                                                              Hero(
-                                                                            tag:
-                                                                                valueOrDefault<String>(
-                                                                              multipleImagesItem,
-                                                                              'https://firebasestorage.googleapis.com/v0/b/linkedup-c3e29.firebasestorage.app/o/asset%2Fdefault-user.png?alt=media&token=35d4da12-13b0-4f43-8b8e-375e6e126683$multipleImagesIndex',
-                                                                            ),
-                                                                            transitionOnUserGestures:
-                                                                                true,
-                                                                            child:
-                                                                                ClipRRect(
-                                                                              borderRadius: BorderRadius.circular(8.0),
-                                                                              child: CachedNetworkImage(
-                                                                                fadeInDuration: const Duration(milliseconds: 300),
-                                                                                fadeOutDuration: const Duration(milliseconds: 300),
-                                                                                imageUrl: valueOrDefault<String>(
-                                                                                  multipleImagesItem,
-                                                                                  'https://firebasestorage.googleapis.com/v0/b/linkedup-c3e29.firebasestorage.app/o/asset%2Fdefault-user.png?alt=media&token=35d4da12-13b0-4f43-8b8e-375e6e126683',
-                                                                                ),
-                                                                                width: double.infinity,
-                                                                                height: 207.2,
-                                                                                fit: BoxFit.cover,
-                                                                                errorWidget: (context, error, stackTrace) => Image.asset(
-                                                                                  'assets/images/error_image.png',
-                                                                                  width: double.infinity,
-                                                                                  height: 207.2,
-                                                                                  fit: BoxFit.cover,
-                                                                                ),
-                                                                              ),
-                                                                            ),
-                                                                          ),
-                                                                        ),
-                                                                      ],
-                                                                    );
-                                                                  },
-                                                                ).divide(
-                                                                    const SizedBox(
-                                                                        height:
-                                                                            8.0)),
-                                                              );
-                                                            },
-                                                          ),
-                                                        ),
-                                                      ),
-                                                    if (widget.message?.audio !=
-                                                            null &&
-                                                        widget.message?.audio !=
-                                                            '')
-                                                      Container(
-                                                        width: double.infinity,
-                                                        decoration:
-                                                            BoxDecoration(
-                                                          color: const Color(
-                                                              0xFFE5E7EB),
-                                                          borderRadius:
-                                                              BorderRadius
-                                                                  .circular(
-                                                                      8.0),
-                                                        ),
-                                                        child:
-                                                            FlutterFlowAudioPlayer(
-                                                          audio: Audio.network(
-                                                            widget.message!
-                                                                .audioPath,
-                                                            metas: Metas(
-                                                              title: 'Voice',
-                                                            ),
-                                                          ),
-                                                          titleTextStyle:
-                                                              FlutterFlowTheme.of(
-                                                                      context)
-                                                                  .titleLarge
-                                                                  .override(
-                                                                    font: GoogleFonts
-                                                                        .inter(
-                                                                      fontWeight: FlutterFlowTheme.of(
-                                                                              context)
-                                                                          .titleLarge
-                                                                          .fontWeight,
-                                                                      fontStyle: FlutterFlowTheme.of(
-                                                                              context)
-                                                                          .titleLarge
-                                                                          .fontStyle,
-                                                                    ),
-                                                                    fontSize:
-                                                                        16.0,
-                                                                    letterSpacing:
-                                                                        0.0,
-                                                                    fontWeight: FlutterFlowTheme.of(
-                                                                            context)
-                                                                        .titleLarge
-                                                                        .fontWeight,
-                                                                    fontStyle: FlutterFlowTheme.of(
-                                                                            context)
-                                                                        .titleLarge
-                                                                        .fontStyle,
-                                                                  ),
-                                                          playbackDurationTextStyle:
-                                                              FlutterFlowTheme.of(
-                                                                      context)
-                                                                  .labelMedium
-                                                                  .override(
-                                                                    font: GoogleFonts
-                                                                        .inter(
-                                                                      fontWeight: FlutterFlowTheme.of(
-                                                                              context)
-                                                                          .labelMedium
-                                                                          .fontWeight,
-                                                                      fontStyle: FlutterFlowTheme.of(
-                                                                              context)
-                                                                          .labelMedium
-                                                                          .fontStyle,
-                                                                    ),
-                                                                    letterSpacing:
-                                                                        0.0,
-                                                                    fontWeight: FlutterFlowTheme.of(
-                                                                            context)
-                                                                        .labelMedium
-                                                                        .fontWeight,
-                                                                    fontStyle: FlutterFlowTheme.of(
-                                                                            context)
-                                                                        .labelMedium
-                                                                        .fontStyle,
-                                                                  ),
-                                                          fillColor: FlutterFlowTheme
-                                                                  .of(context)
-                                                              .secondaryBackground,
-                                                          playbackButtonColor:
-                                                              FlutterFlowTheme.of(
-                                                                      context)
-                                                                  .primary,
-                                                          activeTrackColor:
-                                                              FlutterFlowTheme.of(
-                                                                      context)
-                                                                  .primary,
-                                                          inactiveTrackColor:
-                                                              FlutterFlowTheme.of(
-                                                                      context)
-                                                                  .alternate,
-                                                          elevation: 0.0,
-                                                          playInBackground:
-                                                              PlayInBackground
-                                                                  .enabled,
-                                                        ),
-                                                      ),
-                                                    if (widget.message
-                                                                ?.attachmentUrl !=
-                                                            null &&
-                                                        widget.message
-                                                                ?.attachmentUrl !=
-                                                            '')
-                                                      _buildFileAttachment(
-                                                          widget.message!
-                                                              .attachmentUrl),
-                                                    // Timestamp inside bubble (bottom right for sent messages)
-                                                    Padding(
-                                                      padding:
-                                                          const EdgeInsetsDirectional
-                                                              .fromSTEB(0.0,
-                                                              4.0, 0.0, 0.0),
-                                                      child: Row(
-                                                        mainAxisAlignment:
-                                                            MainAxisAlignment
-                                                                .end,
-                                                        mainAxisSize:
-                                                            MainAxisSize.min,
-                                                        children: [
-                                                          Text(
-                                                            _formatMessageTimestamp(
-                                                                widget.message
-                                                                    ?.createdAt),
-                                                            style: FlutterFlowTheme
-                                                                    .of(context)
-                                                                .bodySmall
-                                                                .override(
-                                                                  font: GoogleFonts
-                                                                      .inter(),
-                                                                  color: const Color(
-                                                                      0xFF6B7280),
-                                                                  fontSize:
-                                                                      11.0,
-                                                                  letterSpacing:
-                                                                      0.0,
-                                                                  fontWeight:
-                                                                      FontWeight
-                                                                          .w400,
-                                                                ),
-                                                          ),
-                                                        ],
-                                                      ),
-                                                    ),
-                                                  ].divide(const SizedBox(
-                                                      height: 8.0)),
-                                                ),
-                                              ),
-                                            ),
-                                          );
-                                        },
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                              ].divide(const SizedBox(height: 4.0)),
-                            ),
-                          ),
-                        ),
-                        // Only show profile photo in group chats
-                        if (widget.isGroup)
-                          ClipRRect(
-                            borderRadius: BorderRadius.circular(16.0),
-                            child: CachedNetworkImage(
-                              fadeInDuration: const Duration(milliseconds: 300),
-                              fadeOutDuration:
-                                  const Duration(milliseconds: 300),
-                              imageUrl: valueOrDefault<String>(
-                                widget.senderImage,
-                                'https://firebasestorage.googleapis.com/v0/b/linkedup-c3e29.firebasestorage.app/o/asset%2Fdiv.png?alt=media&token=85d5445a-3d2d-4dd5-879e-c4000b1fefd5',
-                              ),
-                              width: 36.0,
-                              height: 36.0,
-                              fit: BoxFit.cover,
-                            ),
-                          ),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          ),
-        if (!isMe)
-          Align(
-            alignment: const AlignmentDirectional(-1.0, 0.0),
-            child: Builder(
-              builder: (context) => GestureDetector(
-                onTap: () async {
-                  await actions.closekeyboard();
-                  await widget.action?.call();
-                },
-                onLongPress: _openReportDialog,
-                child: Container(
-                  width: double.infinity,
-                  decoration: const BoxDecoration(),
-                  child: Padding(
-                    padding: const EdgeInsets.all(8.0),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      mainAxisAlignment: MainAxisAlignment.start,
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        // Only show profile photo in group chats
-                        if (widget.isGroup)
-                          ClipRRect(
-                            borderRadius: BorderRadius.circular(16.0),
-                            child: CachedNetworkImage(
-                              fadeInDuration: const Duration(milliseconds: 300),
-                              fadeOutDuration:
-                                  const Duration(milliseconds: 300),
-                              imageUrl: valueOrDefault<String>(
-                                widget.senderImage,
-                                'https://firebasestorage.googleapis.com/v0/b/linkedup-c3e29.firebasestorage.app/o/asset%2Fdiv.png?alt=media&token=85d5445a-3d2d-4dd5-879e-c4000b1fefd5',
-                              ),
-                              width: 36.0,
-                              height: 36.0,
-                              fit: BoxFit.cover,
-                            ),
-                          ),
-                        Flexible(
-                          child: Container(
-                            constraints: BoxConstraints(
-                              maxWidth: availableWidth * 0.7,
-                            ),
-                            child: Column(
-                              mainAxisSize: MainAxisSize.min,
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Align(
-                                  alignment:
-                                      const AlignmentDirectional(-1.0, -1.0),
-                                  child: Padding(
-                                    padding:
-                                        const EdgeInsetsDirectional.fromSTEB(
-                                            12.0, 0.0, 12.0, 0.0),
-                                    child: GestureDetector(
-                                      onLongPress: _copyContentIfAny,
-                                      child: Builder(
-                                        builder: (context) {
-                                          final content =
-                                              widget.message?.content ?? '';
-                                          final isOnlyEmojis =
-                                              _containsOnlyEmojis(content) &&
-                                                  (widget.message?.image ==
-                                                          null ||
-                                                      widget.message?.image ==
-                                                          '') &&
-                                                  (widget.message?.video ==
-                                                          null ||
-                                                      widget.message?.video ==
-                                                          '') &&
-                                                  (widget.message?.audio ==
-                                                          null ||
-                                                      widget.message?.audio ==
-                                                          '') &&
-                                                  (widget.message
-                                                              ?.attachmentUrl ==
-                                                          null ||
-                                                      widget.message
-                                                              ?.attachmentUrl ==
-                                                          '') &&
-                                                  (widget.message?.images
-                                                          .isEmpty ??
-                                                      true);
-
-                                          if (isOnlyEmojis &&
-                                              content.isNotEmpty) {
-                                            // WhatsApp style: Just emojis in bigger size, no bubble
-                                            return _withMessageMenu(
-                                              bubble: Padding(
-                                                padding:
-                                                    const EdgeInsets.symmetric(
-                                                        horizontal: 8.0,
-                                                        vertical: 4.0),
-                                                child: Text(
-                                                  content,
-                                                  style: const TextStyle(
-                                                    fontSize:
-                                                        48.0, // Larger size for emojis
-                                                    height: 1.2,
-                                                  ),
-                                                ),
-                                              ),
-                                            );
-                                          }
-
-                                          // Regular message with bubble
-                                          // If message has image, use fixed width like WhatsApp
-                                          final hasImage = widget.message?.image != null && 
-                                                          widget.message!.image.isNotEmpty;
-                                          return _withMessageMenu(
-                                            bubble: AnimatedContainer(
-                                              duration: const Duration(
-                                                  milliseconds: 300),
-                                              constraints: BoxConstraints(
-                                                maxWidth: hasImage ? 280.0 : availableWidth * 0.7,
-                                              ),
-                                              width: hasImage ? 280.0 : null, // Fixed width when has image
-                                              decoration: BoxDecoration(
-                                                color: Colors.white,
-                                                borderRadius:
-                                                    BorderRadius.circular(18.0),
-                                                border: Border.all(
-                                                  color: Colors.black
-                                                      .withOpacity(0.08),
-                                                  width: 1.0,
-                                                ),
-                                                boxShadow: widget.isHighlighted
-                                                    ? [
-                                                        BoxShadow(
-                                                          color: const Color(
-                                                                  0xFF007AFF)
-                                                              .withOpacity(0.4),
-                                                          blurRadius: 8.0,
-                                                          spreadRadius: 2.0,
-                                                        ),
-                                                      ]
-                                                    : null,
-                                              ),
-                                              child: Padding(
-                                                padding:
-                                                    const EdgeInsets.symmetric(
-                                                        horizontal: 14.0,
-                                                        vertical: 10.0),
-                                                child: Column(
-                                                  mainAxisSize:
-                                                      MainAxisSize.min,
-                                                  crossAxisAlignment:
-                                                      CrossAxisAlignment.start,
-                                                  children: [
-                                                    // Reply indicator for received messages
-                                                    if (widget.message
-                                                                ?.replyTo !=
-                                                            null &&
-                                                        widget.message
-                                                                ?.replyTo !=
-                                                            '')
-                                                      GestureDetector(
-                                                        onTap: () =>
-                                                            _scrollToRepliedMessage(),
-                                                        child: Container(
-                                                          constraints:
-                                                              const BoxConstraints(
-                                                            maxWidth: 280.0,
-                                                          ),
-                                                          margin:
-                                                              const EdgeInsets
-                                                                  .only(
-                                                                  bottom: 8.0),
-                                                          padding:
-                                                              const EdgeInsets
-                                                                  .symmetric(
-                                                                  horizontal:
-                                                                      10.0,
-                                                                  vertical:
-                                                                      6.0),
-                                                          decoration:
-                                                              BoxDecoration(
-                                                            color: const Color(
-                                                                0xFFF0F2F5),
-                                                            borderRadius:
-                                                                BorderRadius
-                                                                    .circular(
-                                                                        10.0),
-                                                            border:
-                                                                const Border(
-                                                              left: BorderSide(
-                                                                color: Color(
-                                                                    0xFF007AFF),
-                                                                width: 3.0,
-                                                              ),
-                                                            ),
-                                                          ),
-                                                          child: Row(
-                                                            mainAxisSize:
-                                                                MainAxisSize
-                                                                    .min,
-                                                            children: [
-                                                              Expanded(
-                                                                child: Column(
-                                                                  crossAxisAlignment:
-                                                                      CrossAxisAlignment
-                                                                          .start,
-                                                                  mainAxisSize:
-                                                                      MainAxisSize
-                                                                          .min,
-                                                                  children: [
-                                                                    Text(
-                                                                      widget.message
-                                                                              ?.replyToSender ??
-                                                                          'Unknown',
-                                                                      style:
-                                                                          const TextStyle(
-                                                                        fontFamily:
-                                                                            'SF Pro Text',
-                                                                        color: Color(
-                                                                            0xFF007AFF),
-                                                                        fontSize:
-                                                                            13.0,
-                                                                        fontWeight:
-                                                                            FontWeight.w600,
-                                                                      ),
-                                                                    ),
-                                                                    const SizedBox(
-                                                                        height:
-                                                                            2.0),
-                                                                    Text(
-                                                                      widget.message
-                                                                              ?.replyToContent ??
-                                                                          '',
-                                                                      style:
-                                                                          const TextStyle(
-                                                                        fontFamily:
-                                                                            'SF Pro Text',
-                                                                        color: Color(
-                                                                            0xFF667781),
-                                                                        fontSize:
-                                                                            13.0,
-                                                                      ),
-                                                                      maxLines:
-                                                                          1,
-                                                                      overflow:
-                                                                          TextOverflow
-                                                                              .ellipsis,
-                                                                    ),
-                                                                  ],
-                                                                ),
-                                                              ),
-                                                            ],
-                                                          ),
-                                                        ),
-                                                      ),
-                                                    // Only show content if there's no file attachment (file name is shown in the file card)
-                                                    if (widget.message
-                                                                ?.content !=
-                                                            null &&
-                                                        widget.message
-                                                                ?.content !=
-                                                            '' &&
-                                                        (widget.message
-                                                                    ?.attachmentUrl ==
-                                                                null ||
-                                                            widget.message
-                                                                    ?.attachmentUrl ==
-                                                                ''))
-                                                      custom_widgets
-                                                          .MessageContentWidget(
-                                                        content: valueOrDefault<
-                                                            String>(
-                                                          widget
-                                                              .message?.content,
-                                                          'I\'m at the venue now. Here\'s the map with the room highlighted:',
-                                                        ),
-                                                        senderName: widget.name,
-                                                        onTapLink: (text, url,
-                                                            title) async {
-                                                          if (url != null) {
-                                                            await _launchURL(
-                                                                url);
-                                                          }
-                                                        },
-                                                        styleSheet:
-                                                            MarkdownStyleSheet(
-                                                          // iMessage received bubble: dark text on gray
-                                                          p: const TextStyle(
-                                                            fontFamily:
-                                                                'SF Pro Text',
-                                                            color: Color(
-                                                                0xFF000000),
-                                                            fontSize: 17.0,
-                                                            letterSpacing: -0.4,
-                                                            fontWeight:
-                                                                FontWeight.w400,
-                                                            height: 1.3,
-                                                          ),
-                                                          a: const TextStyle(
-                                                            fontFamily:
-                                                                'SF Pro Text',
-                                                            color: Color(
-                                                                0xFF007AFF),
-                                                            fontSize: 17.0,
-                                                            letterSpacing: -0.4,
-                                                            fontWeight:
-                                                                FontWeight.w400,
-                                                            decoration:
-                                                                TextDecoration
-                                                                    .underline,
-                                                          ),
-                                                          code: const TextStyle(
-                                                            fontFamily:
-                                                                'SF Mono',
-                                                            color: Color(
-                                                                0xFF000000),
-                                                            fontSize: 15.0,
-                                                          ),
-                                                          codeblockDecoration:
-                                                              BoxDecoration(
-                                                            color: const Color(
-                                                                0xFFD1D1D6),
-                                                            borderRadius:
-                                                                BorderRadius
-                                                                    .circular(
-                                                                        6),
-                                                          ),
-                                                          strong:
-                                                              const TextStyle(
-                                                            fontFamily:
-                                                                'SF Pro Text',
-                                                            color: Color(
-                                                                0xFF000000),
-                                                            fontSize: 17.0,
-                                                            fontWeight:
-                                                                FontWeight.w600,
-                                                          ),
-                                                          em: const TextStyle(
-                                                            fontFamily:
-                                                                'SF Pro Text',
-                                                            color: Color(
-                                                                0xFF000000),
-                                                            fontSize: 17.0,
-                                                            fontStyle: FontStyle
-                                                                .italic,
-                                                            fontWeight:
-                                                                FontWeight.w400,
-                                                          ),
-                                                          tableBody:
-                                                              const TextStyle(
-                                                            fontFamily:
-                                                                'SF Pro Text',
-                                                            color: Color(
-                                                                0xFF000000),
-                                                            fontSize: 15.0,
-                                                            fontWeight:
-                                                                FontWeight.w400,
-                                                          ),
-                                                          tableHead:
-                                                              const TextStyle(
-                                                            fontFamily:
-                                                                'SF Pro Text',
-                                                            color: Color(
-                                                                0xFF000000),
-                                                            fontSize: 15.0,
-                                                            fontWeight:
-                                                                FontWeight.w600,
-                                                          ),
-                                                        ),
-                                                      ),
-                                                    // Edited indicator for received messages
-                                                    if (widget.message
-                                                            ?.isEdited ==
-                                                        true)
-                                                      Padding(
-                                                        padding:
-                                                            const EdgeInsetsDirectional
-                                                                .fromSTEB(0.0,
-                                                                4.0, 0.0, 0.0),
-                                                        child: Row(
-                                                          mainAxisSize:
-                                                              MainAxisSize.min,
-                                                          children: [
-                                                            Text(
-                                                              'edited',
-                                                              style: FlutterFlowTheme
-                                                                      .of(context)
-                                                                  .bodySmall
-                                                                  .override(
-                                                                    color: FlutterFlowTheme.of(
-                                                                            context)
-                                                                        .secondaryText,
-                                                                    fontSize:
-                                                                        11.0,
-                                                                    fontStyle:
-                                                                        FontStyle
-                                                                            .italic,
-                                                                  ),
-                                                            ),
-                                                            if (widget.message
-                                                                    ?.editedAt !=
-                                                                null) ...[
-                                                              Text(
-                                                                ' • ',
-                                                                style: FlutterFlowTheme.of(
-                                                                        context)
-                                                                    .bodySmall
-                                                                    .override(
-                                                                      color: FlutterFlowTheme.of(
-                                                                              context)
-                                                                          .secondaryText,
-                                                                      fontSize:
-                                                                          11.0,
-                                                                    ),
-                                                              ),
-                                                              Text(
-                                                                dateTimeFormat(
-                                                                    'MMM d, h:mm a',
-                                                                    widget
-                                                                        .message!
-                                                                        .editedAt!),
-                                                                style: FlutterFlowTheme.of(
-                                                                        context)
-                                                                    .bodySmall
-                                                                    .override(
-                                                                      color: FlutterFlowTheme.of(
-                                                                              context)
-                                                                          .secondaryText,
-                                                                      fontSize:
-                                                                          11.0,
-                                                                      fontStyle:
-                                                                          FontStyle
-                                                                              .italic,
-                                                                    ),
-                                                              ),
-                                                            ],
-                                                          ],
-                                                        ),
-                                                      ),
-                                                    if (widget.message?.image !=
-                                                            null &&
-                                                        widget.message?.image !=
-                                                            '')
-                                                      OverflowBox(
-                                                        maxWidth:
-                                                            double.infinity,
-                                                        alignment:
-                                                            AlignmentDirectional
-                                                                .centerStart,
-                                                        child: Padding(
-                                                          padding:
-                                                              const EdgeInsets
-                                                                  .only(
-                                                                  left: 40.0),
-                                                          child: Stack(
-                                                            clipBehavior:
-                                                                Clip.none,
-                                                            children: [
-                                                              // Image bubble container (WhatsApp style: fixed width)
-                                                              Container(
-                                                                constraints:
-                                                                    BoxConstraints(
-                                                                  maxWidth: 280.0, // Fixed width like WhatsApp
-                                                                  maxHeight:
-                                                                      400.0,
-                                                                ),
-                                                                width: 280.0, // Fixed width
-                                                                margin:
-                                                                    const EdgeInsets
-                                                                        .only(
-                                                                  bottom: 4.0,
-                                                                ),
-                                                                decoration:
-                                                                    BoxDecoration(
-                                                                  color: const Color(
-                                                                      0xFFE5E7EB),
-                                                                  borderRadius:
-                                                                      BorderRadius
-                                                                          .circular(
-                                                                              8.0),
-                                                                ),
-                                                                child:
-                                                                    GestureDetector(
-                                                                  onTap:
-                                                                      () async {
-                                                                    await Navigator
-                                                                        .push(
-                                                                      context,
-                                                                      PageTransition(
-                                                                        type: PageTransitionType
-                                                                            .fade,
+                                                                        transitionOnUserGestures:
+                                                                            true,
                                                                         child:
-                                                                            FlutterFlowExpandedImageView(
-                                                                          image:
+                                                                            ClipRRect(
+                                                                          borderRadius:
+                                                                              BorderRadius.only(
+                                                                            topLeft:
+                                                                                Radius.circular(8.0),
+                                                                            topRight:
+                                                                                Radius.circular(8.0),
+                                                                            bottomLeft:
+                                                                                Radius.circular(8.0),
+                                                                            bottomRight: Radius.circular((widget.message?.content != null && widget.message!.content.isNotEmpty && (widget.message?.attachmentUrl == null || widget.message?.attachmentUrl == ''))
+                                                                                ? 0.0
+                                                                                : 8.0),
+                                                                          ),
+                                                                          child:
                                                                               CachedNetworkImage(
                                                                             fadeInDuration:
                                                                                 const Duration(milliseconds: 300),
@@ -2696,249 +1885,203 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
                                                                               widget.message?.image,
                                                                               'https://firebasestorage.googleapis.com/v0/b/linkedup-c3e29.firebasestorage.app/o/asset%2Fdefault-user.png?alt=media&token=35d4da12-13b0-4f43-8b8e-375e6e126683',
                                                                             ),
+                                                                            width:
+                                                                                double.infinity,
+                                                                            height:
+                                                                                double.infinity,
                                                                             fit:
-                                                                                BoxFit.contain,
+                                                                                BoxFit.cover,
                                                                             errorWidget: (context, error, stackTrace) =>
-                                                                                Image.asset(
-                                                                              'assets/images/error_image.png',
-                                                                              fit: BoxFit.contain,
+                                                                                Container(
+                                                                              width: double.infinity,
+                                                                              height: 200.0,
+                                                                              color: const Color(0xFFE5E7EB),
+                                                                              child: Icon(
+                                                                                Icons.broken_image,
+                                                                                color: Colors.grey,
+                                                                              ),
                                                                             ),
                                                                           ),
-                                                                          allowRotation:
-                                                                              false,
-                                                                          tag: valueOrDefault<
-                                                                              String>(
-                                                                            widget.message?.image,
-                                                                            'https://firebasestorage.googleapis.com/v0/b/linkedup-c3e29.firebasestorage.app/o/asset%2Fdefault-user.png?alt=media&token=35d4da12-13b0-4f43-8b8e-375e6e126683',
-                                                                          ),
-                                                                          useHeroAnimation:
-                                                                              true,
-                                                                        ),
-                                                                      ),
-                                                                    );
-                                                                  },
-                                                                  child: Hero(
-                                                                    tag: valueOrDefault<
-                                                                        String>(
-                                                                      widget
-                                                                          .message
-                                                                          ?.image,
-                                                                      'https://firebasestorage.googleapis.com/v0/b/linkedup-c3e29.firebasestorage.app/o/asset%2Fdefault-user.png?alt=media&token=35d4da12-13b0-4f43-8b8e-375e6e126683',
-                                                                    ),
-                                                                    transitionOnUserGestures:
-                                                                        true,
-                                                                    child:
-                                                                        ClipRRect(
-                                                                      borderRadius:
-                                                                          BorderRadius.circular(
-                                                                              8.0),
-                                                                      child:
-                                                                          CachedNetworkImage(
-                                                                        fadeInDuration:
-                                                                            const Duration(milliseconds: 300),
-                                                                        fadeOutDuration:
-                                                                            const Duration(milliseconds: 300),
-                                                                        imageUrl:
-                                                                            valueOrDefault<String>(
-                                                                          widget
-                                                                              .message
-                                                                              ?.image,
-                                                                          'https://firebasestorage.googleapis.com/v0/b/linkedup-c3e29.firebasestorage.app/o/asset%2Fdefault-user.png?alt=media&token=35d4da12-13b0-4f43-8b8e-375e6e126683',
-                                                                        ),
-                                                                        fit: BoxFit
-                                                                            .cover,
-                                                                        errorWidget: (context,
-                                                                                error,
-                                                                                stackTrace) =>
-                                                                            Image.asset(
-                                                                          'assets/images/error_image.png',
-                                                                          fit: BoxFit
-                                                                              .cover,
                                                                         ),
                                                                       ),
                                                                     ),
                                                                   ),
-                                                                ),
+                                                                ],
                                                               ),
-                                                            ],
+                                                            ),
                                                           ),
-                                                        ),
-                                                      ),
-                                                    if (widget.message?.video !=
-                                                            null &&
-                                                        widget.message?.video !=
-                                                            '')
-                                                      Container(
-                                                        width: 265.0,
-                                                        height: 200.0,
-                                                        decoration:
-                                                            BoxDecoration(
-                                                          color: const Color(
-                                                              0xFFE5E7EB),
-                                                          borderRadius:
-                                                              BorderRadius
-                                                                  .circular(
-                                                                      8.0),
-                                                        ),
-                                                        child:
-                                                            VideoMessageWidget(
-                                                          videoUrl: widget
-                                                                  .message
-                                                                  ?.video ??
-                                                              '',
-                                                          width: 265.0,
-                                                          height: 200.0,
-                                                          isOwnMessage: isMe,
-                                                        ),
-                                                      ),
-                                                    if ((widget.message
-                                                                    ?.images !=
+                                                        if (widget.message
+                                                                    ?.video !=
                                                                 null &&
-                                                            (widget.message
-                                                                    ?.images)!
-                                                                .isNotEmpty) ==
-                                                        true)
-                                                      Material(
-                                                        color:
-                                                            Colors.transparent,
-                                                        elevation: 0.0,
-                                                        shape:
-                                                            RoundedRectangleBorder(
-                                                          borderRadius:
-                                                              BorderRadius
-                                                                  .circular(
-                                                                      8.0),
-                                                        ),
-                                                        child: Container(
-                                                          width: 265.0,
-                                                          decoration:
-                                                              BoxDecoration(
+                                                            widget.message
+                                                                    ?.video !=
+                                                                '')
+                                                          Container(
+                                                            width: 265.0,
+                                                            height: 200.0,
+                                                            decoration:
+                                                                BoxDecoration(
+                                                              color: const Color(
+                                                                  0xFFE5E7EB),
+                                                              borderRadius:
+                                                                  BorderRadius
+                                                                      .circular(
+                                                                          8.0),
+                                                            ),
+                                                            child:
+                                                                VideoMessageWidget(
+                                                              videoUrl: widget
+                                                                      .message
+                                                                      ?.video ??
+                                                                  '',
+                                                              width: 265.0,
+                                                              height: 200.0,
+                                                              isOwnMessage:
+                                                                  isMe,
+                                                            ),
+                                                          ),
+                                                        if ((widget.message
+                                                                        ?.images !=
+                                                                    null &&
+                                                                (widget.message
+                                                                        ?.images)!
+                                                                    .isNotEmpty) ==
+                                                            true)
+                                                          Material(
                                                             color: Colors
                                                                 .transparent,
-                                                            borderRadius:
-                                                                BorderRadius
-                                                                    .circular(
-                                                                        8.0),
-                                                          ),
-                                                          child: Builder(
-                                                            builder: (context) {
-                                                              final multipleImages =
-                                                                  widget.message
+                                                            elevation: 0.0,
+                                                            shape:
+                                                                RoundedRectangleBorder(
+                                                              borderRadius:
+                                                                  BorderRadius
+                                                                      .circular(
+                                                                          8.0),
+                                                            ),
+                                                            child: Container(
+                                                              width: 265.0,
+                                                              decoration:
+                                                                  BoxDecoration(
+                                                                color: Colors
+                                                                    .transparent,
+                                                                borderRadius:
+                                                                    BorderRadius
+                                                                        .circular(
+                                                                            8.0),
+                                                              ),
+                                                              child: Builder(
+                                                                builder:
+                                                                    (context) {
+                                                                  final multipleImages = widget
+                                                                          .message
                                                                           ?.images
                                                                           .toList() ??
                                                                       [];
-                                                              return Column(
-                                                                mainAxisSize:
-                                                                    MainAxisSize
-                                                                        .min,
-                                                                children: List
-                                                                    .generate(
-                                                                  multipleImages
-                                                                      .length,
-                                                                  (multipleImagesIndex) {
-                                                                    final multipleImagesItem =
-                                                                        multipleImages[
-                                                                            multipleImagesIndex];
-                                                                    return Stack(
-                                                                      clipBehavior:
-                                                                          Clip.none,
-                                                                      children: [
-                                                                        // Image container
-                                                                        GestureDetector(
-                                                                          onTap:
-                                                                              () async {
-                                                                            await Navigator.push(
-                                                                              context,
-                                                                              PageTransition(
-                                                                                type: PageTransitionType.fade,
-                                                                                child: FlutterFlowExpandedImageView(
-                                                                                  image: CachedNetworkImage(
+                                                                  return Column(
+                                                                    mainAxisSize:
+                                                                        MainAxisSize
+                                                                            .min,
+                                                                    children: List
+                                                                        .generate(
+                                                                      multipleImages
+                                                                          .length,
+                                                                      (multipleImagesIndex) {
+                                                                        final multipleImagesItem =
+                                                                            multipleImages[multipleImagesIndex];
+                                                                        return Stack(
+                                                                          clipBehavior:
+                                                                              Clip.none,
+                                                                          children: [
+                                                                            // Image container
+                                                                            GestureDetector(
+                                                                              onTap: () async {
+                                                                                await Navigator.push(
+                                                                                  context,
+                                                                                  PageTransition(
+                                                                                    type: PageTransitionType.fade,
+                                                                                    child: FlutterFlowExpandedImageView(
+                                                                                      image: CachedNetworkImage(
+                                                                                        fadeInDuration: const Duration(milliseconds: 300),
+                                                                                        fadeOutDuration: const Duration(milliseconds: 300),
+                                                                                        imageUrl: valueOrDefault<String>(
+                                                                                          multipleImagesItem,
+                                                                                          'https://firebasestorage.googleapis.com/v0/b/linkedup-c3e29.firebasestorage.app/o/asset%2Fdefault-user.png?alt=media&token=35d4da12-13b0-4f43-8b8e-375e6e126683',
+                                                                                        ),
+                                                                                        fit: BoxFit.contain,
+                                                                                        errorWidget: (context, error, stackTrace) => Image.asset(
+                                                                                          'assets/images/error_image.png',
+                                                                                          fit: BoxFit.contain,
+                                                                                        ),
+                                                                                      ),
+                                                                                      allowRotation: false,
+                                                                                      tag: valueOrDefault<String>(
+                                                                                        multipleImagesItem,
+                                                                                        'https://firebasestorage.googleapis.com/v0/b/linkedup-c3e29.firebasestorage.app/o/asset%2Fdefault-user.png?alt=media&token=35d4da12-13b0-4f43-8b8e-375e6e126683$multipleImagesIndex',
+                                                                                      ),
+                                                                                      useHeroAnimation: true,
+                                                                                    ),
+                                                                                  ),
+                                                                                );
+                                                                              },
+                                                                              child: Hero(
+                                                                                tag: valueOrDefault<String>(
+                                                                                  multipleImagesItem,
+                                                                                  'https://firebasestorage.googleapis.com/v0/b/linkedup-c3e29.firebasestorage.app/o/asset%2Fdefault-user.png?alt=media&token=35d4da12-13b0-4f43-8b8e-375e6e126683$multipleImagesIndex',
+                                                                                ),
+                                                                                transitionOnUserGestures: true,
+                                                                                child: ClipRRect(
+                                                                                  borderRadius: BorderRadius.circular(8.0),
+                                                                                  child: CachedNetworkImage(
                                                                                     fadeInDuration: const Duration(milliseconds: 300),
                                                                                     fadeOutDuration: const Duration(milliseconds: 300),
                                                                                     imageUrl: valueOrDefault<String>(
                                                                                       multipleImagesItem,
                                                                                       'https://firebasestorage.googleapis.com/v0/b/linkedup-c3e29.firebasestorage.app/o/asset%2Fdefault-user.png?alt=media&token=35d4da12-13b0-4f43-8b8e-375e6e126683',
                                                                                     ),
-                                                                                    fit: BoxFit.contain,
+                                                                                    width: double.infinity,
+                                                                                    height: 207.2,
+                                                                                    fit: BoxFit.cover,
                                                                                     errorWidget: (context, error, stackTrace) => Image.asset(
                                                                                       'assets/images/error_image.png',
-                                                                                      fit: BoxFit.contain,
+                                                                                      width: double.infinity,
+                                                                                      height: 207.2,
+                                                                                      fit: BoxFit.cover,
                                                                                     ),
                                                                                   ),
-                                                                                  allowRotation: false,
-                                                                                  tag: valueOrDefault<String>(
-                                                                                    multipleImagesItem,
-                                                                                    'https://firebasestorage.googleapis.com/v0/b/linkedup-c3e29.firebasestorage.app/o/asset%2Fdefault-user.png?alt=media&token=35d4da12-13b0-4f43-8b8e-375e6e126683$multipleImagesIndex',
-                                                                                  ),
-                                                                                  useHeroAnimation: true,
-                                                                                ),
-                                                                              ),
-                                                                            );
-                                                                          },
-                                                                          child:
-                                                                              Hero(
-                                                                            tag:
-                                                                                valueOrDefault<String>(
-                                                                              multipleImagesItem,
-                                                                              'https://firebasestorage.googleapis.com/v0/b/linkedup-c3e29.firebasestorage.app/o/asset%2Fdefault-user.png?alt=media&token=35d4da12-13b0-4f43-8b8e-375e6e126683$multipleImagesIndex',
-                                                                            ),
-                                                                            transitionOnUserGestures:
-                                                                                true,
-                                                                            child:
-                                                                                ClipRRect(
-                                                                              borderRadius: BorderRadius.circular(8.0),
-                                                                              child: CachedNetworkImage(
-                                                                                fadeInDuration: const Duration(milliseconds: 300),
-                                                                                fadeOutDuration: const Duration(milliseconds: 300),
-                                                                                imageUrl: valueOrDefault<String>(
-                                                                                  multipleImagesItem,
-                                                                                  'https://firebasestorage.googleapis.com/v0/b/linkedup-c3e29.firebasestorage.app/o/asset%2Fdefault-user.png?alt=media&token=35d4da12-13b0-4f43-8b8e-375e6e126683',
-                                                                                ),
-                                                                                width: double.infinity,
-                                                                                height: 207.2,
-                                                                                fit: BoxFit.cover,
-                                                                                errorWidget: (context, error, stackTrace) => Image.asset(
-                                                                                  'assets/images/error_image.png',
-                                                                                  width: double.infinity,
-                                                                                  height: 207.2,
-                                                                                  fit: BoxFit.cover,
                                                                                 ),
                                                                               ),
                                                                             ),
-                                                                          ),
-                                                                        ),
-                                                                      ],
-                                                                    );
-                                                                  },
-                                                                ).divide(
-                                                                    const SizedBox(
+                                                                          ],
+                                                                        );
+                                                                      },
+                                                                    ).divide(const SizedBox(
                                                                         height:
                                                                             8.0)),
-                                                              );
-                                                            },
+                                                                  );
+                                                                },
+                                                              ),
+                                                            ),
                                                           ),
-                                                        ),
-                                                      ),
-                                                    if (widget.message?.audio !=
-                                                            null &&
-                                                        widget.message?.audio !=
-                                                            '')
-                                                      Container(
-                                                        width: double.infinity,
-                                                        decoration:
-                                                            BoxDecoration(
-                                                          color: const Color(
-                                                              0xFFE5E7EB),
-                                                          borderRadius:
-                                                              BorderRadius
-                                                                  .circular(
-                                                                      8.0),
-                                                        ),
-                                                        child: Column(
-                                                          mainAxisSize:
-                                                              MainAxisSize.max,
-                                                          children: [
-                                                            FlutterFlowAudioPlayer(
+                                                        if (widget.message
+                                                                    ?.audio !=
+                                                                null &&
+                                                            widget.message
+                                                                    ?.audio !=
+                                                                '')
+                                                          Container(
+                                                            width:
+                                                                double.infinity,
+                                                            decoration:
+                                                                BoxDecoration(
+                                                              color: const Color(
+                                                                  0xFFE5E7EB),
+                                                              borderRadius:
+                                                                  BorderRadius
+                                                                      .circular(
+                                                                          8.0),
+                                                            ),
+                                                            child:
+                                                                FlutterFlowAudioPlayer(
                                                               audio:
                                                                   Audio.network(
                                                                 widget.message!
@@ -3016,121 +2159,1133 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
                                                                   PlayInBackground
                                                                       .enabled,
                                                             ),
-                                                          ],
+                                                          ),
+                                                        if (widget.message
+                                                                    ?.attachmentUrl !=
+                                                                null &&
+                                                            widget.message
+                                                                    ?.attachmentUrl !=
+                                                                '')
+                                                          _buildFileAttachment(
+                                                              widget.message!
+                                                                  .attachmentUrl),
+                                                        // Timestamp inside bubble (bottom right for sent messages)
+                                                        Padding(
+                                                          padding:
+                                                              const EdgeInsetsDirectional
+                                                                  .fromSTEB(
+                                                                  0.0,
+                                                                  4.0,
+                                                                  0.0,
+                                                                  0.0),
+                                                          child: Row(
+                                                            mainAxisAlignment:
+                                                                MainAxisAlignment
+                                                                    .end,
+                                                            mainAxisSize:
+                                                                MainAxisSize
+                                                                    .min,
+                                                            children: [
+                                                              Text(
+                                                                _formatMessageTimestamp(
+                                                                    widget
+                                                                        .message
+                                                                        ?.createdAt),
+                                                                style: FlutterFlowTheme.of(
+                                                                        context)
+                                                                    .bodySmall
+                                                                    .override(
+                                                                      font: GoogleFonts
+                                                                          .inter(),
+                                                                      color: const Color(
+                                                                          0xFF6B7280),
+                                                                      fontSize:
+                                                                          11.0,
+                                                                      letterSpacing:
+                                                                          0.0,
+                                                                      fontWeight:
+                                                                          FontWeight
+                                                                              .w400,
+                                                                    ),
+                                                              ),
+                                                            ],
+                                                          ),
                                                         ),
-                                                      ),
-                                                    if (widget.message
-                                                                ?.attachmentUrl !=
-                                                            null &&
-                                                        widget.message
-                                                                ?.attachmentUrl !=
-                                                            '')
-                                                      _buildFileAttachment(
-                                                          widget.message!
-                                                              .attachmentUrl),
-                                                    // Sender name and timestamp inside bubble (bottom left for received messages)
-                                                    Padding(
-                                                      padding:
-                                                          const EdgeInsetsDirectional
-                                                              .fromSTEB(0.0,
-                                                              4.0, 0.0, 0.0),
-                                                      child: Row(
-                                                        mainAxisAlignment:
-                                                            MainAxisAlignment
-                                                                .start,
-                                                        mainAxisSize:
-                                                            MainAxisSize.min,
-                                                        children: [
-                                                          Text(
-                                                            valueOrDefault<
-                                                                String>(
-                                                              widget.name,
-                                                              'No One',
-                                                            ),
-                                                            style: FlutterFlowTheme
-                                                                    .of(context)
-                                                                .bodySmall
-                                                                .override(
-                                                                  font: GoogleFonts
-                                                                      .inter(),
-                                                                  color: const Color(
-                                                                      0xFF6B7280),
-                                                                  fontSize:
-                                                                      11.0,
-                                                                  letterSpacing:
-                                                                      0.0,
-                                                                  fontWeight:
-                                                                      FontWeight
-                                                                          .w600,
-                                                                ),
-                                                          ),
-                                                          Text(
-                                                            ' • ',
-                                                            style: FlutterFlowTheme
-                                                                    .of(context)
-                                                                .bodySmall
-                                                                .override(
-                                                                  font: GoogleFonts
-                                                                      .inter(),
-                                                                  color: const Color(
-                                                                      0xFF6B7280),
-                                                                  fontSize:
-                                                                      11.0,
-                                                                  letterSpacing:
-                                                                      0.0,
-                                                                ),
-                                                          ),
-                                                          Text(
-                                                            _formatMessageTimestamp(
-                                                                widget.message
-                                                                    ?.createdAt),
-                                                            style: FlutterFlowTheme
-                                                                    .of(context)
-                                                                .bodySmall
-                                                                .override(
-                                                                  font: GoogleFonts
-                                                                      .inter(),
-                                                                  color: const Color(
-                                                                      0xFF6B7280),
-                                                                  fontSize:
-                                                                      11.0,
-                                                                  letterSpacing:
-                                                                      0.0,
-                                                                  fontWeight:
-                                                                      FontWeight
-                                                                          .w400,
-                                                                ),
-                                                          ),
-                                                        ],
-                                                      ),
+                                                      ].divide(const SizedBox(
+                                                          height: 8.0)),
                                                     ),
-                                                  ].divide(const SizedBox(
-                                                      height: 8.0)),
+                                                  ),
                                                 ),
-                                              ),
-                                            ),
-                                          );
-                                        },
+                                              );
+                                            },
+                                          ),
+                                        ),
                                       ),
                                     ),
+                                  ].divide(const SizedBox(height: 4.0)),
+                                ),
+                              ),
+                            ),
+                            // Only show profile photo in group chats
+                            if (widget.isGroup)
+                              InkWell(
+                                onTap: () {
+                                  if (widget.message?.senderRef != null) {
+                                    context.pushNamed(
+                                      'UserSummary',
+                                      queryParameters: {
+                                        'userRef': serializeParam(
+                                          widget.message!.senderRef,
+                                          ParamType.DocumentReference,
+                                        ),
+                                      }.withoutNulls,
+                                      extra: <String, dynamic>{
+                                        'userRef': widget.message!.senderRef,
+                                      },
+                                    );
+                                  }
+                                },
+                                borderRadius: BorderRadius.circular(16.0),
+                                child: ClipRRect(
+                                  borderRadius: BorderRadius.circular(16.0),
+                                  child: CachedNetworkImage(
+                                    fadeInDuration:
+                                        const Duration(milliseconds: 300),
+                                    fadeOutDuration:
+                                        const Duration(milliseconds: 300),
+                                    imageUrl: valueOrDefault<String>(
+                                      widget.senderImage,
+                                      'https://firebasestorage.googleapis.com/v0/b/linkedup-c3e29.firebasestorage.app/o/asset%2Fdiv.png?alt=media&token=85d5445a-3d2d-4dd5-879e-c4000b1fefd5',
+                                    ),
+                                    width: 36.0,
+                                    height: 36.0,
+                                    fit: BoxFit.cover,
                                   ),
                                 ),
-                              ].divide(const SizedBox(height: 4.0)),
-                            ),
-                          ),
+                              ),
+                          ],
                         ),
-                      ],
+                      ),
                     ),
                   ),
                 ),
               ),
-            ),
-          ),
-      ]
-          .divide(const SizedBox(height: 2.0))
-          .addToStart(const SizedBox(height: 8.0))
-          .addToEnd(const SizedBox(height: 8.0)),
-    );
+            if (!isMe)
+              Align(
+                alignment: const AlignmentDirectional(-1.0, 0.0),
+                child: Builder(
+                  builder: (context) => GestureDetector(
+                    onTap: () async {
+                      await actions.closekeyboard();
+                      await widget.action?.call();
+                    },
+                    onLongPress: _openReportDialog,
+                    child: Container(
+                      width: double.infinity,
+                      decoration: const BoxDecoration(),
+                      child: Padding(
+                        padding: const EdgeInsets.all(8.0),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          mainAxisAlignment: MainAxisAlignment.start,
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            // Only show profile photo in group chats
+                            if (widget.isGroup)
+                              InkWell(
+                                onTap: () {
+                                  if (widget.message?.senderRef != null) {
+                                    context.pushNamed(
+                                      'UserSummary',
+                                      queryParameters: {
+                                        'userRef': serializeParam(
+                                          widget.message!.senderRef,
+                                          ParamType.DocumentReference,
+                                        ),
+                                      }.withoutNulls,
+                                      extra: <String, dynamic>{
+                                        'userRef': widget.message!.senderRef,
+                                      },
+                                    );
+                                  }
+                                },
+                                borderRadius: BorderRadius.circular(16.0),
+                                child: ClipRRect(
+                                  borderRadius: BorderRadius.circular(16.0),
+                                  child: CachedNetworkImage(
+                                    fadeInDuration:
+                                        const Duration(milliseconds: 300),
+                                    fadeOutDuration:
+                                        const Duration(milliseconds: 300),
+                                    imageUrl: valueOrDefault<String>(
+                                      widget.senderImage,
+                                      'https://firebasestorage.googleapis.com/v0/b/linkedup-c3e29.firebasestorage.app/o/asset%2Fdiv.png?alt=media&token=85d5445a-3d2d-4dd5-879e-c4000b1fefd5',
+                                    ),
+                                    width: 36.0,
+                                    height: 36.0,
+                                    fit: BoxFit.cover,
+                                  ),
+                                ),
+                              ),
+                            Flexible(
+                              child: Container(
+                                constraints: BoxConstraints(
+                                  maxWidth: availableWidth * 0.7,
+                                ),
+                                child: Column(
+                                  mainAxisSize: MainAxisSize.min,
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Align(
+                                      alignment: const AlignmentDirectional(
+                                          -1.0, -1.0),
+                                      child: Padding(
+                                        padding: const EdgeInsetsDirectional
+                                            .fromSTEB(12.0, 0.0, 12.0, 0.0),
+                                        child: GestureDetector(
+                                          onLongPress: _copyContentIfAny,
+                                          child: Builder(
+                                            builder: (context) {
+                                              final content =
+                                                  widget.message?.content ?? '';
+                                              final isOnlyEmojis = _containsOnlyEmojis(
+                                                      content) &&
+                                                  (widget.message?.image ==
+                                                          null ||
+                                                      widget.message?.image ==
+                                                          '') &&
+                                                  (widget.message?.video ==
+                                                          null ||
+                                                      widget.message?.video ==
+                                                          '') &&
+                                                  (widget.message?.audio ==
+                                                          null ||
+                                                      widget.message?.audio ==
+                                                          '') &&
+                                                  (widget.message
+                                                              ?.attachmentUrl ==
+                                                          null ||
+                                                      widget.message
+                                                              ?.attachmentUrl ==
+                                                          '') &&
+                                                  (widget.message?.images
+                                                          .isEmpty ??
+                                                      true);
+
+                                              if (isOnlyEmojis &&
+                                                  content.isNotEmpty) {
+                                                // WhatsApp style: Just emojis in bigger size, no bubble
+                                                return _withMessageMenu(
+                                                  bubble: Padding(
+                                                    padding: const EdgeInsets
+                                                        .symmetric(
+                                                        horizontal: 8.0,
+                                                        vertical: 4.0),
+                                                    child: Text(
+                                                      content,
+                                                      style: const TextStyle(
+                                                        fontSize:
+                                                            48.0, // Larger size for emojis
+                                                        height: 1.2,
+                                                      ),
+                                                    ),
+                                                  ),
+                                                );
+                                              }
+
+                                              // Regular message with bubble
+                                              // If message has image, use fixed width like WhatsApp
+                                              final hasImage =
+                                                  widget.message?.image !=
+                                                          null &&
+                                                      widget.message!.image
+                                                          .isNotEmpty;
+                                              return _withMessageMenu(
+                                                bubble: AnimatedContainer(
+                                                  duration: const Duration(
+                                                      milliseconds: 300),
+                                                  constraints: BoxConstraints(
+                                                    maxWidth: hasImage
+                                                        ? 280.0
+                                                        : availableWidth * 0.7,
+                                                  ),
+                                                  width: hasImage
+                                                      ? 280.0
+                                                      : null, // Fixed width when has image
+                                                  decoration: BoxDecoration(
+                                                    color: Colors.white,
+                                                    borderRadius:
+                                                        BorderRadius.circular(
+                                                            18.0),
+                                                    border: Border.all(
+                                                      color: Colors.black
+                                                          .withOpacity(0.08),
+                                                      width: 1.0,
+                                                    ),
+                                                    boxShadow: widget
+                                                            .isHighlighted
+                                                        ? [
+                                                            BoxShadow(
+                                                              color: const Color(
+                                                                      0xFF007AFF)
+                                                                  .withOpacity(
+                                                                      0.4),
+                                                              blurRadius: 8.0,
+                                                              spreadRadius: 2.0,
+                                                            ),
+                                                          ]
+                                                        : null,
+                                                  ),
+                                                  child: Padding(
+                                                    padding: const EdgeInsets
+                                                        .symmetric(
+                                                        horizontal: 14.0,
+                                                        vertical: 10.0),
+                                                    child: Column(
+                                                      mainAxisSize:
+                                                          MainAxisSize.min,
+                                                      crossAxisAlignment:
+                                                          CrossAxisAlignment
+                                                              .start,
+                                                      children: [
+                                                        // Reply indicator for received messages
+                                                        if (widget.message
+                                                                    ?.replyTo !=
+                                                                null &&
+                                                            widget.message
+                                                                    ?.replyTo !=
+                                                                '')
+                                                          GestureDetector(
+                                                            onTap: () =>
+                                                                _scrollToRepliedMessage(),
+                                                            child: Container(
+                                                              constraints:
+                                                                  const BoxConstraints(
+                                                                maxWidth: 280.0,
+                                                              ),
+                                                              margin:
+                                                                  const EdgeInsets
+                                                                      .only(
+                                                                      bottom:
+                                                                          8.0),
+                                                              padding:
+                                                                  const EdgeInsets
+                                                                      .symmetric(
+                                                                      horizontal:
+                                                                          10.0,
+                                                                      vertical:
+                                                                          6.0),
+                                                              decoration:
+                                                                  BoxDecoration(
+                                                                color: const Color(
+                                                                    0xFFF0F2F5),
+                                                                borderRadius:
+                                                                    BorderRadius
+                                                                        .circular(
+                                                                            10.0),
+                                                                border:
+                                                                    const Border(
+                                                                  left:
+                                                                      BorderSide(
+                                                                    color: Color(
+                                                                        0xFF007AFF),
+                                                                    width: 3.0,
+                                                                  ),
+                                                                ),
+                                                              ),
+                                                              child: Row(
+                                                                mainAxisSize:
+                                                                    MainAxisSize
+                                                                        .min,
+                                                                children: [
+                                                                  Expanded(
+                                                                    child:
+                                                                        Column(
+                                                                      crossAxisAlignment:
+                                                                          CrossAxisAlignment
+                                                                              .start,
+                                                                      mainAxisSize:
+                                                                          MainAxisSize
+                                                                              .min,
+                                                                      children: [
+                                                                        Text(
+                                                                          widget.message?.replyToSender ??
+                                                                              'Unknown',
+                                                                          style:
+                                                                              const TextStyle(
+                                                                            fontFamily:
+                                                                                'SF Pro Text',
+                                                                            color:
+                                                                                Color(0xFF007AFF),
+                                                                            fontSize:
+                                                                                13.0,
+                                                                            fontWeight:
+                                                                                FontWeight.w600,
+                                                                          ),
+                                                                        ),
+                                                                        const SizedBox(
+                                                                            height:
+                                                                                2.0),
+                                                                        Text(
+                                                                          widget.message?.replyToContent ??
+                                                                              '',
+                                                                          style:
+                                                                              const TextStyle(
+                                                                            fontFamily:
+                                                                                'SF Pro Text',
+                                                                            color:
+                                                                                Color(0xFF667781),
+                                                                            fontSize:
+                                                                                13.0,
+                                                                          ),
+                                                                          maxLines:
+                                                                              1,
+                                                                          overflow:
+                                                                              TextOverflow.ellipsis,
+                                                                        ),
+                                                                      ],
+                                                                    ),
+                                                                  ),
+                                                                ],
+                                                              ),
+                                                            ),
+                                                          ),
+                                                        // Show content if it exists and doesn't look like a filename
+                                                        // When there's a file attachment, show content only if it's actual text (not filename)
+                                                        if (widget.message
+                                                                    ?.content !=
+                                                                null &&
+                                                            widget
+                                                                .message!
+                                                                .content
+                                                                .isNotEmpty) ...[
+                                                          Builder(
+                                                            builder: (context) {
+                                                              final content =
+                                                                  widget
+                                                                      .message!
+                                                                      .content;
+                                                              final hasAttachment = widget
+                                                                          .message
+                                                                          ?.attachmentUrl !=
+                                                                      null &&
+                                                                  widget
+                                                                      .message!
+                                                                      .attachmentUrl
+                                                                      .isNotEmpty;
+                                                              // Check if content looks like a filename (has extension, short, few words)
+                                                              final looksLikeFilename = hasAttachment &&
+                                                                  content
+                                                                      .contains(
+                                                                          '.') &&
+                                                                  !content
+                                                                      .contains(
+                                                                          '/') &&
+                                                                  !content
+                                                                      .contains(
+                                                                          '\\') &&
+                                                                  content.length <
+                                                                      200 &&
+                                                                  content
+                                                                          .split(
+                                                                              ' ')
+                                                                          .length <
+                                                                      8;
+
+                                                              // Only show content if it doesn't look like a filename
+                                                              if (!looksLikeFilename) {
+                                                                return custom_widgets
+                                                                    .MessageContentWidget(
+                                                                  content:
+                                                                      content,
+                                                                  senderName:
+                                                                      widget
+                                                                          .name,
+                                                                  onTapLink: (text,
+                                                                      url,
+                                                                      title) async {
+                                                                    if (url !=
+                                                                        null) {
+                                                                      await _launchURL(
+                                                                          url);
+                                                                    }
+                                                                  },
+                                                                  styleSheet:
+                                                                      MarkdownStyleSheet(
+                                                                    // iMessage received bubble: dark text on gray
+                                                                    p: const TextStyle(
+                                                                      fontFamily:
+                                                                          'SF Pro Text',
+                                                                      color: Color(
+                                                                          0xFF000000),
+                                                                      fontSize:
+                                                                          17.0,
+                                                                      letterSpacing:
+                                                                          -0.4,
+                                                                      fontWeight:
+                                                                          FontWeight
+                                                                              .w400,
+                                                                      height:
+                                                                          1.3,
+                                                                    ),
+                                                                    a: const TextStyle(
+                                                                      fontFamily:
+                                                                          'SF Pro Text',
+                                                                      color: Color(
+                                                                          0xFF007AFF),
+                                                                      fontSize:
+                                                                          17.0,
+                                                                      letterSpacing:
+                                                                          -0.4,
+                                                                      fontWeight:
+                                                                          FontWeight
+                                                                              .w400,
+                                                                      decoration:
+                                                                          TextDecoration
+                                                                              .underline,
+                                                                    ),
+                                                                    code:
+                                                                        const TextStyle(
+                                                                      fontFamily:
+                                                                          'SF Mono',
+                                                                      color: Color(
+                                                                          0xFF000000),
+                                                                      fontSize:
+                                                                          15.0,
+                                                                    ),
+                                                                    codeblockDecoration:
+                                                                        BoxDecoration(
+                                                                      color: const Color(
+                                                                          0xFFD1D1D6),
+                                                                      borderRadius:
+                                                                          BorderRadius.circular(
+                                                                              6),
+                                                                    ),
+                                                                    strong:
+                                                                        const TextStyle(
+                                                                      fontFamily:
+                                                                          'SF Pro Text',
+                                                                      color: Color(
+                                                                          0xFF000000),
+                                                                      fontSize:
+                                                                          17.0,
+                                                                      fontWeight:
+                                                                          FontWeight
+                                                                              .w600,
+                                                                    ),
+                                                                    em: const TextStyle(
+                                                                      fontFamily:
+                                                                          'SF Pro Text',
+                                                                      color: Color(
+                                                                          0xFF000000),
+                                                                      fontSize:
+                                                                          17.0,
+                                                                      fontStyle:
+                                                                          FontStyle
+                                                                              .italic,
+                                                                      fontWeight:
+                                                                          FontWeight
+                                                                              .w400,
+                                                                    ),
+                                                                    tableBody:
+                                                                        const TextStyle(
+                                                                      fontFamily:
+                                                                          'SF Pro Text',
+                                                                      color: Color(
+                                                                          0xFF000000),
+                                                                      fontSize:
+                                                                          15.0,
+                                                                      fontWeight:
+                                                                          FontWeight
+                                                                              .w400,
+                                                                    ),
+                                                                    tableHead:
+                                                                        const TextStyle(
+                                                                      fontFamily:
+                                                                          'SF Pro Text',
+                                                                      color: Color(
+                                                                          0xFF000000),
+                                                                      fontSize:
+                                                                          15.0,
+                                                                      fontWeight:
+                                                                          FontWeight
+                                                                              .w600,
+                                                                    ),
+                                                                  ),
+                                                                );
+                                                              }
+                                                              return SizedBox
+                                                                  .shrink();
+                                                            },
+                                                          ),
+                                                        ],
+                                                        // Edited indicator for received messages
+                                                        if (widget.message
+                                                                ?.isEdited ==
+                                                            true)
+                                                          Padding(
+                                                            padding:
+                                                                const EdgeInsetsDirectional
+                                                                    .fromSTEB(
+                                                                    0.0,
+                                                                    4.0,
+                                                                    0.0,
+                                                                    0.0),
+                                                            child: Row(
+                                                              mainAxisSize:
+                                                                  MainAxisSize
+                                                                      .min,
+                                                              children: [
+                                                                Text(
+                                                                  'edited',
+                                                                  style: FlutterFlowTheme.of(
+                                                                          context)
+                                                                      .bodySmall
+                                                                      .override(
+                                                                        color: FlutterFlowTheme.of(context)
+                                                                            .secondaryText,
+                                                                        fontSize:
+                                                                            11.0,
+                                                                        fontStyle:
+                                                                            FontStyle.italic,
+                                                                      ),
+                                                                ),
+                                                                if (widget
+                                                                        .message
+                                                                        ?.editedAt !=
+                                                                    null) ...[
+                                                                  Text(
+                                                                    ' • ',
+                                                                    style: FlutterFlowTheme.of(
+                                                                            context)
+                                                                        .bodySmall
+                                                                        .override(
+                                                                          color:
+                                                                              FlutterFlowTheme.of(context).secondaryText,
+                                                                          fontSize:
+                                                                              11.0,
+                                                                        ),
+                                                                  ),
+                                                                  Text(
+                                                                    dateTimeFormat(
+                                                                        'MMM d, h:mm a',
+                                                                        widget
+                                                                            .message!
+                                                                            .editedAt!),
+                                                                    style: FlutterFlowTheme.of(
+                                                                            context)
+                                                                        .bodySmall
+                                                                        .override(
+                                                                          color:
+                                                                              FlutterFlowTheme.of(context).secondaryText,
+                                                                          fontSize:
+                                                                              11.0,
+                                                                          fontStyle:
+                                                                              FontStyle.italic,
+                                                                        ),
+                                                                  ),
+                                                                ],
+                                                              ],
+                                                            ),
+                                                          ),
+                                                        if (widget.message
+                                                                    ?.image !=
+                                                                null &&
+                                                            widget.message
+                                                                    ?.image !=
+                                                                '')
+                                                          OverflowBox(
+                                                            maxWidth:
+                                                                double.infinity,
+                                                            alignment:
+                                                                AlignmentDirectional
+                                                                    .centerStart,
+                                                            child: Padding(
+                                                              padding:
+                                                                  const EdgeInsets
+                                                                      .only(
+                                                                      left:
+                                                                          40.0),
+                                                              child: Stack(
+                                                                clipBehavior:
+                                                                    Clip.none,
+                                                                children: [
+                                                                  // Image bubble container (WhatsApp style: fixed width)
+                                                                  Container(
+                                                                    constraints:
+                                                                        BoxConstraints(
+                                                                      maxWidth:
+                                                                          280.0, // Fixed width like WhatsApp
+                                                                      maxHeight:
+                                                                          400.0,
+                                                                    ),
+                                                                    width:
+                                                                        280.0, // Fixed width
+                                                                    margin:
+                                                                        const EdgeInsets
+                                                                            .only(
+                                                                      bottom:
+                                                                          4.0,
+                                                                    ),
+                                                                    decoration:
+                                                                        BoxDecoration(
+                                                                      color: const Color(
+                                                                          0xFFE5E7EB),
+                                                                      borderRadius:
+                                                                          BorderRadius.circular(
+                                                                              8.0),
+                                                                    ),
+                                                                    child:
+                                                                        GestureDetector(
+                                                                      onTap:
+                                                                          () async {
+                                                                        await Navigator
+                                                                            .push(
+                                                                          context,
+                                                                          PageTransition(
+                                                                            type:
+                                                                                PageTransitionType.fade,
+                                                                            child:
+                                                                                FlutterFlowExpandedImageView(
+                                                                              image: CachedNetworkImage(
+                                                                                fadeInDuration: const Duration(milliseconds: 300),
+                                                                                fadeOutDuration: const Duration(milliseconds: 300),
+                                                                                imageUrl: valueOrDefault<String>(
+                                                                                  widget.message?.image,
+                                                                                  'https://firebasestorage.googleapis.com/v0/b/linkedup-c3e29.firebasestorage.app/o/asset%2Fdefault-user.png?alt=media&token=35d4da12-13b0-4f43-8b8e-375e6e126683',
+                                                                                ),
+                                                                                fit: BoxFit.contain,
+                                                                                errorWidget: (context, error, stackTrace) => Image.asset(
+                                                                                  'assets/images/error_image.png',
+                                                                                  fit: BoxFit.contain,
+                                                                                ),
+                                                                              ),
+                                                                              allowRotation: false,
+                                                                              tag: valueOrDefault<String>(
+                                                                                widget.message?.image,
+                                                                                'https://firebasestorage.googleapis.com/v0/b/linkedup-c3e29.firebasestorage.app/o/asset%2Fdefault-user.png?alt=media&token=35d4da12-13b0-4f43-8b8e-375e6e126683',
+                                                                              ),
+                                                                              useHeroAnimation: true,
+                                                                            ),
+                                                                          ),
+                                                                        );
+                                                                      },
+                                                                      child:
+                                                                          Hero(
+                                                                        tag: valueOrDefault<
+                                                                            String>(
+                                                                          widget
+                                                                              .message
+                                                                              ?.image,
+                                                                          'https://firebasestorage.googleapis.com/v0/b/linkedup-c3e29.firebasestorage.app/o/asset%2Fdefault-user.png?alt=media&token=35d4da12-13b0-4f43-8b8e-375e6e126683',
+                                                                        ),
+                                                                        transitionOnUserGestures:
+                                                                            true,
+                                                                        child:
+                                                                            ClipRRect(
+                                                                          borderRadius:
+                                                                              BorderRadius.circular(8.0),
+                                                                          child:
+                                                                              CachedNetworkImage(
+                                                                            fadeInDuration:
+                                                                                const Duration(milliseconds: 300),
+                                                                            fadeOutDuration:
+                                                                                const Duration(milliseconds: 300),
+                                                                            imageUrl:
+                                                                                valueOrDefault<String>(
+                                                                              widget.message?.image,
+                                                                              'https://firebasestorage.googleapis.com/v0/b/linkedup-c3e29.firebasestorage.app/o/asset%2Fdefault-user.png?alt=media&token=35d4da12-13b0-4f43-8b8e-375e6e126683',
+                                                                            ),
+                                                                            fit:
+                                                                                BoxFit.cover,
+                                                                            errorWidget: (context, error, stackTrace) =>
+                                                                                Image.asset(
+                                                                              'assets/images/error_image.png',
+                                                                              fit: BoxFit.cover,
+                                                                            ),
+                                                                          ),
+                                                                        ),
+                                                                      ),
+                                                                    ),
+                                                                  ),
+                                                                ],
+                                                              ),
+                                                            ),
+                                                          ),
+                                                        if (widget.message
+                                                                    ?.video !=
+                                                                null &&
+                                                            widget.message
+                                                                    ?.video !=
+                                                                '')
+                                                          Container(
+                                                            width: 265.0,
+                                                            height: 200.0,
+                                                            decoration:
+                                                                BoxDecoration(
+                                                              color: const Color(
+                                                                  0xFFE5E7EB),
+                                                              borderRadius:
+                                                                  BorderRadius
+                                                                      .circular(
+                                                                          8.0),
+                                                            ),
+                                                            child:
+                                                                VideoMessageWidget(
+                                                              videoUrl: widget
+                                                                      .message
+                                                                      ?.video ??
+                                                                  '',
+                                                              width: 265.0,
+                                                              height: 200.0,
+                                                              isOwnMessage:
+                                                                  isMe,
+                                                            ),
+                                                          ),
+                                                        if ((widget.message
+                                                                        ?.images !=
+                                                                    null &&
+                                                                (widget.message
+                                                                        ?.images)!
+                                                                    .isNotEmpty) ==
+                                                            true)
+                                                          Material(
+                                                            color: Colors
+                                                                .transparent,
+                                                            elevation: 0.0,
+                                                            shape:
+                                                                RoundedRectangleBorder(
+                                                              borderRadius:
+                                                                  BorderRadius
+                                                                      .circular(
+                                                                          8.0),
+                                                            ),
+                                                            child: Container(
+                                                              width: 265.0,
+                                                              decoration:
+                                                                  BoxDecoration(
+                                                                color: Colors
+                                                                    .transparent,
+                                                                borderRadius:
+                                                                    BorderRadius
+                                                                        .circular(
+                                                                            8.0),
+                                                              ),
+                                                              child: Builder(
+                                                                builder:
+                                                                    (context) {
+                                                                  final multipleImages = widget
+                                                                          .message
+                                                                          ?.images
+                                                                          .toList() ??
+                                                                      [];
+                                                                  return Column(
+                                                                    mainAxisSize:
+                                                                        MainAxisSize
+                                                                            .min,
+                                                                    children: List
+                                                                        .generate(
+                                                                      multipleImages
+                                                                          .length,
+                                                                      (multipleImagesIndex) {
+                                                                        final multipleImagesItem =
+                                                                            multipleImages[multipleImagesIndex];
+                                                                        return Stack(
+                                                                          clipBehavior:
+                                                                              Clip.none,
+                                                                          children: [
+                                                                            // Image container
+                                                                            GestureDetector(
+                                                                              onTap: () async {
+                                                                                await Navigator.push(
+                                                                                  context,
+                                                                                  PageTransition(
+                                                                                    type: PageTransitionType.fade,
+                                                                                    child: FlutterFlowExpandedImageView(
+                                                                                      image: CachedNetworkImage(
+                                                                                        fadeInDuration: const Duration(milliseconds: 300),
+                                                                                        fadeOutDuration: const Duration(milliseconds: 300),
+                                                                                        imageUrl: valueOrDefault<String>(
+                                                                                          multipleImagesItem,
+                                                                                          'https://firebasestorage.googleapis.com/v0/b/linkedup-c3e29.firebasestorage.app/o/asset%2Fdefault-user.png?alt=media&token=35d4da12-13b0-4f43-8b8e-375e6e126683',
+                                                                                        ),
+                                                                                        fit: BoxFit.contain,
+                                                                                        errorWidget: (context, error, stackTrace) => Image.asset(
+                                                                                          'assets/images/error_image.png',
+                                                                                          fit: BoxFit.contain,
+                                                                                        ),
+                                                                                      ),
+                                                                                      allowRotation: false,
+                                                                                      tag: valueOrDefault<String>(
+                                                                                        multipleImagesItem,
+                                                                                        'https://firebasestorage.googleapis.com/v0/b/linkedup-c3e29.firebasestorage.app/o/asset%2Fdefault-user.png?alt=media&token=35d4da12-13b0-4f43-8b8e-375e6e126683$multipleImagesIndex',
+                                                                                      ),
+                                                                                      useHeroAnimation: true,
+                                                                                    ),
+                                                                                  ),
+                                                                                );
+                                                                              },
+                                                                              child: Hero(
+                                                                                tag: valueOrDefault<String>(
+                                                                                  multipleImagesItem,
+                                                                                  'https://firebasestorage.googleapis.com/v0/b/linkedup-c3e29.firebasestorage.app/o/asset%2Fdefault-user.png?alt=media&token=35d4da12-13b0-4f43-8b8e-375e6e126683$multipleImagesIndex',
+                                                                                ),
+                                                                                transitionOnUserGestures: true,
+                                                                                child: ClipRRect(
+                                                                                  borderRadius: BorderRadius.circular(8.0),
+                                                                                  child: CachedNetworkImage(
+                                                                                    fadeInDuration: const Duration(milliseconds: 300),
+                                                                                    fadeOutDuration: const Duration(milliseconds: 300),
+                                                                                    imageUrl: valueOrDefault<String>(
+                                                                                      multipleImagesItem,
+                                                                                      'https://firebasestorage.googleapis.com/v0/b/linkedup-c3e29.firebasestorage.app/o/asset%2Fdefault-user.png?alt=media&token=35d4da12-13b0-4f43-8b8e-375e6e126683',
+                                                                                    ),
+                                                                                    width: double.infinity,
+                                                                                    height: 207.2,
+                                                                                    fit: BoxFit.cover,
+                                                                                    errorWidget: (context, error, stackTrace) => Image.asset(
+                                                                                      'assets/images/error_image.png',
+                                                                                      width: double.infinity,
+                                                                                      height: 207.2,
+                                                                                      fit: BoxFit.cover,
+                                                                                    ),
+                                                                                  ),
+                                                                                ),
+                                                                              ),
+                                                                            ),
+                                                                          ],
+                                                                        );
+                                                                      },
+                                                                    ).divide(const SizedBox(
+                                                                        height:
+                                                                            8.0)),
+                                                                  );
+                                                                },
+                                                              ),
+                                                            ),
+                                                          ),
+                                                        if (widget.message
+                                                                    ?.audio !=
+                                                                null &&
+                                                            widget.message
+                                                                    ?.audio !=
+                                                                '')
+                                                          Container(
+                                                            width:
+                                                                double.infinity,
+                                                            decoration:
+                                                                BoxDecoration(
+                                                              color: const Color(
+                                                                  0xFFE5E7EB),
+                                                              borderRadius:
+                                                                  BorderRadius
+                                                                      .circular(
+                                                                          8.0),
+                                                            ),
+                                                            child: Column(
+                                                              mainAxisSize:
+                                                                  MainAxisSize
+                                                                      .max,
+                                                              children: [
+                                                                FlutterFlowAudioPlayer(
+                                                                  audio: Audio
+                                                                      .network(
+                                                                    widget
+                                                                        .message!
+                                                                        .audioPath,
+                                                                    metas:
+                                                                        Metas(
+                                                                      title:
+                                                                          'Voice',
+                                                                    ),
+                                                                  ),
+                                                                  titleTextStyle: FlutterFlowTheme.of(
+                                                                          context)
+                                                                      .titleLarge
+                                                                      .override(
+                                                                        font: GoogleFonts
+                                                                            .inter(
+                                                                          fontWeight: FlutterFlowTheme.of(context)
+                                                                              .titleLarge
+                                                                              .fontWeight,
+                                                                          fontStyle: FlutterFlowTheme.of(context)
+                                                                              .titleLarge
+                                                                              .fontStyle,
+                                                                        ),
+                                                                        fontSize:
+                                                                            16.0,
+                                                                        letterSpacing:
+                                                                            0.0,
+                                                                        fontWeight: FlutterFlowTheme.of(context)
+                                                                            .titleLarge
+                                                                            .fontWeight,
+                                                                        fontStyle: FlutterFlowTheme.of(context)
+                                                                            .titleLarge
+                                                                            .fontStyle,
+                                                                      ),
+                                                                  playbackDurationTextStyle: FlutterFlowTheme.of(
+                                                                          context)
+                                                                      .labelMedium
+                                                                      .override(
+                                                                        font: GoogleFonts
+                                                                            .inter(
+                                                                          fontWeight: FlutterFlowTheme.of(context)
+                                                                              .labelMedium
+                                                                              .fontWeight,
+                                                                          fontStyle: FlutterFlowTheme.of(context)
+                                                                              .labelMedium
+                                                                              .fontStyle,
+                                                                        ),
+                                                                        letterSpacing:
+                                                                            0.0,
+                                                                        fontWeight: FlutterFlowTheme.of(context)
+                                                                            .labelMedium
+                                                                            .fontWeight,
+                                                                        fontStyle: FlutterFlowTheme.of(context)
+                                                                            .labelMedium
+                                                                            .fontStyle,
+                                                                      ),
+                                                                  fillColor: FlutterFlowTheme.of(
+                                                                          context)
+                                                                      .secondaryBackground,
+                                                                  playbackButtonColor:
+                                                                      FlutterFlowTheme.of(
+                                                                              context)
+                                                                          .primary,
+                                                                  activeTrackColor:
+                                                                      FlutterFlowTheme.of(
+                                                                              context)
+                                                                          .primary,
+                                                                  inactiveTrackColor:
+                                                                      FlutterFlowTheme.of(
+                                                                              context)
+                                                                          .alternate,
+                                                                  elevation:
+                                                                      0.0,
+                                                                  playInBackground:
+                                                                      PlayInBackground
+                                                                          .enabled,
+                                                                ),
+                                                              ],
+                                                            ),
+                                                          ),
+                                                        if (widget.message
+                                                                    ?.attachmentUrl !=
+                                                                null &&
+                                                            widget.message
+                                                                    ?.attachmentUrl !=
+                                                                '')
+                                                          _buildFileAttachment(
+                                                              widget.message!
+                                                                  .attachmentUrl),
+                                                        // Sender name and timestamp inside bubble (bottom left for received messages)
+                                                        Padding(
+                                                          padding:
+                                                              const EdgeInsetsDirectional
+                                                                  .fromSTEB(
+                                                                  0.0,
+                                                                  4.0,
+                                                                  0.0,
+                                                                  0.0),
+                                                          child: Row(
+                                                            mainAxisAlignment:
+                                                                MainAxisAlignment
+                                                                    .start,
+                                                            mainAxisSize:
+                                                                MainAxisSize
+                                                                    .min,
+                                                            children: [
+                                                              Text(
+                                                                valueOrDefault<
+                                                                    String>(
+                                                                  widget.name,
+                                                                  'No One',
+                                                                ),
+                                                                style: FlutterFlowTheme.of(
+                                                                        context)
+                                                                    .bodySmall
+                                                                    .override(
+                                                                      font: GoogleFonts
+                                                                          .inter(),
+                                                                      color: const Color(
+                                                                          0xFF6B7280),
+                                                                      fontSize:
+                                                                          11.0,
+                                                                      letterSpacing:
+                                                                          0.0,
+                                                                      fontWeight:
+                                                                          FontWeight
+                                                                              .w600,
+                                                                    ),
+                                                              ),
+                                                              Text(
+                                                                ' • ',
+                                                                style: FlutterFlowTheme.of(
+                                                                        context)
+                                                                    .bodySmall
+                                                                    .override(
+                                                                      font: GoogleFonts
+                                                                          .inter(),
+                                                                      color: const Color(
+                                                                          0xFF6B7280),
+                                                                      fontSize:
+                                                                          11.0,
+                                                                      letterSpacing:
+                                                                          0.0,
+                                                                    ),
+                                                              ),
+                                                              Text(
+                                                                _formatMessageTimestamp(
+                                                                    widget
+                                                                        .message
+                                                                        ?.createdAt),
+                                                                style: FlutterFlowTheme.of(
+                                                                        context)
+                                                                    .bodySmall
+                                                                    .override(
+                                                                      font: GoogleFonts
+                                                                          .inter(),
+                                                                      color: const Color(
+                                                                          0xFF6B7280),
+                                                                      fontSize:
+                                                                          11.0,
+                                                                      letterSpacing:
+                                                                          0.0,
+                                                                      fontWeight:
+                                                                          FontWeight
+                                                                              .w400,
+                                                                    ),
+                                                              ),
+                                                            ],
+                                                          ),
+                                                        ),
+                                                      ].divide(const SizedBox(
+                                                          height: 8.0)),
+                                                    ),
+                                                  ),
+                                                ),
+                                              );
+                                            },
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  ].divide(const SizedBox(height: 4.0)),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+          ]
+              .divide(const SizedBox(height: 2.0))
+              .addToStart(const SizedBox(height: 8.0))
+              .addToEnd(const SizedBox(height: 8.0)),
+        );
       },
     );
   }

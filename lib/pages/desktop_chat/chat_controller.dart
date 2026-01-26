@@ -153,7 +153,39 @@ class ChatController extends GetxController {
       }
 
       // Then, add new unread chats to knownUnreadChats
+      // BUT exclude the currently open chat (WhatsApp-like behavior)
+      final currentSelectedChat = selectedChat.value;
+      final currentSelectedChatId = currentSelectedChat?.reference.id;
+      
       for (final chat in combinedChats) {
+        // CRITICAL: If this chat is currently open, don't add it to knownUnreadChats
+        // and remove it if it's already there (WhatsApp-like behavior)
+        if (currentSelectedChatId != null &&
+            chat.reference.id == currentSelectedChatId) {
+          // Chat is currently open, so remove from knownUnreadChats
+          knownUnreadChats.remove(chat.reference.id);
+          // Update locallySeenChats to current time to keep it in sync
+          locallySeenChats[chat.reference.id] = DateTime.now();
+          
+          // If there are new unread messages in the open chat, mark them as seen
+          // This ensures Firestore is updated so other devices also see it as read
+          final userInSeenList =
+              chat.lastMessageSeen.contains(currentUserReference);
+          final hasLastMessage = chat.lastMessage.isNotEmpty;
+          final isNotSentByUser = chat.lastMessageSent != currentUserReference;
+          
+          if (hasLastMessage && isNotSentByUser && !userInSeenList) {
+            // New message arrived in open chat - mark as seen in background
+            // Don't await to avoid blocking the UI update
+            markMessagesAsSeen(chat).catchError((e) {
+              print('⚠️ Error auto-marking open chat as seen: $e');
+            });
+          }
+          
+          // Skip adding to knownUnreadChats
+          continue;
+        }
+
         // Check if this chat has a new unread message
         final userInSeenList =
             chat.lastMessageSeen.contains(currentUserReference);
@@ -224,6 +256,16 @@ class ChatController extends GetxController {
 
   // Check if chat has unread messages
   bool hasUnreadMessages(ChatsRecord chat) {
+    // CRITICAL: If this chat is currently open, it should never show as unread
+    // This implements WhatsApp-like behavior where open chats don't show badges
+    // NOTE: We only READ from observables here, mutations happen in _combineAndUpdateChats()
+    if (selectedChat.value != null &&
+        selectedChat.value!.reference.id == chat.reference.id) {
+      // Chat is currently open, so it's always considered "seen"
+      // Don't mutate observables here - that's handled in _combineAndUpdateChats()
+      return false;
+    }
+
     // If user has explicitly seen this chat (clicked on it), it's not unread
     if (locallySeenChats.containsKey(chat.reference.id)) {
       final seenAt = locallySeenChats[chat.reference.id];
@@ -264,6 +306,12 @@ class ChatController extends GetxController {
   // Uses smart logic: only counts messages at/after lastMessageAt if user hasn't seen last message
   Stream<int> getUnreadMessageCount(ChatsRecord chat) {
     if (currentUserReference == null) {
+      return Stream.value(0);
+    }
+
+    // CRITICAL: If this chat is currently open, return 0 (WhatsApp-like behavior)
+    if (selectedChat.value != null &&
+        selectedChat.value!.reference.id == chat.reference.id) {
       return Stream.value(0);
     }
 
@@ -347,6 +395,12 @@ class ChatController extends GetxController {
         final batch = chatsList.skip(i).take(batchSize);
 
         final futures = batch.map((chat) async {
+          // CRITICAL: If this chat is currently open, return 0 (WhatsApp-like behavior)
+          if (selectedChat.value != null &&
+              selectedChat.value!.reference.id == chat.reference.id) {
+            return 0;
+          }
+
           // Use the SAME logic as hasUnreadMessages() for consistency
           // 1. Check knownUnreadChats FIRST (sticky) - if chat is known unread, we MUST count it
           // This prevents flickering when new messages arrive

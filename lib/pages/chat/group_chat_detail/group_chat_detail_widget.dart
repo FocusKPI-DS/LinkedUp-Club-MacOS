@@ -1531,6 +1531,8 @@ class _GroupChatDetailWidgetState extends State<GroupChatDetailWidget>
 
     // Initialize userRef with current members
     _model.userRef = widget.chatDoc!.members.toList();
+    // Initialize search controller
+    final searchController = TextEditingController();
     safeSetState(() {});
 
     await showDialog(
@@ -1628,6 +1630,7 @@ class _GroupChatDetailWidgetState extends State<GroupChatDetailWidget>
                             ),
                             Expanded(
                               child: TextField(
+                                controller: searchController,
                                 style: const TextStyle(
                                   fontFamily: 'Inter',
                                   fontSize: 14.0,
@@ -1647,7 +1650,9 @@ class _GroupChatDetailWidgetState extends State<GroupChatDetailWidget>
                                   ),
                                 ),
                                 onChanged: (value) {
-                                  // TODO: Implement search functionality
+                                  setDialogState(() {
+                                    // Trigger rebuild to update filtered list
+                                  });
                                 },
                               ),
                             ),
@@ -1757,10 +1762,21 @@ class _GroupChatDetailWidgetState extends State<GroupChatDetailWidget>
                                   future: UsersRecord.getDocumentOnce(userRef),
                                   builder: (context, snapshot) {
                                     if (!snapshot.hasData) {
-                                      return const SizedBox.shrink();
+                                      return const SizedBox(height: 72);
                                     }
 
                                     final user = snapshot.data!;
+                                    
+                                    // Filter by search query - read from controller each time
+                                    final currentSearchQuery = searchController.text.toLowerCase();
+                                    if (currentSearchQuery.isNotEmpty) {
+                                      final name = user.displayName.toLowerCase();
+                                      final email = user.email.toLowerCase();
+                                      if (!name.contains(currentSearchQuery) && !email.contains(currentSearchQuery)) {
+                                        return const SizedBox.shrink();
+                                      }
+                                    }
+                                    
                                     final isSelected =
                                         _model.userRef.contains(userRef);
 
@@ -1983,7 +1999,10 @@ class _GroupChatDetailWidgetState extends State<GroupChatDetailWidget>
           },
         );
       },
-    );
+    ).then((_) {
+      // Dispose search controller when dialog closes
+      searchController.dispose();
+    });
   }
 
   @override

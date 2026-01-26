@@ -2,15 +2,22 @@ import '/flutter_flow/flutter_flow_util.dart';
 import 'profile_settings_widget.dart' show ProfileSettingsWidget;
 import 'package:flutter/material.dart';
 
+enum SettingsTab {
+  yourProfile,
+  notifications,
+  helpFeedback,
+  logout,
+}
+
 class ProfileSettingsModel extends FlutterFlowModel<ProfileSettingsWidget> {
   ///  State field(s) for this page.
 
   final unfocusNode = FocusNode();
 
   /// Selected setting in the sidebar
-  String _selectedSetting = 'Personal Information';
-  String get selectedSetting => _selectedSetting;
-  set selectedSetting(String value) => _selectedSetting = value;
+  SettingsTab _selectedTab = SettingsTab.yourProfile;
+  SettingsTab get selectedTab => _selectedTab;
+  set selectedTab(SettingsTab value) => _selectedTab = value;
 
   /// Search functionality for workspace members
   TextEditingController? searchController;

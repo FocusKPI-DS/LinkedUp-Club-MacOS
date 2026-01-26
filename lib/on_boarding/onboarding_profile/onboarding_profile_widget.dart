@@ -28,6 +28,7 @@ import 'package:flutter_animate/flutter_animate.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'onboarding_profile_model.dart';
 export 'onboarding_profile_model.dart';
 
@@ -66,9 +67,10 @@ class _OnboardingProfileWidgetState extends State<OnboardingProfileWidget>
       await actions.dismissKeyboard(
         context,
       );
-      
+
       // Check for referrer from user document (for Google/Apple sign-in)
-      if (FFAppState().referrerName == null || FFAppState().referrerName!.isEmpty) {
+      if (FFAppState().referrerName == null ||
+          FFAppState().referrerName!.isEmpty) {
         try {
           final userDoc = await currentUserReference?.get();
           if (userDoc != null && userDoc.exists) {
@@ -77,7 +79,8 @@ class _OnboardingProfileWidgetState extends State<OnboardingProfileWidget>
             if (referrerRef != null) {
               final referrerDoc = await referrerRef.get();
               if (referrerDoc.exists) {
-                final referrerData = referrerDoc.data() as Map<String, dynamic>?;
+                final referrerData =
+                    referrerDoc.data() as Map<String, dynamic>?;
                 final referrerName = referrerData?['display_name'] as String?;
                 if (referrerName != null && referrerName.isNotEmpty) {
                   FFAppState().update(() {
@@ -91,7 +94,7 @@ class _OnboardingProfileWidgetState extends State<OnboardingProfileWidget>
           // Error checking referrer (non-critical)
         }
       }
-      
+
       if (widget.deeplink == true) {
         await showDialog(
           context: context,
@@ -130,7 +133,7 @@ class _OnboardingProfileWidgetState extends State<OnboardingProfileWidget>
     _model.bioFocusNode ??= FocusNode();
     _model.searchTextController ??= TextEditingController();
     _model.searchFocusNode ??= FocusNode();
-    
+
     // Add listener to search controller to trigger rebuilds
     _model.searchTextController?.addListener(() {
       setState(() {});
@@ -2984,42 +2987,89 @@ class _OnboardingProfileWidgetState extends State<OnboardingProfileWidget>
                                               ),
                                               Expanded(
                                                 child: Padding(
-                                                  padding: const EdgeInsetsDirectional
-                                                      .fromSTEB(12.0, 0.0, 0.0, 0.0),
+                                                  padding:
+                                                      const EdgeInsetsDirectional
+                                                          .fromSTEB(
+                                                          12.0, 0.0, 0.0, 0.0),
                                                   child: Column(
                                                     crossAxisAlignment:
-                                                        CrossAxisAlignment.start,
+                                                        CrossAxisAlignment
+                                                            .start,
                                                     children: [
-                                                      if (FFAppState().referrerName != null && FFAppState().referrerName!.isNotEmpty)
+                                                      if (FFAppState()
+                                                                  .referrerName !=
+                                                              null &&
+                                                          FFAppState()
+                                                              .referrerName!
+                                                              .isNotEmpty)
                                                         Container(
-                                                          margin: const EdgeInsetsDirectional.fromSTEB(0.0, 0.0, 0.0, 12.0),
-                                                          padding: const EdgeInsetsDirectional.fromSTEB(12.0, 8.0, 12.0, 8.0),
-                                                          decoration: BoxDecoration(
-                                                            color: FlutterFlowTheme.of(context).primary.withOpacity(0.1),
-                                                            borderRadius: BorderRadius.circular(8.0),
+                                                          margin:
+                                                              const EdgeInsetsDirectional
+                                                                  .fromSTEB(
+                                                                  0.0,
+                                                                  0.0,
+                                                                  0.0,
+                                                                  12.0),
+                                                          padding:
+                                                              const EdgeInsetsDirectional
+                                                                  .fromSTEB(
+                                                                  12.0,
+                                                                  8.0,
+                                                                  12.0,
+                                                                  8.0),
+                                                          decoration:
+                                                              BoxDecoration(
+                                                            color: FlutterFlowTheme
+                                                                    .of(context)
+                                                                .primary
+                                                                .withOpacity(
+                                                                    0.1),
+                                                            borderRadius:
+                                                                BorderRadius
+                                                                    .circular(
+                                                                        8.0),
                                                             border: Border.all(
-                                                              color: FlutterFlowTheme.of(context).primary.withOpacity(0.3),
+                                                              color: FlutterFlowTheme
+                                                                      .of(
+                                                                          context)
+                                                                  .primary
+                                                                  .withOpacity(
+                                                                      0.3),
                                                             ),
                                                           ),
                                                           child: Row(
-                                                            mainAxisSize: MainAxisSize.min,
+                                                            mainAxisSize:
+                                                                MainAxisSize
+                                                                    .min,
                                                             children: [
                                                               Icon(
-                                                                Icons.check_circle,
-                                                                color: FlutterFlowTheme.of(context).primary,
+                                                                Icons
+                                                                    .check_circle,
+                                                                color: FlutterFlowTheme.of(
+                                                                        context)
+                                                                    .primary,
                                                                 size: 20.0,
                                                               ),
-                                                              const SizedBox(width: 8.0),
+                                                              const SizedBox(
+                                                                  width: 8.0),
                                                               Flexible(
                                                                 child: Text(
                                                                   '${FFAppState().referrerName} invited you (Already Connected)',
-                                                                  style: FlutterFlowTheme.of(context).bodyMedium.override(
-                                                                    fontFamily: 'Inter',
-                                                                    color: FlutterFlowTheme.of(context).primary,
-                                                                    fontSize: 14.0,
-                                                                    fontWeight: FontWeight.w500,
-                                                                    letterSpacing: 0.0,
-                                                                  ),
+                                                                  style: FlutterFlowTheme.of(
+                                                                          context)
+                                                                      .bodyMedium
+                                                                      .override(
+                                                                        fontFamily:
+                                                                            'Inter',
+                                                                        color: FlutterFlowTheme.of(context)
+                                                                            .primary,
+                                                                        fontSize:
+                                                                            14.0,
+                                                                        fontWeight:
+                                                                            FontWeight.w500,
+                                                                        letterSpacing:
+                                                                            0.0,
+                                                                      ),
                                                                 ),
                                                               ),
                                                             ],
@@ -3038,11 +3088,10 @@ class _OnboardingProfileWidgetState extends State<OnboardingProfileWidget>
                                                                 fontWeight:
                                                                     FontWeight
                                                                         .bold,
-                                                                fontStyle:
-                                                                    FlutterFlowTheme.of(
-                                                                            context)
-                                                                        .headlineMedium
-                                                                        .fontStyle,
+                                                                fontStyle: FlutterFlowTheme.of(
+                                                                        context)
+                                                                    .headlineMedium
+                                                                    .fontStyle,
                                                               ),
                                                               color: const Color(
                                                                   0xFF111827),
@@ -3052,21 +3101,17 @@ class _OnboardingProfileWidgetState extends State<OnboardingProfileWidget>
                                                               fontWeight:
                                                                   FontWeight
                                                                       .bold,
-                                                              fontStyle:
-                                                                  FlutterFlowTheme.of(
-                                                                          context)
-                                                                      .headlineMedium
-                                                                      .fontStyle,
+                                                              fontStyle: FlutterFlowTheme
+                                                                      .of(context)
+                                                                  .headlineMedium
+                                                                  .fontStyle,
                                                             ),
                                                       ),
                                                       Padding(
                                                         padding:
                                                             const EdgeInsetsDirectional
-                                                                .fromSTEB(
-                                                                    0.0,
-                                                                    4.0,
-                                                                    0.0,
-                                                                    0.0),
+                                                                .fromSTEB(0.0,
+                                                                4.0, 0.0, 0.0),
                                                         child: Text(
                                                           'Connect with people and build your network',
                                                           textAlign:
@@ -3075,16 +3120,16 @@ class _OnboardingProfileWidgetState extends State<OnboardingProfileWidget>
                                                                   .of(context)
                                                               .bodyMedium
                                                               .override(
-                                                                font: GoogleFonts
-                                                                    .inter(
+                                                                font:
+                                                                    GoogleFonts
+                                                                        .inter(
                                                                   fontWeight:
                                                                       FontWeight
                                                                           .normal,
-                                                                  fontStyle:
-                                                                      FlutterFlowTheme.of(
-                                                                              context)
-                                                                          .bodyMedium
-                                                                          .fontStyle,
+                                                                  fontStyle: FlutterFlowTheme.of(
+                                                                          context)
+                                                                      .bodyMedium
+                                                                      .fontStyle,
                                                                 ),
                                                                 color: const Color(
                                                                     0xFF6B7280),
@@ -3094,11 +3139,10 @@ class _OnboardingProfileWidgetState extends State<OnboardingProfileWidget>
                                                                 fontWeight:
                                                                     FontWeight
                                                                         .normal,
-                                                                fontStyle:
-                                                                    FlutterFlowTheme.of(
-                                                                            context)
-                                                                        .bodyMedium
-                                                                        .fontStyle,
+                                                                fontStyle: FlutterFlowTheme.of(
+                                                                        context)
+                                                                    .bodyMedium
+                                                                    .fontStyle,
                                                               ),
                                                         ),
                                                       ),
@@ -3128,22 +3172,21 @@ class _OnboardingProfileWidgetState extends State<OnboardingProfileWidget>
                                               obscureText: false,
                                               decoration: InputDecoration(
                                                 hintText: 'Search by name...',
-                                                hintStyle:
-                                                    FlutterFlowTheme.of(context)
-                                                        .bodyMedium
-                                                        .override(
-                                                          font: GoogleFonts
-                                                              .inter(
-                                                            fontWeight:
-                                                                FontWeight
-                                                                    .normal,
-                                                          ),
-                                                          color: const Color(
-                                                              0xFF9CA3AF),
-                                                          fontSize: 14.0,
-                                                          letterSpacing: 0.0,
-                                                        ),
-                                                enabledBorder: OutlineInputBorder(
+                                                hintStyle: FlutterFlowTheme.of(
+                                                        context)
+                                                    .bodyMedium
+                                                    .override(
+                                                      font: GoogleFonts.inter(
+                                                        fontWeight:
+                                                            FontWeight.normal,
+                                                      ),
+                                                      color: const Color(
+                                                          0xFF9CA3AF),
+                                                      fontSize: 14.0,
+                                                      letterSpacing: 0.0,
+                                                    ),
+                                                enabledBorder:
+                                                    OutlineInputBorder(
                                                   borderSide: const BorderSide(
                                                     color: Color(0xFFE5E7EB),
                                                     width: 1.0,
@@ -3152,7 +3195,8 @@ class _OnboardingProfileWidgetState extends State<OnboardingProfileWidget>
                                                       BorderRadius.circular(
                                                           12.0),
                                                 ),
-                                                focusedBorder: OutlineInputBorder(
+                                                focusedBorder:
+                                                    OutlineInputBorder(
                                                   borderSide: BorderSide(
                                                     color: FlutterFlowTheme.of(
                                                             context)
@@ -3191,25 +3235,25 @@ class _OnboardingProfileWidgetState extends State<OnboardingProfileWidget>
                                                     const Color(0xFFF9FAFB),
                                                 contentPadding:
                                                     const EdgeInsetsDirectional
-                                                        .fromSTEB(16.0, 16.0,
-                                                            16.0, 16.0),
+                                                        .fromSTEB(
+                                                        16.0, 16.0, 16.0, 16.0),
                                                 prefixIcon: const Icon(
                                                   Icons.search_rounded,
                                                   color: Color(0xFF9CA3AF),
                                                   size: 20.0,
                                                 ),
                                               ),
-                                              style: FlutterFlowTheme.of(
-                                                      context)
-                                                  .bodyMedium
-                                                  .override(
-                                                    font: GoogleFonts.inter(
-                                                      fontWeight:
-                                                          FontWeight.normal,
-                                                    ),
-                                                    fontSize: 14.0,
-                                                    letterSpacing: 0.0,
-                                                  ),
+                                              style:
+                                                  FlutterFlowTheme.of(context)
+                                                      .bodyMedium
+                                                      .override(
+                                                        font: GoogleFonts.inter(
+                                                          fontWeight:
+                                                              FontWeight.normal,
+                                                        ),
+                                                        fontSize: 14.0,
+                                                        letterSpacing: 0.0,
+                                                      ),
                                               validator: _model
                                                   .searchTextControllerValidator
                                                   ?.asValidator(context),
@@ -3219,10 +3263,10 @@ class _OnboardingProfileWidgetState extends State<OnboardingProfileWidget>
                                           Expanded(
                                             child: currentUserReference != null
                                                 ? StreamBuilder<
-                                                        List<UsersRecord>>(
+                                                    List<UsersRecord>>(
                                                     stream: queryUsersRecord(),
-                                                    builder: (context,
-                                                        snapshot) {
+                                                    builder:
+                                                        (context, snapshot) {
                                                       if (snapshot.hasError) {
                                                         return Center(
                                                           child: Text(
@@ -3243,15 +3287,16 @@ class _OnboardingProfileWidgetState extends State<OnboardingProfileWidget>
 
                                                       final allUsers =
                                                           snapshot.data!;
-                                                      final searchQuery =
-                                                          _model.searchTextController
-                                                                  ?.text
-                                                                  .toLowerCase() ??
-                                                              '';
+                                                      final searchQuery = _model
+                                                              .searchTextController
+                                                              ?.text
+                                                              .toLowerCase() ??
+                                                          '';
 
                                                       // Filter users
                                                       final filteredUsers =
-                                                          allUsers.where((user) {
+                                                          allUsers
+                                                              .where((user) {
                                                         // Exclude current user
                                                         if (user.reference ==
                                                             currentUserReference) {
@@ -3275,7 +3320,8 @@ class _OnboardingProfileWidgetState extends State<OnboardingProfileWidget>
                                                         return true;
                                                       }).toList();
 
-                                                      if (filteredUsers.isEmpty) {
+                                                      if (filteredUsers
+                                                          .isEmpty) {
                                                         return Center(
                                                           child: Column(
                                                             mainAxisAlignment:
@@ -3294,10 +3340,10 @@ class _OnboardingProfileWidgetState extends State<OnboardingProfileWidget>
                                                                 padding:
                                                                     const EdgeInsetsDirectional
                                                                         .fromSTEB(
-                                                                            0.0,
-                                                                            16.0,
-                                                                            0.0,
-                                                                            0.0),
+                                                                        0.0,
+                                                                        16.0,
+                                                                        0.0,
+                                                                        0.0),
                                                                 child: Text(
                                                                   searchQuery
                                                                           .isNotEmpty
@@ -3307,14 +3353,12 @@ class _OnboardingProfileWidgetState extends State<OnboardingProfileWidget>
                                                                           context)
                                                                       .bodyMedium
                                                                       .override(
-                                                                        font:
-                                                                            GoogleFonts.inter(
+                                                                        font: GoogleFonts
+                                                                            .inter(
                                                                           fontWeight:
-                                                                              FontWeight
-                                                                                  .normal,
+                                                                              FontWeight.normal,
                                                                         ),
-                                                                        color: FlutterFlowTheme.of(
-                                                                                context)
+                                                                        color: FlutterFlowTheme.of(context)
                                                                             .secondaryText,
                                                                         fontSize:
                                                                             16.0,
@@ -3331,24 +3375,21 @@ class _OnboardingProfileWidgetState extends State<OnboardingProfileWidget>
                                                       return GridView.builder(
                                                         padding:
                                                             const EdgeInsetsDirectional
-                                                                .fromSTEB(
-                                                                    0.0,
-                                                                    16.0,
-                                                                    0.0,
-                                                                    0.0),
+                                                                .fromSTEB(0.0,
+                                                                16.0, 0.0, 0.0),
                                                         gridDelegate:
                                                             const SliverGridDelegateWithFixedCrossAxisCount(
                                                           crossAxisCount: 2,
                                                           crossAxisSpacing:
                                                               12.0,
-                                                          mainAxisSpacing:
-                                                              12.0,
-                                                          childAspectRatio: 0.85,
+                                                          mainAxisSpacing: 12.0,
+                                                          childAspectRatio:
+                                                              0.85,
                                                         ),
-                                                        itemCount:
-                                                            filteredUsers.length,
-                                                        itemBuilder: (context,
-                                                            index) {
+                                                        itemCount: filteredUsers
+                                                            .length,
+                                                        itemBuilder:
+                                                            (context, index) {
                                                           final user =
                                                               filteredUsers[
                                                                   index];
@@ -3366,6 +3407,190 @@ class _OnboardingProfileWidgetState extends State<OnboardingProfileWidget>
                                         ],
                                       ),
                                     ),
+                                    Padding(
+                                      padding: const EdgeInsets.all(24.0),
+                                      child: Column(
+                                        mainAxisSize: MainAxisSize.max,
+                                        mainAxisAlignment:
+                                            MainAxisAlignment.center,
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.center,
+                                        children: [
+                                          // App Logo
+                                          Container(
+                                            width: 120.0,
+                                            height: 120.0,
+                                            decoration: BoxDecoration(
+                                              borderRadius:
+                                                  BorderRadius.circular(24.0),
+                                              boxShadow: [
+                                                BoxShadow(
+                                                  blurRadius: 20.0,
+                                                  color: FlutterFlowTheme.of(
+                                                          context)
+                                                      .primary
+                                                      .withOpacity(0.3),
+                                                  offset:
+                                                      const Offset(0.0, 10.0),
+                                                )
+                                              ],
+                                            ),
+                                            child: ClipRRect(
+                                              borderRadius:
+                                                  BorderRadius.circular(24.0),
+                                              child: Image.asset(
+                                                'assets/images/adaptive_foreground_icon.png',
+                                                width: 120.0,
+                                                height: 120.0,
+                                                fit: BoxFit.cover,
+                                              ),
+                                            ),
+                                          ),
+                                          Padding(
+                                            padding: const EdgeInsetsDirectional
+                                                .fromSTEB(0.0, 32.0, 0.0, 16.0),
+                                            child: Column(
+                                              mainAxisSize: MainAxisSize.max,
+                                              children: [
+                                                Text(
+                                                  'Download Our App',
+                                                  textAlign: TextAlign.center,
+                                                  style: FlutterFlowTheme.of(
+                                                          context)
+                                                      .headlineMedium
+                                                      .override(
+                                                        font: GoogleFonts.inter(
+                                                          fontWeight:
+                                                              FontWeight.bold,
+                                                          fontStyle:
+                                                              FlutterFlowTheme.of(
+                                                                      context)
+                                                                  .headlineMedium
+                                                                  .fontStyle,
+                                                        ),
+                                                        color: const Color(
+                                                            0xFF111827),
+                                                        fontSize: 28.0,
+                                                        letterSpacing: -0.5,
+                                                        fontWeight:
+                                                            FontWeight.bold,
+                                                        fontStyle:
+                                                            FlutterFlowTheme.of(
+                                                                    context)
+                                                                .headlineMedium
+                                                                .fontStyle,
+                                                      ),
+                                                ),
+                                                Padding(
+                                                  padding:
+                                                      const EdgeInsetsDirectional
+                                                          .fromSTEB(
+                                                          0.0, 12.0, 0.0, 0.0),
+                                                  child: Text(
+                                                    'Get the full experience on iOS and macOS. Connect, network, and build your community with Lona Club.',
+                                                    textAlign: TextAlign.center,
+                                                    style: FlutterFlowTheme.of(
+                                                            context)
+                                                        .bodyMedium
+                                                        .override(
+                                                          font:
+                                                              GoogleFonts.inter(
+                                                            fontWeight:
+                                                                FontWeight
+                                                                    .normal,
+                                                            fontStyle:
+                                                                FlutterFlowTheme.of(
+                                                                        context)
+                                                                    .bodyMedium
+                                                                    .fontStyle,
+                                                          ),
+                                                          color: const Color(
+                                                              0xFF6B7280),
+                                                          fontSize: 16.0,
+                                                          letterSpacing: 0.0,
+                                                          fontWeight:
+                                                              FontWeight.normal,
+                                                          fontStyle:
+                                                              FlutterFlowTheme.of(
+                                                                      context)
+                                                                  .bodyMedium
+                                                                  .fontStyle,
+                                                        ),
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                          ),
+                                          Padding(
+                                            padding: const EdgeInsetsDirectional
+                                                .fromSTEB(0.0, 32.0, 0.0, 0.0),
+                                            child: FFButtonWidget(
+                                              onPressed: () async {
+                                                final uri = Uri.parse(
+                                                    'https://apps.apple.com/us/app/lona-club/id6747595642');
+                                                if (await canLaunchUrl(uri)) {
+                                                  await launchUrl(uri,
+                                                      mode: LaunchMode
+                                                          .externalApplication);
+                                                }
+                                              },
+                                              text: 'Download on App Store',
+                                              icon: const FaIcon(
+                                                FontAwesomeIcons.appStore,
+                                                size: 20.0,
+                                              ),
+                                              options: FFButtonOptions(
+                                                width: double.infinity,
+                                                height: 56.0,
+                                                padding:
+                                                    const EdgeInsetsDirectional
+                                                        .fromSTEB(
+                                                        24.0, 0.0, 24.0, 0.0),
+                                                iconPadding:
+                                                    const EdgeInsetsDirectional
+                                                        .fromSTEB(
+                                                        0.0, 0.0, 12.0, 0.0),
+                                                color:
+                                                    FlutterFlowTheme.of(context)
+                                                        .primary,
+                                                textStyle:
+                                                    FlutterFlowTheme.of(context)
+                                                        .titleSmall
+                                                        .override(
+                                                          font:
+                                                              GoogleFonts.inter(
+                                                            fontWeight:
+                                                                FontWeight.w600,
+                                                            fontStyle:
+                                                                FlutterFlowTheme.of(
+                                                                        context)
+                                                                    .titleSmall
+                                                                    .fontStyle,
+                                                          ),
+                                                          color: Colors.white,
+                                                          fontSize: 18.0,
+                                                          letterSpacing: 0.0,
+                                                          fontWeight:
+                                                              FontWeight.w600,
+                                                          fontStyle:
+                                                              FlutterFlowTheme.of(
+                                                                      context)
+                                                                  .titleSmall
+                                                                  .fontStyle,
+                                                        ),
+                                                elevation: 3.0,
+                                                borderSide: const BorderSide(
+                                                  color: Colors.transparent,
+                                                  width: 1.0,
+                                                ),
+                                                borderRadius:
+                                                    BorderRadius.circular(16.0),
+                                              ),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
                                   ],
                                 ),
                               ),
@@ -3378,7 +3603,7 @@ class _OnboardingProfileWidgetState extends State<OnboardingProfileWidget>
                                       smooth_page_indicator.SmoothPageIndicator(
                                     controller: _model.pageViewController ??=
                                         PageController(initialPage: 0),
-                                    count: 4,
+                                    count: 5,
                                     axisDirection: Axis.horizontal,
                                     onDotClicked: (i) async {
                                       await _model.pageViewController!
@@ -3415,7 +3640,7 @@ class _OnboardingProfileWidgetState extends State<OnboardingProfileWidget>
                             16.0, 32.0, 16.0, 27.0),
                         child: FFButtonWidget(
                           onPressed: () async {
-                            if (_model.pageViewCurrentIndex <= 2) {
+                            if (_model.pageViewCurrentIndex <= 3) {
                               await _model.pageViewController?.nextPage(
                                 duration: const Duration(milliseconds: 300),
                                 curve: Curves.ease,
@@ -3471,7 +3696,7 @@ class _OnboardingProfileWidgetState extends State<OnboardingProfileWidget>
                               }
                             }
                           },
-                          text: _model.pageViewCurrentIndex == 3
+                          text: _model.pageViewCurrentIndex == 4
                               ? 'Get Started'
                               : 'Next',
                           options: FFButtonOptions(
@@ -3570,7 +3795,7 @@ class _OnboardingProfileWidgetState extends State<OnboardingProfileWidget>
   // Build user card widget
   Widget _buildUserCard(BuildContext context, UsersRecord user) {
     final isLoading = _isOperationInProgress(user.reference.id);
-    
+
     return StreamBuilder<UsersRecord>(
       stream: UsersRecord.getDocument(currentUserReference!),
       builder: (context, currentUserSnapshot) {
@@ -3580,7 +3805,8 @@ class _OnboardingProfileWidgetState extends State<OnboardingProfileWidget>
 
         final currentUser = currentUserSnapshot.data!;
         final isConnected = currentUser.friends.contains(user.reference);
-        final hasSentRequest = currentUser.sentRequests.contains(user.reference);
+        final hasSentRequest =
+            currentUser.sentRequests.contains(user.reference);
 
         return Container(
           decoration: BoxDecoration(
@@ -3604,7 +3830,8 @@ class _OnboardingProfileWidgetState extends State<OnboardingProfileWidget>
             children: [
               // Profile picture
               Padding(
-                padding: const EdgeInsetsDirectional.fromSTEB(16.0, 20.0, 16.0, 12.0),
+                padding: const EdgeInsetsDirectional.fromSTEB(
+                    16.0, 20.0, 16.0, 12.0),
                 child: Container(
                   width: 90.0,
                   height: 90.0,
@@ -3652,9 +3879,12 @@ class _OnboardingProfileWidgetState extends State<OnboardingProfileWidget>
               ),
               // User name
               Padding(
-                padding: const EdgeInsetsDirectional.fromSTEB(12.0, 0.0, 12.0, 12.0),
+                padding:
+                    const EdgeInsetsDirectional.fromSTEB(12.0, 0.0, 12.0, 12.0),
                 child: Text(
-                  user.displayName.isNotEmpty ? user.displayName : 'Unknown User',
+                  user.displayName.isNotEmpty
+                      ? user.displayName
+                      : 'Unknown User',
                   textAlign: TextAlign.center,
                   style: FlutterFlowTheme.of(context).bodyMedium.override(
                         font: GoogleFonts.inter(
@@ -3670,96 +3900,99 @@ class _OnboardingProfileWidgetState extends State<OnboardingProfileWidget>
               ),
               // Connect button
               Padding(
-                padding: const EdgeInsetsDirectional.fromSTEB(12.0, 0.0, 12.0, 16.0),
+                padding:
+                    const EdgeInsetsDirectional.fromSTEB(12.0, 0.0, 12.0, 16.0),
                 child: SizedBox(
                   width: double.infinity,
                   child: isConnected
-                        ? Container(
-                            padding: const EdgeInsets.symmetric(vertical: 8.0),
-                            decoration: BoxDecoration(
-                              color: const Color(0xFFF3F4F6),
-                              borderRadius: BorderRadius.circular(6.0),
-                            ),
-                            child: Text(
-                              'Connected',
-                              textAlign: TextAlign.center,
-                              style: FlutterFlowTheme.of(context)
-                                  .bodyMedium
-                                  .override(
-                                    font: GoogleFonts.inter(
-                                      fontWeight: FontWeight.w500,
-                                    ),
-                                    fontSize: 12.0,
-                                    letterSpacing: 0.0,
-                                    color: const Color(0xFF6B7280),
+                      ? Container(
+                          padding: const EdgeInsets.symmetric(vertical: 8.0),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFF3F4F6),
+                            borderRadius: BorderRadius.circular(6.0),
+                          ),
+                          child: Text(
+                            'Connected',
+                            textAlign: TextAlign.center,
+                            style: FlutterFlowTheme.of(context)
+                                .bodyMedium
+                                .override(
+                                  font: GoogleFonts.inter(
+                                    fontWeight: FontWeight.w500,
                                   ),
-                            ),
-                          )
-                        : hasSentRequest
-                            ? Container(
-                                padding: const EdgeInsets.symmetric(vertical: 8.0),
-                                decoration: BoxDecoration(
-                                  color: const Color(0xFFF3F4F6),
-                                  borderRadius: BorderRadius.circular(6.0),
+                                  fontSize: 12.0,
+                                  letterSpacing: 0.0,
+                                  color: const Color(0xFF6B7280),
                                 ),
-                                child: Text(
-                                  'Request Sent',
-                                  textAlign: TextAlign.center,
-                                  style: FlutterFlowTheme.of(context)
-                                      .bodyMedium
-                                      .override(
-                                        font: GoogleFonts.inter(
-                                          fontWeight: FontWeight.w500,
-                                        ),
-                                        fontSize: 12.0,
-                                        letterSpacing: 0.0,
-                                        color: const Color(0xFF6B7280),
+                          ),
+                        )
+                      : hasSentRequest
+                          ? Container(
+                              padding:
+                                  const EdgeInsets.symmetric(vertical: 8.0),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFF3F4F6),
+                                borderRadius: BorderRadius.circular(6.0),
+                              ),
+                              child: Text(
+                                'Request Sent',
+                                textAlign: TextAlign.center,
+                                style: FlutterFlowTheme.of(context)
+                                    .bodyMedium
+                                    .override(
+                                      font: GoogleFonts.inter(
+                                        fontWeight: FontWeight.w500,
                                       ),
-                                ),
-                              )
-                            : Material(
-                                color: Colors.transparent,
-                                child: InkWell(
-                                  onTap: isLoading
-                                      ? null
-                                      : () => _sendConnectionRequest(user, currentUser),
-                                  borderRadius: BorderRadius.circular(4.0),
-                                  child: Container(
-                                    padding: const EdgeInsets.symmetric(
-                                        horizontal: 16.0, vertical: 8.0),
-                                    decoration: BoxDecoration(
-                                      color: isLoading
-                                          ? const Color(0xFF9CA3AF)
-                                          : const Color(0xFF2563EB),
-                                      borderRadius: BorderRadius.circular(4.0),
+                                      fontSize: 12.0,
+                                      letterSpacing: 0.0,
+                                      color: const Color(0xFF6B7280),
                                     ),
-                                    child: isLoading
-                                        ? const SizedBox(
-                                            width: 16.0,
-                                            height: 16.0,
-                                            child: CircularProgressIndicator(
-                                              strokeWidth: 2.0,
-                                              valueColor:
-                                                  AlwaysStoppedAnimation<Color>(
-                                                Colors.white,
-                                              ),
-                                            ),
-                                          )
-                                        : Text(
-                                            'Connect',
-                                            textAlign: TextAlign.center,
-                                            style: TextStyle(
-                                              fontFamily: 'Inter',
-                                              fontSize: 14.0,
-                                              fontWeight: FontWeight.w600,
-                                              color: Colors.white,
+                              ),
+                            )
+                          : Material(
+                              color: Colors.transparent,
+                              child: InkWell(
+                                onTap: isLoading
+                                    ? null
+                                    : () => _sendConnectionRequest(
+                                        user, currentUser),
+                                borderRadius: BorderRadius.circular(4.0),
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 16.0, vertical: 8.0),
+                                  decoration: BoxDecoration(
+                                    color: isLoading
+                                        ? const Color(0xFF9CA3AF)
+                                        : const Color(0xFF2563EB),
+                                    borderRadius: BorderRadius.circular(4.0),
+                                  ),
+                                  child: isLoading
+                                      ? const SizedBox(
+                                          width: 16.0,
+                                          height: 16.0,
+                                          child: CircularProgressIndicator(
+                                            strokeWidth: 2.0,
+                                            valueColor:
+                                                AlwaysStoppedAnimation<Color>(
+                                              Colors.white,
                                             ),
                                           ),
-                                  ),
+                                        )
+                                      : Text(
+                                          'Connect',
+                                          textAlign: TextAlign.center,
+                                          style: TextStyle(
+                                            fontFamily: 'Inter',
+                                            fontSize: 14.0,
+                                            fontWeight: FontWeight.w600,
+                                            color: Colors.white,
+                                          ),
+                                        ),
                                 ),
                               ),
-                  ),
+                            ),
                 ),
+              ),
             ],
           ),
         );
