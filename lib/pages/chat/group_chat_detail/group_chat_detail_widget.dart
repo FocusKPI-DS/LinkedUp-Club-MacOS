@@ -12,6 +12,8 @@ import '/pages/chat/chat_component/reminder_time/reminder_time_widget.dart';
 import '/pages/event/gallary/gallary_widget.dart';
 import '/pages/chat/chat_group_creation/chat_group_creation_widget.dart';
 import '/pages/chat/group_action_tasks/group_action_tasks_widget.dart';
+import '/pages/chat/group_chat_detail/mobile_group_tasks_widget.dart';
+import '/pages/chat/group_chat_detail/mobile_group_media_widget.dart';
 import 'dart:ui';
 import 'dart:io';
 import '/custom_code/widgets/index.dart' as custom_widgets;
@@ -254,6 +256,7 @@ class _GroupChatDetailWidgetState extends State<GroupChatDetailWidget>
                   allowRotation: false,
                   tag: imageUrl,
                   useHeroAnimation: true,
+                  imageUrl: imageUrl,
                 ),
               ),
             );
@@ -1766,17 +1769,20 @@ class _GroupChatDetailWidgetState extends State<GroupChatDetailWidget>
                                     }
 
                                     final user = snapshot.data!;
-                                    
+
                                     // Filter by search query - read from controller each time
-                                    final currentSearchQuery = searchController.text.toLowerCase();
+                                    final currentSearchQuery =
+                                        searchController.text.toLowerCase();
                                     if (currentSearchQuery.isNotEmpty) {
-                                      final name = user.displayName.toLowerCase();
+                                      final name =
+                                          user.displayName.toLowerCase();
                                       final email = user.email.toLowerCase();
-                                      if (!name.contains(currentSearchQuery) && !email.contains(currentSearchQuery)) {
+                                      if (!name.contains(currentSearchQuery) &&
+                                          !email.contains(currentSearchQuery)) {
                                         return const SizedBox.shrink();
                                       }
                                     }
-                                    
+
                                     final isSelected =
                                         _model.userRef.contains(userRef);
 
@@ -2283,6 +2289,9 @@ class _GroupChatDetailWidgetState extends State<GroupChatDetailWidget>
                                                             tag: 'groupImage',
                                                             useHeroAnimation:
                                                                 true,
+                                                            imageUrl: currentChatDoc
+                                                                    ?.chatImageUrl ??
+                                                                '',
                                                           ),
                                                         ),
                                                       );
@@ -2563,9 +2572,28 @@ class _GroupChatDetailWidgetState extends State<GroupChatDetailWidget>
                                               highlightColor:
                                                   Colors.transparent,
                                               onTap: () async {
-                                                _model.showMediaLinksDocs =
-                                                    true;
-                                                safeSetState(() {});
+                                                if (Platform.isIOS) {
+                                                  context.pushNamed(
+                                                    MobileGroupMediaWidget
+                                                        .routeName,
+                                                    queryParameters: {
+                                                      'chatDoc':
+                                                          serializeParam(
+                                                        widget.chatDoc,
+                                                        ParamType.Document,
+                                                      ),
+                                                    }.withoutNulls,
+                                                    extra: <String,
+                                                        dynamic>{
+                                                      'chatDoc':
+                                                          widget.chatDoc,
+                                                    },
+                                                  );
+                                                } else {
+                                                  _model.showMediaLinksDocs =
+                                                      true;
+                                                  safeSetState(() {});
+                                                }
                                               },
                                               child: Row(
                                                 mainAxisSize: MainAxisSize.max,
@@ -2693,6 +2721,8 @@ class _GroupChatDetailWidgetState extends State<GroupChatDetailWidget>
                                                                               imageItem,
                                                                           useHeroAnimation:
                                                                               true,
+                                                                          imageUrl:
+                                                                              imageItem,
                                                                         ),
                                                                       ),
                                                                     );
@@ -3046,46 +3076,69 @@ class _GroupChatDetailWidgetState extends State<GroupChatDetailWidget>
                                                   highlightColor:
                                                       Colors.transparent,
                                                   onTap: () async {
-                                                    await Navigator.push(
-                                                      context,
-                                                      PageRouteBuilder(
-                                                        opaque: false,
-                                                        barrierColor:
-                                                            Colors.transparent,
-                                                        pageBuilder: (context,
-                                                                animation,
-                                                                secondaryAnimation) =>
-                                                            GroupActionTasksWidget(
-                                                          chatDoc:
+                                                    if (Platform.isIOS) {
+                                                      context.pushNamed(
+                                                        MobileGroupTasksWidget
+                                                            .routeName,
+                                                        queryParameters: {
+                                                          'chatDoc':
+                                                              serializeParam(
+                                                            widget.chatDoc,
+                                                            ParamType.Document,
+                                                          ),
+                                                        }.withoutNulls,
+                                                        extra: <String,
+                                                            dynamic>{
+                                                          'chatDoc':
                                                               widget.chatDoc,
-                                                        ),
-                                                        transitionsBuilder:
-                                                            (context,
-                                                                animation,
-                                                                secondaryAnimation,
-                                                                child) {
-                                                          const begin =
-                                                              Offset(1.0, 0.0);
-                                                          const end =
-                                                              Offset.zero;
-                                                          const curve =
-                                                              Curves.easeInOut;
-                                                          var tween = Tween(
-                                                                  begin: begin,
-                                                                  end: end)
-                                                              .chain(CurveTween(
-                                                                  curve:
-                                                                      curve));
-                                                          var offsetAnimation =
-                                                              animation
-                                                                  .drive(tween);
-                                                          return SlideTransition(
-                                                              position:
-                                                                  offsetAnimation,
-                                                              child: child);
                                                         },
-                                                      ),
-                                                    );
+                                                      );
+                                                    } else {
+                                                      await Navigator.push(
+                                                        context,
+                                                        PageRouteBuilder(
+                                                          opaque: false,
+                                                          barrierColor:
+                                                              Colors
+                                                                  .transparent,
+                                                          pageBuilder: (context,
+                                                                  animation,
+                                                                  secondaryAnimation) =>
+                                                              GroupActionTasksWidget(
+                                                            chatDoc:
+                                                                widget.chatDoc,
+                                                          ),
+                                                          transitionsBuilder:
+                                                              (context,
+                                                                  animation,
+                                                                  secondaryAnimation,
+                                                                  child) {
+                                                            const begin =
+                                                                Offset(1.0, 0.0);
+                                                            const end =
+                                                                Offset.zero;
+                                                            const curve =
+                                                                Curves
+                                                                    .easeInOut;
+                                                            var tween = Tween(
+                                                                    begin:
+                                                                        begin,
+                                                                    end: end)
+                                                                .chain(
+                                                                    CurveTween(
+                                                                        curve:
+                                                                            curve));
+                                                            var offsetAnimation =
+                                                                animation.drive(
+                                                                    tween);
+                                                            return SlideTransition(
+                                                                position:
+                                                                    offsetAnimation,
+                                                                child: child);
+                                                          },
+                                                        ),
+                                                      );
+                                                    }
                                                   },
                                                   child: Container(
                                                     width: double.infinity,
@@ -3470,7 +3523,8 @@ class _GroupChatDetailWidgetState extends State<GroupChatDetailWidget>
                                                                             );
                                                                           }
 
-                                                                          if (snapshot.hasError || !snapshot.hasData) {
+                                                                          if (snapshot.hasError ||
+                                                                              !snapshot.hasData) {
                                                                             return const SizedBox.shrink();
                                                                           }
 

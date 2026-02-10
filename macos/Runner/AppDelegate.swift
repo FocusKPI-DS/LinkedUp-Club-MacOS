@@ -6,14 +6,173 @@ import FirebaseMessaging
 import FirebaseCore
 import GoogleSignIn
 
+// MARK: - Camera Delegate for ImagePickerMacOS
+class CameraDelegate: NSObject, AVCaptureFileOutputRecordingDelegate {
+  var completionHandler: ((URL?, Error?) -> Void)?
+  
+  func fileOutput(_ output: AVCaptureFileOutput, didFinishRecordingTo outputFileURL: URL, from connections: [AVCaptureConnection], error: Error?) {
+    completionHandler?(outputFileURL, error)
+  }
+}
+
 @main
 class AppDelegate: FlutterAppDelegate {
+  private var cameraDelegate: CameraDelegate?
   override func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
     return false
   }
 
   override func applicationSupportsSecureRestorableState(_ app: NSApplication) -> Bool {
     return true
+  }
+  
+  // MARK: - Force Release All Camera Sessions
+  // This is a workaround for camera_macos package not properly releasing camera resources
+  private func forceReleaseAllCameras() {
+    print("🔴 [Camera Cleanup] Force releasing all camera sessions...")
+    
+    // Get all available video devices
+    let discoverySession = AVCaptureDevice.DiscoverySession(
+      deviceTypes: [.builtInWideAngleCamera, .externalUnknown],
+      mediaType: .video,
+      position: .unspecified
+    )
+    
+    // Try to release any active camera sessions
+    for device in discoverySession.devices {
+      if device.isConnected {
+        print("📷 [Camera Cleanup] Found connected device: \(device.localizedName)")
+        // Attempt to unlock the device if it's locked
+        do {
+          try device.lockForConfiguration()
+          device.unlockForConfiguration()
+          print("✅ [Camera Cleanup] Unlocked device: \(device.localizedName)")
+        } catch {
+          print("⚠️ [Camera Cleanup] Could not unlock device \(device.localizedName): \(error.localizedDescription)")
+        }
+      }
+    }
+    
+    print("✅ [Camera Cleanup] Camera release attempt completed")
+  }
+  
+  override func applicationWillTerminate(_ notification: Notification) {
+    print("🛑 [AppDelegate] applicationWillTerminate - forcing camera release")
+    forceReleaseAllCameras()
+  }
+  
+  override func applicationWillResignActive(_ notification: Notification) {
+    // Release cameras when app loses focus (optional, but helps)
+    // Uncomment if needed:
+    // forceReleaseAllCameras()
+  }
+  
+  // MARK: - Camera Permission & Cleanup Method Channel (DEDICATED - no conflicts)
+  private func setupCameraChannels() {
+    DispatchQueue.main.async { [weak self] in
+      guard let self = self,
+            let controller = NSApplication.shared.windows.first?.contentViewController as? FlutterViewController else {
+        print("⚠️ [Camera] Could not get FlutterViewController, will retry in 0.5s...")
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+          self?.setupCameraChannels()
+        }
+        return
+      }
+      
+      let messenger = controller.engine.binaryMessenger
+      
+      // ── 1. Dedicated camera permission channel (does NOT conflict with permission_handler) ──
+      let cameraChannel = FlutterMethodChannel(
+        name: "com.focuskpi.linkedup/camera_permission",
+        binaryMessenger: messenger
+      )
+      
+      cameraChannel.setMethodCallHandler { [weak self] (call, result) in
+        guard let self = self else {
+          result(FlutterError(code: "UNAVAILABLE", message: "AppDelegate deallocated", details: nil))
+          return
+        }
+        
+        switch call.method {
+          
+        case "checkStatus":
+          // Returns raw AVAuthorizationStatus: 0=notDetermined, 1=restricted, 2=denied, 3=authorized
+          let status = AVCaptureDevice.authorizationStatus(for: .video)
+          print("📷 [Camera] checkStatus → \(status.rawValue) (\(self.statusName(status)))")
+          result(status.rawValue)
+          
+        case "requestAccess":
+          // Calls AVCaptureDevice.requestAccess — this is what shows the macOS system dialog
+          let currentStatus = AVCaptureDevice.authorizationStatus(for: .video)
+          print("📷 [Camera] requestAccess called (current status: \(self.statusName(currentStatus)))")
+          
+          AVCaptureDevice.requestAccess(for: .video) { granted in
+            DispatchQueue.main.async {
+              let newStatus = AVCaptureDevice.authorizationStatus(for: .video)
+              print(granted
+                ? "✅ [Camera] System granted camera access! (status: \(self.statusName(newStatus)))"
+                : "❌ [Camera] System denied camera access (status: \(self.statusName(newStatus)))")
+              // Return: {"granted": true/false, "status": rawValue}
+              result(["granted": granted, "status": newStatus.rawValue])
+            }
+          }
+          
+        case "openSettings":
+          // Open macOS System Settings → Privacy & Security → Camera (like Slack / WhatsApp)
+          print("🔧 [Camera] Opening System Settings > Privacy > Camera...")
+          self.openCameraSystemSettings()
+          result(true)
+          
+        case "releaseCameras":
+          self.forceReleaseAllCameras()
+          result(true)
+          
+        default:
+          result(FlutterMethodNotImplemented)
+        }
+      }
+      
+      // ── 2. Camera cleanup channel (kept for dispose calls) ──
+      let cleanupChannel = FlutterMethodChannel(
+        name: "com.focuskpi.linkedup/camera_cleanup",
+        binaryMessenger: messenger
+      )
+      
+      cleanupChannel.setMethodCallHandler { [weak self] (call, result) in
+        guard let self = self else {
+          result(FlutterError(code: "UNAVAILABLE", message: "AppDelegate deallocated", details: nil))
+          return
+        }
+        switch call.method {
+        case "release":
+          self.forceReleaseAllCameras()
+          result(true)
+        default:
+          result(FlutterMethodNotImplemented)
+        }
+      }
+      
+      print("✅ [Camera] Dedicated permission channel ready: com.focuskpi.linkedup/camera_permission")
+      print("✅ [Camera] Cleanup channel ready: com.focuskpi.linkedup/camera_cleanup")
+    }
+  }
+  
+  private func statusName(_ status: AVAuthorizationStatus) -> String {
+    switch status {
+    case .notDetermined: return "notDetermined"
+    case .restricted:    return "restricted"
+    case .denied:        return "denied"
+    case .authorized:    return "authorized"
+    @unknown default:    return "unknown(\(status.rawValue))"
+    }
+  }
+  
+  // MARK: - Open System Preferences > Camera (like Slack / WhatsApp)
+  private func openCameraSystemSettings() {
+    // This URL scheme works on macOS 12+ (Monterey through Sequoia)
+    if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Camera") {
+      NSWorkspace.shared.open(url)
+    }
   }
   
   // MARK: - Google Sign-In Configuration
@@ -58,6 +217,9 @@ class AppDelegate: FlutterAppDelegate {
   
   override func applicationDidFinishLaunching(_ notification: Notification) {
     print("🚀 [AppDelegate] applicationDidFinishLaunching started")
+    
+    // Configure dedicated camera permission + cleanup channels
+    self.setupCameraChannels()
     
     // Configure Google Sign-In
     self.configureGoogleSignIn()

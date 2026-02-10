@@ -28,6 +28,11 @@ class _ConnectionsWidgetState extends State<ConnectionsWidget> {
   // Track loading states for each user to prevent multiple operations
   final Set<String> _loadingOperations = <String>{};
 
+  // ScrollControllers for each ListView
+  final ScrollController _connectionsScrollController = ScrollController();
+  final ScrollController _requestsScrollController = ScrollController();
+  final ScrollController _sentRequestsScrollController = ScrollController();
+
   @override
   void initState() {
     super.initState();
@@ -41,6 +46,9 @@ class _ConnectionsWidgetState extends State<ConnectionsWidget> {
   @override
   void dispose() {
     _searchController.dispose();
+    _connectionsScrollController.dispose();
+    _requestsScrollController.dispose();
+    _sentRequestsScrollController.dispose();
     super.dispose();
   }
 
@@ -98,7 +106,8 @@ class _ConnectionsWidgetState extends State<ConnectionsWidget> {
                         },
                         borderRadius: BorderRadius.circular(12),
                         child: Container(
-                          padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                          padding:
+                              EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                           decoration: BoxDecoration(
                             color: Colors.white,
                             borderRadius: BorderRadius.circular(12),
@@ -148,14 +157,16 @@ class _ConnectionsWidgetState extends State<ConnectionsWidget> {
                 StreamBuilder<UsersRecord>(
                   stream: UsersRecord.getDocument(currentUserReference!),
                   builder: (context, userSnapshot) {
-                    final connectionsCount =
-                        userSnapshot.hasData ? userSnapshot.data!.friends.length : 0;
+                    final connectionsCount = userSnapshot.hasData
+                        ? userSnapshot.data!.friends.length
+                        : 0;
                     final incomingRequestsCount = userSnapshot.hasData
                         ? userSnapshot.data!.friendRequests.length
                         : 0;
 
                     return Padding(
-                      padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                      padding:
+                          EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                       child: Container(
                         width: double.infinity,
                         child: CupertinoSlidingSegmentedControl<int>(
@@ -163,8 +174,10 @@ class _ConnectionsWidgetState extends State<ConnectionsWidget> {
                           thumbColor: Colors.white,
                           groupValue: _selectedTabIndex,
                           children: {
-                            0: _buildSegment('My Connections', connectionsCount, 0),
-                            1: _buildSegment('Requests', incomingRequestsCount, 1),
+                            0: _buildSegment(
+                                'My Connections', connectionsCount, 0),
+                            1: _buildSegment(
+                                'Requests', incomingRequestsCount, 1),
                             2: _buildSegment('Sent', 0, 2),
                           },
                           onValueChanged: (value) {
@@ -379,7 +392,9 @@ class _ConnectionsWidgetState extends State<ConnectionsWidget> {
         // Connections list
         Expanded(
           child: CupertinoScrollbar(
+            controller: _connectionsScrollController,
             child: ListView.separated(
+              controller: _connectionsScrollController,
               padding: EdgeInsets.zero,
               itemCount: connections.length,
               separatorBuilder: (context, index) => SizedBox.shrink(),
@@ -476,7 +491,9 @@ class _ConnectionsWidgetState extends State<ConnectionsWidget> {
         // Requests list
         Expanded(
           child: CupertinoScrollbar(
+            controller: _requestsScrollController,
             child: ListView.separated(
+              controller: _requestsScrollController,
               padding: EdgeInsets.zero,
               itemCount: requests.length,
               separatorBuilder: (context, index) => SizedBox.shrink(),
@@ -572,7 +589,9 @@ class _ConnectionsWidgetState extends State<ConnectionsWidget> {
         // Sent requests list
         Expanded(
           child: CupertinoScrollbar(
+            controller: _sentRequestsScrollController,
             child: ListView.separated(
+              controller: _sentRequestsScrollController,
               padding: EdgeInsets.zero,
               itemCount: sentRequests.length,
               separatorBuilder: (context, index) => SizedBox.shrink(),
@@ -746,68 +765,29 @@ class _ConnectionsWidgetState extends State<ConnectionsWidget> {
     final isLoading = _isOperationInProgress(user.reference.id);
 
     if (actuallyConnected) {
-      // Show Message icon button and More options icon button - LinkedIn style
-      return Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          // Message button (paper plane icon)
-          Material(
-            color: Colors.transparent,
-            child: InkWell(
-              onTap: isLoading ? null : () => _startChat(user),
-              borderRadius: BorderRadius.circular(20),
-              child: Container(
-                width: 36,
-                height: 36,
-                decoration: BoxDecoration(
-                  border: Border.all(
-                    color: Color(0xFFE5E7EB),
-                    width: 1,
-                  ),
-                  shape: BoxShape.circle,
-                ),
-                child: isLoading
-                    ? Center(
-                        child: SizedBox(
-                          width: 16,
-                          height: 16,
-                          child: CupertinoActivityIndicator(),
-                        ),
-                      )
-                    : Icon(
-                        CupertinoIcons.paperplane_fill,
-                        size: 16,
-                        color: Color(0xFF000000),
-                      ),
+      // Show More options icon button only
+      return Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: () => _showMoreOptions(user, currentUser),
+          borderRadius: BorderRadius.circular(20),
+          child: Container(
+            width: 36,
+            height: 36,
+            decoration: BoxDecoration(
+              border: Border.all(
+                color: Color(0xFFE5E7EB),
+                width: 1,
               ),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(
+              CupertinoIcons.ellipsis_vertical,
+              size: 16,
+              color: Color(0xFF666666),
             ),
           ),
-          SizedBox(width: 6),
-          // More options button (ellipsis icon)
-          Material(
-            color: Colors.transparent,
-            child: InkWell(
-              onTap: () => _showMoreOptions(user, currentUser),
-              borderRadius: BorderRadius.circular(20),
-              child: Container(
-                width: 36,
-                height: 36,
-                decoration: BoxDecoration(
-                  border: Border.all(
-                    color: Color(0xFFE5E7EB),
-                    width: 1,
-                  ),
-                  shape: BoxShape.circle,
-                ),
-                child: Icon(
-                  CupertinoIcons.ellipsis_vertical,
-                  size: 16,
-                  color: Color(0xFF666666),
-                ),
-              ),
-            ),
-          ),
-        ],
+        ),
       );
     } else if (actuallyHasIncomingRequest && !actuallyHasSentRequest) {
       // Accept and Decline buttons for incoming requests
@@ -1492,41 +1472,53 @@ class _ConnectionsWidgetState extends State<ConnectionsWidget> {
 
   Widget _buildSegment(String label, int count, int index) {
     return Container(
-      padding: EdgeInsets.symmetric(vertical: 8),
+      padding: EdgeInsets.symmetric(vertical: 8, horizontal: 4),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Text(
-            label,
-            style: TextStyle(
-              fontFamily: 'SF Pro Text',
-              fontSize: 15,
-              fontWeight: _selectedTabIndex == index ? FontWeight.w600 : FontWeight.w500,
-              color: _selectedTabIndex == index ? Color(0xFF007AFF) : Color(0xFF64748B),
-              decoration: TextDecoration.none,
+          Flexible(
+            child: Text(
+              label,
+              style: TextStyle(
+                fontFamily: 'SF Pro Text',
+                fontSize: 14,
+                fontWeight: _selectedTabIndex == index
+                    ? FontWeight.w600
+                    : FontWeight.w500,
+                color: _selectedTabIndex == index
+                    ? Color(0xFF007AFF)
+                    : Color(0xFF64748B),
+                decoration: TextDecoration.none,
+              ),
+              overflow: TextOverflow.ellipsis,
+              maxLines: 1,
             ),
           ),
           if (count > 0) ...[
-            SizedBox(width: 6),
+            SizedBox(width: 4),
             Container(
-              padding: EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+              padding: EdgeInsets.symmetric(horizontal: 5, vertical: 2),
               decoration: BoxDecoration(
-                color: _selectedTabIndex == index ? Color(0xFF007AFF) : Color(0xFFE2E8F0),
+                color: _selectedTabIndex == index
+                    ? Color(0xFF007AFF)
+                    : Color(0xFFE2E8F0),
                 borderRadius: BorderRadius.circular(10),
               ),
               constraints: BoxConstraints(
-                minWidth: 18,
-                minHeight: 18,
+                minWidth: 16,
+                minHeight: 16,
               ),
               child: Center(
                 child: Text(
                   count > 99 ? '99+' : count.toString(),
                   style: TextStyle(
                     fontFamily: 'SF Pro Text',
-                    fontSize: 11,
+                    fontSize: 10,
                     fontWeight: FontWeight.bold,
-                    color: _selectedTabIndex == index ? Colors.white : Color(0xFF64748B),
+                    color: _selectedTabIndex == index
+                        ? Colors.white
+                        : Color(0xFF64748B),
                     decoration: TextDecoration.none,
                   ),
                   textAlign: TextAlign.center,

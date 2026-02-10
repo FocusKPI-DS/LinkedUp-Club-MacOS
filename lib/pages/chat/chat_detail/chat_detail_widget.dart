@@ -5,6 +5,7 @@ import '/flutter_flow/flutter_flow_util.dart';
 import '/flutter_flow/flutter_flow_widgets.dart';
 import '/pages/chat/chat_component/blocked/blocked_widget.dart';
 import '/pages/chat/chat_component/chat_thread_component/chat_thread_component_widget.dart';
+import 'dart:async';
 import 'dart:io';
 import 'dart:ui';
 import '/actions/actions.dart' as action_blocks;
@@ -44,6 +45,10 @@ class _ChatDetailWidgetState extends State<ChatDetailWidget> {
 
   final scaffoldKey = GlobalKey<ScaffoldState>();
   double? _dragStartX;
+
+  // Blocked users state (UID based)
+  Set<String> _blockedUserIds = {};
+  StreamSubscription? _blockedUsersSubscription;
 
   @override
   void initState() {
@@ -123,7 +128,26 @@ class _ChatDetailWidgetState extends State<ChatDetailWidget> {
       safeSetState(() {});
     });
 
-    WidgetsBinding.instance.addPostFrameCallback((_) => safeSetState(() {}));
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      safeSetState(() {});
+
+      // Listen to blocked users for real-time UI updates
+      print('Debug: Initializing blocked user listener in ChatDetail. CurrentUserRef: $currentUserReference');
+      _blockedUsersSubscription = BlockedUsersRecord.collection
+          .where('blocker_user', isEqualTo: currentUserReference)
+          .snapshots()
+          .listen((snapshot) {
+        setState(() {
+          _blockedUserIds = snapshot.docs
+              .map((doc) => BlockedUsersRecord.fromSnapshot(doc).blockedUser?.id)
+              .whereType<String>()
+              .toSet();
+          print('Debug: ChatDetail updated blocked IDs to: $_blockedUserIds');
+        });
+      }, onError: (e) {
+        print('Debug: Error in ChatDetail blocked user listener: $e');
+      });
+    });
   }
 
   @override
@@ -134,6 +158,7 @@ class _ChatDetailWidgetState extends State<ChatDetailWidget> {
     }();
 
     _model.dispose();
+    _blockedUsersSubscription?.cancel();
 
     super.dispose();
   }
@@ -453,7 +478,12 @@ class _ChatDetailWidgetState extends State<ChatDetailWidget> {
                                                           ].divide(SizedBox(
                                                               width: 16.0)),
                                                         ),
-                                                        InkWell(
+                                                        Builder(
+                                                          builder: (context) {
+                                                            final isBlocked = _blockedUserIds.contains(bigUsersRecord.reference.id);
+                                                            print('Debug: UI Block check for ${bigUsersRecord.reference.id}: $isBlocked (in list: $_blockedUserIds)');
+
+                                                            return InkWell(
                                                           splashColor: Colors
                                                               .transparent,
                                                           focusColor: Colors
@@ -533,31 +563,72 @@ class _ChatDetailWidgetState extends State<ChatDetailWidget> {
 
                                                                 if (shouldBlock ==
                                                                     true) {
-                                                                  // Create blocked user record
-                                                                  await BlockedUsersRecord
-                                                                      .collection
-                                                                      .add({
-                                                                    ...createBlockedUsersRecordData(
-                                                                      blockerUser:
-                                                                          currentUserReference,
-                                                                      blockedUser:
-                                                                          bigUsersRecord
-                                                                              .reference,
-                                                                      createdAt:
-                                                                          getCurrentTimestamp,
-                                                                    ),
-                                                                  });
+                                                                  print('Debug: Blocking user ${bigUsersRecord.reference.id} from ${currentUserReference?.id}');
+                                                                  try {
+                                                                    // Create blocked user record
+                                                                    final ref = await BlockedUsersRecord.collection.add({
+                                                                      ...createBlockedUsersRecordData(
+                                                                        blockerUser:
+                                                                            currentUserReference,
+                                                                        blockedUser:
+                                                                            bigUsersRecord
+                                                                                .reference,
+                                                                        createdAt:
+                                                                            getCurrentTimestamp,
+                                                                      ),
+                                                                    });
+                                                                    print('Debug: Block record created at ${ref.path}');
 
-                                                                  // Show success message and go back
-                                                                  ScaffoldMessenger.of(
-                                                                          context)
-                                                                      .showSnackBar(
-                                                                    SnackBar(
-                                                                        content:
-                                                                            Text('User has been blocked')),
-                                                                  );
-                                                                  context
-                                                                      .safePop();
+                                                                    // Show success message
+                                                                    ScaffoldMessenger.of(context).showSnackBar(
+                                                                      SnackBar(content: Text('User has been blocked')),
+                                                                    );
+                                                                  } catch (e) {
+                                                                    print('Debug: Error blocking user: $e');
+                                                                  }
+                                                                }
+                                                              } else if (value == 'unblock') {
+                                                                // Show confirmation dialog
+                                                                final shouldUnblock = await showDialog<bool>(
+                                                                  context: context,
+                                                                  builder: (BuildContext context) {
+                                                                    return AlertDialog(
+                                                                      title: Text('Unblock User'),
+                                                                      content: Text('Are you sure you want to unblock this user? You will be able to see their messages again.'),
+                                                                      actions: [
+                                                                        TextButton(
+                                                                          onPressed: () => Navigator.of(context).pop(false),
+                                                                          child: Text('Cancel'),
+                                                                        ),
+                                                                        TextButton(
+                                                                          onPressed: () => Navigator.of(context).pop(true),
+                                                                          child: Text('Unblock', style: TextStyle(color: Colors.blue)),
+                                                                        ),
+                                                                      ],
+                                                                    );
+                                                                  },
+                                                                );
+
+                                                                if (shouldUnblock == true) {
+                                                                  print('Debug: Unblocking user ${bigUsersRecord.reference.id}');
+                                                                  try {
+                                                                    final blockedDocs = await BlockedUsersRecord.collection
+                                                                        .where('blocker_user', isEqualTo: currentUserReference)
+                                                                        .where('blocked_user', isEqualTo: bigUsersRecord.reference)
+                                                                        .get();
+
+                                                                    print('Debug: Found ${blockedDocs.docs.length} records to delete');
+                                                                    for (var doc in blockedDocs.docs) {
+                                                                      await doc.reference.delete();
+                                                                      print('Debug: Deleted ${doc.reference.path}');
+                                                                    }
+
+                                                                    ScaffoldMessenger.of(context).showSnackBar(
+                                                                      SnackBar(content: Text('User has been unblocked')),
+                                                                    );
+                                                                  } catch (e) {
+                                                                    print('Debug: Error unblocking user: $e');
+                                                                  }
                                                                 }
                                                               } else if (value ==
                                                                   'profile') {
@@ -607,30 +678,30 @@ class _ChatDetailWidgetState extends State<ChatDetailWidget> {
                                                               ),
                                                               PopupMenuItem<
                                                                   String>(
-                                                                value: 'block',
+                                                                value: isBlocked ? 'unblock' : 'block',
                                                                 child: Row(
                                                                   children: [
                                                                     Icon(
-                                                                        Icons
-                                                                            .block,
-                                                                        color: Colors
-                                                                            .red,
+                                                                        isBlocked ? Icons.check_circle : Icons.block,
+                                                                        color: isBlocked ? Colors.blue : Colors.red,
                                                                         size:
                                                                             20),
                                                                     SizedBox(
                                                                         width:
                                                                             8),
                                                                     Text(
-                                                                      'Block User',
+                                                                      isBlocked ? 'Unblock User' : 'Block User',
                                                                       style: TextStyle(
                                                                           color:
-                                                                              Colors.red),
+                                                                              isBlocked ? Colors.blue : Colors.red),
                                                                     ),
                                                                   ],
                                                                 ),
                                                               ),
                                                             ],
                                                           ),
+                                                        );
+                                                          },
                                                         ),
                                                       ],
                                                     );

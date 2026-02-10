@@ -1,13 +1,17 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart' as material;
+import 'package:flutter/foundation.dart';
 import 'package:intl/intl.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import '/backend/backend.dart';
 import '/auth/firebase_auth/auth_util.dart';
 import 'dart:async';
 import 'dart:ui';
 
 class SummerAITodos extends StatefulWidget {
-  const SummerAITodos({super.key});
+  const SummerAITodos({super.key, this.isMobile = false});
+
+  final bool isMobile;
 
   @override
   State<SummerAITodos> createState() => _SummerAITodosState();
@@ -116,30 +120,34 @@ class _SummerAITodosState extends State<SummerAITodos> {
         }
 
         final filteredTodos = allTodos.where((task) {
-          // REQUIREMENT: User must be in the group AND in involved_people
+          // REQUIREMENT: User must be in involved_people
+          // For tasks with chatRef: User must also be in the group
+          // For tasks without chatRef (manually created): Only check involvement
 
           // Step 1: Check if task is from a group the user is a member of
-          if (task.chatRef == null) {
-            // Task has no chat_ref - skip it (tasks must be from a group)
-            return false;
-          }
-
-          final chatId = task.chatRef!.id;
           bool isFromUserGroup = false;
-          if (_userGroupChatIds != null) {
-            isFromUserGroup = _userGroupChatIds!.contains(chatId);
-          } else {
-            // Groups haven't loaded yet - for now, allow through if user is involved
-            // This prevents showing 0 tasks while groups are loading
-            // We'll still check involvement below
-          }
+          if (task.chatRef != null) {
+            final chatId = task.chatRef!.id;
+            if (_userGroupChatIds != null) {
+              isFromUserGroup = _userGroupChatIds!.contains(chatId);
+            } else {
+              // Groups haven't loaded yet - for now, allow through if user is involved
+              // This prevents showing 0 tasks while groups are loading
+              // We'll still check involvement below
+              isFromUserGroup = true; // Assume true temporarily for group tasks
+            }
 
-          // If groups are loaded and task is not from a group the user is in, hide it
-          if (_userGroupChatIds != null && !isFromUserGroup) {
-            return false; // User is not a member of this group - HIDE THIS TASK
+            // If groups are loaded and task is from a group the user is NOT in, hide it
+            if (_userGroupChatIds != null && !isFromUserGroup) {
+              return false; // User is not a member of this group - HIDE THIS TASK
+            }
           }
+          // If chatRef is null, it's a personal task (or non-group task), so we allow it
+          // and rely on the involved_people check below.
 
-          // Step 2: Check if user is in involved_people
+          // Step 2: Check if user is in involved_people (STRICT: name-based only)
+          // Only show tasks where the user's name (Mitansh, Mitan, Patel, etc.) is
+          // present in involved_people — no "owner" bypass so unrelated tasks stay hidden.
           // User MUST be in involved_people to see the task
           if (task.involvedPeople.isEmpty) {
             return false; // No involved_people - HIDE THIS TASK
@@ -198,6 +206,24 @@ class _SummerAITodosState extends State<SummerAITodos> {
                   return true;
                 }
               }
+              
+              // More flexible: if user name contains any significant word from involved name
+              // This helps with variations like "Mitansh P." vs "Mitansh Patel"
+              if (userWordsSet.length > 0) {
+                final significantUserWords = userWordsSet.where((w) => w.length >= 3).toSet();
+                final significantInvolvedWords = involvedWordsSet.where((w) => w.length >= 3).toSet();
+                if (significantUserWords.length > 0 && significantInvolvedWords.length > 0) {
+                  // If at least one significant word matches
+                  if (significantUserWords.intersection(significantInvolvedWords).isNotEmpty) {
+                    // Additional check: first name or last name should match
+                    if (userWordsSet.first == involvedWordsSet.first || 
+                        (userWordsSet.length > 1 && involvedWordsSet.length > 1 && 
+                         userWordsSet.last == involvedWordsSet.last)) {
+                      return true;
+                    }
+                  }
+                }
+              }
             }
 
             return false;
@@ -208,13 +234,19 @@ class _SummerAITodosState extends State<SummerAITodos> {
             return false; // User not in involved_people - HIDE THIS TASK
           }
 
-          // If groups are loaded, verify user is in the group
-          // If groups aren't loaded yet, we've already checked involvement, so allow through
-          if (_userGroupChatIds != null && !isFromUserGroup) {
-            return false; // Double-check: user not in group
+          // For tasks with chatRef: verify user is in the group (if groups are loaded)
+          // For manually created tasks (chatRef == null): only involvement check is needed
+          if (task.chatRef != null && _userGroupChatIds != null) {
+            final chatId = task.chatRef!.id;
+            final isFromUserGroup = _userGroupChatIds!.contains(chatId);
+            if (!isFromUserGroup) {
+              return false; // Double-check: user not in group
+            }
           }
 
-          // Both conditions met: user is in the group (or groups still loading) AND in involved_people
+          // Conditions met: 
+          // - For group tasks: user is in the group (or groups still loading) AND in involved_people
+          // - For manual tasks: user is in involved_people
           return true;
         }).toList();
 
@@ -316,111 +348,226 @@ class _SummerAITodosState extends State<SummerAITodos> {
         }
         final todos = uniqueTodos.values.toList();
 
-        return Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Header with title, subtitle, and action buttons
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 4),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        // Action Items title
-                        Text(
-                          'Action Items',
-                          style: const TextStyle(
-                            fontFamily: '.SF Pro Display',
-                            fontSize: 28,
-                            fontWeight: FontWeight.w700,
-                            color: CupertinoColors.label,
-                            letterSpacing: -0.8,
-                            height: 1.1,
-                          ),
-                        ),
-                        const SizedBox(height: 4),
-                        // Subtitle on separate line
-                        Text(
-                          'Focus on what matters most.',
-                          style: const TextStyle(
-                            fontFamily: '.SF Pro Text',
-                            fontSize: 15,
-                            fontWeight: FontWeight.w400,
-                            color: CupertinoColors.secondaryLabel,
-                            letterSpacing: -0.2,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  // Action buttons
-                  Row(
-                    mainAxisSize: MainAxisSize.min,
+        // Use LayoutBuilder to get available height and fill it properly
+        return widget.isMobile
+            ? LayoutBuilder(
+                builder: (context, constraints) {
+                  return Column(
+                    mainAxisSize: MainAxisSize.max,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisAlignment: MainAxisAlignment.start,
                     children: [
-                      // Filter button with dropdown
-                      _buildFilterDropdown(),
-                      const SizedBox(width: 8),
-                      // Add Task button - iOS style
-                      CupertinoButton(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 14, vertical: 8),
-                        color: CupertinoColors.systemBlue,
-                        borderRadius: BorderRadius.circular(8),
-                        onPressed: () {
-                          _showAddNewDialog();
-                        },
+                      // Header with title, subtitle, and action buttons
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 4),
                         child: Row(
-                          mainAxisSize: MainAxisSize.min,
+                          crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Icon(
-                              CupertinoIcons.add,
-                              size: 16,
-                              color: CupertinoColors.white,
-                            ),
-                            const SizedBox(width: 6),
-                            const Text(
-                              'Task',
-                              style: TextStyle(
-                                fontFamily: '.SF Pro Text',
-                                fontSize: 15,
-                                fontWeight: FontWeight.w600,
-                                color: CupertinoColors.white,
-                                letterSpacing: -0.2,
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  // Action Items title
+                                  Text(
+                                    'Action Items',
+                                    style: const TextStyle(
+                                      fontFamily: '.SF Pro Display',
+                                      fontSize: 28,
+                                      fontWeight: FontWeight.w700,
+                                      color: CupertinoColors.label,
+                                      letterSpacing: -0.8,
+                                      height: 1.1,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 4),
+                                  // Subtitle on separate line
+                                  Text(
+                                    'Focus on what matters most.',
+                                    style: const TextStyle(
+                                      fontFamily: '.SF Pro Text',
+                                      fontSize: 15,
+                                      fontWeight: FontWeight.w400,
+                                      color: CupertinoColors.secondaryLabel,
+                                      letterSpacing: -0.2,
+                                    ),
+                                  ),
+                                ],
                               ),
+                            ),
+                            const SizedBox(width: 8),
+                            // Action buttons
+                            Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                // Filter button with dropdown
+                                _buildFilterDropdown(),
+                                const SizedBox(width: 8),
+                                // Add Task button - iOS style
+                                CupertinoButton(
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 14, vertical: 8),
+                                  color: CupertinoColors.systemBlue,
+                                  borderRadius: BorderRadius.circular(8),
+                                  onPressed: () {
+                                    _showAddNewDialog();
+                                  },
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Icon(
+                                        CupertinoIcons.add,
+                                        size: 16,
+                                        color: CupertinoColors.white,
+                                      ),
+                                      const SizedBox(width: 6),
+                                      const Text(
+                                        'Task',
+                                        style: TextStyle(
+                                          fontFamily: '.SF Pro Text',
+                                          fontSize: 15,
+                                          fontWeight: FontWeight.w600,
+                                          color: CupertinoColors.white,
+                                          letterSpacing: -0.2,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
                             ),
                           ],
                         ),
                       ),
+
+                      const SizedBox(height: 16),
+
+                      // Todo List - Fill remaining height
+                      Expanded(
+                        child: AnimatedSwitcher(
+                          duration: const Duration(milliseconds: 200),
+                          switchInCurve: Curves.easeOut,
+                          switchOutCurve: Curves.easeIn,
+                          child: todos.isEmpty
+                              ? _buildEmptyState(context, filter: _selectedFilter)
+                              : _buildTodoList(todos),
+                          transitionBuilder: (child, animation) {
+                            return FadeTransition(
+                              opacity: animation,
+                              child: child,
+                            );
+                          },
+                        ),
+                      ),
                     ],
+                  );
+                },
+              )
+            : Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisAlignment: MainAxisAlignment.start,
+                children: [
+                  // Header with title, subtitle, and action buttons
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 4),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              // Action Items title
+                              Text(
+                                'Action Items',
+                                style: const TextStyle(
+                                  fontFamily: '.SF Pro Display',
+                                  fontSize: 28,
+                                  fontWeight: FontWeight.w700,
+                                  color: CupertinoColors.label,
+                                  letterSpacing: -0.8,
+                                  height: 1.1,
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              // Subtitle on separate line
+                              Text(
+                                'Focus on what matters most.',
+                                style: const TextStyle(
+                                  fontFamily: '.SF Pro Text',
+                                  fontSize: 15,
+                                  fontWeight: FontWeight.w400,
+                                  color: CupertinoColors.secondaryLabel,
+                                  letterSpacing: -0.2,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        // Action buttons
+                        Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            // Filter button with dropdown
+                            _buildFilterDropdown(),
+                            const SizedBox(width: 8),
+                            // Add Task button - iOS style
+                            CupertinoButton(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 14, vertical: 8),
+                              color: CupertinoColors.systemBlue,
+                              borderRadius: BorderRadius.circular(8),
+                              onPressed: () {
+                                _showAddNewDialog();
+                              },
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(
+                                    CupertinoIcons.add,
+                                    size: 16,
+                                    color: CupertinoColors.white,
+                                  ),
+                                  const SizedBox(width: 6),
+                                  const Text(
+                                    'Task',
+                                    style: TextStyle(
+                                      fontFamily: '.SF Pro Text',
+                                      fontSize: 15,
+                                      fontWeight: FontWeight.w600,
+                                      color: CupertinoColors.white,
+                                      letterSpacing: -0.2,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  const SizedBox(height: 16),
+
+                  // Todo List - Desktop uses calculated height
+                  AnimatedSwitcher(
+                    duration: const Duration(milliseconds: 200),
+                    switchInCurve: Curves.easeOut,
+                    switchOutCurve: Curves.easeIn,
+                    child: todos.isEmpty
+                        ? _buildEmptyState(context, filter: _selectedFilter)
+                        : _buildTodoList(todos),
+                    transitionBuilder: (child, animation) {
+                      return FadeTransition(
+                        opacity: animation,
+                        child: child,
+                      );
+                    },
                   ),
                 ],
-              ),
-            ),
-
-            const SizedBox(height: 16),
-
-            // Todo List - AnimatedSwitcher for smooth transitions
-            AnimatedSwitcher(
-              duration: const Duration(milliseconds: 200),
-              switchInCurve: Curves.easeOut,
-              switchOutCurve: Curves.easeIn,
-              child: todos.isEmpty
-                  ? _buildEmptyState(context, filter: _selectedFilter)
-                  : _buildTodoList(todos),
-              transitionBuilder: (child, animation) {
-                return FadeTransition(
-                  opacity: animation,
-                  child: child,
-                );
-              },
-            ),
-          ],
-        );
+              );
       },
     );
   }
@@ -729,24 +876,40 @@ class _SummerAITodosState extends State<SummerAITodos> {
   }
 
   Widget _buildTodoList(List<ActionItemsRecord> todos) {
-    // Always show 4 items with fixed height, scroll for more
-    const double itemHeight = 140.0;
-    const double fixedHeight =
-        itemHeight * 4; // Fixed height for exactly 4 items
-
-    return SizedBox(
-      height: fixedHeight,
-      child: ListView.builder(
+    // On mobile, the list should expand to fill available space
+    // On desktop, use calculated height based on screen size
+    if (widget.isMobile) {
+      // Mobile: Fill available space
+      return ListView.builder(
         key: ValueKey('todos-list-${_selectedFilter}'),
         shrinkWrap: false,
-        physics: const AlwaysScrollableScrollPhysics(),
+        physics: const BouncingScrollPhysics(),
         itemCount: todos.length,
         itemBuilder: (context, index) {
           final todo = todos[index];
           return _buildTodoRow(context, todo, index);
         },
-      ),
-    );
+      );
+    } else {
+      // Desktop: height for exactly 4 task cards (card ~118px with margin) so container looks full
+      const double cardHeightWithMargin = 118.0;
+      const int visibleCards = 4;
+      const double maxHeight = visibleCards * cardHeightWithMargin;
+
+      return SizedBox(
+        height: maxHeight,
+        child: ListView.builder(
+          key: ValueKey('todos-list-${_selectedFilter}'),
+          shrinkWrap: false,
+          physics: const BouncingScrollPhysics(),
+          itemCount: todos.length,
+          itemBuilder: (context, index) {
+            final todo = todos[index];
+            return _buildTodoRow(context, todo, index);
+          },
+        ),
+      );
+    }
   }
 
   Future<void> _handleTaskToggle(
@@ -777,7 +940,10 @@ class _SummerAITodosState extends State<SummerAITodos> {
         }
 
         // Update task in Firebase
-        await todo.reference.update({'status': 'completed'});
+        await todo.reference.update({
+          'status': 'completed',
+          'completed_time': FieldValue.serverTimestamp(),
+        });
 
         // Wait a bit before hiding the task
         await Future.delayed(const Duration(milliseconds: 200));
@@ -791,7 +957,10 @@ class _SummerAITodosState extends State<SummerAITodos> {
         }
       } else {
         // Uncheck - change status back to pending
-        await todo.reference.update({'status': 'pending'});
+        await todo.reference.update({
+          'status': 'pending',
+          'completed_time': null,
+        });
 
         if (mounted) {
           setState(() {
@@ -818,20 +987,32 @@ class _SummerAITodosState extends State<SummerAITodos> {
     final opacity =
         isCompleting && progress > 0.5 ? 1.0 - ((progress - 0.5) / 0.5) : 1.0;
 
+    // Get priority color for accent
+    final priorityColor = _getPriorityColor(todo.priority);
+
     return AnimatedOpacity(
       duration: const Duration(milliseconds: 50),
       opacity: opacity,
       child: Container(
-        margin: const EdgeInsets.only(bottom: 10),
-        padding: const EdgeInsets.all(16),
+        margin: const EdgeInsets.only(bottom: 12),
         decoration: BoxDecoration(
-          color: CupertinoColors.systemBackground,
-          borderRadius: BorderRadius.circular(14),
+          color: CupertinoColors.white,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: const Color(0xFFE5E7EB),
+            width: 1,
+          ),
           boxShadow: [
             BoxShadow(
-              color: CupertinoColors.black.withOpacity(0.05),
-              blurRadius: 10,
-              offset: const Offset(0, 2),
+              color: CupertinoColors.black.withOpacity(0.06),
+              blurRadius: 12,
+              offset: const Offset(0, 3),
+              spreadRadius: 0,
+            ),
+            BoxShadow(
+              color: priorityColor.withOpacity(0.08),
+              blurRadius: 8,
+              offset: const Offset(0, 1),
               spreadRadius: 0,
             ),
           ],
@@ -839,113 +1020,91 @@ class _SummerAITodosState extends State<SummerAITodos> {
         child: Stack(
           clipBehavior: Clip.none,
           children: [
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // Checkbox on the left
-                Padding(
-                  padding: const EdgeInsets.only(top: 2, right: 12),
-                  child: CupertinoCheckbox(
-                    value: (todo.status == 'completed' ||
-                            _completedTasks.contains(todo.reference.path)) &&
-                        !_completingTasks.containsKey(todo.reference.id),
-                    onChanged: (value) {
-                      final isCompleting = value ?? false;
-                      _handleTaskToggle(todo, isCompleting);
-                    },
-                    activeColor: CupertinoColors.systemGreen,
+            // Left accent border
+            Positioned(
+              left: 0,
+              top: 0,
+              bottom: 0,
+              child: Container(
+                width: 4,
+                decoration: BoxDecoration(
+                  color: priorityColor,
+                  borderRadius: const BorderRadius.only(
+                    topLeft: Radius.circular(16),
+                    bottomLeft: Radius.circular(16),
                   ),
                 ),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      // Task title
-                      Text(
-                        todo.title,
-                        style: TextStyle(
-                          fontFamily: '.SF Pro Text',
-                          fontSize: 17,
-                          fontWeight: FontWeight.w600,
-                          color: CupertinoColors.label,
-                          decoration: todo.status == 'completed'
-                              ? TextDecoration.lineThrough
-                              : TextDecoration.none,
-                          letterSpacing: -0.3,
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.all(18),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Checkbox on the left
+                  Padding(
+                    padding: const EdgeInsets.only(top: 2, right: 14),
+                    child: CupertinoCheckbox(
+                      value: (todo.status == 'completed' ||
+                              _completedTasks.contains(todo.reference.path)) &&
+                          !_completingTasks.containsKey(todo.reference.id),
+                      onChanged: (value) {
+                        final isCompleting = value ?? false;
+                        _handleTaskToggle(todo, isCompleting);
+                      },
+                      activeColor: CupertinoColors.systemGreen,
+                    ),
+                  ),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // Task title
+                        Text(
+                          todo.title,
+                          style: TextStyle(
+                            fontFamily: '.SF Pro Display',
+                            fontSize: 16,
+                            fontWeight: FontWeight.w600,
+                            color: const Color(0xFF1E293B),
+                            decoration: todo.status == 'completed'
+                                ? TextDecoration.lineThrough
+                                : TextDecoration.none,
+                            decorationColor: const Color(0xFF94A3B8),
+                            letterSpacing: -0.3,
+                            height: 1.3,
+                          ),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
                         ),
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      const SizedBox(height: 8),
-                      // Priority, Project, Due Date row
-                      Row(
-                        children: [
-                          _buildPriorityBadge(todo.priority),
-                          const SizedBox(width: 8),
-                          Flexible(
-                            fit: FlexFit.loose,
-                            child: (todo.groupName.isNotEmpty ||
-                                    todo.chatRef == null)
-                                ? Text(
-                                    todo.groupName,
-                                    style: TextStyle(
-                                      fontFamily: '.SF Pro Text',
-                                      fontSize: 13,
-                                      fontWeight: FontWeight.w400,
-                                      color: CupertinoColors.secondaryLabel,
-                                      letterSpacing: -0.2,
-                                    ),
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                  )
-                                : StreamBuilder<ChatsRecord>(
-                                    stream:
-                                        ChatsRecord.getDocument(todo.chatRef!),
-                                    builder: (context, chatSnap) {
-                                      final name = chatSnap.data?.title ?? '';
-                                      return Text(
-                                        name,
-                                        style: TextStyle(
-                                          fontFamily: '.SF Pro Text',
-                                          fontSize: 13,
-                                          fontWeight: FontWeight.w400,
-                                          color: CupertinoColors.secondaryLabel,
-                                          letterSpacing: -0.2,
-                                        ),
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis,
-                                      );
-                                    },
-                                  ),
-                          ),
-                          const SizedBox(width: 8),
-                          Icon(
-                            CupertinoIcons.calendar,
-                            size: 12,
-                            color: CupertinoColors.secondaryLabel,
-                          ),
-                          const SizedBox(width: 4),
-                          Text(
-                            todo.dueDate != null
-                                ? DateFormat('MMM dd').format(todo.dueDate!)
-                                : 'No due',
-                            style: TextStyle(
-                              fontFamily: '.SF Pro Text',
-                              fontSize: 13,
-                              fontWeight: FontWeight.w400,
-                              color: CupertinoColors.secondaryLabel,
-                              letterSpacing: -0.2,
+                        const SizedBox(height: 12),
+                        // Metadata row with better spacing - use Expanded to prevent overflow
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.center,
+                          children: [
+                            Expanded(
+                              child: Wrap(
+                                spacing: 8,
+                                runSpacing: 8,
+                                crossAxisAlignment: WrapCrossAlignment.center,
+                                children: [
+                                  _buildPriorityBadge(todo.priority),
+                                  if (todo.groupName.isNotEmpty || todo.chatRef != null)
+                                    _buildGroupChip(todo),
+                                  _buildDueDateChip(todo),
+                                ],
+                              ),
                             ),
-                          ),
-                          const Spacer(),
-                          // Overlapping people avatars - stick to right end
-                          _buildPeopleAvatars(todo),
-                        ],
-                      ),
-                    ],
+                            const SizedBox(width: 8),
+                            // Overlapping people avatars - constrained width
+                            _buildPeopleAvatars(todo),
+                          ],
+                        ),
+                      ],
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
             // Progress bar overlay when completing
             if (_completingTasks.containsKey(todo.reference.id))
@@ -955,8 +1114,8 @@ class _SummerAITodosState extends State<SummerAITodos> {
                 right: 0,
                 child: ClipRRect(
                   borderRadius: const BorderRadius.only(
-                    bottomLeft: Radius.circular(12),
-                    bottomRight: Radius.circular(12),
+                    bottomLeft: Radius.circular(16),
+                    bottomRight: Radius.circular(16),
                   ),
                   child: SizedBox(
                     height: 3,
@@ -976,6 +1135,141 @@ class _SummerAITodosState extends State<SummerAITodos> {
     );
   }
 
+  Color _getPriorityColor(String priority) {
+    switch (priority.toLowerCase()) {
+      case 'urgent':
+      case 'high':
+        return const Color(0xFFEF4444);
+      case 'moderate':
+        return const Color(0xFFF59E0B);
+      case 'low':
+        return const Color(0xFF3B82F6);
+      default:
+        return const Color(0xFFF59E0B);
+    }
+  }
+
+  Widget _buildGroupChip(ActionItemsRecord todo) {
+    return Builder(
+      builder: (context) {
+        if (todo.groupName.isNotEmpty || todo.chatRef == null) {
+          if (todo.groupName.isEmpty) {
+            return const SizedBox.shrink();
+          }
+          return Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+            decoration: BoxDecoration(
+              color: const Color(0xFFF1F5F9),
+              borderRadius: BorderRadius.circular(6),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  CupertinoIcons.group_solid,
+                  size: 11,
+                  color: const Color(0xFF64748B),
+                ),
+                const SizedBox(width: 4),
+                Text(
+                  todo.groupName,
+                  style: const TextStyle(
+                    fontFamily: '.SF Pro Text',
+                    fontSize: 12,
+                    fontWeight: FontWeight.w500,
+                    color: Color(0xFF64748B),
+                    letterSpacing: -0.1,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ],
+            ),
+          );
+        }
+        return StreamBuilder<ChatsRecord>(
+          stream: ChatsRecord.getDocument(todo.chatRef!),
+          builder: (context, chatSnap) {
+            final name = chatSnap.data?.title ?? '';
+            if (name.isEmpty) return const SizedBox.shrink();
+            return Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              decoration: BoxDecoration(
+                color: const Color(0xFFF1F5F9),
+                borderRadius: BorderRadius.circular(6),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    CupertinoIcons.group_solid,
+                    size: 11,
+                    color: const Color(0xFF64748B),
+                  ),
+                  const SizedBox(width: 4),
+                  Text(
+                    name,
+                    style: const TextStyle(
+                      fontFamily: '.SF Pro Text',
+                      fontSize: 12,
+                      fontWeight: FontWeight.w500,
+                      color: Color(0xFF64748B),
+                      letterSpacing: -0.1,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Widget _buildDueDateChip(ActionItemsRecord todo) {
+    final hasDueDate = todo.dueDate != null;
+    final isOverdue = hasDueDate && todo.dueDate!.isBefore(DateTime.now());
+    
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: isOverdue 
+            ? const Color(0xFFFEF2F2)
+            : const Color(0xFFF1F5F9),
+        borderRadius: BorderRadius.circular(6),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            CupertinoIcons.calendar,
+            size: 11,
+            color: isOverdue 
+                ? const Color(0xFFDC2626)
+                : const Color(0xFF64748B),
+          ),
+          const SizedBox(width: 4),
+          Text(
+            hasDueDate
+                ? DateFormat('MMM dd').format(todo.dueDate!)
+                : 'No due',
+            style: TextStyle(
+              fontFamily: '.SF Pro Text',
+              fontSize: 12,
+              fontWeight: FontWeight.w500,
+              color: isOverdue 
+                  ? const Color(0xFFDC2626)
+                  : const Color(0xFF64748B),
+              letterSpacing: -0.1,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildPriorityBadge(String priority) {
     Color dotColor;
     Color bgColor;
@@ -983,46 +1277,64 @@ class _SummerAITodosState extends State<SummerAITodos> {
 
     switch (priority.toLowerCase()) {
       case 'urgent':
-        dotColor = CupertinoColors.systemRed;
-        bgColor = CupertinoColors.systemRed.withOpacity(0.1);
-        label = '• High';
+        dotColor = const Color(0xFFDC2626);
+        bgColor = const Color(0xFFFEF2F2);
+        label = 'Urgent';
         break;
       case 'high':
-        dotColor = CupertinoColors.systemRed;
-        bgColor = CupertinoColors.systemRed.withOpacity(0.1);
-        label = '• High';
+        dotColor = const Color(0xFFEF4444);
+        bgColor = const Color(0xFFFEF2F2);
+        label = 'High';
         break;
       case 'moderate':
-        dotColor = CupertinoColors.systemOrange;
-        bgColor = CupertinoColors.systemOrange.withOpacity(0.1);
-        label = '• Moderate';
+        dotColor = const Color(0xFFF59E0B);
+        bgColor = const Color(0xFFFEFCE8);
+        label = 'Moderate';
         break;
       case 'low':
-        dotColor = CupertinoColors.systemBlue;
-        bgColor = CupertinoColors.systemBlue.withOpacity(0.1);
-        label = '• Low';
+        dotColor = const Color(0xFF3B82F6);
+        bgColor = const Color(0xFFEFF6FF);
+        label = 'Low';
         break;
       default:
-        dotColor = CupertinoColors.systemOrange;
-        bgColor = CupertinoColors.systemOrange.withOpacity(0.1);
-        label = '• Moderate';
+        dotColor = const Color(0xFFF59E0B);
+        bgColor = const Color(0xFFFEFCE8);
+        label = 'Moderate';
     }
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
         color: bgColor,
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: Text(
-        label,
-        style: TextStyle(
-          fontFamily: '.SF Pro Text',
-          fontSize: 12,
-          fontWeight: FontWeight.w500,
-          color: dotColor,
-          letterSpacing: -0.2,
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(
+          color: dotColor.withOpacity(0.2),
+          width: 1,
         ),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 6,
+            height: 6,
+            decoration: BoxDecoration(
+              color: dotColor,
+              shape: BoxShape.circle,
+            ),
+          ),
+          const SizedBox(width: 5),
+          Text(
+            label,
+            style: TextStyle(
+              fontFamily: '.SF Pro Text',
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              color: dotColor,
+              letterSpacing: -0.1,
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -1347,9 +1659,11 @@ class _FilterDropdownButtonState extends State<_FilterDropdownButton> {
   void _closeDropdown() {
     _overlayEntry?.remove();
     _overlayEntry = null;
-    setState(() {
-      _isOpen = false;
-    });
+    if (mounted) {
+      setState(() {
+        _isOpen = false;
+      });
+    }
   }
 
   OverlayEntry _createOverlayEntry() {
@@ -1690,7 +2004,9 @@ class _FilterDropdownButtonState extends State<_FilterDropdownButton> {
   @override
   void dispose() {
     _searchController.dispose();
-    _closeDropdown();
+    // Only remove overlay; do not call _closeDropdown() which uses setState (unsafe during dispose)
+    _overlayEntry?.remove();
+    _overlayEntry = null;
     super.dispose();
   }
 

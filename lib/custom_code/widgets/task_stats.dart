@@ -88,19 +88,26 @@ class _TaskStatsState extends State<TaskStats> {
         final total = uniqueAllTodos.length;
 
         return Container(
-          padding: const EdgeInsets.all(24),
+          padding: const EdgeInsets.all(28),
           decoration: BoxDecoration(
             color: Colors.white,
-            borderRadius: BorderRadius.circular(16),
+            borderRadius: BorderRadius.circular(20),
             border: Border.all(
-              color: const Color(0xFFE5E7EB),
+              color: const Color(0xFFE2E8F0),
               width: 1,
             ),
             boxShadow: [
               BoxShadow(
-                color: const Color(0xFF1E293B).withOpacity(0.05),
-                blurRadius: 10,
-                offset: const Offset(0, 2),
+                color: const Color(0xFF0F172A).withOpacity(0.04),
+                blurRadius: 16,
+                offset: const Offset(0, 4),
+                spreadRadius: 0,
+              ),
+              BoxShadow(
+                color: const Color(0xFF0F172A).withOpacity(0.02),
+                blurRadius: 6,
+                offset: const Offset(0, 1),
+                spreadRadius: 0,
               ),
             ],
           ),
@@ -122,7 +129,7 @@ class _TaskStatsState extends State<TaskStats> {
                   ),
                   TextButton(
                     onPressed: () {
-                      // TODO: Implement AI Insights
+                      _showInsight(context, uniqueAllTodos);
                     },
                     style: TextButton.styleFrom(
                       padding: const EdgeInsets.symmetric(
@@ -142,7 +149,7 @@ class _TaskStatsState extends State<TaskStats> {
                   ),
                 ],
               ),
-              const SizedBox(height: 24),
+              const SizedBox(height: 28),
               // Circular progress indicator
               Center(
                 child: SizedBox(
@@ -192,14 +199,14 @@ class _TaskStatsState extends State<TaskStats> {
                   ),
                 ),
               ),
-              const SizedBox(height: 24),
+              const SizedBox(height: 28),
               // Summary cards
               Row(
                 children: [
                   Expanded(
                     child: _buildStatCard('Total', total.toString()),
                   ),
-                  const SizedBox(width: 12),
+                  const SizedBox(width: 16),
                   Expanded(
                     child: _buildStatCard('Completed', completed.toString()),
                   ),
@@ -212,14 +219,150 @@ class _TaskStatsState extends State<TaskStats> {
     );
   }
 
+  void _showInsight(BuildContext context, List<ActionItemsRecord> todos) {
+    // 1. Analyze tasks
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+
+    final overdueTasks = todos
+        .where((t) =>
+            t.status == 'pending' &&
+            t.dueDate != null &&
+            t.dueDate!.isBefore(today))
+        .toList();
+
+    final highPriorityTasks = todos
+        .where((t) =>
+            t.status == 'pending' &&
+            (t.priority.toLowerCase() == 'high' ||
+                t.priority.toLowerCase() == 'urgent'))
+        .toList();
+
+    String insightTitle = "Quick Insight";
+    String insightBody = "";
+    IconData insightIcon = Icons.lightbulb_outline;
+    Color insightColor = Colors.blue;
+
+    if (overdueTasks.isNotEmpty) {
+      insightTitle = "Attention Needed";
+      insightBody =
+          "You have ${overdueTasks.length} overdue tasks. Consider clearing these out first to reduce mental clutter.";
+      insightIcon = Icons.warning_amber_rounded;
+      insightColor = Colors.orange;
+    } else if (highPriorityTasks.isNotEmpty) {
+      insightTitle = "Focus Mode";
+      insightBody =
+          "You have ${highPriorityTasks.length} high priority tasks. Recommendation: Start with '${highPriorityTasks.first.title}' to make the most impact.";
+      insightIcon = Icons.priority_high_rounded;
+      insightColor = Colors.redAccent;
+    } else if (todos.where((t) => t.status == 'pending').isEmpty) {
+      insightTitle = "All Clear!";
+      insightBody =
+          "You have no pending tasks. Great job! Take a break or plan for tomorrow.";
+      insightIcon = Icons.check_circle_outline;
+      insightColor = Colors.green;
+    } else {
+      insightTitle = "Steady Progress";
+      insightBody =
+          "You're doing well. Pick any task and make a start. Consistency is key!";
+      insightIcon = Icons.trending_up;
+      insightColor = Colors.blueAccent;
+    }
+
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (context) => Container(
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.only(
+            topLeft: Radius.circular(20),
+            topRight: Radius.circular(20),
+          ),
+        ),
+        padding: const EdgeInsets.all(24),
+        child: SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: Colors.grey[300],
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              const SizedBox(height: 24),
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: insightColor.withOpacity(0.1),
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(insightIcon, size: 32, color: insightColor),
+              ),
+              const SizedBox(height: 16),
+              Text(
+                insightTitle,
+                style: const TextStyle(
+                  fontFamily: 'Inter',
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
+                  color: Color(0xFF1E293B),
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                insightBody,
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                  fontFamily: 'Inter',
+                  fontSize: 16,
+                  color: Color(0xFF64748B),
+                  height: 1.5,
+                ),
+              ),
+              const SizedBox(height: 32),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  onPressed: () => Navigator.pop(context),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF1E293B),
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    elevation: 0,
+                  ),
+                  child: const Text(
+                    'Got it',
+                    style: TextStyle(
+                      fontFamily: 'Inter',
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 12),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _buildStatCard(String label, String value) {
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
         color: const Color(0xFFF8FAFC),
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(16),
         border: Border.all(
-          color: const Color(0xFFE5E7EB),
+          color: const Color(0xFFE2E8F0),
           width: 1,
         ),
       ),
@@ -263,8 +406,7 @@ class _TaskStatsState extends State<TaskStats> {
       ),
       child: const Center(
         child: CircularProgressIndicator(
-          valueColor:
-              AlwaysStoppedAnimation<Color>(Color(0xFF2563EB)),
+          valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF2563EB)),
         ),
       ),
     );

@@ -9,7 +9,7 @@ import '/pages/mobile_chat/mobile_chat_model.dart';
 import '/pages/mobile_chat/mobile_new_chat_widget.dart';
 import '/pages/mobile_chat/mobile_new_group_chat_widget.dart';
 import '/pages/desktop_chat/chat_controller.dart';
-import '/pages/chat/user_profile_detail/user_profile_detail_widget.dart';
+import '/pages/user_summary/user_summary_widget.dart';
 import '/pages/chat/group_chat_detail/group_chat_detail_widget.dart';
 import '/pages/chat/group_chat_detail/mobile_group_media_widget.dart';
 import '/pages/chat/group_chat_detail/mobile_group_tasks_widget.dart';
@@ -26,6 +26,7 @@ import 'package:easy_debounce/easy_debounce.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/scheduler.dart';
+import 'package:flutter/foundation.dart' show debugPrint;
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:get/get.dart';
 import 'package:image_picker/image_picker.dart';
@@ -33,6 +34,9 @@ import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/services.dart';
 import 'package:emoji_picker_flutter/emoji_picker_flutter.dart';
 import 'package:liquid_glass_renderer/liquid_glass_renderer.dart';
+import 'package:http/http.dart' as http;
+import 'package:permission_handler/permission_handler.dart';
+import 'package:image_gallery_saver_plus/image_gallery_saver_plus.dart';
 
 class MobileChatWidget extends StatefulWidget {
   const MobileChatWidget({
@@ -278,13 +282,15 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
     });
 
     // Push route immediately without waiting for state update
-    Navigator.of(context, rootNavigator: true).push(
+    Navigator.of(context, rootNavigator: true)
+        .push(
       CupertinoPageRoute(
         fullscreenDialog: false,
         builder: (context) => _FullScreenChatPage(
           chat: chat,
           onMessageLongPress: _showMessageMenu,
-          shouldPopTwice: widget.initialChat != null, // Pop twice if opened from New Chat
+          shouldPopTwice:
+              widget.initialChat != null, // Pop twice if opened from New Chat
           onPop: () {
             // Clear selected chat when route is popped so the same chat can be opened again
             if (mounted) {
@@ -295,7 +301,8 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
           },
         ),
       ),
-    ).then((_) {
+    )
+        .then((_) {
       // Also clear when route completes (handles swipe back on iOS)
       if (mounted) {
         setState(() {
@@ -581,6 +588,20 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
       ]);
     }
 
+    // Add Download option for messages with images
+    if ((message.image != null && message.image!.isNotEmpty) ||
+        (message.images != null && message.images!.isNotEmpty)) {
+      menuItems.add(
+        AdaptivePopupMenuItem(
+          label: 'Download',
+          icon: PlatformInfo.isIOS26OrHigher()
+              ? 'arrow.down.circle'
+              : Icons.download_rounded,
+          value: 'download',
+        ),
+      );
+    }
+
     // Add Report option (destructive action)
     menuItems.add(
       AdaptivePopupMenuItem(
@@ -612,6 +633,9 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
             break;
           case 'unsend':
             _unsendMessage(message);
+            break;
+          case 'download':
+            _downloadImage(message);
             break;
           case 'report':
             _reportMessage(message);
@@ -843,7 +867,6 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
     }
   }
 
-
   Widget _buildAdaptiveMenuOption({
     required AdaptivePopupMenuItem<String> item,
     required VoidCallback onTap,
@@ -886,7 +909,7 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
   }
 
   IconData _getIconForSFSymbol(String sfSymbol) {
-    // Map SF Symbol names to CupertinoIcons
+    // Map SF Symbols to CupertinoIcons
     final iconMap = {
       'doc.on.doc': CupertinoIcons.doc_on_doc,
       'face.smiling': CupertinoIcons.smiley,
@@ -894,8 +917,262 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
       'pencil': CupertinoIcons.pencil,
       'arrow.uturn.backward': CupertinoIcons.arrow_counterclockwise,
       'exclamationmark.triangle': CupertinoIcons.exclamationmark_triangle,
+      'arrow.down.circle': CupertinoIcons.arrow_down_circle,
     };
     return iconMap[sfSymbol] ?? CupertinoIcons.circle;
+  }
+
+  String _getFileNameFromUrl(String url) {
+    try {
+      final uri = Uri.parse(url);
+      final segments = uri.pathSegments;
+      if (segments.isNotEmpty) {
+        String fileName = segments.last;
+        // Remove Firebase storage tokens and parameters
+        if (fileName.contains('?')) {
+          fileName = fileName.split('?').first;
+        }
+        // Decode URL encoding
+        fileName = Uri.decodeComponent(fileName);
+        if (fileName.isNotEmpty) {
+          return fileName;
+        }
+      }
+    } catch (e) {
+      // Fallback filename
+    }
+    // Generate filename based on timestamp
+    final timestamp = DateTime.now().millisecondsSinceEpoch;
+    return 'image_$timestamp.jpg';
+  }
+
+  void _showDownloadSuccessPopup() {
+    if (!mounted) return;
+
+    final overlay = Overlay.of(context);
+    late OverlayEntry overlayEntry;
+
+    overlayEntry = OverlayEntry(
+      builder: (context) => Positioned(
+        top: 80,
+        left: 0,
+        right: 0,
+        child: Center(
+          child: Material(
+            color: Colors.transparent,
+            child: TweenAnimationBuilder<double>(
+              tween: Tween(begin: 0.0, end: 1.0),
+              duration: const Duration(milliseconds: 300),
+              curve: Curves.easeOut,
+              builder: (context, value, child) {
+                return Transform.scale(
+                  scale: value,
+                  child: Opacity(
+                    opacity: value,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 20,
+                        vertical: 12,
+                      ),
+                      decoration: BoxDecoration(
+                        color: Colors.green,
+                        borderRadius: BorderRadius.circular(8),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.2),
+                            blurRadius: 10,
+                            offset: const Offset(0, 4),
+                            spreadRadius: 2,
+                          ),
+                        ],
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(
+                            Icons.check_circle,
+                            color: Colors.white,
+                            size: 20,
+                          ),
+                          const SizedBox(width: 8),
+                          const Text(
+                            'Downloaded',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 14,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                );
+              },
+            ),
+          ),
+        ),
+      ),
+    );
+
+    overlay.insert(overlayEntry);
+
+    // Remove after 2 seconds
+    Future.delayed(const Duration(milliseconds: 2000), () {
+      overlayEntry.remove();
+    });
+  }
+
+  Future<void> _downloadImage(MessagesRecord message) async {
+    try {
+      // Try single image first
+      final imageUrl = message.image ?? '';
+      final imageUrls = message.images ?? [];
+
+      if (imageUrl.isNotEmpty) {
+        await _downloadSingleImage(imageUrl);
+      } else if (imageUrls.isNotEmpty) {
+        // Download all images
+        for (final imgUrl in imageUrls) {
+          if (imgUrl.isNotEmpty) {
+            await _downloadSingleImage(imgUrl);
+          }
+        }
+      } else {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('No images found in this message'),
+              backgroundColor: Color(0xFFFF3B30),
+            ),
+          );
+        }
+        return;
+      }
+    } catch (e) {
+      debugPrint('Error downloading image: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error downloading image: $e'),
+            backgroundColor: Color(0xFFFF3B30),
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _downloadSingleImage(String imageUrl) async {
+    if (imageUrl.isEmpty) return;
+
+    try {
+      // Request permissions
+      if (Platform.isAndroid) {
+        final photosStatus = await Permission.photos.status;
+        if (photosStatus.isDenied) {
+          final permission = await Permission.photos.request();
+          if (permission.isDenied || permission.isPermanentlyDenied) {
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('Permission denied. Cannot download image.'),
+                  backgroundColor: Color(0xFFFF3B30),
+                ),
+              );
+            }
+            return;
+          }
+        }
+        // Also check storage permission for older Android versions
+        final storageStatus = await Permission.storage.status;
+        if (storageStatus.isDenied) {
+          final permission = await Permission.storage.request();
+          if (permission.isDenied || permission.isPermanentlyDenied) {
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('Permission denied. Cannot download image.'),
+                  backgroundColor: Color(0xFFFF3B30),
+                ),
+              );
+            }
+            return;
+          }
+        }
+      } else if (Platform.isIOS) {
+        final photosStatus = await Permission.photos.status;
+        if (!photosStatus.isGranted && !photosStatus.isLimited) {
+          final permission = await Permission.photos.request();
+          if (permission.isDenied || permission.isPermanentlyDenied) {
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('Permission denied. Cannot download image.'),
+                  backgroundColor: Color(0xFFFF3B30),
+                ),
+              );
+            }
+            return;
+          }
+        }
+      }
+
+      // Download the image
+      final response = await http.get(Uri.parse(imageUrl));
+      if (response.statusCode != 200) {
+        throw Exception('Download failed: HTTP ${response.statusCode}');
+      }
+
+      // Get file name
+      String safeFileName = _getFileNameFromUrl(imageUrl);
+      safeFileName = safeFileName.replaceAll('/', '_').replaceAll('\\', '_');
+      safeFileName = safeFileName.split('/').last.split('\\').last;
+
+      // Remove extension if present, we'll let the saver handle it
+      if (safeFileName.contains('.')) {
+        safeFileName = safeFileName.split('.').first;
+      }
+
+      // If no filename, generate one
+      if (safeFileName.isEmpty) {
+        safeFileName = 'image_${DateTime.now().millisecondsSinceEpoch}';
+      }
+
+      // Save to gallery using image_gallery_saver_plus
+      final result = await ImageGallerySaverPlus.saveImage(
+        response.bodyBytes,
+        quality: 100,
+        name: safeFileName,
+        isReturnImagePathOfIOS: false,
+      );
+
+      if (result['isSuccess'] == true) {
+        if (mounted) {
+          _showDownloadSuccessPopup();
+        }
+      } else {
+        final errorMsg = result['errorMessage'] ?? result.toString();
+        debugPrint('Save failed: $errorMsg');
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Failed to save image: $errorMsg'),
+              backgroundColor: Color(0xFFFF3B30),
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      debugPrint('Error downloading image: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error downloading image: $e'),
+            backgroundColor: Color(0xFFFF3B30),
+          ),
+        );
+      }
+    }
   }
 
   Widget _buildMessageMenuOption({
@@ -1001,75 +1278,77 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
             Expanded(
               child: Padding(
                 padding: const EdgeInsets.only(
-                    bottom: 20.0, left: 8.0), // Add bottom padding to move buttons up, left padding for search button
+                    bottom: 20.0,
+                    left:
+                        8.0), // Add bottom padding to move buttons up, left padding for search button
                 child: EmojiPicker(
                   onEmojiSelected: (category, emoji) {
                     Navigator.pop(context, emoji.emoji);
                   },
                   config: Config(
-                  height: MediaQuery.of(context).size.height * 0.35,
-                  checkPlatformCompatibility: true,
-                  emojiViewConfig: EmojiViewConfig(
-                    emojiSizeMax: 28,
-                    verticalSpacing: 0,
-                    horizontalSpacing: 0,
-                    gridPadding: EdgeInsets.zero,
-                    recentsLimit: 28,
-                    replaceEmojiOnLimitExceed: true,
-                    noRecents: Text(
-                      'No Recents',
-                      style: TextStyle(
-                        fontSize: 16,
-                        color: isDark ? Colors.white54 : Colors.black54,
+                    height: MediaQuery.of(context).size.height * 0.35,
+                    checkPlatformCompatibility: true,
+                    emojiViewConfig: EmojiViewConfig(
+                      emojiSizeMax: 28,
+                      verticalSpacing: 0,
+                      horizontalSpacing: 0,
+                      gridPadding: EdgeInsets.zero,
+                      recentsLimit: 28,
+                      replaceEmojiOnLimitExceed: true,
+                      noRecents: Text(
+                        'No Recents',
+                        style: TextStyle(
+                          fontSize: 16,
+                          color: isDark ? Colors.white54 : Colors.black54,
+                        ),
+                      ),
+                      loadingIndicator: const Center(
+                        child: CupertinoActivityIndicator(),
+                      ),
+                      buttonMode: ButtonMode.CUPERTINO,
+                      backgroundColor:
+                          isDark ? const Color(0xFF1C1C1E) : Colors.white,
+                    ),
+                    skinToneConfig: const SkinToneConfig(
+                      enabled: true,
+                      dialogBackgroundColor: Colors.white,
+                      indicatorColor: Colors.grey,
+                    ),
+                    categoryViewConfig: CategoryViewConfig(
+                      initCategory: Category.RECENT,
+                      backgroundColor:
+                          isDark ? const Color(0xFF1C1C1E) : Colors.white,
+                      indicatorColor: CupertinoColors.activeBlue,
+                      iconColor: isDark ? Colors.white54 : Colors.black45,
+                      iconColorSelected: CupertinoColors.activeBlue,
+                      categoryIcons: const CategoryIcons(
+                        recentIcon: CupertinoIcons.clock,
+                        smileyIcon: CupertinoIcons.smiley,
+                        animalIcon: CupertinoIcons.tortoise,
+                        foodIcon: CupertinoIcons.cart,
+                        activityIcon: CupertinoIcons.sportscourt,
+                        travelIcon: CupertinoIcons.car,
+                        objectIcon: CupertinoIcons.lightbulb,
+                        symbolIcon: CupertinoIcons.heart,
+                        flagIcon: CupertinoIcons.flag,
                       ),
                     ),
-                    loadingIndicator: const Center(
-                      child: CupertinoActivityIndicator(),
+                    bottomActionBarConfig: BottomActionBarConfig(
+                      backgroundColor:
+                          isDark ? const Color(0xFF1C1C1E) : Colors.white,
+                      buttonColor: isDark ? Colors.white54 : Colors.black45,
+                      buttonIconColor: isDark ? Colors.white : Colors.black87,
+                      showBackspaceButton: false,
+                      showSearchViewButton: true,
                     ),
-                    buttonMode: ButtonMode.CUPERTINO,
-                    backgroundColor:
-                        isDark ? const Color(0xFF1C1C1E) : Colors.white,
-                  ),
-                  skinToneConfig: const SkinToneConfig(
-                    enabled: true,
-                    dialogBackgroundColor: Colors.white,
-                    indicatorColor: Colors.grey,
-                  ),
-                  categoryViewConfig: CategoryViewConfig(
-                    initCategory: Category.RECENT,
-                    backgroundColor:
-                        isDark ? const Color(0xFF1C1C1E) : Colors.white,
-                    indicatorColor: CupertinoColors.activeBlue,
-                    iconColor: isDark ? Colors.white54 : Colors.black45,
-                    iconColorSelected: CupertinoColors.activeBlue,
-                    categoryIcons: const CategoryIcons(
-                      recentIcon: CupertinoIcons.clock,
-                      smileyIcon: CupertinoIcons.smiley,
-                      animalIcon: CupertinoIcons.tortoise,
-                      foodIcon: CupertinoIcons.cart,
-                      activityIcon: CupertinoIcons.sportscourt,
-                      travelIcon: CupertinoIcons.car,
-                      objectIcon: CupertinoIcons.lightbulb,
-                      symbolIcon: CupertinoIcons.heart,
-                      flagIcon: CupertinoIcons.flag,
+                    searchViewConfig: SearchViewConfig(
+                      backgroundColor: isDark
+                          ? const Color(0xFF2C2C2E)
+                          : const Color(0xFFF2F2F7),
+                      buttonIconColor: isDark ? Colors.white54 : Colors.black54,
+                      hintText: 'Search emoji...',
                     ),
                   ),
-                  bottomActionBarConfig: BottomActionBarConfig(
-                    backgroundColor:
-                        isDark ? const Color(0xFF1C1C1E) : Colors.white,
-                    buttonColor: isDark ? Colors.white54 : Colors.black45,
-                    buttonIconColor: isDark ? Colors.white : Colors.black87,
-                    showBackspaceButton: false,
-                    showSearchViewButton: true,
-                  ),
-                  searchViewConfig: SearchViewConfig(
-                    backgroundColor: isDark
-                        ? const Color(0xFF2C2C2E)
-                        : const Color(0xFFF2F2F7),
-                    buttonIconColor: isDark ? Colors.white54 : Colors.black54,
-                    hintText: 'Search emoji...',
-                  ),
-                ),
                 ),
               ),
             ),
@@ -1952,9 +2231,8 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
             ),
             AdaptivePopupMenuItem(
               label: 'New Group Chat',
-              icon: PlatformInfo.isIOS26OrHigher()
-                  ? 'person.2'
-                  : Icons.group_add,
+              icon:
+                  PlatformInfo.isIOS26OrHigher() ? 'person.2' : Icons.group_add,
               value: 'new_group_chat',
             ),
           ],
@@ -3143,6 +3421,25 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
         ],
       });
 
+      // Send greeting message so the chat appears in the list
+      final greeting =
+          '${currentUserDisplayName.isNotEmpty ? currentUserDisplayName : "You"} created the group';
+
+      await newChatRef.collection('messages').add({
+        'content': greeting,
+        'created_at': getCurrentTimestamp,
+        'sender_ref': currentUserReference,
+        'is_system_message': true,
+        'is_read_by': [currentUserReference],
+      });
+
+      // Update chat with last message
+      await newChatRef.update({
+        'last_message': greeting,
+        'last_message_at': getCurrentTimestamp,
+        'last_message_sent': currentUserReference,
+      });
+
       // Get the created chat document
       final newChat = await ChatsRecord.getDocumentOnce(newChatRef);
 
@@ -3160,15 +3457,7 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
       });
       chatController.selectChat(newChat);
 
-      // Show success message
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Group "$groupName" created successfully!'),
-          backgroundColor: Color(0xFF34C759),
-        ),
-      );
-
-      // Open the new group chat in full-screen
+      // Navigate to the new group chat immediately
       _openChatFullScreen(newChat);
     } catch (e) {
       // Show error message
@@ -3948,12 +4237,16 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
     try {
       final user = await UsersRecord.getDocumentOnce(otherUserRef);
       if (context.mounted) {
+        // Navigate to new user summary page instead of old profile page
         context.pushNamed(
-          UserProfileDetailWidget.routeName,
+          UserSummaryWidget.routeName,
           queryParameters: {
-            'user': serializeParam(user, ParamType.Document),
+            'userRef':
+                serializeParam(user.reference, ParamType.DocumentReference),
           }.withoutNulls,
-          extra: <String, dynamic>{'user': user},
+          extra: <String, dynamic>{
+            'userRef': user.reference,
+          },
         );
       }
     } catch (e) {
@@ -4598,6 +4891,70 @@ class _MobileChatListItemState extends State<_MobileChatListItem>
       );
     }
 
+    // Show sender name for group chats or when lastMessageSent is available
+    // On iOS, show sender name for all chats
+    if (Platform.isIOS && chat.lastMessageSent != null) {
+      return StreamBuilder<UsersRecord>(
+        stream: UsersRecord.getDocument(chat.lastMessageSent!),
+        builder: (context, snapshot) {
+          String prefix = '';
+          if (snapshot.hasData && snapshot.data != null) {
+            final senderName = snapshot.data!.displayName;
+            // Get first name only for cleaner display
+            final firstName = senderName.isNotEmpty
+                ? senderName.split(' ').first
+                : (snapshot.data!.email.split('@').first);
+            // Check if it's the current user
+            if (chat.lastMessageSent == currentUserReference) {
+              prefix = 'You: ';
+            } else {
+              prefix = '$firstName: ';
+            }
+          } else if (snapshot.connectionState == ConnectionState.waiting) {
+            // Show message without prefix while loading
+            return Text(
+              chat.lastMessage,
+              style: TextStyle(
+                fontFamily: 'SF Pro Text',
+                color: Color(0xFF8E8E93),
+                fontSize: 15,
+              ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            );
+          }
+
+          return Text.rich(
+            TextSpan(
+              children: [
+                TextSpan(
+                  text: prefix,
+                  style: TextStyle(
+                    fontFamily: 'SF Pro Text',
+                    color: Color(0xFF8E8E93),
+                    fontSize: 15,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                TextSpan(
+                  text: chat.lastMessage,
+                  style: TextStyle(
+                    fontFamily: 'SF Pro Text',
+                    color: Color(0xFF8E8E93),
+                    fontSize: 15,
+                    fontWeight: FontWeight.w400,
+                  ),
+                ),
+              ],
+            ),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          );
+        },
+      );
+    }
+
+    // For non-iOS or when lastMessageSent is not available, show message only
     return Text(
       chat.lastMessage,
       style: TextStyle(
@@ -4689,17 +5046,20 @@ class _FullScreenChatPageState extends State<_FullScreenChatPage> {
                       glowRadius: 1.0,
                       child: AdaptiveFloatingActionButton(
                         onPressed: () {
-                          print('🔙 Back button clicked! shouldPopTwice: ${widget.shouldPopTwice}');
+                          print(
+                              '🔙 Back button clicked! shouldPopTwice: ${widget.shouldPopTwice}');
                           if (widget.shouldPopTwice) {
                             // Pop the full-screen chat (pushed with rootNavigator: true)
-                            if (Navigator.of(context, rootNavigator: true).canPop()) {
+                            if (Navigator.of(context, rootNavigator: true)
+                                .canPop()) {
                               Navigator.of(context, rootNavigator: true).pop();
                               print('✅ Popped full-screen chat');
                             }
                             // Then pop MobileChatWidget and New Chat page using root context
                             // Use addPostFrameCallback to ensure the first pop completes
                             WidgetsBinding.instance.addPostFrameCallback((_) {
-                              final rootContext = nav.appNavigatorKey.currentContext;
+                              final rootContext =
+                                  nav.appNavigatorKey.currentContext;
                               if (rootContext != null) {
                                 final navigator = Navigator.of(rootContext);
                                 // Pop MobileChatWidget (the one pushed from New Chat)
@@ -4708,7 +5068,8 @@ class _FullScreenChatPageState extends State<_FullScreenChatPage> {
                                   print('✅ Popped MobileChatWidget');
                                 }
                                 // Pop New Chat page after a frame
-                                WidgetsBinding.instance.addPostFrameCallback((_) {
+                                WidgetsBinding.instance
+                                    .addPostFrameCallback((_) {
                                   if (navigator.canPop()) {
                                     navigator.pop();
                                     print('✅ Popped New Chat page');
@@ -5036,16 +5397,19 @@ class _FullScreenChatPageState extends State<_FullScreenChatPage> {
         extra: <String, dynamic>{'chatDoc': chat},
       );
     } else {
-      // For DMs, navigate to user profile
+      // For DMs, navigate to new user summary page instead of old profile page
       try {
         final user = await _getOtherUser(chat);
         if (context.mounted) {
           context.pushNamed(
-            UserProfileDetailWidget.routeName,
+            UserSummaryWidget.routeName,
             queryParameters: {
-              'user': serializeParam(user, ParamType.Document),
+              'userRef':
+                  serializeParam(user.reference, ParamType.DocumentReference),
             }.withoutNulls,
-            extra: <String, dynamic>{'user': user},
+            extra: <String, dynamic>{
+              'userRef': user.reference,
+            },
           );
         }
       } catch (e) {
@@ -5327,6 +5691,7 @@ class _IOS26PopupMenu<T> extends StatelessWidget {
       'pencil': CupertinoIcons.pencil,
       'arrow.uturn.backward': CupertinoIcons.arrow_counterclockwise,
       'exclamationmark.triangle': CupertinoIcons.exclamationmark_triangle,
+      'arrow.down.circle': CupertinoIcons.arrow_down_circle,
     };
     return iconMap[symbol] ?? CupertinoIcons.circle;
   }

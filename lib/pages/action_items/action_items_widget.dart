@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import '/backend/backend.dart';
 import '/auth/firebase_auth/auth_util.dart';
 
@@ -554,7 +555,10 @@ class _ActionItemsWidgetState extends State<ActionItemsWidget> {
 
     try {
       // Update task in Firebase
-      await todo.reference.update({'status': 'completed'});
+      await todo.reference.update({
+        'status': 'completed',
+        'completed_time': FieldValue.serverTimestamp(),
+      });
     } catch (e) {
       print('Error updating task: $e');
       // Rollback on error

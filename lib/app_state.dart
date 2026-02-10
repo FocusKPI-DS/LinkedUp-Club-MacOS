@@ -48,6 +48,16 @@ class FFAppState extends ChangeNotifier {
       _chatPageLastOpened =
           lastOpenedString != null ? DateTime.parse(lastOpenedString) : null;
     });
+    _safeInit(() {
+      final stored = prefs.getInt('ff_sendMessageShortcut');
+      if (stored != null && stored >= 0 && stored <= 2) {
+        _sendMessageShortcut = stored;
+      } else {
+        // Migrate from old bool preference
+        final legacy = prefs.getBool('ff_sendMessageOnEnter');
+        _sendMessageShortcut = (legacy == false) ? 1 : 0;
+      }
+    });
   }
 
   void update(VoidCallback callback) {
@@ -385,6 +395,19 @@ class FFAppState extends ChangeNotifier {
     } else {
       prefs.remove('ff_chatPageLastOpened');
     }
+  }
+
+  // Keyboard shortcut preference for sending messages
+  // 0 = Enter to send, Shift+Enter for new line (default)
+  // 1 = Shift+Enter to send, Enter for new line
+  // 2 = Command+Enter to send, Enter for new line
+  int _sendMessageShortcut = 0;
+  int get sendMessageShortcut => _sendMessageShortcut;
+  set sendMessageShortcut(int value) {
+    if (value < 0 || value > 2) return;
+    _sendMessageShortcut = value;
+    prefs.setInt('ff_sendMessageShortcut', value);
+    notifyListeners();
   }
 }
 

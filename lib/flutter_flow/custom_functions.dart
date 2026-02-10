@@ -198,36 +198,108 @@ bool? checkmention(String? string) {
 }
 
 /// Extract the mention query after @ symbol
-/// Returns the text after the last @ symbol for filtering members
-String? extractMentionQuery(String? text) {
+/// Returns the text after the @ symbol before cursor position for filtering members
+/// Supports both @name and @"name with spaces" formats
+String? extractMentionQuery(String? text, [int? cursorPosition]) {
   if (text == null || text.isEmpty) return null;
   
-  // Find the last @ symbol
-  final lastAtIndex = text.lastIndexOf('@');
+  // Use cursor position if provided, otherwise use text length
+  final searchEnd = cursorPosition ?? text.length;
+  if (searchEnd < 0 || searchEnd > text.length) return null;
+  
+  // Find the @ symbol before cursor position
+  final textBeforeCursor = text.substring(0, searchEnd);
+  final lastAtIndex = textBeforeCursor.lastIndexOf('@');
   if (lastAtIndex == -1) return null;
   
-  // Check if @ is at the start or preceded by whitespace
+  // Check if @ is at the start or preceded by whitespace or punctuation
   if (lastAtIndex > 0) {
     final charBeforeAt = text[lastAtIndex - 1];
-    if (charBeforeAt != ' ' && charBeforeAt != '\n') {
+    // Allow @ after whitespace, newline, or common punctuation
+    if (charBeforeAt != ' ' && 
+        charBeforeAt != '\n' && 
+        charBeforeAt != '\t' &&
+        !RegExp(r'[.,!?;:()\[\]{}]').hasMatch(charBeforeAt)) {
       return null; // @ is in the middle of a word
     }
   }
   
-  // Extract text after @
-  final afterAt = text.substring(lastAtIndex + 1);
+  // Check if this is a quoted mention @"name with spaces"
+  final charAfterAt = lastAtIndex + 1 < text.length ? text[lastAtIndex + 1] : null;
+  if (charAfterAt == '"') {
+    // Find the closing quote
+    final quoteStart = lastAtIndex + 2; // After @"
+    int quoteEnd = quoteStart;
+    bool foundClosingQuote = false;
+    
+    for (int i = quoteStart; i < text.length && i < searchEnd; i++) {
+      if (text[i] == '"' && (i == quoteStart || text[i - 1] != '\\')) {
+        quoteEnd = i;
+        foundClosingQuote = true;
+        break;
+      }
+    }
+    
+    if (foundClosingQuote) {
+      // Extract the name inside quotes (up to cursor if quote not closed yet)
+      final nameInsideQuotes = text.substring(quoteStart, quoteEnd < searchEnd ? quoteEnd : searchEnd);
+      return nameInsideQuotes.isEmpty ? null : nameInsideQuotes.toLowerCase();
+    } else {
+      // Quote not closed yet, extract what's typed so far
+      final nameInsideQuotes = text.substring(quoteStart, searchEnd);
+      return nameInsideQuotes.isEmpty ? null : nameInsideQuotes.toLowerCase();
+    }
+  }
   
-  // Check if there's a space after the @ (which means mention is complete)
+  // Regular unquoted mention - extract text after @ up to cursor or next space/newline
+  final afterAt = text.substring(lastAtIndex + 1, searchEnd);
+  
+  // Check if there's a space or newline in the query (which means mention is complete)
   if (afterAt.contains(' ') || afterAt.contains('\n')) {
     return null;
   }
   
-  return afterAt.toLowerCase();
+  // Return empty string if just "@" is typed (to show all members)
+  // Return the query text if there's text after @
+  return afterAt.isEmpty ? '' : afterAt.toLowerCase();
 }
 
 /// Check if text contains an active mention being typed
-bool hasActiveMention(String? text) {
-  return extractMentionQuery(text) != null;
+/// Returns true if @ is typed (even without query text)
+bool hasActiveMention(String? text, [int? cursorPosition]) {
+  if (text == null || text.isEmpty) return false;
+  
+  // Use cursor position if provided, otherwise use text length
+  final searchEnd = cursorPosition ?? text.length;
+  if (searchEnd < 0 || searchEnd > text.length) return false;
+  
+  // Find the @ symbol before cursor position
+  final textBeforeCursor = text.substring(0, searchEnd);
+  final lastAtIndex = textBeforeCursor.lastIndexOf('@');
+  if (lastAtIndex == -1) return false;
+  
+  // Check if @ is at the start or preceded by whitespace or punctuation
+  if (lastAtIndex > 0) {
+    final charBeforeAt = text[lastAtIndex - 1];
+    // Allow @ after whitespace, newline, or common punctuation
+    if (charBeforeAt != ' ' && 
+        charBeforeAt != '\n' && 
+        charBeforeAt != '\t' &&
+        !RegExp(r'[.,!?;:()\[\]{}]').hasMatch(charBeforeAt)) {
+      return false; // @ is in the middle of a word
+    }
+  }
+  
+  // Check if there's text after @ that would complete the mention
+  final afterAt = text.substring(lastAtIndex + 1, searchEnd);
+  
+  // If there's a space or newline, mention is complete (not active)
+  if (afterAt.contains(' ') || afterAt.contains('\n')) {
+    return false;
+  }
+  
+  // @ is active (even if no query text yet)
+  return true;
 }
 
 bool? locationNear(

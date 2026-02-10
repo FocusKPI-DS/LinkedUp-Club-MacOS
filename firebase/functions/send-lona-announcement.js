@@ -58,7 +58,12 @@ async function sendLonaAnnouncement() {
     // ═══════════════════════════════════════════════════════════════
     const announcementMessage = `🎉 New Update Available!
 
-We've just released a new macOS update (16.1) and pushed an iOS update last week!
+A new update for macOS 16.2 is available!
+
+What's New:
+• Bug Fixes - Improved stability and performance
+• Quickly start a Google Meet - Launch meetings fast
+• Keyboard Shortcuts - Work more efficiently with new shortcuts
 
 Update your app now to get the latest features and improvements!
 Appstore Link: https://apps.apple.com/us/app/lona-club/id6747595642`;
@@ -172,6 +177,8 @@ Appstore Link: https://apps.apple.com/us/app/lona-club/id6747595642`;
         console.log(`📝 Message ID: ${messageRef.id}`);
         console.log(`👥 Users notified: ${userRefs.length}`);
         console.log(`💬 Preview: "${messagePreview}"`);
+        console.log('═══════════════════════════════════════════════════════════');
+        console.log('ℹ️  To send emails, run: node sendLonaAnnouncementEmail.js');
         console.log('═══════════════════════════════════════════════════════════\n');
 
     } catch (error) {

@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 enum SettingsTab {
   yourProfile,
   notifications,
+  preferences,
   helpFeedback,
   logout,
 }

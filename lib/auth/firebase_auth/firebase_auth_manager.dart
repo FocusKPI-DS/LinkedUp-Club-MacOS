@@ -18,6 +18,9 @@ import 'firebase_user_provider.dart';
 import 'google_auth.dart';
 import 'jwt_token_auth.dart';
 import 'github_auth.dart';
+import '/custom_code/actions/index.dart' as actions;
+import '/custom_code/actions/delete_fcm_token.dart' show deleteFcmToken;
+import 'auth_util.dart';
 
 export '../base_auth_user_provider.dart';
 
@@ -60,7 +63,21 @@ class FirebaseAuthManager extends AuthManager
   FirebasePhoneAuthManager phoneAuthManager = FirebasePhoneAuthManager();
 
   @override
-  Future signOut() {
+  Future signOut() async {
+    // Delete FCM tokens before signing out to prevent receiving
+    // notifications for accounts the user is no longer logged into
+    try {
+      final currentUser = FirebaseAuth.instance.currentUser;
+      if (currentUser != null) {
+        final userRef = UsersRecord.collection.doc(currentUser.uid);
+        print('🗑️ Deleting FCM tokens before sign out...');
+        await deleteFcmToken(userRef);
+      }
+    } catch (e) {
+      print('⚠️ Error deleting FCM tokens during sign out: $e');
+      // Continue with sign out even if token deletion fails
+    }
+
     return FirebaseAuth.instance.signOut();
   }
 
@@ -332,13 +349,15 @@ class FirebaseAuthManager extends AuthManager
       } else {
         errorMsg = 'Error: ${e.message ?? 'Unknown platform error'}';
       }
-      ScaffoldMessenger.of(context).hideCurrentSnackBar();
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(errorMsg),
-          duration: const Duration(seconds: 5),
-        ),
-      );
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).hideCurrentSnackBar();
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(errorMsg),
+            duration: const Duration(seconds: 5),
+          ),
+        );
+      }
       return null;
     } on FirebaseAuthException catch (e) {
       final errorMsg = switch (e.code) {
@@ -348,17 +367,21 @@ class FirebaseAuthManager extends AuthManager
           'Error: The supplied auth credential is incorrect, malformed or has expired',
         _ => 'Error: ${e.message!}',
       };
-      ScaffoldMessenger.of(context).hideCurrentSnackBar();
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(errorMsg)),
-      );
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).hideCurrentSnackBar();
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(errorMsg)),
+        );
+      }
       return null;
     } catch (e) {
       // Handle any other errors
-      ScaffoldMessenger.of(context).hideCurrentSnackBar();
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Sign-in error: ${e.toString()}')),
-      );
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).hideCurrentSnackBar();
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Sign-in error: ${e.toString()}')),
+        );
+      }
       return null;
     }
   }

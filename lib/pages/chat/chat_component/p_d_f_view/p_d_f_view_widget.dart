@@ -4,6 +4,7 @@ import 'package:http/http.dart' as http;
 import 'package:file_picker/file_picker.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
+import 'package:permission_handler/permission_handler.dart';
 import '/custom_code/actions/web_download_helper.dart';
 import '/flutter_flow/flutter_flow_icon_button.dart';
 import '/flutter_flow/flutter_flow_pdf_viewer.dart';
@@ -363,64 +364,8 @@ class _PDFViewWidgetState extends State<PDFViewWidget> {
   Future<void> _downloadFile(String url, String fileName) async {
     debugPrint('_downloadFile called with URL: $url, fileName: $fileName');
 
-    // macOS - Handle separately to avoid any fallthrough
-    if (!kIsWeb && Platform.isMacOS) {
-      debugPrint('Platform is macOS, starting download...');
-      try {
-        // Sanitize filename
-        String safeFileName = fileName;
-        safeFileName = safeFileName.replaceAll('/', '_').replaceAll('\\', '_');
-        safeFileName = safeFileName.split('/').last.split('\\').last;
-
-        // Download the file first
-        debugPrint('Downloading from URL: $url');
-        final response = await http.get(Uri.parse(url));
-        debugPrint('Download response status: ${response.statusCode}');
-
-        if (response.statusCode != 200) {
-          throw Exception('Failed to download file: ${response.statusCode}');
-        }
-
-        // Use file_picker's saveFile to handle macOS sandboxing properly
-        final result = await FilePicker.platform.saveFile(
-          dialogTitle: 'Save File',
-          fileName: safeFileName,
-          type: FileType.custom,
-          allowedExtensions: ['pdf'],
-        );
-
-        if (result != null && result.isNotEmpty) {
-          try {
-            final file = File(result);
-            await file.writeAsBytes(response.bodyBytes);
-            debugPrint('File saved successfully to: $result');
-
-            // Reveal in Finder
-            try {
-              await Process.run('open', ['-R', result]);
-              _showSuccessPopup('Downloaded');
-            } catch (e) {
-              debugPrint('Error revealing file in Finder: $e');
-              _showSuccessPopup('File saved');
-            }
-          } catch (e) {
-            debugPrint('Error saving file: $e');
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text('Error saving file: $e'), backgroundColor: Colors.red),
-            );
-          }
-        }
-      } catch (e) {
-        debugPrint('Error during download: $e');
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error downloading file: $e'), backgroundColor: Colors.red),
-        );
-      }
-      return;
-    }
-
-    // Web and other platforms
     try {
+      // Handle web platform FIRST
       if (kIsWeb) {
         debugPrint('Platform is Web, starting download...');
         final response = await http.get(Uri.parse(url));
@@ -428,16 +373,177 @@ class _PDFViewWidgetState extends State<PDFViewWidget> {
           throw Exception('Failed to download file: ${response.statusCode}');
         }
         await downloadFileOnWeb(url, fileName, response.bodyBytes);
-        _showSuccessPopup('Downloaded: $fileName');
+        _showSuccessPopup('Downloaded');
         return;
       }
 
-      // For other mobile platforms, use the standard action
-      await actions.downloadPDFFile(context, url, true, false);
+      // macOS - Handle separately
+      if (Platform.isMacOS) {
+        debugPrint('Platform is macOS, starting download...');
+        try {
+          // Sanitize filename
+          String safeFileName = fileName;
+          safeFileName = safeFileName.replaceAll('/', '_').replaceAll('\\', '_');
+          safeFileName = safeFileName.split('/').last.split('\\').last;
+
+          // Download the file first
+          debugPrint('Downloading from URL: $url');
+          final response = await http.get(Uri.parse(url));
+          debugPrint('Download response status: ${response.statusCode}');
+
+          if (response.statusCode != 200) {
+            throw Exception('Failed to download file: ${response.statusCode}');
+          }
+
+          // Use file_picker's saveFile to handle macOS sandboxing properly
+          final result = await FilePicker.platform.saveFile(
+            dialogTitle: 'Save File',
+            fileName: safeFileName,
+            type: FileType.custom,
+            allowedExtensions: ['pdf'],
+          );
+
+          if (result != null && result.isNotEmpty) {
+            try {
+              final file = File(result);
+              await file.writeAsBytes(response.bodyBytes);
+              debugPrint('File saved successfully to: $result');
+
+              // Reveal in Finder
+              try {
+                await Process.run('open', ['-R', result]);
+                _showSuccessPopup('Downloaded');
+              } catch (e) {
+                debugPrint('Error revealing file in Finder: $e');
+                _showSuccessPopup('File saved');
+              }
+            } catch (e) {
+              debugPrint('Error saving file: $e');
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(content: Text('Error saving file: $e'), backgroundColor: Colors.red),
+              );
+            }
+          }
+        } catch (e) {
+          debugPrint('Error during download: $e');
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Error downloading file: $e'), backgroundColor: Colors.red),
+          );
+        }
+        return;
+      }
+
+      // For mobile platforms (Android/iOS)
+      // iOS: Use FilePicker to save to Files app
+      if (Platform.isIOS) {
+        try {
+          // Sanitize filename
+          String safeFileName = fileName;
+          safeFileName =
+              safeFileName.replaceAll('/', '_').replaceAll('\\', '_');
+          safeFileName = safeFileName.split('/').last.split('\\').last;
+          
+          // Ensure filename has .pdf extension
+          if (!safeFileName.toLowerCase().endsWith('.pdf')) {
+            safeFileName = '$safeFileName.pdf';
+          }
+
+          // Download the file first
+          final response = await http.get(Uri.parse(url));
+          if (response.statusCode != 200) {
+            throw Exception('Failed to download file: ${response.statusCode}');
+          }
+
+          // Use FilePicker to save file (this makes it accessible in Files app)
+          // On iOS/Android, bytes parameter is required
+          final result = await FilePicker.platform.saveFile(
+            dialogTitle: 'Save File',
+            fileName: safeFileName,
+            type: FileType.custom,
+            allowedExtensions: ['pdf'],
+            bytes: response.bodyBytes, // Required on iOS/Android
+          );
+
+          if (result != null && result.isNotEmpty) {
+            debugPrint('File saved successfully to: $result');
+            _showSuccessPopup('Downloaded');
+          } else {
+            debugPrint('User cancelled file save dialog');
+          }
+        } catch (e) {
+          debugPrint('Error during download: $e');
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Error downloading file: $e'),
+              backgroundColor: Colors.red,
+              duration: const Duration(seconds: 3),
+            ),
+          );
+        }
+        return;
+      }
+
+      // For Android
+      if (Platform.isAndroid) {
+        // Request storage permission
+        try {
+          var status = await Permission.storage.status;
+          if (!status.isGranted) {
+            status = await Permission.storage.request();
+            if (!status.isGranted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content:
+                      Text('Storage permission is required to download files'),
+                  backgroundColor: Colors.red,
+                ),
+              );
+              return;
+            }
+          }
+        } catch (e) {
+          // Permission handler not available
+          // Continue without permission check
+        }
+
+        // Download the file
+        final response = await http.get(Uri.parse(url));
+        if (response.statusCode == 200) {
+          // Get the downloads directory
+          Directory? directory;
+          directory = Directory('/storage/emulated/0/Download');
+          if (!await directory.exists()) {
+            directory = await getExternalStorageDirectory();
+          }
+
+          if (directory != null) {
+            // Create unique filename if file already exists
+            String finalFileName = fileName;
+            int counter = 1;
+            while (await File('${directory.path}/$finalFileName').exists()) {
+              final extension = fileName.split('.').last;
+              final nameWithoutExtension = fileName.replaceAll('.$extension', '');
+              finalFileName = '${nameWithoutExtension}_$counter.$extension';
+              counter++;
+            }
+
+            final file = File('${directory.path}/$finalFileName');
+            await file.writeAsBytes(response.bodyBytes);
+
+            _showSuccessPopup('Downloaded');
+          }
+        } else {
+          throw Exception('Failed to download file: ${response.statusCode}');
+        }
+      }
     } catch (e) {
       debugPrint('Error downloading file: $e');
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error downloading file: $e'), backgroundColor: Colors.red),
+        SnackBar(
+          content: Text('Error downloading file: $e'),
+          backgroundColor: Colors.red,
+          duration: const Duration(seconds: 3),
+        ),
       );
     }
   }

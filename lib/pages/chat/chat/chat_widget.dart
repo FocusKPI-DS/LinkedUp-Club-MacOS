@@ -42,6 +42,10 @@ class _ChatWidgetState extends State<ChatWidget> with TickerProviderStateMixin {
 
   final animationsMap = <String, AnimationInfo>{};
 
+  // Blocked users state (UID based)
+  Set<String> _blockedUserIds = {};
+  StreamSubscription? _blockedUsersSubscription;
+
   @override
   void initState() {
     super.initState();
@@ -169,12 +173,31 @@ class _ChatWidgetState extends State<ChatWidget> with TickerProviderStateMixin {
       ),
     });
 
-    WidgetsBinding.instance.addPostFrameCallback((_) => safeSetState(() {}));
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      safeSetState(() {});
+      // Listen to blocked users for real-time filtering (UID based)
+      print('Debug: Initializing blocked user listener in ChatWidget. CurrentUserRef: $currentUserReference');
+      _blockedUsersSubscription = BlockedUsersRecord.collection
+          .where('blocker_user', isEqualTo: currentUserReference)
+          .snapshots()
+          .listen((snapshot) {
+        setState(() {
+          _blockedUserIds = snapshot.docs
+              .map((doc) => BlockedUsersRecord.fromSnapshot(doc).blockedUser?.id)
+              .whereType<String>()
+              .toSet();
+          print('Debug: ChatWidget (List) updated blocked IDs to: $_blockedUserIds');
+        });
+      }, onError: (e) {
+        print('Debug: Error in ChatWidget blocked user listener: $e');
+      });
+    });
   }
 
   @override
   void dispose() {
     _model.dispose();
+    _blockedUsersSubscription?.cancel();
 
     super.dispose();
   }
@@ -190,6 +213,7 @@ class _ChatWidgetState extends State<ChatWidget> with TickerProviderStateMixin {
           'members',
           arrayContains: currentUserReference,
         );
+        debugPrint('🔍 Querying chats where user is member: ${currentUserReference?.path}');
         return query;
       },
     );
@@ -211,6 +235,17 @@ class _ChatWidgetState extends State<ChatWidget> with TickerProviderStateMixin {
             final List<ChatsRecord> allChats = [];
             if (regularSnapshot.hasData) {
               allChats.addAll(regularSnapshot.data!);
+              debugPrint('🔍 Regular chats loaded: ${regularSnapshot.data!.length}');
+              // Debug: Find "Lets Gooo" group
+              final letsGoGroup = regularSnapshot.data!.where((c) => 
+                c.title.toLowerCase().contains('lets go') || 
+                c.title.toLowerCase().contains('let\'s go')
+              ).toList();
+              if (letsGoGroup.isNotEmpty) {
+                debugPrint('🔍 FOUND "Lets Gooo" group! Title: "${letsGoGroup.first.title}", isGroup: ${letsGoGroup.first.isGroup}, members: ${letsGoGroup.first.members.length}');
+              } else {
+                debugPrint('🔍 "Lets Gooo" group NOT found in regular chats query results');
+              }
             }
             if (serviceSnapshot.hasData) {
               // Remove duplicates by reference path
@@ -330,6 +365,13 @@ class _ChatWidgetState extends State<ChatWidget> with TickerProviderStateMixin {
     // Use sortedChats which is already sorted by last_message_at (handles null values)
     List<ChatsRecord> allChats = sortedChats;
     List<ChatsRecord> chatChatsRecordList = allChats.where((chat) {
+      // Filter out chats with blocked users (UID based)
+      // Check if any member (other than current user) is in the blocked list
+      if (chat.members.any((member) =>
+          member != currentUserReference && _blockedUserIds.contains(member.id))) {
+        return false;
+      }
+
       // Always show service chats regardless of workspace
       if (chat.isServiceChat == true) {
         return true;
@@ -345,6 +387,52 @@ class _ChatWidgetState extends State<ChatWidget> with TickerProviderStateMixin {
       // Show legacy chats without workspace_ref
       return true;
     }).toList();
+    
+    // Debug: Log all groups to help diagnose missing groups
+    debugPrint('🔍 All chats after filtering: ${chatChatsRecordList.length}');
+    final allGroups = chatChatsRecordList.where((e) => e.isGroup == true).toList();
+    debugPrint('🔍 All groups found: ${allGroups.length}');
+    
+    // Specifically search for "Lets Gooo" group
+    final letsGoGroups = chatChatsRecordList.where((e) => 
+      e.title.toLowerCase().contains('lets go') || 
+      e.title.toLowerCase().contains('let\'s go') ||
+      e.title.toLowerCase().contains('let\'s gooo') ||
+      e.title.toLowerCase().contains('lets gooo')
+    ).toList();
+    
+    if (letsGoGroups.isNotEmpty) {
+      debugPrint('🔍 ✅ FOUND "Lets Gooo" group in filtered list!');
+      for (var group in letsGoGroups) {
+        debugPrint('  - Title: "${group.title}"');
+        debugPrint('    isGroup: ${group.isGroup}');
+        debugPrint('    isPin: ${group.isPin}');
+        debugPrint('    lastMessageAt: ${group.lastMessageAt}');
+        debugPrint('    lastMessage: "${group.lastMessage}"');
+        debugPrint('    workspaceRef: ${group.workspaceRef?.path}');
+        debugPrint('    members count: ${group.members.length}');
+      }
+    } else {
+      debugPrint('🔍 ❌ "Lets Gooo" group NOT found in filtered chat list!');
+      debugPrint('   Checking all chats before filtering...');
+      final allGroupsBeforeFilter = allChats.where((e) => 
+        (e.title.toLowerCase().contains('lets go') || 
+         e.title.toLowerCase().contains('let\'s go'))
+      ).toList();
+      if (allGroupsBeforeFilter.isNotEmpty) {
+        debugPrint('   ✅ Found in allChats before filtering!');
+        for (var group in allGroupsBeforeFilter) {
+          debugPrint('     - "${group.title}" - Filtered out? Checking workspace...');
+          debugPrint('       workspaceRef: ${group.workspaceRef?.path}, current workspace: ${workspaceRef?.path}');
+        }
+      } else {
+        debugPrint('   ❌ Not found in allChats either - might not be in query results');
+      }
+    }
+    
+    for (var group in allGroups) {
+      debugPrint('  - "${group.title}" (isGroup: ${group.isGroup}, isPin: ${group.isPin}, lastMessageAt: ${group.lastMessageAt}, lastMessage: "${group.lastMessage}", workspaceRef: ${group.workspaceRef?.path})');
+    }
 
     return GestureDetector(
       onTap: () {
@@ -716,11 +804,16 @@ class _ChatWidgetState extends State<ChatWidget> with TickerProviderStateMixin {
                                                                       e.isPin ==
                                                                       true)
                                                                   .toList()
-                                                                  .sortedList(
-                                                                      keyOf: (e) =>
-                                                                          e.lastMessageAt!,
-                                                                      desc: true)
-                                                                  .toList();
+                                                                  ..sort((a, b) {
+                                                                    final aTime = a.lastMessageAt;
+                                                                    final bTime = b.lastMessageAt;
+                                                                    // Handle null values - put nulls at the end
+                                                                    if (aTime == null && bTime == null) return 0;
+                                                                    if (aTime == null) return 1; // a goes after b
+                                                                    if (bTime == null) return -1; // b goes after a
+                                                                    // Both have values, sort descending (newest first)
+                                                                    return bTime.compareTo(aTime);
+                                                                  });
 
                                                           return Column(
                                                             mainAxisSize:
@@ -1419,11 +1512,16 @@ class _ChatWidgetState extends State<ChatWidget> with TickerProviderStateMixin {
                                                                       e.isPin ==
                                                                       false)
                                                                   .toList()
-                                                                  .sortedList(
-                                                                      keyOf: (e) =>
-                                                                          e.lastMessageAt!,
-                                                                      desc: true)
-                                                                  .toList();
+                                                                  ..sort((a, b) {
+                                                                    final aTime = a.lastMessageAt;
+                                                                    final bTime = b.lastMessageAt;
+                                                                    // Handle null values - put nulls at the end
+                                                                    if (aTime == null && bTime == null) return 0;
+                                                                    if (aTime == null) return 1; // a goes after b
+                                                                    if (bTime == null) return -1; // b goes after a
+                                                                    // Both have values, sort descending (newest first)
+                                                                    return bTime.compareTo(aTime);
+                                                                  });
 
                                                           return Column(
                                                             mainAxisSize:
@@ -2109,11 +2207,16 @@ class _ChatWidgetState extends State<ChatWidget> with TickerProviderStateMixin {
                                                                 (e.isGroup ==
                                                                     false))
                                                             .toList()
-                                                            .sortedList(
-                                                                keyOf: (e) => e
-                                                                    .lastMessageAt!,
-                                                                desc: true)
-                                                            .toList();
+                                                            ..sort((a, b) {
+                                                              final aTime = a.lastMessageAt;
+                                                              final bTime = b.lastMessageAt;
+                                                              // Handle null values - put nulls at the end
+                                                              if (aTime == null && bTime == null) return 0;
+                                                              if (aTime == null) return 1; // a goes after b
+                                                              if (bTime == null) return -1; // b goes after a
+                                                              // Both have values, sort descending (newest first)
+                                                              return bTime.compareTo(aTime);
+                                                            });
 
                                                     return Column(
                                                       mainAxisSize:
@@ -2591,11 +2694,16 @@ class _ChatWidgetState extends State<ChatWidget> with TickerProviderStateMixin {
                                                                     (e.isGroup ==
                                                                         false))
                                                                 .toList()
-                                                                .sortedList(
-                                                                    keyOf: (e) =>
-                                                                        e.lastMessageAt!,
-                                                                    desc: true)
-                                                                .toList();
+                                                                ..sort((a, b) {
+                                                                  final aTime = a.lastMessageAt;
+                                                                  final bTime = b.lastMessageAt;
+                                                                  // Handle null values - put nulls at the end
+                                                                  if (aTime == null && bTime == null) return 0;
+                                                                  if (aTime == null) return 1; // a goes after b
+                                                                  if (bTime == null) return -1; // b goes after a
+                                                                  // Both have values, sort descending (newest first)
+                                                                  return bTime.compareTo(aTime);
+                                                                });
 
                                                         return Column(
                                                           mainAxisSize:
@@ -3201,11 +3309,16 @@ class _ChatWidgetState extends State<ChatWidget> with TickerProviderStateMixin {
                                                                 (e.isGroup ==
                                                                     true))
                                                             .toList()
-                                                            .sortedList(
-                                                                keyOf: (e) => e
-                                                                    .lastMessageAt!,
-                                                                desc: true)
-                                                            .toList();
+                                                            ..sort((a, b) {
+                                                              final aTime = a.lastMessageAt;
+                                                              final bTime = b.lastMessageAt;
+                                                              // Handle null values - put nulls at the end
+                                                              if (aTime == null && bTime == null) return 0;
+                                                              if (aTime == null) return 1; // a goes after b
+                                                              if (bTime == null) return -1; // b goes after a
+                                                              // Both have values, sort descending (newest first)
+                                                              return bTime.compareTo(aTime);
+                                                            });
 
                                                     return Column(
                                                       mainAxisSize:
@@ -3629,11 +3742,22 @@ class _ChatWidgetState extends State<ChatWidget> with TickerProviderStateMixin {
                                                                     (e.isGroup ==
                                                                         true))
                                                                 .toList()
-                                                                .sortedList(
-                                                                    keyOf: (e) =>
-                                                                        e.lastMessageAt!,
-                                                                    desc: true)
-                                                                .toList();
+                                                                ..sort((a, b) {
+                                                                  final aTime = a.lastMessageAt;
+                                                                  final bTime = b.lastMessageAt;
+                                                                  // Handle null values - put nulls at the end
+                                                                  if (aTime == null && bTime == null) return 0;
+                                                                  if (aTime == null) return 1; // a goes after b
+                                                                  if (bTime == null) return -1; // b goes after a
+                                                                  // Both have values, sort descending (newest first)
+                                                                  return bTime.compareTo(aTime);
+                                                                });
+                                                        
+                                                        // Debug: Log all groups to help diagnose missing groups
+                                                        debugPrint('🔍 Groups found: ${chatVar.length}');
+                                                        for (var group in chatVar) {
+                                                          debugPrint('  - ${group.title} (isGroup: ${group.isGroup}, lastMessageAt: ${group.lastMessageAt}, lastMessage: ${group.lastMessage})');
+                                                        }
 
                                                         return Column(
                                                           mainAxisSize:

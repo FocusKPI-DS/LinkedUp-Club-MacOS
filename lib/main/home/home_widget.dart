@@ -8,12 +8,15 @@ import '/flutter_flow/flutter_flow_util.dart';
 import '/custom_code/widgets/summerai_todos.dart';
 import '/custom_code/widgets/todays_calendar_events.dart';
 import '/custom_code/widgets/task_stats.dart';
+import '/custom_code/widgets/productivity_trend_chart.dart';
 import 'dart:async';
+import 'dart:io' show Platform;
 import 'dart:ui';
 import '/actions/actions.dart' as action_blocks;
 import '/custom_code/actions/index.dart' as actions;
 import '/flutter_flow/permissions_util.dart';
 import 'package:flutter/cupertino.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
@@ -157,138 +160,160 @@ class _HomeWidgetState extends State<HomeWidget> with TickerProviderStateMixin {
     super.dispose();
   }
 
+  // Helper method to detect if we're on mobile (iOS or mobile web)
+  bool _isMobile(BuildContext context) {
+    if (kIsWeb) {
+      // Check if web is mobile by screen width
+      final screenWidth = MediaQuery.of(context).size.width;
+      return screenWidth < 768; // Mobile web threshold
+    }
+    // Native iOS or Android
+    return !kIsWeb && (Platform.isIOS || Platform.isAndroid);
+  }
+
+
   @override
   Widget build(BuildContext context) {
     context.watch<FFAppState>();
+    
+    final isMobile = _isMobile(context);
 
-    return GestureDetector(
-      onTap: () => FocusScope.of(context).unfocus(),
-      child: Scaffold(
-        key: scaffoldKey,
-        backgroundColor: Color(
-            0xFFF8FAFF), // Subtle white tinted with blue (Color(0xFF2563EB))
-        body: SafeArea(
-          top: true,
-          child: Stack(
-            clipBehavior: Clip.none,
-            children: [
-              SingleChildScrollView(
-                child: Padding(
-                  padding: const EdgeInsetsDirectional.fromSTEB(
-                      32.0, 32.0, 32.0, 32.0),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      // Header Section
-                      _buildHeaderSection(context),
+    return NotificationListener<ScrollNotification>(
+      onNotification: (ScrollNotification notification) {
+        // Absorb all scroll notifications to prevent tab bar from minimizing/blurring
+        return true;
+      },
+      child: GestureDetector(
+        onTap: () => FocusScope.of(context).unfocus(),
+        child: Scaffold(
+          key: scaffoldKey,
+          backgroundColor: const Color(0xFFF8FAFC), // Premium light gray background
+          body: SafeArea(
+            top: true,
+            child: Stack(
+              clipBehavior: Clip.none,
+              children: [
+                SingleChildScrollView(
+                  child: Padding(
+                    padding: EdgeInsetsDirectional.fromSTEB(
+                      isMobile ? 20.0 : 40.0,
+                      isMobile ? 24.0 : 40.0,
+                      isMobile ? 20.0 : 40.0,
+                      isMobile ? 24.0 : 40.0,
+                    ),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // Header Section
+                        _buildHeaderSection(context, isMobile),
 
-                      const SizedBox(height: 32),
+                        SizedBox(height: isMobile ? 24.0 : 40.0),
 
-                      // Two-column layout with equal heights
-                      IntrinsicHeight(
-                        child: Row(
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
-                          children: [
-                            // Left Column
-                            Expanded(
-                              child: Column(
-                                mainAxisSize: MainAxisSize.min,
-                                crossAxisAlignment: CrossAxisAlignment.stretch,
-                                children: [
-                                  // Today's Schedule Card
-                                  _buildTodaysCalendarSection(context),
+                        // Conditional layout based on platform
+                        if (isMobile)
+                          // Mobile: Single column layout
+                          _buildMobileLayout(context)
+                        else
+                          // Desktop: Two-column layout
+                          _buildDesktopLayout(context),
 
-                                  const SizedBox(height: 24),
-
-                                  // Task Stats Section - will expand to match right column
-                                  const Expanded(
-                                    child: TaskStats(),
-                                  ),
-                                ],
-                              ),
-                            ),
-
-                            const SizedBox(width: 24),
-
-                            // Right Column
-                            Expanded(
-                              child: _buildSummerAITasksSection(context),
-                            ),
-                          ],
-                        ),
-                      ),
-
-                      // Bottom spacing
-                      const SizedBox(height: 40),
-                    ],
+                        // Bottom spacing
+                        SizedBox(height: isMobile ? 20.0 : 40.0),
+                      ],
+                    ),
                   ),
                 ),
-              ),
-              // Invite friends buttons in top right
-              Positioned(
-                top: 32,
-                right: 32,
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    LiquidStretch(
-                      stretch: 0.5,
-                      interactionScale: 1.05,
-                      child: GlassGlow(
-                        glowColor: Colors.white24,
-                        glowRadius: 1.0,
-                        child: AdaptiveFloatingActionButton(
-                          mini: true,
-                          backgroundColor: Colors.white,
-                          foregroundColor: Color(0xFF007AFF),
-                          onPressed: () => _showEmailInviteDialog(),
-                          child: Icon(
-                            CupertinoIcons.mail_solid,
-                            size: 17,
-                          ),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    LiquidStretch(
-                      stretch: 0.5,
-                      interactionScale: 1.05,
-                      child: GlassGlow(
-                        glowColor: Colors.white24,
-                        glowRadius: 1.0,
-                        child: AdaptiveFloatingActionButton(
-                          mini: true,
-                          backgroundColor: Colors.white,
-                          foregroundColor: Color(0xFF007AFF),
-                          onPressed: () => _showInviteDialog(context),
-                          child: Icon(
-                            CupertinoIcons.person_add_solid,
-                            size: 17,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),
     );
   }
 
-  Widget _buildHeaderSection(BuildContext context) {
+  // Mobile-optimized single column layout
+  Widget _buildMobileLayout(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        // Task Stats Section (compact for mobile)
+        const TaskStats(),
+        
+        const SizedBox(height: 20),
+        
+        // Today's Schedule Card
+        _buildTodaysCalendarSection(context),
+        
+        const SizedBox(height: 20),
+        
+        // Action Items Section
+        _buildSummerAITasksSection(context),
+        
+        const SizedBox(height: 20),
+        
+        // Productivity Trend Chart
+        const ProductivityTrendChart(),
+      ],
+    );
+  }
+
+  // Desktop two-column layout (original)
+  Widget _buildDesktopLayout(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        // Two-column section
+        IntrinsicHeight(
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              // Left Column
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    // Today's Schedule Card
+                    _buildTodaysCalendarSection(context),
+
+                    const SizedBox(height: 28),
+
+                    // Task Stats Section
+                    const TaskStats(),
+                  ],
+                ),
+              ),
+
+              const SizedBox(width: 28),
+
+              // Right Column - matches left column height
+              Expanded(
+                child: _buildSummerAITasksSection(context),
+              ),
+            ],
+          ),
+        ),
+        
+        const SizedBox(height: 28),
+        
+        // Productivity Trend Chart - Full Width
+        const ProductivityTrendChart(),
+      ],
+    );
+  }
+
+  Widget _buildHeaderSection(BuildContext context, bool isMobile) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        // Add top spacing
+        SizedBox(height: isMobile ? 20.0 : 32.0),
         if (currentUserReference != null)
           StreamBuilder<UsersRecord>(
             stream: UsersRecord.getDocument(currentUserReference!),
             builder: (context, snapshot) {
               if (!snapshot.hasData) {
-                return const SizedBox(height: 20);
+                return SizedBox(height: isMobile ? 10 : 20);
               }
 
               final user = snapshot.data!;
@@ -310,41 +335,88 @@ class _HomeWidgetState extends State<HomeWidget> with TickerProviderStateMixin {
               return Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text.rich(
-                    TextSpan(
-                      children: [
-                        TextSpan(
-                          text: '$greeting, ',
-                          style: const TextStyle(
+                  // First line: Greeting + Action buttons
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    children: [
+                      Expanded(
+                        child: Text(
+                          greeting,
+                          style: TextStyle(
                             fontFamily: '.SF Pro Display',
                             color: Color(0xFF1E293B),
-                            fontSize: 32,
-                            fontWeight: FontWeight.w700,
-                            letterSpacing: -0.5,
+                            fontSize: isMobile ? 30 : 32,
+                            fontWeight: FontWeight.w800,
+                            letterSpacing: isMobile ? -0.4 : -0.5,
                           ),
                         ),
-                        TextSpan(
-                          text: userName,
-                          style: const TextStyle(
-                            fontFamily: '.SF Pro Display',
-                            color: Color(0xFF2563EB),
-                            fontSize: 32,
-                            fontWeight: FontWeight.w700,
-                            letterSpacing: -0.5,
+                      ),
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          LiquidStretch(
+                            stretch: 0.5,
+                            interactionScale: 1.05,
+                            child: GlassGlow(
+                              glowColor: Colors.white24,
+                              glowRadius: 1.0,
+                              child: AdaptiveFloatingActionButton(
+                                mini: true,
+                                backgroundColor: Colors.white,
+                                foregroundColor: Color(0xFF007AFF),
+                                onPressed: () => _showEmailInviteDialog(),
+                                child: Icon(
+                                  CupertinoIcons.mail_solid,
+                                  size: isMobile ? 16 : 17,
+                                ),
+                              ),
+                            ),
                           ),
-                        ),
-                      ],
+                          SizedBox(width: isMobile ? 8.0 : 12.0),
+                          LiquidStretch(
+                            stretch: 0.5,
+                            interactionScale: 1.05,
+                            child: GlassGlow(
+                              glowColor: Colors.white24,
+                              glowRadius: 1.0,
+                              child: AdaptiveFloatingActionButton(
+                                mini: true,
+                                backgroundColor: Colors.white,
+                                foregroundColor: Color(0xFF007AFF),
+                                onPressed: () => _showInviteDialog(context),
+                                child: Icon(
+                                  CupertinoIcons.person_add_solid,
+                                  size: isMobile ? 16 : 17,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                  SizedBox(height: isMobile ? 4 : 6),
+                  // Second line: User's name
+                  Text(
+                    userName,
+                    style: TextStyle(
+                      fontFamily: '.SF Pro Display',
+                      color: Color(0xFF2563EB),
+                      fontSize: isMobile ? 30 : 32,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: isMobile ? -0.4 : -0.5,
                     ),
                   ),
-                  const SizedBox(height: 8),
-                  const Text(
+                  SizedBox(height: isMobile ? 6 : 8),
+                  Text(
                     "Here's your command center for today.",
                     style: TextStyle(
                       fontFamily: '.SF Pro Text',
                       color: Color(0xFF64748B),
-                      fontSize: 16,
-                      fontWeight: FontWeight.w400,
-                      letterSpacing: -0.2,
+                      fontSize: isMobile ? 16 : 16,
+                      fontWeight: FontWeight.w500,
+                      letterSpacing: isMobile ? -0.1 : -0.2,
                     ),
                   ),
                 ],
@@ -356,17 +428,28 @@ class _HomeWidgetState extends State<HomeWidget> with TickerProviderStateMixin {
   }
 
   Widget _buildTodaysCalendarSection(BuildContext context) {
+    final isMobile = _isMobile(context);
     return Container(
-      padding: const EdgeInsets.all(20),
+      padding: EdgeInsets.all(isMobile ? 20 : 24),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFFE5E7EB), width: 1),
+        borderRadius: BorderRadius.circular(isMobile ? 16 : 20),
+        border: Border.all(
+          color: const Color(0xFFE2E8F0),
+          width: 1,
+        ),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.04),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
+            color: const Color(0xFF0F172A).withOpacity(0.04),
+            blurRadius: isMobile ? 12 : 16,
+            offset: const Offset(0, 4),
+            spreadRadius: 0,
+          ),
+          BoxShadow(
+            color: const Color(0xFF0F172A).withOpacity(0.02),
+            blurRadius: isMobile ? 4 : 6,
+            offset: const Offset(0, 1),
+            spreadRadius: 0,
           ),
         ],
       ),
@@ -537,21 +620,41 @@ class _HomeWidgetState extends State<HomeWidget> with TickerProviderStateMixin {
   }
 
   Widget _buildSummerAITasksSection(BuildContext context) {
+    final isMobile = _isMobile(context);
+    // On mobile, set a fixed height to ensure the card fills properly
+    // Calculate based on screen height for iOS
+    final screenHeight = MediaQuery.of(context).size.height;
+    final cardHeight = isMobile 
+        ? (screenHeight * 0.5).clamp(400.0, 600.0) // 50% of screen, 400-600px
+        : null; // Desktop uses intrinsic height
+    
     return Container(
-      padding: const EdgeInsets.all(20),
+      // On mobile, use fixed height; on desktop, use intrinsic size
+      height: cardHeight,
+      padding: EdgeInsets.all(isMobile ? 20 : 24),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFFE5E7EB), width: 1),
+        borderRadius: BorderRadius.circular(isMobile ? 16 : 20),
+        border: Border.all(
+          color: const Color(0xFFE2E8F0),
+          width: 1,
+        ),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.04),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
+            color: const Color(0xFF0F172A).withOpacity(0.04),
+            blurRadius: isMobile ? 12 : 16,
+            offset: const Offset(0, 4),
+            spreadRadius: 0,
+          ),
+          BoxShadow(
+            color: const Color(0xFF0F172A).withOpacity(0.02),
+            blurRadius: isMobile ? 4 : 6,
+            offset: const Offset(0, 1),
+            spreadRadius: 0,
           ),
         ],
       ),
-      child: const SummerAITodos(),
+      child: SummerAITodos(isMobile: isMobile),
     );
   }
 }

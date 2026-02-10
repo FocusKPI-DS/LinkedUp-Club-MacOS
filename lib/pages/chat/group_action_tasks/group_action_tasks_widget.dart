@@ -635,7 +635,10 @@ class _GroupActionTasksWidgetState extends State<GroupActionTasksWidget> {
           _completingTasks[taskId] = null; // use indeterminate bar
         });
 
-        await todo.reference.update({'status': 'completed'});
+        await todo.reference.update({
+          'status': 'completed',
+          'completed_time': FieldValue.serverTimestamp(),
+        });
 
         if (mounted) {
           setState(() {
@@ -649,7 +652,10 @@ class _GroupActionTasksWidgetState extends State<GroupActionTasksWidget> {
         setState(() {
           _pendingStatusChange[taskId] = 'pending';
         });
-        await todo.reference.update({'status': 'pending'});
+        await todo.reference.update({
+          'status': 'pending',
+          'completed_time': null,
+        });
 
         if (mounted) {
           setState(() {

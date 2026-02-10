@@ -362,6 +362,7 @@ class _MobileGroupMediaWidgetState
                 allowRotation: false,
                 tag: imageUrl,
                 useHeroAnimation: true,
+                imageUrl: imageUrl,
               ),
             ),
           );

@@ -39,109 +39,73 @@ Future<UserCredential?> googleSignInFunc() async {
   // On macOS, Google Sign-In can have keychain issues
   if (!kIsWeb && Platform.isMacOS) {
     try {
-      // Try silent sign-in first to avoid unnecessary sign-out
-      // This prevents conflicts with Gmail OAuth
+      // Always sign out first to clear cached account and show account picker
+      // This ensures users can choose their account instead of auto-signing in
       GoogleSignInAccount? googleUser;
+      
+      // Sign out to clear any cached account
       try {
-        googleUser = await _googleSignIn.signInSilently();
-        if (googleUser != null) {
-          // We have a cached user, try to use their credentials
-          final GoogleSignInAuthentication googleAuth =
-              await googleUser.authentication;
-
-          final credential = GoogleAuthProvider.credential(
-            accessToken: googleAuth.accessToken,
-            idToken: googleAuth.idToken,
-          );
-
-          // Try to sign in with existing credentials
-          try {
-            return await FirebaseAuth.instance.signInWithCredential(credential);
-          } catch (e) {
-            // If that fails, the credentials might be stale, continue with fresh sign-in
-            print(
-                'Sign-in with cached credentials failed, trying fresh sign-in: $e');
-            await signOutWithGoogle().catchError((_) => null);
-            googleUser = null; // Reset to force fresh sign-in
-          }
-        }
+        await signOutWithGoogle();
       } catch (e) {
-        // Silent sign-in failed, this is normal if no cached user
-        print('Silent sign-in failed (this is normal): $e');
-        // Only sign out if there's an actual error, not just no cached user
-        if (e.toString().contains('sign_in_required') == false &&
-            e.toString().contains('SignInRequiredException') == false) {
-          await signOutWithGoogle().catchError((_) => null);
+        // Ignore errors from sign out - it might fail if not signed in
+        print('Sign out before sign-in (this is normal): $e');
+      }
+
+      // Wait a brief moment to ensure keychain state is cleared
+      await Future.delayed(const Duration(milliseconds: 200));
+
+      // Always show account picker - don't use silent sign-in
+      // For macOS, we need to ensure GIDSignIn is properly configured
+      print('Attempting Google Sign-In on macOS...');
+
+      // Try sign-in with retry logic for keychain errors
+      int maxRetries = 2;
+      int retryCount = 0;
+
+      while (retryCount <= maxRetries && googleUser == null) {
+        try {
+          googleUser = await _googleSignIn.signIn();
+          break; // Success, exit loop
+        } catch (signInError) {
+          // Check if it's a keychain/GIDSignIn error
+          final isKeychainError =
+              signInError.toString().contains('GIDSignIn') ||
+                  signInError.toString().contains('com.google.GIDSignIn') ||
+                  signInError.toString().contains('keychain');
+
+          if (isKeychainError && retryCount < maxRetries) {
+            retryCount++;
+            print(
+                'GIDSignIn/keychain error detected (attempt $retryCount/$maxRetries), attempting recovery...');
+
+            // Reset the instance and try again
+            _resetGoogleSignInInstance();
+            try {
+              await signOutWithGoogle();
+            } catch (_) {
+              // Ignore sign out errors
+            }
+
+            // Wait longer between retries
+            await Future.delayed(Duration(milliseconds: 500 * retryCount));
+          } else {
+            // Not a keychain error, or max retries reached
+            if (isKeychainError) {
+              print('Keychain error persists after $maxRetries retries');
+              print('This may indicate:');
+              print('1. App needs to be properly code-signed');
+              print('2. Keychain access permissions need to be granted');
+              print(
+                  '3. Try restarting the app or signing out from System Preferences > Internet Accounts');
+            }
+            rethrow;
+          }
         }
       }
 
-      // If we don't have a user yet, attempt fresh Google Sign-In
       if (googleUser == null) {
-        // For macOS, we need to ensure GIDSignIn is properly configured
-        // The AppDelegate should have configured it, but we'll try anyway
-        print('Attempting Google Sign-In on macOS...');
-
-        // Clear any potentially corrupted state before attempting sign-in
-        // This helps resolve conflicts with Gmail OAuth
-        try {
-          await signOutWithGoogle();
-        } catch (e) {
-          // Ignore errors from sign out - it might fail if not signed in
-          print('Sign out before sign-in (this is normal): $e');
-        }
-
-        // Wait a brief moment to ensure keychain state is cleared
-        await Future.delayed(const Duration(milliseconds: 200));
-
-        // Try sign-in with retry logic for keychain errors
-        int maxRetries = 2;
-        int retryCount = 0;
-
-        while (retryCount <= maxRetries && googleUser == null) {
-          try {
-            googleUser = await _googleSignIn.signIn();
-            break; // Success, exit loop
-          } catch (signInError) {
-            // Check if it's a keychain/GIDSignIn error
-            final isKeychainError =
-                signInError.toString().contains('GIDSignIn') ||
-                    signInError.toString().contains('com.google.GIDSignIn') ||
-                    signInError.toString().contains('keychain');
-
-            if (isKeychainError && retryCount < maxRetries) {
-              retryCount++;
-              print(
-                  'GIDSignIn/keychain error detected (attempt $retryCount/$maxRetries), attempting recovery...');
-
-              // Reset the instance and try again
-              _resetGoogleSignInInstance();
-              try {
-                await signOutWithGoogle();
-              } catch (_) {
-                // Ignore sign out errors
-              }
-
-              // Wait longer between retries
-              await Future.delayed(Duration(milliseconds: 500 * retryCount));
-            } else {
-              // Not a keychain error, or max retries reached
-              if (isKeychainError) {
-                print('Keychain error persists after $maxRetries retries');
-                print('This may indicate:');
-                print('1. App needs to be properly code-signed');
-                print('2. Keychain access permissions need to be granted');
-                print(
-                    '3. Try restarting the app or signing out from System Preferences > Internet Accounts');
-              }
-              rethrow;
-            }
-          }
-        }
-
-        if (googleUser == null) {
-          // User cancelled the sign-in
-          return null;
-        }
+        // User cancelled the sign-in
+        return null;
       }
 
       // Obtain the auth details from the request
@@ -178,56 +142,23 @@ Future<UserCredential?> googleSignInFunc() async {
 
   // iOS and Android: use native Google Sign-In
   try {
-    // Try silent sign-in first to avoid unnecessary sign-out
-    // This prevents conflicts with Gmail OAuth
-    GoogleSignInAccount? googleUser;
+    // Always sign out first to clear cached account and show account picker
+    // This ensures users can choose their account instead of auto-signing in
     try {
-      googleUser = await _googleSignIn.signInSilently();
-      if (googleUser != null) {
-        // We have a cached user, try to use their credentials
-        final GoogleSignInAuthentication googleAuth =
-            await googleUser.authentication;
-
-        final credential = GoogleAuthProvider.credential(
-          accessToken: googleAuth.accessToken,
-          idToken: googleAuth.idToken,
-        );
-
-        // Try to sign in with existing credentials
-        try {
-          return await FirebaseAuth.instance.signInWithCredential(credential);
-        } catch (e) {
-          // If that fails, the credentials might be stale, continue with fresh sign-in
-          print(
-              'Sign-in with cached credentials failed, trying fresh sign-in: $e');
-          await signOutWithGoogle().catchError((_) => null);
-          googleUser = null; // Reset to force fresh sign-in
-        }
-      }
+      await signOutWithGoogle();
     } catch (e) {
-      // Silent sign-in failed, this is normal if no cached user
-      print('Silent sign-in failed (this is normal): $e');
-      // Only sign out if there's an actual error, not just no cached user
-      if (e.toString().contains('sign_in_required') == false &&
-          e.toString().contains('SignInRequiredException') == false) {
-        await signOutWithGoogle().catchError((_) => null);
-      }
+      // Ignore errors from sign out - it might fail if not signed in
+      print('Sign out before sign-in (this is normal): $e');
     }
 
-    // If we don't have a user yet, attempt fresh Google Sign-In
-    if (googleUser == null) {
-      await signOutWithGoogle().catchError((_) => null);
-      final auth = await (await _googleSignIn.signIn())?.authentication;
-      if (auth == null) {
-        return null;
-      }
-      final credential = GoogleAuthProvider.credential(
-          idToken: auth.idToken, accessToken: auth.accessToken);
-      return await FirebaseAuth.instance.signInWithCredential(credential);
+    // Always show account picker - don't use silent sign-in
+    final auth = await (await _googleSignIn.signIn())?.authentication;
+    if (auth == null) {
+      return null; // User cancelled
     }
-
-    // Should not reach here, but just in case
-    return null;
+    final credential = GoogleAuthProvider.credential(
+        idToken: auth.idToken, accessToken: auth.accessToken);
+    return await FirebaseAuth.instance.signInWithCredential(credential);
   } catch (e) {
     print('Google Sign-In error: $e');
     // Re-throw to let the UI handle the error

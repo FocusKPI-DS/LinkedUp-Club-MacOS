@@ -178,6 +178,26 @@ service cloud.firestore {
       allow delete: if request.auth != null;
     }
 
+    // Blocked Users - users can only block/unblock as themselves
+    match /blocked_users/{document} {
+      // Allow create if the authenticated user is the blocker_user
+      // Users can only create block records where they are the blocker
+      allow create: if request.auth != null && 
+                    request.resource.data.blocker_user == /databases/$(database)/documents/users/$(request.auth.uid);
+      
+      // Allow read if the authenticated user is the blocker_user
+      // This works for both individual document reads and queries
+      allow read: if request.auth != null && 
+                  resource.data.blocker_user == /databases/$(database)/documents/users/$(request.auth.uid);
+      
+      // Allow delete if the authenticated user is the blocker_user (to unblock)
+      allow delete: if request.auth != null && 
+                    resource.data.blocker_user == /databases/$(database)/documents/users/$(request.auth.uid);
+      
+      // No updates allowed (blocking is a one-time action)
+      allow update: if false;
+    }
+
     // AI Assistant Conversations
     match /ai_assistant_conversations/{conversationId} {
       allow read, write: if request.auth != null 

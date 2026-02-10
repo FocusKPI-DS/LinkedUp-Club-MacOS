@@ -28,11 +28,10 @@ class AppUpdateService {
       if (latestVersion == null) {
         return null;
       }
-
+      
       // Compare versions
       return _isVersionNewer(latestVersion, currentVersion);
     } catch (e) {
-      print('Error checking for app update: $e');
       return null;
     }
   }

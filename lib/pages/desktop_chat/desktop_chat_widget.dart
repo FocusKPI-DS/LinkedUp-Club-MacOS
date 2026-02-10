@@ -1,5 +1,6 @@
 import '/auth/firebase_auth/auth_util.dart';
 import '/backend/backend.dart';
+import '/backend/schema/enums/enums.dart';
 import '/components/invite_friends_button_widget.dart';
 import '/flutter_flow/flutter_flow_animations.dart';
 import '/flutter_flow/flutter_flow_util.dart';
@@ -12,7 +13,6 @@ import '/pages/chat/group_action_tasks/group_action_tasks_widget.dart';
 import '/pages/chat/add_group_members/add_group_members_widget.dart';
 import '/pages/chat/group_chat_detail/group_media_links_docs_widget.dart';
 import '/pages/chat/all_pending_requests/all_pending_requests_widget.dart';
-import '/pages/chat/calling_screen/calling_screen_widget.dart';
 import '/pages/user_summary/user_summary_widget.dart';
 import 'dart:async';
 import 'dart:io';
@@ -2657,14 +2657,19 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
                   onSelected: (String value) {
                     if (value == 'profile') {
                       _viewUserProfile(chat);
-                    } else if (value == 'block') {
-                      _blockUser(chat);
+                    } else if (value == 'block_toggle') {
+                      _toggleBlockUser(chat);
                     } else if (value == 'group') {
                       _viewGroupChat(chat);
                     }
                   },
                   itemBuilder: (BuildContext context) {
                     // Direct chat options
+                    final otherUserRef = chat.members.firstWhere(
+                      (member) => member != currentUserReference,
+                      orElse: () => chat.members.first,
+                    );
+
                     return <PopupMenuEntry<String>>[
                       PopupMenuItem<String>(
                         value: 'profile',
@@ -2689,26 +2694,29 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
                         ),
                       ),
                       PopupMenuItem<String>(
-                        value: 'block',
-                        child: Row(
-                          children: [
-                            Icon(
-                              Icons.block,
-                              color: Color(0xFFDC2626),
-                              size: 18,
-                            ),
-                            SizedBox(width: 12),
-                            Text(
-                              'Block User',
-                              style: TextStyle(
-                                fontFamily: 'Inter',
-                                color: Color(0xFFDC2626),
-                                fontSize: 14,
-                                fontWeight: FontWeight.w500,
+                        value: 'block_toggle',
+                        child: Obx(() {
+                          final isBlockedNow = chatController.blockedUserIds.value.contains(otherUserRef.id);
+                          return Row(
+                            children: [
+                              Icon(
+                                isBlockedNow ? Icons.check_circle : Icons.block,
+                                color: isBlockedNow ? Color(0xFF10B981) : Color(0xFFDC2626),
+                                size: 18,
                               ),
-                            ),
-                          ],
-                        ),
+                              SizedBox(width: 12),
+                              Text(
+                                isBlockedNow ? 'Unblock User' : 'Block User',
+                                style: TextStyle(
+                                  fontFamily: 'Inter',
+                                  color: isBlockedNow ? Color(0xFF10B981) : Color(0xFFDC2626),
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                            ],
+                          );
+                        }),
                       ),
                     ];
                   },
@@ -3282,9 +3290,8 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
     }
   }
 
-  void _blockUser(ChatsRecord chat) async {
+  void _toggleBlockUser(ChatsRecord chat) async {
     if (chat.isGroup) {
-      // For group chats, show group info instead
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('Cannot block group chats'),
@@ -3294,109 +3301,107 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
       return;
     }
 
-    // For direct chats, get the other user and block them
     final otherUserRef = chat.members.firstWhere(
       (member) => member != currentUserReference,
       orElse: () => chat.members.first,
     );
 
+    final isBlocked = chatController.blockedUserIds.value.contains(otherUserRef.id);
+
     try {
       final user = await UsersRecord.getDocumentOnce(otherUserRef);
 
-      // Show confirmation dialog
-      final shouldBlock = await showDialog<bool>(
-        context: context,
-        builder: (BuildContext context) {
-          return AlertDialog(
-            backgroundColor: Color(0xFF2D3142),
-            title: Text(
-              'Block User',
-              style: TextStyle(
-                fontFamily: 'Inter',
-                color: Colors.white,
-                fontSize: 18,
-                fontWeight: FontWeight.w600,
+      if (isBlocked) {
+        // Unblock Logic
+        final shouldUnblock = await showDialog<bool>(
+          context: context,
+          builder: (BuildContext context) {
+            return AlertDialog(
+              backgroundColor: Color(0xFF2D3142),
+              title: Text(
+                'Unblock User',
+                style: TextStyle(fontFamily: 'Inter', color: Colors.white, fontSize: 18, fontWeight: FontWeight.w600),
               ),
-            ),
-            content: Text(
-              'Are you sure you want to block ${user.displayName}? You will no longer see their messages or be able to contact them.',
-              style: TextStyle(
-                fontFamily: 'Inter',
-                color: Color(0xFF9CA3AF),
-                fontSize: 14,
+              content: Text(
+                'Are you sure you want to unblock ${user.displayName}? You will be able to see their messages again.',
+                style: TextStyle(fontFamily: 'Inter', color: Color(0xFF9CA3AF), fontSize: 14),
               ),
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.of(context).pop(false),
-                child: Text(
-                  'Cancel',
-                  style: TextStyle(
-                    fontFamily: 'Inter',
-                    color: Color(0xFF9CA3AF),
-                  ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(context).pop(false),
+                  child: Text('Cancel', style: TextStyle(fontFamily: 'Inter', color: Color(0xFF9CA3AF))),
                 ),
-              ),
-              TextButton(
-                onPressed: () => Navigator.of(context).pop(true),
-                child: Text(
-                  'Block',
-                  style: TextStyle(
-                    fontFamily: 'Inter',
-                    color: Color(0xFFEF4444),
-                    fontWeight: FontWeight.w600,
-                  ),
+                TextButton(
+                  onPressed: () => Navigator.of(context).pop(true),
+                  child: Text('Unblock', style: TextStyle(fontFamily: 'Inter', color: Color(0xFF10B981), fontWeight: FontWeight.w600)),
                 ),
-              ),
-            ],
-          );
-        },
-      );
-
-      if (shouldBlock == true) {
-        // Create blocked user record
-        await BlockedUsersRecord.collection.add({
-          ...createBlockedUsersRecordData(
-            blockerUser: currentUserReference,
-            blockedUser: otherUserRef,
-            createdAt: getCurrentTimestamp,
-          ),
-        });
-
-        // Show success message
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('User has been blocked'),
-            backgroundColor: Color(0xFF10B981),
-          ),
+              ],
+            );
+          },
         );
+
+        if (shouldUnblock == true) {
+          final blockedRecords = await BlockedUsersRecord.collection
+              .where('blocker_user', isEqualTo: currentUserReference)
+              .where('blocked_user', isEqualTo: otherUserRef)
+              .get();
+
+          for (var doc in blockedRecords.docs) {
+            await doc.reference.delete();
+          }
+
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('User has been unblocked'), backgroundColor: Color(0xFF10B981)),
+          );
+        }
+      } else {
+        // Block Logic
+        final shouldBlock = await showDialog<bool>(
+          context: context,
+          builder: (BuildContext context) {
+            return AlertDialog(
+              backgroundColor: Color(0xFF2D3142),
+              title: Text(
+                'Block User',
+                style: TextStyle(fontFamily: 'Inter', color: Colors.white, fontSize: 18, fontWeight: FontWeight.w600),
+              ),
+              content: Text(
+                'Are you sure you want to block ${user.displayName}? You will no longer see their messages.',
+                style: TextStyle(fontFamily: 'Inter', color: Color(0xFF9CA3AF), fontSize: 14),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(context).pop(false),
+                  child: Text('Cancel', style: TextStyle(fontFamily: 'Inter', color: Color(0xFF9CA3AF))),
+                ),
+                TextButton(
+                  onPressed: () => Navigator.of(context).pop(true),
+                  child: Text('Block', style: TextStyle(fontFamily: 'Inter', color: Color(0xFFEF4444), fontWeight: FontWeight.w600)),
+                ),
+              ],
+            );
+          },
+        );
+
+        if (shouldBlock == true) {
+          await BlockedUsersRecord.collection.add({
+            ...createBlockedUsersRecordData(
+              blockerUser: currentUserReference,
+              blockedUser: otherUserRef,
+              createdAt: getCurrentTimestamp,
+            ),
+          });
+
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('User has been blocked'), backgroundColor: Color(0xFF10B981)),
+          );
+        }
       }
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Error blocking user'),
-          backgroundColor: Color(0xFFEF4444),
-        ),
+        SnackBar(content: Text('Error updating block status: $e'), backgroundColor: Color(0xFFEF4444)),
       );
     }
-  }
-
-  void _showCallingScreen(ChatsRecord chat, {required bool isVideoCall}) {
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      barrierColor: Colors.transparent,
-      builder: (context) => Dialog.fullscreen(
-        backgroundColor: Colors.transparent,
-        child: CallingScreenWidget(
-          chat: chat,
-          isVideoCall: isVideoCall,
-          onEndCall: () {
-            Navigator.of(context).pop();
-          },
-        ),
-      ),
-    );
   }
 
   void _viewGroupChat(ChatsRecord chat) async {
@@ -4188,7 +4193,87 @@ class _ChatListItemState extends State<_ChatListItem>
   }
 
   Widget _getLastMessagePreview(ChatsRecord chat, {bool isSelected = false}) {
+    // If lastMessage is empty, check lastMessageType to show appropriate preview
     if (chat.lastMessage.isEmpty) {
+      // Check if there's a message type (video, image, etc.)
+      if (chat.lastMessageType != null) {
+        String previewText = 'No messages';
+        switch (chat.lastMessageType) {
+          case MessageType.video:
+            previewText = '🎬 Video';
+            break;
+          case MessageType.image:
+            previewText = '📷 Photo';
+            break;
+          case MessageType.voice:
+            previewText = '🎤 Voice message';
+            break;
+          case MessageType.file:
+            previewText = '📎 File';
+            break;
+          case MessageType.text:
+          default:
+            previewText = 'No messages';
+            break;
+        }
+        
+        // For group chats, we might want to show sender name too
+        if (chat.isGroup && chat.lastMessageSent != null) {
+          return StreamBuilder<UsersRecord>(
+            stream: UsersRecord.getDocument(chat.lastMessageSent!),
+            builder: (context, snapshot) {
+              String prefix = '';
+              if (snapshot.hasData && snapshot.data != null) {
+                final senderName = snapshot.data!.displayName;
+                final firstName = senderName.split(' ').first;
+                if (chat.lastMessageSent == currentUserReference) {
+                  prefix = 'You: ';
+                } else {
+                  prefix = '$firstName: ';
+                }
+              }
+              return Text.rich(
+                TextSpan(
+                  children: [
+                    TextSpan(
+                      text: prefix,
+                      style: TextStyle(
+                        fontFamily: 'Inter',
+                        color: isSelected ? Color(0xFF6B7280) : Color(0xFF374151),
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    TextSpan(
+                      text: previewText,
+                      style: TextStyle(
+                        fontFamily: 'Inter',
+                        color: isSelected ? Color(0xFF9CA3AF) : Color(0xFF6B7280),
+                        fontSize: 12,
+                      ),
+                    ),
+                  ],
+                ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              );
+            },
+          );
+        }
+        
+        return Text(
+          previewText,
+          style: TextStyle(
+            fontFamily: 'Inter',
+            color: isSelected ? Color(0xFF9CA3AF) : Color(0xFF6B7280),
+            fontSize: 12,
+          ),
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+        );
+      }
+      
+      // No message type, show default
       return Text(
         'No messages',
         style: TextStyle(

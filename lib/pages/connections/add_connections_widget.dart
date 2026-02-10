@@ -2,6 +2,7 @@ import '/auth/firebase_auth/auth_util.dart';
 import '/backend/backend.dart';
 import '/flutter_flow/flutter_flow_util.dart';
 import '/pages/mobile_chat/mobile_chat_widget.dart';
+import '/pages/user_summary/user_summary_widget.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'dart:ui';
@@ -521,7 +522,7 @@ class _AddConnectionsWidgetState extends State<AddConnectionsWidget> {
                   maxCrossAxisExtent: 280,
                   crossAxisSpacing: 16,
                   mainAxisSpacing: 16,
-                  childAspectRatio: 1.05,
+                  childAspectRatio: 0.70,
                 ),
                 itemCount: sortedUsers.length,
                 itemBuilder: (context, index) {
@@ -1050,7 +1051,7 @@ class _AddConnectionsWidgetState extends State<AddConnectionsWidget> {
               maxCrossAxisExtent: 280,
               crossAxisSpacing: 16,
               mainAxisSpacing: 16,
-              childAspectRatio: 1.05,
+              childAspectRatio: 0.70,
             ),
             itemCount: filteredUsers.length + (_isLoadingMore ? 1 : 0),
             itemBuilder: (context, index) {
@@ -1090,7 +1091,13 @@ class _AddConnectionsWidgetState extends State<AddConnectionsWidget> {
     required bool isSentRequest,
   }) {
     final isLoading = _isOperationInProgress(user.reference.id);
-    final title = user.bio.isNotEmpty ? user.bio : user.email;
+    
+    // Set fixed character limit for bio/about text (45 characters)
+    final rawTitle = user.bio.isNotEmpty ? user.bio : user.email;
+    final title = rawTitle.length > 45 
+        ? '${rawTitle.substring(0, 42)}...' 
+        : rawTitle;
+    
     final mutualText = mutualConnections > 0
         ? mutualConnections == 1
             ? '1 mutual connection'
@@ -1098,52 +1105,65 @@ class _AddConnectionsWidgetState extends State<AddConnectionsWidget> {
         : '';
 
     return SelectionContainer.disabled(
-      child: Container(
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(16),
-          boxShadow: [
-            BoxShadow(
-              color: Color(0x0D000000),
-              blurRadius: 8,
-              offset: Offset(0, 2),
-              spreadRadius: 0,
+      child: GestureDetector(
+        onTap: () {
+          Navigator.push(
+            context,
+            CupertinoPageRoute(
+              builder: (context) => UserSummaryWidget(
+                userRef: user.reference,
+                isEditable: false,
+              ),
             ),
-          ],
-        ),
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(16),
-          child: Padding(
-            padding: EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-            child: Column(
+          );
+        },
+        child: Container(
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(16),
+            boxShadow: [
+              BoxShadow(
+                color: Color(0x0D000000),
+                blurRadius: 8,
+                offset: Offset(0, 2),
+                spreadRadius: 0,
+              ),
+            ],
+          ),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(16),
+            child: Padding(
+              padding: EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+              child: Column(
               crossAxisAlignment: CrossAxisAlignment.center,
               mainAxisSize: MainAxisSize.min,
+              mainAxisAlignment: MainAxisAlignment.start,
               children: [
                 // Profile picture - centered
                 Container(
-                  width: 56,
-                  height: 56,
+                  width: 80,
+                  height: 80,
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
                     border: Border.all(
                       color: Color(0xFFE5E7EB),
-                      width: 1.5,
+                      width: 2,
                     ),
                   ),
                   child: ClipRRect(
-                    borderRadius: BorderRadius.circular(28),
+                    borderRadius: BorderRadius.circular(40),
                     child: user.photoUrl.isNotEmpty
                         ? CachedNetworkImage(
                             imageUrl: user.photoUrl,
-                            width: 56,
-                            height: 56,
+                            width: 80,
+                            height: 80,
                             fit: BoxFit.cover,
-                            memCacheWidth: 112,
+                            memCacheWidth: 240,
                             fadeInDuration: Duration(milliseconds: 200),
                             fadeOutDuration: Duration(milliseconds: 100),
                             placeholder: (context, url) => Container(
-                              width: 56,
-                              height: 56,
+                              width: 80,
+                              height: 80,
                               decoration: BoxDecoration(
                                 color: Color(0xFFF9FAFB),
                                 shape: BoxShape.circle,
@@ -1151,7 +1171,7 @@ class _AddConnectionsWidgetState extends State<AddConnectionsWidget> {
                               child: Icon(
                                 CupertinoIcons.person_fill,
                                 color: Color(0xFF9CA3AF),
-                                size: 28,
+                                size: 40,
                               ),
                             ),
                             errorWidget: (context, url, error) =>
@@ -1160,7 +1180,7 @@ class _AddConnectionsWidgetState extends State<AddConnectionsWidget> {
                         : _buildInitialsAvatarSmall(user),
                   ),
                 ),
-                SizedBox(height: 8),
+                SizedBox(height: 10),
                 // Name
                 Padding(
                   padding: EdgeInsets.symmetric(horizontal: 8),
@@ -1170,7 +1190,7 @@ class _AddConnectionsWidgetState extends State<AddConnectionsWidget> {
                         : 'Unknown User',
                     style: TextStyle(
                       fontFamily: 'SF Pro Display',
-                      fontSize: 15,
+                      fontSize: 17,
                       fontWeight: FontWeight.w600,
                       letterSpacing: -0.3,
                       height: 1.2,
@@ -1182,19 +1202,20 @@ class _AddConnectionsWidgetState extends State<AddConnectionsWidget> {
                     overflow: TextOverflow.ellipsis,
                   ),
                 ),
-                SizedBox(height: 3),
-                // Title/Bio
-                Flexible(
+                SizedBox(height: 4),
+                // Title/Bio - Fixed height container to ensure consistent card height
+                Container(
+                  height: 34,
                   child: Padding(
                     padding: EdgeInsets.symmetric(horizontal: 8),
                     child: Text(
                       title,
                       style: TextStyle(
                         fontFamily: 'SF Pro Text',
-                        fontSize: 12,
+                        fontSize: 14,
                         fontWeight: FontWeight.w400,
                         letterSpacing: -0.1,
-                        height: 1.25,
+                        height: 1.3,
                         color: Color(0xFF6B7280),
                         decoration: TextDecoration.none,
                       ),
@@ -1204,10 +1225,11 @@ class _AddConnectionsWidgetState extends State<AddConnectionsWidget> {
                     ),
                   ),
                 ),
-                SizedBox(height: 6),
+                SizedBox(height: 5),
                 // Mutual connections
                 if (mutualText.isNotEmpty)
-                  Flexible(
+                  Container(
+                    height: 16,
                     child: Padding(
                       padding: EdgeInsets.symmetric(horizontal: 8),
                       child: Row(
@@ -1216,16 +1238,16 @@ class _AddConnectionsWidgetState extends State<AddConnectionsWidget> {
                         children: [
                           Icon(
                             CupertinoIcons.person_2_fill,
-                            size: 11,
+                            size: 13,
                             color: Color(0xFF9CA3AF),
                           ),
-                          SizedBox(width: 3),
+                          SizedBox(width: 4),
                           Flexible(
                             child: Text(
                               mutualText,
                               style: TextStyle(
                                 fontFamily: 'SF Pro Text',
-                                fontSize: 10,
+                                fontSize: 12,
                                 fontWeight: FontWeight.w400,
                                 letterSpacing: -0.1,
                                 height: 1.2,
@@ -1245,7 +1267,7 @@ class _AddConnectionsWidgetState extends State<AddConnectionsWidget> {
                 // Connect button or status
                 Container(
                   width: double.infinity,
-                  height: 30,
+                  height: 38,
                   decoration: BoxDecoration(
                     color: isConnected
                         ? Color(0xFFF3F4F6)
@@ -1284,7 +1306,7 @@ class _AddConnectionsWidgetState extends State<AddConnectionsWidget> {
                                         : 'Connect',
                                 style: TextStyle(
                                   fontFamily: 'SF Pro Text',
-                                  fontSize: 13,
+                                  fontSize: 15,
                                   fontWeight: FontWeight.w600,
                                   letterSpacing: -0.2,
                                   color: isConnected || isSentRequest
@@ -1300,6 +1322,7 @@ class _AddConnectionsWidgetState extends State<AddConnectionsWidget> {
               ],
             ),
           ),
+        ),
         ),
       ),
     );
@@ -1326,8 +1349,8 @@ class _AddConnectionsWidgetState extends State<AddConnectionsWidget> {
     final colorIndex = user.displayName.hashCode.abs() % colors.length;
 
     return Container(
-      width: 56,
-      height: 56,
+      width: 80,
+      height: 80,
       decoration: BoxDecoration(
         color: colors[colorIndex],
         shape: BoxShape.circle,
@@ -1338,7 +1361,7 @@ class _AddConnectionsWidgetState extends State<AddConnectionsWidget> {
             initials.toUpperCase(),
             style: TextStyle(
               color: Colors.white,
-              fontSize: 22,
+              fontSize: 32,
               fontWeight: FontWeight.w600,
               letterSpacing: 0.5,
               decoration: TextDecoration.none,

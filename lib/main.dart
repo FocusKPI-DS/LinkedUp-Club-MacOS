@@ -223,11 +223,81 @@ void _initializePushNotificationsAsync() async {
   if (kIsWeb) {
     try {
       // Listen for foreground FCM messages (when tab is open)
-      FirebaseMessaging.onMessage.listen((RemoteMessage message) {
+      FirebaseMessaging.onMessage.listen((RemoteMessage message) async {
         print('🔔 [WEB] FOREGROUND FCM NOTIFICATION RECEIVED!');
         print('   Title: ${message.notification?.title}');
         print('   Body: ${message.notification?.body}');
-        print('   Data: ${message.data}');
+        print('   Data Keys: ${message.data.keys.toList()}');
+        print('   Raw Data: ${message.data}');
+        print('   Sender Ref: ${message.data['sender_ref']}');
+
+        // Check if sender is blocked
+        if (currentUserReference != null) {
+           try {
+              String? senderId;
+
+              // 1. Try direct sender_ref first (if available)
+              if (message.data.containsKey('sender_ref')) {
+                 final senderRefPath = message.data['sender_ref'];
+                 if (senderRefPath != null) {
+                    final senderRef = FirebaseFirestore.instance.doc(senderRefPath as String);
+                    senderId = senderRef.id;
+                 }
+              }
+
+              // 2. Fallback: Try to infer from chatDoc if it's a DM
+              if (senderId == null && message.data.containsKey('parameterData')) {
+                 try {
+                   final paramDataStr = message.data['parameterData'];
+                   if (paramDataStr is String) {
+                      // Simple regex or json decode to extract chatDoc
+                      // The log shows: {"chatDoc":"chats/..."}
+                      // Use regex to be safe against json format variations or just manual parsing
+                      final RegExp regExp = RegExp(r'"chatDoc"\s*:\s*"([^"]+)"');
+                      final match = regExp.firstMatch(paramDataStr);
+                      if (match != null) {
+                        final chatPath = match.group(1);
+                        if (chatPath != null) {
+                           final chatRef = FirebaseFirestore.instance.doc(chatPath);
+                           // Fetch chat to check members
+                           final chatDoc = await ChatsRecord.getDocumentOnce(chatRef);
+                           if (!chatDoc.isGroup && chatDoc.members.length == 2) {
+                              // It's a DM. The sender is the one who is NOT current user.
+                              final otherMember = chatDoc.members.firstWhere(
+                                (m) => m != currentUserReference,
+                                orElse: () => chatDoc.members.first
+                              );
+                              senderId = otherMember.id;
+                           }
+                        }
+                      }
+                   }
+                 } catch (e) {
+                   print('⚠️ Error parsing parameterData: $e');
+                 }
+              }
+
+              if (senderId != null) {
+                // Fetch all blocked users for current user to avoid reference query issues
+                final blockedSnapshot = await BlockedUsersRecord.collection
+                    .where('blocker_user', isEqualTo: currentUserReference)
+                    .get();
+
+                // Check if sender ID exists in blocked list (UID based comparison)
+                final isBlocked = blockedSnapshot.docs.any((doc) {
+                  final blockedUserRef = doc['blocked_user'] as DocumentReference?;
+                  return blockedUserRef?.id == senderId;
+                });
+
+                if (isBlocked) {
+                  print('🚫 [WEB] Notification suppressed: Sender $senderId is blocked');
+                  return;
+                }
+              }
+           } catch (e) {
+             print('⚠️ Error checking blocked status for notification: $e');
+           }
+        }
 
         // Show browser notification for foreground messages (force show for FCM)
         WebNotificationService.instance.showMessageNotification(

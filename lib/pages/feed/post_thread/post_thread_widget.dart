@@ -451,6 +451,10 @@ class _PostThreadWidgetState extends State<PostThreadWidget>
                                     'https://images.unsplash.com/photo-1747128947265-7b22125aedd4?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w0NTYyMDF8MHwxfHJhbmRvbXx8fHx8fHx8fDE3NTI3NDMwNDZ8&ixlib=rb-4.1.0&q=80&w=1080',
                                   ),
                                   useHeroAnimation: true,
+                                  imageUrl: valueOrDefault<String>(
+                                    widget.image,
+                                    '',
+                                  ),
                                 ),
                               ),
                             );

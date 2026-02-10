@@ -13,6 +13,7 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 import 'dart:io' show Platform;
 import 'dart:math' show min;
 import '/flutter_flow/platform_utils/platform_util.dart';
+import '/backend/cloud_functions/cloud_functions.dart';
 
 Future<bool> ensureFcmToken(DocumentReference userRef) async {
   try {
@@ -183,28 +184,55 @@ Future<bool> ensureFcmToken(DocumentReference userRef) async {
     
     print('🔍 Checking Firestore for existing token ($deviceType)...');
 
-    // Check if fcm_tokens subcollection exists and has this token
+    // Get fcm_tokens reference for use in token refresh listener
     final fcmTokensRef = userRef.collection('fcm_tokens');
-    final existingTokenQuery =
-        await fcmTokensRef.where('fcm_token', isEqualTo: token).limit(1).get();
 
-    if (existingTokenQuery.docs.isEmpty) {
-      // Token doesn't exist, add it
-      print('📝 Token not found, adding new token to Firestore...');
-      await fcmTokensRef.add({
-        'fcm_token': token,
-        'device_type': deviceType,
-        'created_at': FieldValue.serverTimestamp(),
-      });
-      print('✅ New token saved successfully!');
-    } else {
-      // Token exists, update it if needed
-      print('📝 Token found, updating existing record...');
-      await existingTokenQuery.docs.first.reference.update({
-        'fcm_token': token,
-        'device_type': deviceType,
-      });
-      print('✅ Existing token updated successfully!');
+    // Use addFcmToken cloud function to ensure proper cleanup of tokens
+    // from other users (this prevents receiving notifications for accounts
+    // the user is no longer logged into)
+    try {
+      print('📝 Adding FCM token via cloud function (ensures cleanup of other users\' tokens)...');
+      final result = await makeCloudCall(
+        'addFcmToken',
+        {
+          'userDocPath': userRef.path,
+          'fcmToken': token,
+          'deviceType': deviceType,
+        },
+      );
+      
+      if (result.containsKey('error') || result.containsKey('Failed')) {
+        print('⚠️ Cloud function returned error, falling back to direct Firestore write');
+        throw Exception('Cloud function error');
+      }
+      
+      print('✅ Token added via cloud function successfully!');
+    } catch (e) {
+      // Fallback to direct Firestore write if cloud function fails
+      print('⚠️ Cloud function failed, using direct Firestore write: $e');
+      
+      // Check if fcm_tokens subcollection exists and has this token
+      final existingTokenQuery =
+          await fcmTokensRef.where('fcm_token', isEqualTo: token).limit(1).get();
+
+      if (existingTokenQuery.docs.isEmpty) {
+        // Token doesn't exist, add it
+        print('📝 Token not found, adding new token to Firestore...');
+        await fcmTokensRef.add({
+          'fcm_token': token,
+          'device_type': deviceType,
+          'created_at': FieldValue.serverTimestamp(),
+        });
+        print('✅ New token saved successfully!');
+      } else {
+        // Token exists, update it if needed
+        print('📝 Token found, updating existing record...');
+        await existingTokenQuery.docs.first.reference.update({
+          'fcm_token': token,
+          'device_type': deviceType,
+        });
+        print('✅ Existing token updated successfully!');
+      }
     }
 
     // Subscribe to News topic (mobile platforms only)
@@ -220,18 +248,31 @@ Future<bool> ensureFcmToken(DocumentReference userRef) async {
     // Also listen for token refresh
     FirebaseMessaging.instance.onTokenRefresh.listen((newToken) async {
       try {
-        // Remove ALL old tokens for this user (cleanup)
-        final allTokensQuery = await fcmTokensRef.get();
-        for (var doc in allTokensQuery.docs) {
-          await doc.reference.delete();
-        }
+        // Use cloud function to add new token (ensures cleanup)
+        try {
+          await makeCloudCall(
+            'addFcmToken',
+            {
+              'userDocPath': userRef.path,
+              'fcmToken': newToken,
+              'deviceType': deviceType,
+            },
+          );
+        } catch (e) {
+          // Fallback to direct Firestore write
+          // Remove ALL old tokens for this user (cleanup)
+          final allTokensQuery = await fcmTokensRef.get();
+          for (var doc in allTokensQuery.docs) {
+            await doc.reference.delete();
+          }
 
-        // Add new token
-        await fcmTokensRef.add({
-          'fcm_token': newToken,
-          'device_type': deviceType,
-          'created_at': FieldValue.serverTimestamp(),
-        });
+          // Add new token
+          await fcmTokensRef.add({
+            'fcm_token': newToken,
+            'device_type': deviceType,
+            'created_at': FieldValue.serverTimestamp(),
+          });
+        }
 
         // Re-subscribe to topic after token refresh
         try {

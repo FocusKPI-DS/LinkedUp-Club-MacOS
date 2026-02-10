@@ -29,6 +29,8 @@ class _VideoMessageWidgetState extends State<VideoMessageWidget> {
   VideoPlayerController? _videoPlayerController;
   ChewieController? _chewieController;
   bool _isInitialized = false;
+  double? _calculatedWidth;
+  double? _calculatedHeight;
 
   @override
   void initState() {
@@ -67,6 +69,45 @@ class _VideoMessageWidgetState extends State<VideoMessageWidget> {
 
       await _videoPlayerController!.initialize();
       print('✅ Video initialized successfully');
+
+      // Get video dimensions and calculate aspect ratio
+      final videoSize = _videoPlayerController!.value.size;
+      final aspectRatio = videoSize.width / videoSize.height;
+      print('📐 Video dimensions: ${videoSize.width}x${videoSize.height}, aspect ratio: $aspectRatio');
+
+      // Calculate responsive dimensions based on aspect ratio (WhatsApp style)
+      // Max width for horizontal videos: 280px
+      // Max height for vertical videos: 400px
+      const maxWidth = 280.0;
+      const maxHeight = 400.0;
+      
+      double calculatedWidth;
+      double calculatedHeight;
+      
+      if (aspectRatio > 1.0) {
+        // Horizontal/landscape video
+        calculatedWidth = maxWidth;
+        calculatedHeight = maxWidth / aspectRatio;
+        // Ensure minimum height
+        if (calculatedHeight < 150.0) {
+          calculatedHeight = 150.0;
+          calculatedWidth = calculatedHeight * aspectRatio;
+        }
+      } else {
+        // Vertical/portrait video
+        calculatedHeight = maxHeight;
+        calculatedWidth = maxHeight * aspectRatio;
+        // Ensure minimum width
+        if (calculatedWidth < 150.0) {
+          calculatedWidth = 150.0;
+          calculatedHeight = calculatedWidth / aspectRatio;
+        }
+      }
+
+      setState(() {
+        _calculatedWidth = calculatedWidth;
+        _calculatedHeight = calculatedHeight;
+      });
 
       _chewieController = ChewieController(
         videoPlayerController: _videoPlayerController!,
@@ -132,14 +173,31 @@ class _VideoMessageWidgetState extends State<VideoMessageWidget> {
 
   @override
   Widget build(BuildContext context) {
-    if (!_isInitialized) {
+    // Use calculated dimensions if available, otherwise fall back to provided dimensions
+    final displayWidth = _calculatedWidth ?? widget.width;
+    final displayHeight = _calculatedHeight ?? widget.height;
+
+    // Container with constraints to prevent overflow
+    Widget buildContainer({required Widget child, double? width, double? height}) {
       return Container(
-        width: widget.width,
-        height: widget.height,
+        constraints: BoxConstraints(
+          maxWidth: 280.0,
+          maxHeight: 400.0,
+        ),
+        width: width != null && width <= 280.0 ? width : null,
+        height: height != null && height <= 400.0 ? height : null,
         decoration: BoxDecoration(
           color: FlutterFlowTheme.of(context).secondaryBackground,
           borderRadius: BorderRadius.circular(8.0),
         ),
+        child: child,
+      );
+    }
+
+    if (!_isInitialized) {
+      return buildContainer(
+        width: displayWidth,
+        height: displayHeight,
         child: Center(
           child: CircularProgressIndicator(
             color: FlutterFlowTheme.of(context).primary,
@@ -150,13 +208,9 @@ class _VideoMessageWidgetState extends State<VideoMessageWidget> {
 
     // Check if video controller is null (failed to initialize)
     if (_videoPlayerController == null || _chewieController == null) {
-      return Container(
-        width: widget.width,
-        height: widget.height,
-        decoration: BoxDecoration(
-          color: FlutterFlowTheme.of(context).secondaryBackground,
-          borderRadius: BorderRadius.circular(8.0),
-        ),
+      return buildContainer(
+        width: displayWidth,
+        height: displayHeight,
         child: Center(
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
@@ -177,9 +231,14 @@ class _VideoMessageWidgetState extends State<VideoMessageWidget> {
       );
     }
 
+    // Get aspect ratio from video controller
+    final aspectRatio = _videoPlayerController!.value.aspectRatio;
+    
     return Container(
-      width: widget.width,
-      height: widget.height,
+      constraints: BoxConstraints(
+        maxWidth: 280.0,
+        maxHeight: 400.0,
+      ),
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(8.0),
         boxShadow: [
@@ -192,7 +251,35 @@ class _VideoMessageWidgetState extends State<VideoMessageWidget> {
       ),
       child: ClipRRect(
         borderRadius: BorderRadius.circular(8.0),
-        child: Chewie(controller: _chewieController!),
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            // Calculate size that fits within constraints while maintaining aspect ratio
+            double width = constraints.maxWidth;
+            double height = width / aspectRatio;
+            
+            // If height exceeds max, recalculate based on height
+            if (height > constraints.maxHeight) {
+              height = constraints.maxHeight;
+              width = height * aspectRatio;
+            }
+            
+            // Ensure minimum size
+            if (width < 150.0) {
+              width = 150.0;
+              height = width / aspectRatio;
+            }
+            if (height < 150.0) {
+              height = 150.0;
+              width = height * aspectRatio;
+            }
+            
+            return SizedBox(
+              width: width,
+              height: height,
+              child: Chewie(controller: _chewieController!),
+            );
+          },
+        ),
       ),
     );
   }

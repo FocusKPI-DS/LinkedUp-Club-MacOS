@@ -33,6 +33,7 @@ class OnboardingProfileModel extends FlutterFlowModel<OnboardingProfileWidget> {
   ///  Local state fields for this page.
 
   String? userProfile;
+  String? coverPhoto;
 
   List<String> iterested = [];
   void addToIterested(String item) => iterested.add(item);
@@ -61,6 +62,13 @@ class OnboardingProfileModel extends FlutterFlowModel<OnboardingProfileWidget> {
   FFUploadedFile uploadedLocalFile_uploadDataMtl =
       FFUploadedFile(bytes: Uint8List.fromList([]));
   String uploadedFileUrl_uploadDataMtl = '';
+  
+  bool isDataUploading_coverPhoto = false;
+  FFUploadedFile uploadedLocalFile_coverPhoto =
+      FFUploadedFile(bytes: Uint8List.fromList([]));
+  String uploadedFileUrl_coverPhoto = '';
+  
+  bool isCoverPhotoLoading = false;
 
   // State field(s) for Bio widget.
   FocusNode? bioFocusNode;

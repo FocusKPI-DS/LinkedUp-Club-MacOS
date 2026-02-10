@@ -1,7 +1,6 @@
 import '/backend/backend.dart';
 import '/backend/schema/enums/enums.dart';
 import '/flutter_flow/flutter_flow_expanded_image_view.dart';
-import '/flutter_flow/flutter_flow_icon_button.dart';
 import '/flutter_flow/flutter_flow_util.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:ff_theme/flutter_flow/flutter_flow_theme.dart';
@@ -134,15 +133,11 @@ class _GroupMediaLinksDocsWidgetState
       appBar: AppBar(
         backgroundColor: FlutterFlowTheme.of(context).primaryBackground,
         automaticallyImplyLeading: false,
-        leading: FlutterFlowIconButton(
-          borderColor: Colors.transparent,
-          borderRadius: 30.0,
-          borderWidth: 1.0,
-          buttonSize: 60.0,
+        leading: IconButton(
           icon: Icon(
             Icons.arrow_back_rounded,
             color: FlutterFlowTheme.of(context).primaryText,
-            size: 30.0,
+            size: 24.0,
           ),
           onPressed: () async {
             context.pop();
@@ -243,6 +238,7 @@ class _GroupMediaLinksDocsWidgetState
                   allowRotation: false,
                   tag: imageUrl,
                   useHeroAnimation: true,
+                  imageUrl: imageUrl,
                 ),
               ),
             );

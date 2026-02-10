@@ -77,6 +77,8 @@
     <string>We use your camera so you can take a profile photo or send images in event chatrooms.</string>
     <key>NSPhotoLibraryUsageDescription</key>
     <string>We access your photo library so you can upload event images or send pictures in chats.</string>
+    <key>NSPhotoLibraryAddUsageDescription</key>
+    <string>We need permission to save images to your photo library when you download pictures from chats.</string>
     <key>NSMicrophoneUsageDescription</key>
     <string>We use your microphone to let you record and send voice messages inside the event chat.</string>
     <key>UIBackgroundModes</key>

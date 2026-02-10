@@ -519,6 +519,7 @@ class _PostItemState extends State<PostItem> {
                             allowRotation: false,
                             tag: post.imageUrl,
                             useHeroAnimation: true,
+                            imageUrl: post.imageUrl,
                           ),
                         ),
                       );

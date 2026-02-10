@@ -1,18 +1,19 @@
 import '/auth/firebase_auth/auth_util.dart';
 import '/backend/backend.dart';
+import '/components/delete_account_widget.dart';
 import '/flutter_flow/flutter_flow_util.dart';
 import '/pages/user_summary/user_summary_widget.dart';
+import '/app_state.dart';
 import 'profile_settings_model.dart';
 export 'profile_settings_model.dart';
 
 import 'package:flutter/cupertino.dart';
-import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'dart:io' show Platform;
+import 'dart:io';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:permission_handler/permission_handler.dart';
-import 'profile_settings_model.dart' show SettingsTab;
 
 class ProfileSettingsWidget extends StatefulWidget {
   const ProfileSettingsWidget({Key? key}) : super(key: key);
@@ -105,6 +106,82 @@ class _ProfileSettingsWidgetState extends State<ProfileSettingsWidget> {
                 CupertinoIcons.chevron_right,
                 size: 20,
                 color: Color(0xFF999999),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  // Build keyboard shortcut option widget
+  Widget _buildKeyboardShortcutOption({
+    required String title,
+    required String subtitle,
+    required bool isSelected,
+    required VoidCallback onTap,
+  }) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(10),
+        child: Container(
+          padding: EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: isSelected ? Color(0xFFE3F2FD) : Color(0xFFF5F5F5),
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(
+              color: isSelected ? Color(0xFF0077B5) : Color(0xFFE5E7EB),
+              width: isSelected ? 2 : 1,
+            ),
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: 22,
+                height: 22,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: isSelected ? Color(0xFF0077B5) : Colors.transparent,
+                  border: Border.all(
+                    color: isSelected ? Color(0xFF0077B5) : Color(0xFF999999),
+                    width: 2,
+                  ),
+                ),
+                child: isSelected
+                    ? Icon(
+                        Icons.check,
+                        size: 14,
+                        color: Colors.white,
+                      )
+                    : null,
+              ),
+              SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: TextStyle(
+                        fontFamily: 'SF Pro Display',
+                        fontSize: 15,
+                        fontWeight: FontWeight.w600,
+                        color: isSelected ? Color(0xFF0077B5) : Color(0xFF1A1A1A),
+                      ),
+                    ),
+                    SizedBox(height: 2),
+                    Text(
+                      subtitle,
+                      style: TextStyle(
+                        fontFamily: 'SF Pro Display',
+                        fontSize: 13,
+                        color: Color(0xFF666666),
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ],
           ),
@@ -437,6 +514,12 @@ class _ProfileSettingsWidgetState extends State<ProfileSettingsWidget> {
                   isSelected: _model.selectedTab == SettingsTab.notifications,
                 ),
                 _buildSidebarItem(
+                  tab: SettingsTab.preferences,
+                  title: 'Preferences',
+                  icon: CupertinoIcons.slider_horizontal_3,
+                  isSelected: _model.selectedTab == SettingsTab.preferences,
+                ),
+                _buildSidebarItem(
                   tab: SettingsTab.helpFeedback,
                   title: 'Help & Feedback',
                   icon: CupertinoIcons.question_circle_fill,
@@ -607,6 +690,196 @@ class _ProfileSettingsWidgetState extends State<ProfileSettingsWidget> {
                     ),
                   ),
                 ),
+            ],
+          ),
+        );
+
+      case SettingsTab.preferences:
+        return Container(
+          padding: EdgeInsets.all(40),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Icon(
+                    CupertinoIcons.slider_horizontal_3,
+                    size: 32,
+                    color: Color(0xFF0077B5),
+                  ),
+                  SizedBox(width: 12),
+                  Text(
+                    'Preferences',
+                    style: TextStyle(
+                      fontFamily: 'SF Pro Display',
+                      fontSize: 28,
+                      fontWeight: FontWeight.w700,
+                      color: Color(0xFF1A1A1A),
+                    ),
+                  ),
+                ],
+              ),
+              SizedBox(height: 24),
+              // Keyboard Shortcuts Section
+              Text(
+                'Keyboard Shortcuts',
+                style: TextStyle(
+                  fontFamily: 'SF Pro Display',
+                  fontSize: 18,
+                  fontWeight: FontWeight.w600,
+                  color: Color(0xFF1A1A1A),
+                ),
+              ),
+              SizedBox(height: 16),
+              Container(
+                padding: EdgeInsets.all(20),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: Color(0xFFE5E7EB),
+                    width: 1,
+                  ),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Send Message Shortcut',
+                      style: TextStyle(
+                        fontFamily: 'SF Pro Display',
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                        color: Color(0xFF1A1A1A),
+                      ),
+                    ),
+                    SizedBox(height: 4),
+                    Text(
+                      'Choose how you want to send messages in chat',
+                      style: TextStyle(
+                        fontFamily: 'SF Pro Display',
+                        fontSize: 14,
+                        color: Color(0xFF666666),
+                      ),
+                    ),
+                    SizedBox(height: 16),
+                    // Option 1: Enter to send
+                    _buildKeyboardShortcutOption(
+                      title: 'Return (↵) to send',
+                      subtitle: 'Shift + Return for new line',
+                      isSelected: FFAppState().sendMessageShortcut == 0,
+                      onTap: () {
+                        setState(() {
+                          FFAppState().sendMessageShortcut = 0;
+                        });
+                      },
+                    ),
+                    SizedBox(height: 12),
+                    // Option 2: Shift+Enter to send
+                    _buildKeyboardShortcutOption(
+                      title: 'Shift + Return to send',
+                      subtitle: 'Return (↵) for new line',
+                      isSelected: FFAppState().sendMessageShortcut == 1,
+                      onTap: () {
+                        setState(() {
+                          FFAppState().sendMessageShortcut = 1;
+                        });
+                      },
+                    ),
+                    SizedBox(height: 12),
+                    // Option 3: Command+Enter to send
+                    _buildKeyboardShortcutOption(
+                      title: 'Command (⌘) + Return to send',
+                      subtitle: 'Return (↵) for new line',
+                      isSelected: FFAppState().sendMessageShortcut == 2,
+                      onTap: () {
+                        setState(() {
+                          FFAppState().sendMessageShortcut = 2;
+                        });
+                      },
+                    ),
+                  ],
+                ),
+              ),
+              SizedBox(height: 16),
+              // Info text
+              Container(
+                padding: EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Color(0xFFF5F5F5),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Row(
+                  children: [
+                    Icon(
+                      CupertinoIcons.info_circle_fill,
+                      size: 18,
+                      color: Color(0xFF666666),
+                    ),
+                    SizedBox(width: 12),
+                    Expanded(
+                      child: Text(
+                        'This setting applies to all chat conversations',
+                        style: TextStyle(
+                          fontFamily: 'SF Pro Display',
+                          fontSize: 13,
+                          color: Color(0xFF666666),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              SizedBox(height: 24),
+              // Account
+              Text(
+                'Account',
+                style: TextStyle(
+                  fontFamily: 'SF Pro Display',
+                  fontSize: 18,
+                  fontWeight: FontWeight.w600,
+                  color: Color(0xFF1A1A1A),
+                ),
+              ),
+              SizedBox(height: 16),
+              InkWell(
+                onTap: () async {
+                  await showModalBottomSheet(
+                    context: context,
+                    backgroundColor: Colors.transparent,
+                    isScrollControlled: true,
+                    builder: (context) => Padding(
+                      padding: MediaQuery.viewInsetsOf(context),
+                      child: DeleteAccountWidget(),
+                    ),
+                  );
+                },
+                child: Container(
+                  padding: EdgeInsets.all(20),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: Color(0xFFE5E7EB), width: 1),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(Icons.person_remove_outlined, size: 24, color: Color(0xFFDC2626)),
+                      SizedBox(width: 16),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text('Account Deletion', style: TextStyle(fontFamily: 'SF Pro Display', fontSize: 16, fontWeight: FontWeight.w600, color: Color(0xFF1A1A1A))),
+                            SizedBox(height: 4),
+                            Text('Permanently delete your account', style: TextStyle(fontFamily: 'SF Pro Display', fontSize: 14, color: Color(0xFF666666))),
+                          ],
+                        ),
+                      ),
+                      Icon(CupertinoIcons.chevron_right, size: 20, color: Color(0xFF999999)),
+                    ],
+                  ),
+                ),
+              ),
             ],
           ),
         );
@@ -815,6 +1088,13 @@ class _ProfileSettingsWidgetState extends State<ProfileSettingsWidget> {
                               icon: CupertinoIcons.bell_fill,
                               isSelected: _model.selectedTab ==
                                   SettingsTab.notifications,
+                            ),
+                            _buildSidebarItem(
+                              tab: SettingsTab.preferences,
+                              title: 'Preferences',
+                              icon: CupertinoIcons.slider_horizontal_3,
+                              isSelected: _model.selectedTab ==
+                                  SettingsTab.preferences,
                             ),
                             _buildSidebarItem(
                               tab: SettingsTab.helpFeedback,

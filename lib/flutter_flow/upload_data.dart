@@ -12,6 +12,7 @@ import 'package:mime_type/mime_type.dart';
 import 'package:video_player/video_player.dart';
 import 'package:image/image.dart' as img;
 import 'package:permission_handler/permission_handler.dart';
+import 'package:camera/camera.dart';
 
 // Import for macOS camera delegate
 import 'package:image_picker_platform_interface/image_picker_platform_interface.dart';
@@ -21,6 +22,7 @@ import '../auth/firebase_auth/auth_util.dart';
 import 'package:ff_theme/flutter_flow/flutter_flow_theme.dart';
 import 'flutter_flow_util.dart';
 import 'package:ff_commons/flutter_flow/upload_data_class.dart';
+import '../../custom_code/widgets/macos_camera_capture_widget.dart';
 export 'package:ff_commons/flutter_flow/upload_data_class.dart';
 
 const allowedFormats = {'image/png', 'image/jpeg', 'video/mp4', 'image/gif'};
@@ -118,6 +120,7 @@ Future<List<SelectedFile>?> selectMediaWithSourceBottomSheet({
     return null;
   }
   return selectMedia(
+    context: context,
     storageFolderPath: storageFolderPath,
     maxWidth: maxWidth,
     maxHeight: maxHeight,
@@ -131,6 +134,7 @@ Future<List<SelectedFile>?> selectMediaWithSourceBottomSheet({
 }
 
 Future<List<SelectedFile>?> selectMedia({
+  required BuildContext? context,
   String? storageFolderPath,
   double? maxWidth,
   double? maxHeight,
@@ -141,6 +145,18 @@ Future<List<SelectedFile>?> selectMedia({
   bool includeDimensions = false,
   bool includeBlurHash = false,
 }) async {
+  // For macOS camera, use camera_macos package
+  if (!kIsWeb &&
+      Platform.isMacOS &&
+      mediaSource == MediaSource.camera &&
+      context != null) {
+    return await _selectMediaFromMacOSCamera(
+      context: context,
+      isVideo: isVideo,
+      storageFolderPath: storageFolderPath,
+    );
+  }
+
   // Configure ImagePicker with camera delegate for macOS (not on web)
   if (!kIsWeb && Platform.isMacOS) {
     final imagePickerMacOS = ImagePickerMacOS();
@@ -167,18 +183,26 @@ Future<List<SelectedFile>?> selectMedia({
       }
     } else if (Platform.isMacOS) {
       try {
-        // Request camera permission on macOS using method channel
-        const platform = MethodChannel('com.linkedup.camera_permission');
-        final bool hasPermission =
-            await platform.invokeMethod('requestCameraPermission');
+        // Request camera permission on macOS using permission_handler
+        // Native implementation is now available in AppDelegate.swift
+        print('macOS: Checking camera permission...');
+        final cameraStatus = await Permission.camera.status;
+        print('macOS: Camera permission status: $cameraStatus');
 
-        if (!hasPermission) {
-          print('macOS camera permission denied');
-          return null;
+        if (cameraStatus.isDenied || cameraStatus.isPermanentlyDenied) {
+          print('macOS: Requesting camera permission...');
+          final result = await Permission.camera.request();
+          print('macOS: Camera permission request result: $result');
+
+          if (result.isDenied || result.isPermanentlyDenied) {
+            print('macOS camera permission denied');
+            return null;
+          }
         }
+        print('macOS: Camera permission granted, proceeding...');
       } catch (e) {
         print('macOS camera permission request failed: $e');
-        // Try to proceed anyway, the ImagePicker might handle it
+        // Try to proceed anyway - ImagePickerMacOS might handle it
       }
     }
   }
@@ -200,14 +224,14 @@ Future<List<SelectedFile>?> selectMedia({
       final media = e.value;
       final mediaBytes = await media.readAsBytes();
       final path = _getStoragePath(storageFolderPath, media.name, false, index);
-      
+
       // Get dimensions - avoid blocking on web for videos
       MediaDimensions? finalDimensions;
       if (includeDimensions && !isVideo) {
         // Only calculate image dimensions
         finalDimensions = await _getImageDimensions(mediaBytes);
       }
-      
+
       final blurHash = includeBlurHash
           ? isVideo
               ? null
@@ -226,13 +250,14 @@ Future<List<SelectedFile>?> selectMedia({
   }
 
   // On web, camera source doesn't work well, always use gallery
-  final source = (kIsWeb || mediaSource != MediaSource.camera)
-      ? ImageSource.gallery
-      : ImageSource.camera;
-
+  // On macOS, use ImageSource.camera directly - permission is now handled natively
   XFile? pickedMedia;
 
   try {
+    final source = (kIsWeb || mediaSource != MediaSource.camera)
+        ? ImageSource.gallery
+        : ImageSource.camera;
+
     final pickedMediaFuture = isVideo
         ? picker.pickVideo(source: source)
         : picker.pickImage(
@@ -270,14 +295,14 @@ Future<List<SelectedFile>?> selectMedia({
     return null;
   }
   final path = _getStoragePath(storageFolderPath, pickedMedia!.name, isVideo);
-  
+
   // Get dimensions - avoid blocking on web for videos
   MediaDimensions? finalDimensions;
   if (includeDimensions && !isVideo) {
     // Only calculate image dimensions
     finalDimensions = await _getImageDimensions(mediaBytes);
   }
-  
+
   final blurHash = includeBlurHash
       ? isVideo
           ? null
@@ -399,6 +424,51 @@ List<SelectedFile> selectedFilesFromUploadedFiles(
       },
     ).toList();
 
+/// Select media from macOS camera using camera_macos package
+Future<List<SelectedFile>?> _selectMediaFromMacOSCamera({
+  required BuildContext context,
+  required bool isVideo,
+  String? storageFolderPath,
+}) async {
+  try {
+    SelectedFile? capturedFile;
+
+    await Navigator.push<SelectedFile>(
+      context,
+      MaterialPageRoute(
+        builder: (context) => MacOSCameraCaptureWidget(
+          isVideo: isVideo,
+          onCapture: (file) {
+            Navigator.pop(context, file);
+          },
+        ),
+      ),
+    ).then((file) {
+      capturedFile = file;
+    });
+
+    if (capturedFile != null) {
+      // Update storage path if needed
+      if (storageFolderPath != null) {
+        final timestamp = DateTime.now().microsecondsSinceEpoch;
+        final ext = isVideo ? 'mp4' : 'jpg';
+        capturedFile = SelectedFile(
+          storagePath: '$storageFolderPath/$timestamp.$ext',
+          filePath: capturedFile!.filePath,
+          bytes: capturedFile!.bytes,
+          dimensions: capturedFile!.dimensions,
+          blurHash: capturedFile!.blurHash,
+        );
+      }
+      return [capturedFile!];
+    }
+    return null;
+  } catch (e) {
+    print('Error capturing media from macOS camera: $e');
+    return null;
+  }
+}
+
 Future<MediaDimensions> _getImageDimensions(Uint8List mediaBytes) async {
   final image = await decodeImageFromList(mediaBytes);
   return MediaDimensions(
@@ -466,7 +536,7 @@ void showUploadMessage(
   if (!context.mounted) {
     return;
   }
-  
+
   try {
     ScaffoldMessenger.of(context)
       ..hideCurrentSnackBar()
@@ -487,8 +557,9 @@ void showUploadMessage(
               Text(message),
             ],
           ),
-          duration:
-              showLoading ? const Duration(days: 1) : const Duration(seconds: 4),
+          duration: showLoading
+              ? const Duration(days: 1)
+              : const Duration(seconds: 4),
         ),
       );
   } catch (e) {

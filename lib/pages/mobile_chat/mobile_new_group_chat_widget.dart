@@ -3,7 +3,7 @@ import '/backend/backend.dart';
 import '/flutter_flow/flutter_flow_util.dart';
 import '/pages/mobile_chat/mobile_new_group_chat_model.dart';
 import '/pages/desktop_chat/chat_controller.dart';
-import '/pages/chat/group_chat_detail/group_chat_detail_widget.dart';
+import '/pages/mobile_chat/mobile_chat_widget.dart';
 import 'dart:io';
 import 'package:adaptive_platform_ui/adaptive_platform_ui.dart';
 import 'package:cached_network_image/cached_network_image.dart';
@@ -53,15 +53,6 @@ class _MobileNewGroupChatWidgetState extends State<MobileNewGroupChatWidget> {
   void dispose() {
     _model.maybeDispose();
     super.dispose();
-  }
-
-  void _openChatFullScreen(ChatsRecord chat) {
-    Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (context) => GroupChatDetailWidget(chatDoc: chat),
-        fullscreenDialog: true,
-      ),
-    );
   }
 
   Future<void> _pickGroupImage() async {
@@ -216,24 +207,39 @@ class _MobileNewGroupChatWidgetState extends State<MobileNewGroupChatWidget> {
         ],
       });
 
+      // Send greeting message so the chat appears in the list
+      final greeting =
+          '${currentUserDisplayName.isNotEmpty ? currentUserDisplayName : "You"} created the group';
+
+      await newChatRef.collection('messages').add({
+        'content': greeting,
+        'created_at': getCurrentTimestamp,
+        'sender_ref': currentUserReference,
+        'is_system_message': true,
+        'is_read_by': [currentUserReference],
+      });
+
+      // Update chat with last message
+      await newChatRef.update({
+        'last_message': greeting,
+        'last_message_at': getCurrentTimestamp,
+        'last_message_sent': currentUserReference,
+      });
+
       // Get the created chat document
       final newChat = await ChatsRecord.getDocumentOnce(newChatRef);
 
       // Select the new group chat
       chatController.selectChat(newChat);
 
-      // Show success message
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Group "$groupName" created successfully!'),
-          backgroundColor: Color(0xFF34C759),
+      // Navigate directly to the chat conversation page, replacing the creation page
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute(
+          builder: (context) => MobileChatWidget(
+            initialChat: newChat,
+          ),
         ),
       );
-
-      // Open the new group chat in full-screen
-      _openChatFullScreen(newChat);
-      // Pop this page
-      Navigator.of(context).pop();
     } catch (e) {
       // Show error message
       ScaffoldMessenger.of(context).showSnackBar(

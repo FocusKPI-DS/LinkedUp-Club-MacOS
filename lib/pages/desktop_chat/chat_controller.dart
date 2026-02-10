@@ -17,6 +17,9 @@ class ChatController extends GetxController {
   final RxString chatFilter = 'All'.obs; // Filter: All, Unread, DM, Groups
   final RxMap<String, DateTime> locallySeenChats = <String, DateTime>{}.obs;
 
+  // Blocked users set (reactive)
+  final Rx<Set<String>> blockedUserIds = Rx<Set<String>>(<String>{});
+
   // Error message
   final RxString errorMessage = ''.obs;
 
@@ -28,10 +31,12 @@ class ChatController extends GetxController {
 
   StreamSubscription? _chatsSubscription;
   StreamSubscription? _serviceChatsSubscription;
+  StreamSubscription? _blockedUsersSubscription;
 
   @override
   void onClose() {
     _chatsSubscription?.cancel();
+    _blockedUsersSubscription?.cancel();
     _serviceChatsSubscription?.cancel();
     super.onClose();
   }
@@ -42,6 +47,7 @@ class ChatController extends GetxController {
       // Cancel existing subscriptions if any
       await _chatsSubscription?.cancel();
       await _serviceChatsSubscription?.cancel();
+      await _blockedUsersSubscription?.cancel();
 
       chatState.value = ChatState.loading;
 
@@ -91,6 +97,22 @@ class ChatController extends GetxController {
           chatState.value = ChatState.error;
         },
       );
+
+      // Listen to blocked users for real-time filtering
+      print('Debug: Initializing blocked user listener in ChatController. CurrentUserRef: $currentUserReference');
+      _blockedUsersSubscription = BlockedUsersRecord.collection
+          .where('blocker_user', isEqualTo: currentUserReference)
+          .snapshots()
+          .listen((snapshot) {
+        blockedUserIds.value = snapshot.docs
+            .map((doc) => BlockedUsersRecord.fromSnapshot(doc).blockedUser?.id)
+            .whereType<String>()
+            .toSet();
+        print('Debug: ChatController updated blocked IDs to: $blockedUserIds');
+        chats.refresh();
+      }, onError: (e) {
+        print('Debug: Error in ChatController blocked user listener: $e');
+      });
     } catch (e) {
       errorMessage.value = 'Error loading chats: $e';
       chatState.value = ChatState.error;
@@ -110,6 +132,24 @@ class ChatController extends GetxController {
     }
 
     final combinedChats = uniqueChats.values.toList();
+    
+    // Debug: Search for "Lets Gooo" group
+    final letsGoGroups = combinedChats.where((c) => 
+      c.title.toLowerCase().contains('lets go') || 
+      c.title.toLowerCase().contains('let\'s go')
+    ).toList();
+    if (letsGoGroups.isNotEmpty) {
+      print('🔍 [Desktop Chat] FOUND "Lets Gooo" group in combined chats!');
+      for (var group in letsGoGroups) {
+        print('  - Title: "${group.title}"');
+        print('    isGroup: ${group.isGroup}');
+        print('    lastMessage: "${group.lastMessage}"');
+        print('    lastMessageAt: ${group.lastMessageAt}');
+        print('    lastMessageType: ${group.lastMessageType}');
+      }
+    } else {
+      print('🔍 [Desktop Chat] "Lets Gooo" group NOT found in combined chats');
+    }
 
     // BEFORE updating chats, sync knownUnreadChats with actual state
     // IMPORTANT: Only remove from knownUnreadChats if user EXPLICITLY saw the chat locally
@@ -605,13 +645,39 @@ class ChatController extends GetxController {
   // Get filtered chats based on search and tab
   List<ChatsRecord> get filteredChats {
     List<ChatsRecord> filteredChatsList = List.from(chats);
+    
+    // Debug: Log all groups before filtering
+    final allGroupsBeforeFilter = filteredChatsList.where((c) => c.isGroup == true).toList();
+    print('🔍 [Desktop Chat] All groups before filtering: ${allGroupsBeforeFilter.length}');
+    final letsGoBeforeFilter = allGroupsBeforeFilter.where((c) => 
+      c.title.toLowerCase().contains('lets go')
+    ).toList();
+    if (letsGoBeforeFilter.isNotEmpty) {
+      print('🔍 [Desktop Chat] "Lets Gooo" found BEFORE filtering');
+    }
 
     // Hide chats with no messages (temporary chats only appear when selected)
     // But always show service chats regardless of message count
+    // IMPORTANT: Don't filter out chats that have lastMessageAt even if lastMessage is empty
+    // (this can happen if video message update failed - we still want to show the group)
     filteredChatsList = filteredChatsList.where((chat) {
       if (chat.isServiceChat == true) {
         return true; // Always show service chats
       }
+
+      // Filter out chats with blocked users
+      // Check if any member (other than current user) is in the blocked list
+      if (chat.members.any((member) =>
+          member != currentUserReference && blockedUserIds.value.contains(member.id))) {
+        return false;
+      }
+
+      // If chat has lastMessageAt timestamp, show it even if lastMessage is empty
+      // (handles cases where video message update failed)
+      if (chat.lastMessageAt != null) {
+        return true;
+      }
+      // Only hide if both lastMessage and lastMessageAt are empty/null
       if (chat.lastMessage.isEmpty) {
         return false;
       }
@@ -682,17 +748,32 @@ class ChatController extends GetxController {
         return a.isPin ? -1 : 1;
       }
       // Then sort by last message time (most recent first)
-      if (a.lastMessageAt != null && b.lastMessageAt != null) {
-        return b.lastMessageAt!.compareTo(a.lastMessageAt!);
-      }
-      // Handle null cases - chats with lastMessageAt come first
-      if (a.lastMessageAt != null && b.lastMessageAt == null) return -1;
-      if (a.lastMessageAt == null && b.lastMessageAt != null) return 1;
-      return 0;
+      final aTime = a.lastMessageAt;
+      final bTime = b.lastMessageAt;
+      
+      // Handle null values - put nulls at the end
+      if (aTime == null && bTime == null) return 0;
+      if (aTime == null) return 1; // a goes after b
+      if (bTime == null) return -1; // b goes after a
+      
+      // Both have values, sort descending (newest first)
+      return bTime.compareTo(aTime);
     });
 
     // Update tab title with unread count
     _updateTabTitle(filteredChatsList);
+    
+    // Debug: Check if "Lets Gooo" is in filtered list
+    final letsGoAfterFilter = filteredChatsList.where((c) => 
+      c.title.toLowerCase().contains('lets go')
+    ).toList();
+    if (letsGoAfterFilter.isNotEmpty) {
+      print('🔍 [Desktop Chat] "Lets Gooo" found AFTER filtering ✅');
+    } else {
+      print('🔍 [Desktop Chat] "Lets Gooo" NOT found AFTER filtering ❌');
+      print('   Total filtered chats: ${filteredChatsList.length}');
+      print('   Groups in filtered list: ${filteredChatsList.where((c) => c.isGroup).length}');
+    }
 
     return filteredChatsList;
   }

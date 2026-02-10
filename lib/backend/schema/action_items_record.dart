@@ -69,6 +69,11 @@ class ActionItemsRecord extends FirestoreRecord {
   DateTime? get dueDate => _dueDate;
   bool hasDueDate() => _dueDate != null;
 
+  // "completed_time" field.
+  DateTime? _completedTime;
+  DateTime? get completedTime => _completedTime;
+  bool hasCompletedTime() => _completedTime != null;
+
   // "description" field.
   String? _description;
   String get description => _description ?? '';
@@ -86,6 +91,7 @@ class ActionItemsRecord extends FirestoreRecord {
     _createdTime = snapshotData['created_time'] as DateTime?;
     _lastSummaryAt = snapshotData['last_summary_at'] as DateTime?;
     _dueDate = snapshotData['due_date'] as DateTime?;
+    _completedTime = snapshotData['completed_time'] as DateTime?;
     _description = snapshotData['description'] as String?;
   }
 
@@ -135,6 +141,7 @@ Map<String, dynamic> createActionItemsRecordData({
   DateTime? createdTime,
   DateTime? lastSummaryAt,
   DateTime? dueDate,
+  DateTime? completedTime,
   String? description,
 }) {
   final firestoreData = mapToFirestore(
@@ -150,6 +157,7 @@ Map<String, dynamic> createActionItemsRecordData({
       'created_time': createdTime,
       'last_summary_at': lastSummaryAt,
       'due_date': dueDate,
+      'completed_time': completedTime,
       'description': description,
     }.withoutNulls,
   );

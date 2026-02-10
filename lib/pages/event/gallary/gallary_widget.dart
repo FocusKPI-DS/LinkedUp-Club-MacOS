@@ -153,6 +153,7 @@ class _GallaryWidgetState extends State<GallaryWidget>
                                   allowRotation: false,
                                   tag: imageListItem,
                                   useHeroAnimation: true,
+                                  imageUrl: imageListItem,
                                 ),
                               ),
                             );

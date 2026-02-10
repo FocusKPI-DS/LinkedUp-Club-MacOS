@@ -1,6 +1,7 @@
 import '/auth/firebase_auth/auth_util.dart';
 import '/backend/backend.dart';
 import '/backend/schema/enums/enums.dart';
+import '/pages/user_summary/user_summary_widget.dart';
 import '/flutter_flow/flutter_flow_audio_player.dart';
 import '/flutter_flow/flutter_flow_expanded_image_view.dart';
 import '/custom_code/widgets/video_message_widget.dart';
@@ -51,6 +52,7 @@ class ChatThreadWidget extends StatefulWidget {
     this.onEditMessage,
     this.isHighlighted = false,
     this.isGroup = false,
+    this.mentionableUsers = const [],
   });
 
   final MessagesRecord? message;
@@ -65,6 +67,7 @@ class ChatThreadWidget extends StatefulWidget {
   final Function(MessagesRecord)? onEditMessage;
   final bool isHighlighted;
   final bool isGroup; // Show profile photos only in group chats
+  final List<String> mentionableUsers;
 
   @override
   State<ChatThreadWidget> createState() => _ChatThreadWidgetState();
@@ -336,9 +339,13 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
     try {
       final uri = Uri.parse(fileUrl);
 
-      // First, try to get the original file name from message content
-      // When there's an attachment, content is likely the original filename (if no caption was sent)
+      // Prefer stored file_name from Firestore (set when sending from file preview)
       String fileName = 'file';
+      final storedFileName = widget.message?.snapshotData['file_name'];
+      if (storedFileName is String && storedFileName.trim().isNotEmpty) {
+        fileName = storedFileName.trim();
+      } else {
+      // Fallback: try to get filename from message content or URL
       final hasAttachment = widget.message?.attachmentUrl != null &&
           widget.message!.attachmentUrl.isNotEmpty;
 
@@ -400,6 +407,7 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
           fileName = 'file';
         }
       }
+      } // end else (no stored file_name)
 
       final extension =
           fileName.contains('.') ? fileName.split('.').last.toLowerCase() : '';
@@ -798,7 +806,12 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
             await _editMessage();
             break;
           case _MsgAction.save:
-            await _saveImage();
+            // Check if it's a video or image
+            if (widget.message?.video != null && widget.message!.video!.isNotEmpty) {
+              await _saveVideo();
+            } else {
+              await _saveImage();
+            }
             break;
         }
       },
@@ -839,11 +852,13 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
                 (!kIsWeb && Platform.isIOS) ? Colors.black : Colors.white,
           ),
         ),
-        // Show Save option for messages with images (single or multiple)
+        // Show Save option for messages with images (single or multiple) or videos
         if ((widget.message?.image != null &&
                 widget.message!.image.isNotEmpty) ||
             (widget.message?.images != null &&
-                widget.message!.images.isNotEmpty)) ...[
+                widget.message!.images.isNotEmpty) ||
+            (widget.message?.video != null &&
+                widget.message!.video!.isNotEmpty)) ...[
           PopupMenuItem(
             value: _MsgAction.save,
             child: _MenuRow(
@@ -1363,24 +1378,30 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
                                               }
 
                                               // Regular message with bubble
-                                              // If message has image, use fixed width like WhatsApp
+                                              // If message has image or video, use fixed width like WhatsApp
                                               final hasImage =
                                                   widget.message?.image !=
                                                           null &&
                                                       widget.message!.image
                                                           .isNotEmpty;
+                                              final hasVideo =
+                                                  widget.message?.video !=
+                                                          null &&
+                                                      widget.message!.video!
+                                                          .isNotEmpty;
+                                              final hasMedia = hasImage || hasVideo;
                                               return _withMessageMenu(
                                                 bubble: AnimatedContainer(
                                                   duration: const Duration(
                                                       milliseconds: 300),
                                                   constraints: BoxConstraints(
-                                                    maxWidth: hasImage
+                                                    maxWidth: hasMedia
                                                         ? 280.0
                                                         : availableWidth * 0.7,
                                                   ),
-                                                  width: hasImage
+                                                  width: hasMedia
                                                       ? 280.0
-                                                      : null, // Fixed width when has image
+                                                      : null, // Fixed width when has image or video
                                                   decoration: BoxDecoration(
                                                     color: Colors.white,
                                                     borderRadius:
@@ -1519,175 +1540,132 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
                                                               ),
                                                             ),
                                                           ),
-                                                        // Show content if it exists and doesn't look like a filename
-                                                        // When there's a file attachment, show content only if it's actual text (not filename)
-                                                        if (widget.message
-                                                                    ?.content !=
+                                                        // Show content (caption/text) whenever present, including with file attachment
+                                                        if (widget.message?.content !=
                                                                 null &&
-                                                            widget
-                                                                .message!
-                                                                .content
-                                                                .isNotEmpty) ...[
-                                                          Builder(
-                                                            builder: (context) {
-                                                              final content =
-                                                                  widget
-                                                                      .message!
-                                                                      .content;
-                                                              final hasAttachment = widget
-                                                                          .message
-                                                                          ?.attachmentUrl !=
-                                                                      null &&
-                                                                  widget
-                                                                      .message!
-                                                                      .attachmentUrl
-                                                                      .isNotEmpty;
-                                                              // Check if content looks like a filename (has extension, short, few words)
-                                                              final looksLikeFilename = hasAttachment &&
-                                                                  content
-                                                                      .contains(
-                                                                          '.') &&
-                                                                  !content
-                                                                      .contains(
-                                                                          '/') &&
-                                                                  !content
-                                                                      .contains(
-                                                                          '\\') &&
-                                                                  content.length <
-                                                                      200 &&
-                                                                  content
-                                                                          .split(
-                                                                              ' ')
-                                                                          .length <
-                                                                      8;
-
-                                                              // Only show content if it doesn't look like a filename
-                                                              if (!looksLikeFilename) {
-                                                                return custom_widgets
-                                                                    .MessageContentWidget(
-                                                                  content:
-                                                                      content,
-                                                                  senderName:
-                                                                      widget
-                                                                          .name,
-                                                                  onTapLink: (text,
-                                                                      url,
-                                                                      title) async {
-                                                                    if (url !=
-                                                                        null) {
-                                                                      await _launchURL(
-                                                                          url);
-                                                                    }
-                                                                  },
-                                                                  styleSheet:
-                                                                      MarkdownStyleSheet(
-                                                                    // iOS native text styling
-                                                                    p: const TextStyle(
-                                                                      fontFamily:
-                                                                          'SF Pro Text',
-                                                                      color: Color(
-                                                                          0xFF000000),
-                                                                      fontSize:
-                                                                          17.0,
-                                                                      letterSpacing:
-                                                                          -0.4,
-                                                                      fontWeight:
-                                                                          FontWeight
-                                                                              .w400,
-                                                                      height:
-                                                                          1.3,
-                                                                    ),
-                                                                    a: const TextStyle(
-                                                                      fontFamily:
-                                                                          'SF Pro Text',
-                                                                      color: Color(
-                                                                          0xFF007AFF),
-                                                                      fontSize:
-                                                                          17.0,
-                                                                      letterSpacing:
-                                                                          -0.4,
-                                                                      fontWeight:
-                                                                          FontWeight
-                                                                              .w400,
-                                                                      decoration:
-                                                                          TextDecoration
-                                                                              .underline,
-                                                                    ),
-                                                                    code:
-                                                                        const TextStyle(
-                                                                      fontFamily:
-                                                                          'SF Mono',
-                                                                      color: Color(
-                                                                          0xFF000000),
-                                                                      fontSize:
-                                                                          15.0,
-                                                                    ),
-                                                                    codeblockDecoration:
-                                                                        BoxDecoration(
-                                                                      color: const Color(
-                                                                          0xFFE5E7EB),
-                                                                      borderRadius:
-                                                                          BorderRadius.circular(
-                                                                              6),
-                                                                    ),
-                                                                    strong:
-                                                                        const TextStyle(
-                                                                      fontFamily:
-                                                                          'SF Pro Text',
-                                                                      color: Color(
-                                                                          0xFF000000),
-                                                                      fontSize:
-                                                                          17.0,
-                                                                      fontWeight:
-                                                                          FontWeight
-                                                                              .w600,
-                                                                    ),
-                                                                    em: const TextStyle(
-                                                                      fontFamily:
-                                                                          'SF Pro Text',
-                                                                      color: Color(
-                                                                          0xFF000000),
-                                                                      fontSize:
-                                                                          17.0,
-                                                                      fontStyle:
-                                                                          FontStyle
-                                                                              .italic,
-                                                                      fontWeight:
-                                                                          FontWeight
-                                                                              .w400,
-                                                                    ),
-                                                                    tableBody:
-                                                                        const TextStyle(
-                                                                      fontFamily:
-                                                                          'SF Pro Text',
-                                                                      color: Color(
-                                                                          0xFF000000),
-                                                                      fontSize:
-                                                                          15.0,
-                                                                      fontWeight:
-                                                                          FontWeight
-                                                                              .w400,
-                                                                    ),
-                                                                    tableHead:
-                                                                        const TextStyle(
-                                                                      fontFamily:
-                                                                          'SF Pro Text',
-                                                                      color: Color(
-                                                                          0xFF000000),
-                                                                      fontSize:
-                                                                          15.0,
-                                                                      fontWeight:
-                                                                          FontWeight
-                                                                              .w600,
-                                                                    ),
-                                                                  ),
-                                                                );
-                                                              }
-                                                              return SizedBox
-                                                                  .shrink();
-                                                            },
+                                                            widget.message
+                                                                    ?.content !=
+                                                                '')
+                                                          Container(
+                                                            constraints: BoxConstraints(
+                                                              maxWidth: hasMedia ? 280.0 : double.infinity,
+                                                            ),
+                                                            child: custom_widgets
+                                                                .MessageContentWidget(
+                                                              content:
+                                                                  valueOrDefault<
+                                                                      String>(
+                                                                widget.message
+                                                                    ?.content,
+                                                                'I\'m at the venue now. Here\'s the map with the room highlighted:',
+                                                              ),
+                                                              senderName:
+                                                                  widget.name,
+                                                              onTapLink: (text,
+                                                                  url,
+                                                                  title) async {
+                                                                if (url != null) {
+                                                                  await _launchURL(
+                                                                      url);
+                                                                }
+                                                              },
+                                                            styleSheet:
+                                                                MarkdownStyleSheet(
+                                                              // iOS native text styling
+                                                              p: const TextStyle(
+                                                                fontFamily:
+                                                                    'SF Pro Text',
+                                                                color: Color(
+                                                                    0xFF000000),
+                                                                fontSize: 17.0,
+                                                                letterSpacing:
+                                                                    -0.4,
+                                                                fontWeight:
+                                                                    FontWeight
+                                                                        .w400,
+                                                                height: 1.3,
+                                                              ),
+                                                              a: const TextStyle(
+                                                                fontFamily:
+                                                                    'SF Pro Text',
+                                                                color: Color(
+                                                                    0xFF007AFF),
+                                                                fontSize: 17.0,
+                                                                letterSpacing:
+                                                                    -0.4,
+                                                                fontWeight:
+                                                                    FontWeight
+                                                                        .w400,
+                                                                decoration:
+                                                                    TextDecoration
+                                                                        .underline,
+                                                              ),
+                                                              code:
+                                                                  const TextStyle(
+                                                                fontFamily:
+                                                                    'SF Mono',
+                                                                color: Color(
+                                                                    0xFF000000),
+                                                                fontSize: 15.0,
+                                                              ),
+                                                              codeblockDecoration:
+                                                                  BoxDecoration(
+                                                                color: const Color(
+                                                                    0xFFE5E7EB),
+                                                                borderRadius:
+                                                                    BorderRadius
+                                                                        .circular(
+                                                                            6),
+                                                              ),
+                                                              strong:
+                                                                  const TextStyle(
+                                                                fontFamily:
+                                                                    'SF Pro Text',
+                                                                color: Color(
+                                                                    0xFF000000),
+                                                                fontSize: 17.0,
+                                                                fontWeight:
+                                                                    FontWeight
+                                                                        .w600,
+                                                              ),
+                                                              em: const TextStyle(
+                                                                fontFamily:
+                                                                    'SF Pro Text',
+                                                                color: Color(
+                                                                    0xFF000000),
+                                                                fontSize: 17.0,
+                                                                fontStyle:
+                                                                    FontStyle
+                                                                        .italic,
+                                                                fontWeight:
+                                                                    FontWeight
+                                                                        .w400,
+                                                              ),
+                                                              tableBody:
+                                                                  const TextStyle(
+                                                                fontFamily:
+                                                                    'SF Pro Text',
+                                                                color: Color(
+                                                                    0xFF000000),
+                                                                fontSize: 15.0,
+                                                                fontWeight:
+                                                                    FontWeight
+                                                                        .w400,
+                                                              ),
+                                                              tableHead:
+                                                                  const TextStyle(
+                                                                fontFamily:
+                                                                    'SF Pro Text',
+                                                                color: Color(
+                                                                    0xFF000000),
+                                                                fontSize: 15.0,
+                                                                fontWeight:
+                                                                    FontWeight
+                                                                        .w600,
+                                                              ),
+                                                            ),
                                                           ),
-                                                        ],
+                                                        ),
                                                         // Edited indicator
                                                         if (widget.message
                                                                 ?.isEdited ==
@@ -1845,6 +1823,10 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
                                                                                 'https://firebasestorage.googleapis.com/v0/b/linkedup-c3e29.firebasestorage.app/o/asset%2Fdefault-user.png?alt=media&token=35d4da12-13b0-4f43-8b8e-375e6e126683',
                                                                               ),
                                                                               useHeroAnimation: true,
+                                                                              imageUrl: valueOrDefault<String>(
+                                                                                widget.message?.image,
+                                                                                '',
+                                                                              ),
                                                                             ),
                                                                           ),
                                                                         );
@@ -1917,27 +1899,44 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
                                                                     ?.video !=
                                                                 '')
                                                           Container(
-                                                            width: 265.0,
-                                                            height: 200.0,
-                                                            decoration:
-                                                                BoxDecoration(
-                                                              color: const Color(
-                                                                  0xFFE5E7EB),
-                                                              borderRadius:
-                                                                  BorderRadius
-                                                                      .circular(
-                                                                          8.0),
+                                                            constraints: BoxConstraints(
+                                                              maxWidth: 280.0,
+                                                              maxHeight: 400.0,
                                                             ),
-                                                            child:
-                                                                VideoMessageWidget(
-                                                              videoUrl: widget
-                                                                      .message
-                                                                      ?.video ??
-                                                                  '',
-                                                              width: 265.0,
-                                                              height: 200.0,
-                                                              isOwnMessage:
-                                                                  isMe,
+                                                            width: 280.0, // Fixed width like WhatsApp
+                                                            margin: const EdgeInsets.only(
+                                                              bottom: 4.0,
+                                                            ),
+                                                            decoration: BoxDecoration(
+                                                              color: const Color(0xFFE5E7EB),
+                                                              borderRadius: BorderRadius.only(
+                                                                topLeft: Radius.circular(8.0),
+                                                                topRight: Radius.circular(8.0),
+                                                                bottomLeft: Radius.circular(8.0),
+                                                                bottomRight: Radius.circular((widget.message?.content != null &&
+                                                                        widget.message!.content.isNotEmpty &&
+                                                                        (widget.message?.attachmentUrl == null || widget.message?.attachmentUrl == ''))
+                                                                    ? 0.0
+                                                                    : 8.0),
+                                                              ),
+                                                            ),
+                                                            child: ClipRRect(
+                                                              borderRadius: BorderRadius.only(
+                                                                topLeft: Radius.circular(8.0),
+                                                                topRight: Radius.circular(8.0),
+                                                                bottomLeft: Radius.circular(8.0),
+                                                                bottomRight: Radius.circular((widget.message?.content != null &&
+                                                                        widget.message!.content.isNotEmpty &&
+                                                                        (widget.message?.attachmentUrl == null || widget.message?.attachmentUrl == ''))
+                                                                    ? 0.0
+                                                                    : 8.0),
+                                                              ),
+                                                              child: VideoMessageWidget(
+                                                                videoUrl: widget.message?.video ?? '',
+                                                                width: 280.0,
+                                                                height: 200.0,
+                                                                isOwnMessage: isMe,
+                                                              ),
                                                             ),
                                                           ),
                                                         if ((widget.message
@@ -2019,6 +2018,10 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
                                                                                         'https://firebasestorage.googleapis.com/v0/b/linkedup-c3e29.firebasestorage.app/o/asset%2Fdefault-user.png?alt=media&token=35d4da12-13b0-4f43-8b8e-375e6e126683$multipleImagesIndex',
                                                                                       ),
                                                                                       useHeroAnimation: true,
+                                                                                      imageUrl: valueOrDefault<String>(
+                                                                                        multipleImagesItem,
+                                                                                        '',
+                                                                                      ),
                                                                                     ),
                                                                                   ),
                                                                                 );
@@ -2226,26 +2229,25 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
                                 ),
                               ),
                             ),
-                            // Only show profile photo in group chats
+                            // Only show profile photo in group chats (tappable to open user summary)
                             if (widget.isGroup)
-                              InkWell(
-                                onTap: () {
-                                  if (widget.message?.senderRef != null) {
-                                    context.pushNamed(
-                                      'UserSummary',
-                                      queryParameters: {
-                                        'userRef': serializeParam(
-                                          widget.message!.senderRef,
-                                          ParamType.DocumentReference,
-                                        ),
-                                      }.withoutNulls,
-                                      extra: <String, dynamic>{
-                                        'userRef': widget.message!.senderRef,
-                                      },
-                                    );
-                                  }
-                                },
-                                borderRadius: BorderRadius.circular(16.0),
+                              GestureDetector(
+                                onTap: widget.userRef != null
+                                    ? () {
+                                        context.pushNamed(
+                                          UserSummaryWidget.routeName,
+                                          queryParameters: {
+                                            'userRef': serializeParam(
+                                              widget.userRef,
+                                              ParamType.DocumentReference,
+                                            ),
+                                          }.withoutNulls,
+                                          extra: <String, dynamic>{
+                                            'userRef': widget.userRef,
+                                          },
+                                        );
+                                      }
+                                    : null,
                                 child: ClipRRect(
                                   borderRadius: BorderRadius.circular(16.0),
                                   child: CachedNetworkImage(
@@ -2290,26 +2292,25 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
                           mainAxisAlignment: MainAxisAlignment.start,
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            // Only show profile photo in group chats
+                            // Only show profile photo in group chats (tappable to open user summary)
                             if (widget.isGroup)
-                              InkWell(
-                                onTap: () {
-                                  if (widget.message?.senderRef != null) {
-                                    context.pushNamed(
-                                      'UserSummary',
-                                      queryParameters: {
-                                        'userRef': serializeParam(
-                                          widget.message!.senderRef,
-                                          ParamType.DocumentReference,
-                                        ),
-                                      }.withoutNulls,
-                                      extra: <String, dynamic>{
-                                        'userRef': widget.message!.senderRef,
-                                      },
-                                    );
-                                  }
-                                },
-                                borderRadius: BorderRadius.circular(16.0),
+                              GestureDetector(
+                                onTap: widget.userRef != null
+                                    ? () {
+                                        context.pushNamed(
+                                          UserSummaryWidget.routeName,
+                                          queryParameters: {
+                                            'userRef': serializeParam(
+                                              widget.userRef,
+                                              ParamType.DocumentReference,
+                                            ),
+                                          }.withoutNulls,
+                                          extra: <String, dynamic>{
+                                            'userRef': widget.userRef,
+                                          },
+                                        );
+                                      }
+                                    : null,
                                 child: ClipRRect(
                                   borderRadius: BorderRadius.circular(16.0),
                                   child: CachedNetworkImage(
@@ -2394,24 +2395,30 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
                                               }
 
                                               // Regular message with bubble
-                                              // If message has image, use fixed width like WhatsApp
+                                              // If message has image or video, use fixed width like WhatsApp
                                               final hasImage =
                                                   widget.message?.image !=
                                                           null &&
                                                       widget.message!.image
                                                           .isNotEmpty;
+                                              final hasVideo =
+                                                  widget.message?.video !=
+                                                          null &&
+                                                      widget.message!.video!
+                                                          .isNotEmpty;
+                                              final hasMedia = hasImage || hasVideo;
                                               return _withMessageMenu(
                                                 bubble: AnimatedContainer(
                                                   duration: const Duration(
                                                       milliseconds: 300),
                                                   constraints: BoxConstraints(
-                                                    maxWidth: hasImage
+                                                    maxWidth: hasMedia
                                                         ? 280.0
                                                         : availableWidth * 0.7,
                                                   ),
-                                                  width: hasImage
+                                                  width: hasMedia
                                                       ? 280.0
-                                                      : null, // Fixed width when has image
+                                                      : null, // Fixed width when has image or video
                                                   decoration: BoxDecoration(
                                                     color: Colors.white,
                                                     borderRadius:
@@ -2550,175 +2557,132 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
                                                               ),
                                                             ),
                                                           ),
-                                                        // Show content if it exists and doesn't look like a filename
-                                                        // When there's a file attachment, show content only if it's actual text (not filename)
-                                                        if (widget.message
-                                                                    ?.content !=
+                                                        // Show content (caption/text) whenever present, including with file attachment
+                                                        if (widget.message?.content !=
                                                                 null &&
-                                                            widget
-                                                                .message!
-                                                                .content
-                                                                .isNotEmpty) ...[
-                                                          Builder(
-                                                            builder: (context) {
-                                                              final content =
-                                                                  widget
-                                                                      .message!
-                                                                      .content;
-                                                              final hasAttachment = widget
-                                                                          .message
-                                                                          ?.attachmentUrl !=
-                                                                      null &&
-                                                                  widget
-                                                                      .message!
-                                                                      .attachmentUrl
-                                                                      .isNotEmpty;
-                                                              // Check if content looks like a filename (has extension, short, few words)
-                                                              final looksLikeFilename = hasAttachment &&
-                                                                  content
-                                                                      .contains(
-                                                                          '.') &&
-                                                                  !content
-                                                                      .contains(
-                                                                          '/') &&
-                                                                  !content
-                                                                      .contains(
-                                                                          '\\') &&
-                                                                  content.length <
-                                                                      200 &&
-                                                                  content
-                                                                          .split(
-                                                                              ' ')
-                                                                          .length <
-                                                                      8;
-
-                                                              // Only show content if it doesn't look like a filename
-                                                              if (!looksLikeFilename) {
-                                                                return custom_widgets
-                                                                    .MessageContentWidget(
-                                                                  content:
-                                                                      content,
-                                                                  senderName:
-                                                                      widget
-                                                                          .name,
-                                                                  onTapLink: (text,
-                                                                      url,
-                                                                      title) async {
-                                                                    if (url !=
-                                                                        null) {
-                                                                      await _launchURL(
-                                                                          url);
-                                                                    }
-                                                                  },
-                                                                  styleSheet:
-                                                                      MarkdownStyleSheet(
-                                                                    // iMessage received bubble: dark text on gray
-                                                                    p: const TextStyle(
-                                                                      fontFamily:
-                                                                          'SF Pro Text',
-                                                                      color: Color(
-                                                                          0xFF000000),
-                                                                      fontSize:
-                                                                          17.0,
-                                                                      letterSpacing:
-                                                                          -0.4,
-                                                                      fontWeight:
-                                                                          FontWeight
-                                                                              .w400,
-                                                                      height:
-                                                                          1.3,
-                                                                    ),
-                                                                    a: const TextStyle(
-                                                                      fontFamily:
-                                                                          'SF Pro Text',
-                                                                      color: Color(
-                                                                          0xFF007AFF),
-                                                                      fontSize:
-                                                                          17.0,
-                                                                      letterSpacing:
-                                                                          -0.4,
-                                                                      fontWeight:
-                                                                          FontWeight
-                                                                              .w400,
-                                                                      decoration:
-                                                                          TextDecoration
-                                                                              .underline,
-                                                                    ),
-                                                                    code:
-                                                                        const TextStyle(
-                                                                      fontFamily:
-                                                                          'SF Mono',
-                                                                      color: Color(
-                                                                          0xFF000000),
-                                                                      fontSize:
-                                                                          15.0,
-                                                                    ),
-                                                                    codeblockDecoration:
-                                                                        BoxDecoration(
-                                                                      color: const Color(
-                                                                          0xFFD1D1D6),
-                                                                      borderRadius:
-                                                                          BorderRadius.circular(
-                                                                              6),
-                                                                    ),
-                                                                    strong:
-                                                                        const TextStyle(
-                                                                      fontFamily:
-                                                                          'SF Pro Text',
-                                                                      color: Color(
-                                                                          0xFF000000),
-                                                                      fontSize:
-                                                                          17.0,
-                                                                      fontWeight:
-                                                                          FontWeight
-                                                                              .w600,
-                                                                    ),
-                                                                    em: const TextStyle(
-                                                                      fontFamily:
-                                                                          'SF Pro Text',
-                                                                      color: Color(
-                                                                          0xFF000000),
-                                                                      fontSize:
-                                                                          17.0,
-                                                                      fontStyle:
-                                                                          FontStyle
-                                                                              .italic,
-                                                                      fontWeight:
-                                                                          FontWeight
-                                                                              .w400,
-                                                                    ),
-                                                                    tableBody:
-                                                                        const TextStyle(
-                                                                      fontFamily:
-                                                                          'SF Pro Text',
-                                                                      color: Color(
-                                                                          0xFF000000),
-                                                                      fontSize:
-                                                                          15.0,
-                                                                      fontWeight:
-                                                                          FontWeight
-                                                                              .w400,
-                                                                    ),
-                                                                    tableHead:
-                                                                        const TextStyle(
-                                                                      fontFamily:
-                                                                          'SF Pro Text',
-                                                                      color: Color(
-                                                                          0xFF000000),
-                                                                      fontSize:
-                                                                          15.0,
-                                                                      fontWeight:
-                                                                          FontWeight
-                                                                              .w600,
-                                                                    ),
-                                                                  ),
-                                                                );
-                                                              }
-                                                              return SizedBox
-                                                                  .shrink();
-                                                            },
+                                                            widget.message
+                                                                    ?.content !=
+                                                                '')
+                                                          Container(
+                                                            constraints: BoxConstraints(
+                                                              maxWidth: hasMedia ? 280.0 : double.infinity,
+                                                            ),
+                                                            child: custom_widgets
+                                                                .MessageContentWidget(
+                                                              content:
+                                                                  valueOrDefault<
+                                                                      String>(
+                                                                widget.message
+                                                                    ?.content,
+                                                                'I\'m at the venue now. Here\'s the map with the room highlighted:',
+                                                              ),
+                                                              senderName:
+                                                                  widget.name,
+                                                              onTapLink: (text,
+                                                                  url,
+                                                                  title) async {
+                                                                if (url != null) {
+                                                                  await _launchURL(
+                                                                      url);
+                                                                }
+                                                              },
+                                                            styleSheet:
+                                                                MarkdownStyleSheet(
+                                                              // iMessage received bubble: dark text on gray
+                                                              p: const TextStyle(
+                                                                fontFamily:
+                                                                    'SF Pro Text',
+                                                                color: Color(
+                                                                    0xFF000000),
+                                                                fontSize: 17.0,
+                                                                letterSpacing:
+                                                                    -0.4,
+                                                                fontWeight:
+                                                                    FontWeight
+                                                                        .w400,
+                                                                height: 1.3,
+                                                              ),
+                                                              a: const TextStyle(
+                                                                fontFamily:
+                                                                    'SF Pro Text',
+                                                                color: Color(
+                                                                    0xFF007AFF),
+                                                                fontSize: 17.0,
+                                                                letterSpacing:
+                                                                    -0.4,
+                                                                fontWeight:
+                                                                    FontWeight
+                                                                        .w400,
+                                                                decoration:
+                                                                    TextDecoration
+                                                                        .underline,
+                                                              ),
+                                                              code:
+                                                                  const TextStyle(
+                                                                fontFamily:
+                                                                    'SF Mono',
+                                                                color: Color(
+                                                                    0xFF000000),
+                                                                fontSize: 15.0,
+                                                              ),
+                                                              codeblockDecoration:
+                                                                  BoxDecoration(
+                                                                color: const Color(
+                                                                    0xFFD1D1D6),
+                                                                borderRadius:
+                                                                    BorderRadius
+                                                                        .circular(
+                                                                            6),
+                                                              ),
+                                                              strong:
+                                                                  const TextStyle(
+                                                                fontFamily:
+                                                                    'SF Pro Text',
+                                                                color: Color(
+                                                                    0xFF000000),
+                                                                fontSize: 17.0,
+                                                                fontWeight:
+                                                                    FontWeight
+                                                                        .w600,
+                                                              ),
+                                                              em: const TextStyle(
+                                                                fontFamily:
+                                                                    'SF Pro Text',
+                                                                color: Color(
+                                                                    0xFF000000),
+                                                                fontSize: 17.0,
+                                                                fontStyle:
+                                                                    FontStyle
+                                                                        .italic,
+                                                                fontWeight:
+                                                                    FontWeight
+                                                                        .w400,
+                                                              ),
+                                                              tableBody:
+                                                                  const TextStyle(
+                                                                fontFamily:
+                                                                    'SF Pro Text',
+                                                                color: Color(
+                                                                    0xFF000000),
+                                                                fontSize: 15.0,
+                                                                fontWeight:
+                                                                    FontWeight
+                                                                        .w400,
+                                                              ),
+                                                              tableHead:
+                                                                  const TextStyle(
+                                                                fontFamily:
+                                                                    'SF Pro Text',
+                                                                color: Color(
+                                                                    0xFF000000),
+                                                                fontSize: 15.0,
+                                                                fontWeight:
+                                                                    FontWeight
+                                                                        .w600,
+                                                              ),
+                                                            ),
                                                           ),
-                                                        ],
+                                                        ),
                                                         // Edited indicator for received messages
                                                         if (widget.message
                                                                 ?.isEdited ==
@@ -2866,6 +2830,10 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
                                                                                 'https://firebasestorage.googleapis.com/v0/b/linkedup-c3e29.firebasestorage.app/o/asset%2Fdefault-user.png?alt=media&token=35d4da12-13b0-4f43-8b8e-375e6e126683',
                                                                               ),
                                                                               useHeroAnimation: true,
+                                                                              imageUrl: valueOrDefault<String>(
+                                                                                widget.message?.image,
+                                                                                '',
+                                                                              ),
                                                                             ),
                                                                           ),
                                                                         );
@@ -2919,27 +2887,44 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
                                                                     ?.video !=
                                                                 '')
                                                           Container(
-                                                            width: 265.0,
-                                                            height: 200.0,
-                                                            decoration:
-                                                                BoxDecoration(
-                                                              color: const Color(
-                                                                  0xFFE5E7EB),
-                                                              borderRadius:
-                                                                  BorderRadius
-                                                                      .circular(
-                                                                          8.0),
+                                                            constraints: BoxConstraints(
+                                                              maxWidth: 280.0,
+                                                              maxHeight: 400.0,
                                                             ),
-                                                            child:
-                                                                VideoMessageWidget(
-                                                              videoUrl: widget
-                                                                      .message
-                                                                      ?.video ??
-                                                                  '',
-                                                              width: 265.0,
-                                                              height: 200.0,
-                                                              isOwnMessage:
-                                                                  isMe,
+                                                            width: 280.0, // Fixed width like WhatsApp
+                                                            margin: const EdgeInsets.only(
+                                                              bottom: 4.0,
+                                                            ),
+                                                            decoration: BoxDecoration(
+                                                              color: const Color(0xFFE5E7EB),
+                                                              borderRadius: BorderRadius.only(
+                                                                topLeft: Radius.circular(8.0),
+                                                                topRight: Radius.circular(8.0),
+                                                                bottomLeft: Radius.circular(8.0),
+                                                                bottomRight: Radius.circular((widget.message?.content != null &&
+                                                                        widget.message!.content.isNotEmpty &&
+                                                                        (widget.message?.attachmentUrl == null || widget.message?.attachmentUrl == ''))
+                                                                    ? 0.0
+                                                                    : 8.0),
+                                                              ),
+                                                            ),
+                                                            child: ClipRRect(
+                                                              borderRadius: BorderRadius.only(
+                                                                topLeft: Radius.circular(8.0),
+                                                                topRight: Radius.circular(8.0),
+                                                                bottomLeft: Radius.circular(8.0),
+                                                                bottomRight: Radius.circular((widget.message?.content != null &&
+                                                                        widget.message!.content.isNotEmpty &&
+                                                                        (widget.message?.attachmentUrl == null || widget.message?.attachmentUrl == ''))
+                                                                    ? 0.0
+                                                                    : 8.0),
+                                                              ),
+                                                              child: VideoMessageWidget(
+                                                                videoUrl: widget.message?.video ?? '',
+                                                                width: 280.0,
+                                                                height: 200.0,
+                                                                isOwnMessage: isMe,
+                                                              ),
                                                             ),
                                                           ),
                                                         if ((widget.message
@@ -3021,6 +3006,10 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
                                                                                         'https://firebasestorage.googleapis.com/v0/b/linkedup-c3e29.firebasestorage.app/o/asset%2Fdefault-user.png?alt=media&token=35d4da12-13b0-4f43-8b8e-375e6e126683$multipleImagesIndex',
                                                                                       ),
                                                                                       useHeroAnimation: true,
+                                                                                      imageUrl: valueOrDefault<String>(
+                                                                                        multipleImagesItem,
+                                                                                        '',
+                                                                                      ),
                                                                                     ),
                                                                                   ),
                                                                                 );
@@ -3495,103 +3484,50 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
     }
   }
 
-  // Download function for images
+  // Save video from message
+  Future<void> _saveVideo() async {
+    debugPrint('========================================');
+    debugPrint('=== SAVE VIDEO FROM MENU ===');
+    debugPrint('========================================');
+
+    final videoUrl = valueOrDefault<String>(
+      widget.message?.video,
+      '',
+    );
+
+    if (videoUrl.isNotEmpty) {
+      // Extract filename from URL, default to .mp4 if no extension found
+      String fileName = _getFileNameFromUrl(videoUrl);
+      // Ensure it has .mp4 extension if no extension found
+      if (!fileName.contains('.')) {
+        fileName = '$fileName.mp4';
+      } else if (!fileName.toLowerCase().endsWith('.mp4') &&
+          !fileName.toLowerCase().endsWith('.mov') &&
+          !fileName.toLowerCase().endsWith('.avi') &&
+          !fileName.toLowerCase().endsWith('.mkv')) {
+        // If it has an extension but not a video extension, add .mp4
+        fileName = '${fileName.split('.').first}.mp4';
+      }
+      debugPrint('Saving video: $fileName');
+      await _downloadFile(videoUrl, fileName);
+    } else {
+      debugPrint('No video found in message!');
+      _showSnackBar(
+        const SnackBar(
+          content: Text('No video found in this message'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
   Future<void> _downloadFile(String url, String fileName) async {
     debugPrint('_downloadFile called with URL: $url, fileName: $fileName');
-    // macOS - Handle separately to avoid any fallthrough
-    if (Platform.isMacOS) {
-      debugPrint('Platform is macOS, starting download...');
-      try {
-        // Sanitize filename
-        String safeFileName = fileName;
-        safeFileName = safeFileName.replaceAll('/', '_').replaceAll('\\', '_');
-        safeFileName = safeFileName.split('/').last.split('\\').last;
-        if (!safeFileName.contains('.')) {
-          safeFileName = '${safeFileName}.jpg';
-        }
 
-        // Download the file first
-        debugPrint('Downloading from URL: $url');
-        final response = await http.get(Uri.parse(url));
-        debugPrint('Download response status: ${response.statusCode}');
-
-        if (response.statusCode != 200) {
-          throw Exception('Failed to download file: ${response.statusCode}');
-        }
-
-        // Use file_picker's saveFile to handle macOS sandboxing properly
-        // This will show a save dialog and handle permissions correctly
-        final fileExtension = safeFileName.contains('.')
-            ? safeFileName.split('.').last.toLowerCase()
-            : 'jpg';
-
-        // Determine file type based on extension
-        FileType fileType = FileType.any;
-        List<String>? allowedExtensions;
-
-        // For common image types, use custom type with specific extension
-        if (['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 'svg']
-            .contains(fileExtension)) {
-          fileType = FileType.custom;
-          allowedExtensions = [fileExtension];
-        } else if (['pdf'].contains(fileExtension)) {
-          fileType = FileType.custom;
-          allowedExtensions = [fileExtension];
-        }
-
-        final result = await FilePicker.platform.saveFile(
-          dialogTitle: 'Save File',
-          fileName: safeFileName,
-          type: fileType,
-          allowedExtensions: allowedExtensions,
-        );
-
-        if (result != null && result.isNotEmpty) {
-          try {
-            final file = File(result);
-            await file.writeAsBytes(response.bodyBytes);
-            debugPrint('File saved successfully to: $result');
-
-            // Reveal in Finder
-            try {
-              await Process.run('open', ['-R', result]);
-              debugPrint('Download complete!');
-
-              _showSuccessPopup('Downloaded');
-            } catch (e) {
-              debugPrint('Error revealing file in Finder: $e');
-              _showSuccessPopup('File saved');
-            }
-          } catch (e) {
-            debugPrint('Error saving file: $e');
-            _showSnackBar(
-              SnackBar(
-                content: Text('Error saving file: $e'),
-                backgroundColor: Colors.red,
-                duration: const Duration(seconds: 3),
-              ),
-            );
-          }
-        } else {
-          debugPrint('User cancelled file save dialog');
-        }
-      } catch (e) {
-        debugPrint('Error during download: $e');
-        _showSnackBar(
-          SnackBar(
-            content: Text('Error downloading file: $e'),
-            backgroundColor: Colors.red,
-            duration: const Duration(seconds: 3),
-          ),
-        );
-      }
-      return; // ALWAYS return for macOS
-    }
-
-    // Rest of the code for other platforms
     try {
+      // Handle web platform FIRST
       if (kIsWeb) {
-        // For web, download the file using blob URL
+        debugPrint('Platform is Web, starting download...');
         try {
           _showSnackBar(
             SnackBar(
@@ -3635,7 +3571,7 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
             } else if (contentType.contains('pdf')) {
               extension = 'pdf';
             }
-            safeFileName = '${safeFileName}.$extension';
+            safeFileName = '$safeFileName.$extension';
           }
 
           // Create blob and download using helper (only works on web)
@@ -3668,7 +3604,99 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
             ),
           );
         }
-        return;
+        return; // ALWAYS return for web
+      }
+
+      // Native platforms only below this point
+      // macOS - Handle separately to avoid any fallthrough
+      if (Platform.isMacOS) {
+        debugPrint('Platform is macOS, starting download...');
+        try {
+          // Sanitize filename
+          String safeFileName = fileName;
+          safeFileName =
+              safeFileName.replaceAll('/', '_').replaceAll('\\', '_');
+          safeFileName = safeFileName.split('/').last.split('\\').last;
+          if (!safeFileName.contains('.')) {
+            safeFileName = '$safeFileName.jpg';
+          }
+
+          // Download the file first
+          debugPrint('Downloading from URL: $url');
+          final response = await http.get(Uri.parse(url));
+          debugPrint('Download response status: ${response.statusCode}');
+
+          if (response.statusCode != 200) {
+            throw Exception('Failed to download file: ${response.statusCode}');
+          }
+
+          // Use file_picker's saveFile to handle macOS sandboxing properly
+          // This will show a save dialog and handle permissions correctly
+          final fileExtension = safeFileName.contains('.')
+              ? safeFileName.split('.').last.toLowerCase()
+              : 'jpg';
+
+          // Determine file type based on extension
+          FileType fileType = FileType.any;
+          List<String>? allowedExtensions;
+
+          // For common image types, use custom type with specific extension
+          if (['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 'svg']
+              .contains(fileExtension)) {
+            fileType = FileType.custom;
+            allowedExtensions = [fileExtension];
+          } else if (['pdf'].contains(fileExtension)) {
+            fileType = FileType.custom;
+            allowedExtensions = [fileExtension];
+          }
+
+          final result = await FilePicker.platform.saveFile(
+            dialogTitle: 'Save File',
+            fileName: safeFileName,
+            type: fileType,
+            allowedExtensions: allowedExtensions,
+          );
+
+          if (result != null && result.isNotEmpty) {
+            try {
+              final file = File(result);
+              await file.writeAsBytes(response.bodyBytes);
+              debugPrint('File saved successfully to: $result');
+
+              // Reveal in Finder
+              try {
+                await Process.run('open', ['-R', result]);
+                debugPrint('Download complete!');
+
+                _showSuccessPopup('Downloaded');
+              } catch (e) {
+                debugPrint('Error revealing file in Finder: $e');
+                _showSuccessPopup('File saved');
+              }
+            } catch (e) {
+              debugPrint('Error saving file: $e');
+              _showSnackBar(
+                SnackBar(
+                  content: Text('Error saving file: $e'),
+                  backgroundColor: Colors.red,
+                  duration: const Duration(seconds: 3),
+                ),
+              );
+            }
+          } else {
+            debugPrint('User cancelled file save dialog');
+          }
+        } catch (e) {
+          debugPrint('Error during download: $e');
+          _showSnackBar(
+            SnackBar(
+              content: Text('Error downloading file: $e'),
+              backgroundColor: Colors.red,
+              duration: const Duration(seconds: 3),
+            ),
+          );
+        }
+        return; // ALWAYS return for macOS
       }
 
       // For other desktop platforms
@@ -3716,7 +3744,14 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
             SnackBar(
               content: Text('Downloaded: $finalFileName'),
               backgroundColor: Colors.green,
-              duration: const Duration(seconds: 3),
+              duration: const Duration(seconds: 4),
+              action: SnackBarAction(
+                label: 'Open',
+                textColor: Colors.white,
+                onPressed: () async {
+                  await _launchURL('file://${file.path}');
+                },
+              ),
             ),
           );
         } else {
@@ -3725,99 +3760,152 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
         return;
       }
 
-      // For mobile platforms (Android/iOS), download to device storage
-      // Request storage permission (wrapped in try-catch for platforms that don't support it)
-      try {
-        var status = await Permission.storage.status;
-        if (!status.isGranted) {
-          status = await Permission.storage.request();
-          if (!status.isGranted) {
-            _showSnackBar(
-              const SnackBar(
-                content:
-                    Text('Storage permission is required to download files'),
-                backgroundColor: Colors.red,
-              ),
-            );
-            return;
+      // For mobile platforms (Android/iOS)
+      // iOS: Use FilePicker to save to Files app
+      if (Platform.isIOS) {
+        try {
+          // Sanitize filename
+          String safeFileName = fileName;
+          safeFileName =
+              safeFileName.replaceAll('/', '_').replaceAll('\\', '_');
+          safeFileName = safeFileName.split('/').last.split('\\').last;
+          
+          // Ensure filename has extension
+          if (!safeFileName.contains('.')) {
+            // Try to detect from URL or default to generic
+            final uri = Uri.parse(url);
+            final pathSegments = uri.pathSegments;
+            if (pathSegments.isNotEmpty) {
+              final lastSegment = pathSegments.last;
+              if (lastSegment.contains('.')) {
+                final ext = lastSegment.split('.').last;
+                safeFileName = '$safeFileName.$ext';
+              } else {
+                safeFileName = '$safeFileName.file';
+              }
+            } else {
+              safeFileName = '$safeFileName.file';
+            }
           }
+
+          // Download the file first
+          final response = await http.get(Uri.parse(url));
+          if (response.statusCode != 200) {
+            throw Exception('Failed to download file: ${response.statusCode}');
+          }
+
+          // Get file extension for FilePicker
+          final fileExtension = safeFileName.contains('.')
+              ? safeFileName.split('.').last.toLowerCase()
+              : 'file';
+
+          // Determine file type based on extension
+          FileType fileType = FileType.any;
+          List<String>? allowedExtensions;
+
+          // Map common extensions to file types
+          if (['pdf'].contains(fileExtension)) {
+            fileType = FileType.custom;
+            allowedExtensions = ['pdf'];
+          } else if (['xlsx', 'xls'].contains(fileExtension)) {
+            fileType = FileType.custom;
+            allowedExtensions = ['xlsx', 'xls'];
+          } else if (['docx', 'doc'].contains(fileExtension)) {
+            fileType = FileType.custom;
+            allowedExtensions = ['docx', 'doc'];
+          } else if (['pptx', 'ppt'].contains(fileExtension)) {
+            fileType = FileType.custom;
+            allowedExtensions = ['pptx', 'ppt'];
+          } else if (['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 'svg']
+              .contains(fileExtension)) {
+            fileType = FileType.custom;
+            allowedExtensions = [fileExtension];
+          } else {
+            // For other file types, use any type
+            fileType = FileType.any;
+          }
+
+          // Use FilePicker to save file (this makes it accessible in Files app)
+          // On iOS/Android, bytes parameter is required
+          final result = await FilePicker.platform.saveFile(
+            dialogTitle: 'Save File',
+            fileName: safeFileName,
+            type: fileType,
+            allowedExtensions: allowedExtensions,
+            bytes: response.bodyBytes, // Required on iOS/Android
+          );
+
+          if (result != null && result.isNotEmpty) {
+            debugPrint('File saved successfully to: $result');
+            _showSuccessPopup('Downloaded');
+          } else {
+            debugPrint('User cancelled file save dialog');
+          }
+        } catch (e) {
+          debugPrint('Error during download: $e');
+          _showSnackBar(
+            SnackBar(
+              content: Text('Error downloading file: $e'),
+              backgroundColor: Colors.red,
+              duration: const Duration(seconds: 3),
+            ),
+          );
         }
-      } catch (e) {
-        // Permission handler not available (e.g., on some platforms)
-        // Continue without permission check
+        return; // ALWAYS return for iOS
       }
 
-      // Show loading indicator
-      _showSnackBar(
-        SnackBar(
-          content: Row(
-            children: [
-              const SizedBox(
-                width: 20,
-                height: 20,
-                child: CircularProgressIndicator(strokeWidth: 2),
-              ),
-              const SizedBox(width: 16),
-              Text('Downloading $fileName...'),
-            ],
-          ),
-          duration: const Duration(seconds: 30),
-        ),
-      );
+      // For Android
+      if (Platform.isAndroid) {
+        // Request storage permission
+        try {
+          var status = await Permission.storage.status;
+          if (!status.isGranted) {
+            status = await Permission.storage.request();
+            if (!status.isGranted) {
+              _showSnackBar(
+                const SnackBar(
+                  content:
+                      Text('Storage permission is required to download files'),
+                  backgroundColor: Colors.red,
+                ),
+              );
+              return;
+            }
+          }
+        } catch (e) {
+          // Permission handler not available
+          // Continue without permission check
+        }
 
-      // Download the file
-      final response = await http.get(Uri.parse(url));
-      if (response.statusCode == 200) {
-        // Get the downloads directory
-        Directory? directory;
-        if (Platform.isAndroid) {
+        // Download the file
+        final response = await http.get(Uri.parse(url));
+        if (response.statusCode == 200) {
+          // Get the downloads directory
+          Directory? directory;
           directory = Directory('/storage/emulated/0/Download');
           if (!await directory.exists()) {
             directory = await getExternalStorageDirectory();
           }
-        } else if (Platform.isIOS) {
-          directory = await getApplicationDocumentsDirectory();
-        }
 
-        if (directory != null) {
-          // Create unique filename if file already exists
-          String finalFileName = fileName;
-          int counter = 1;
-          while (await File('${directory.path}/$finalFileName').exists()) {
-            final extension = fileName.split('.').last;
-            final nameWithoutExtension = fileName.replaceAll('.$extension', '');
-            finalFileName = '${nameWithoutExtension}_$counter.$extension';
-            counter++;
+          if (directory != null) {
+            // Create unique filename if file already exists
+            String finalFileName = fileName;
+            int counter = 1;
+            while (await File('${directory.path}/$finalFileName').exists()) {
+              final extension = fileName.split('.').last;
+              final nameWithoutExtension = fileName.replaceAll('.$extension', '');
+              finalFileName = '${nameWithoutExtension}_$counter.$extension';
+              counter++;
+            }
+
+            final file = File('${directory.path}/$finalFileName');
+            await file.writeAsBytes(response.bodyBytes);
+
+            _showSuccessPopup('Downloaded');
           }
-
-          final file = File('${directory.path}/$finalFileName');
-          await file.writeAsBytes(response.bodyBytes);
-
-          _hideSnackBar();
-          _showSnackBar(
-            SnackBar(
-              content: Row(
-                children: [
-                  const Icon(Icons.check_circle, color: Colors.white),
-                  const SizedBox(width: 16),
-                  Expanded(
-                    child: Text('Downloaded: $finalFileName'),
-                  ),
-                ],
-              ),
-              backgroundColor: Colors.green,
-              action: SnackBarAction(
-                label: 'Open',
-                textColor: Colors.white,
-                onPressed: () async {
-                  await launchURL(file.path);
-                },
-              ),
-            ),
-          );
+        } else {
+          throw Exception('Failed to download file: ${response.statusCode}');
         }
-      } else {
-        throw Exception('Failed to download file: ${response.statusCode}');
       }
     } catch (e) {
       _hideSnackBar();

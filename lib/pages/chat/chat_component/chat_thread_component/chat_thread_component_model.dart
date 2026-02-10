@@ -5,6 +5,7 @@ import 'chat_thread_component_widget.dart' show ChatThreadComponentWidget;
 import 'package:flutter/material.dart';
 import 'package:record/record.dart';
 import '/flutter_flow/upload_data.dart';
+import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
 
 class ChatThreadComponentModel
     extends FlutterFlowModel<ChatThreadComponentWidget> {
@@ -32,7 +33,9 @@ class ChatThreadComponentModel
 
   MessagesRecord? editingMessage;
 
-  ScrollController? scrollController;
+  // ScrollController? scrollController; // Removed for ScrollablePositionedList
+  ItemScrollController? itemScrollController;
+  ItemPositionsListener? itemPositionsListener;
 
   String? highlightedMessageId;
 

@@ -11,6 +11,8 @@ import '/flutter_flow/flutter_flow_util.dart';
 import '/flutter_flow/flutter_flow_video_player.dart';
 import '/flutter_flow/upload_data.dart';
 import '/pages/chat/chat_component/chat_thread/chat_thread_widget.dart';
+import '/pages/chat/chat_component/media_preview/media_preview_widget.dart';
+import '/pages/chat/chat_component/file_preview/file_preview_widget.dart';
 import 'dart:async';
 import 'dart:io';
 import 'dart:ui';
@@ -32,6 +34,7 @@ import 'package:adaptive_platform_ui/adaptive_platform_ui.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:record/record.dart';
 import 'package:file_picker/file_picker.dart';
@@ -39,6 +42,8 @@ import 'package:emoji_picker_flutter/emoji_picker_flutter.dart';
 import 'package:liquid_glass_renderer/liquid_glass_renderer.dart';
 import 'package:desktop_drop/desktop_drop.dart';
 import 'package:cross_file/cross_file.dart';
+import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
+import '/app_state.dart';
 import 'chat_thread_component_model.dart';
 export 'chat_thread_component_model.dart';
 
@@ -78,10 +83,20 @@ class _ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget>
   bool _isDragging = false;
   Timer? _autoMarkReadDebounce;
   String? _lastAutoMarkedLatestMessageId;
-  
+
   // Mention overlay using proper Overlay API
   final LayerLink _mentionLayerLink = LayerLink();
   OverlayEntry? _mentionOverlayEntry;
+
+  // List of valid usernames for mention highlighting
+  List<String> _mentionableUserNames = [];
+
+  // Track total items for pagination triggers
+  int _totalMessageCount = 0;
+
+  // Blocked users state (UID based)
+  Set<String> _blockedUserIds = {};
+  StreamSubscription? _blockedUsersSubscription;
 
   @override
   void setState(VoidCallback callback) {
@@ -102,14 +117,23 @@ class _ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget>
           // Check if Return/Enter key is pressed
           if (event.logicalKey == LogicalKeyboardKey.enter ||
               event.logicalKey == LogicalKeyboardKey.numpadEnter) {
-            // Check if Shift is pressed - if yes, allow newline; if no, send message
+            // Check if Shift or Command (Meta) is pressed
             final isShiftPressed =
                 event.logicalKey == LogicalKeyboardKey.shiftLeft ||
                     event.logicalKey == LogicalKeyboardKey.shiftRight ||
                     HardwareKeyboard.instance.isShiftPressed;
+            final isMetaPressed = HardwareKeyboard.instance.isMetaPressed;
 
-            if (!isShiftPressed) {
-              // Send message on Return (without Shift)
+            // Get user preference: 0 = Enter sends, 1 = Shift+Enter sends, 2 = Command+Enter sends
+            final shortcut = FFAppState().sendMessageShortcut;
+            final shouldSend = shortcut == 0
+                ? !isShiftPressed
+                : shortcut == 1
+                    ? isShiftPressed
+                    : (shortcut == 2 && isMetaPressed);
+
+            if (shouldSend) {
+              // Send message based on preference
               final messageText =
                   _model.messageTextController?.text.trim() ?? '';
               final hasText = messageText.isNotEmpty;
@@ -121,7 +145,7 @@ class _ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget>
                   _model.audiopath != null && _model.audiopath!.isNotEmpty;
               final hasVideo = _model.selectedVideoFile != null;
 
-              // Only send if there's content to send
+              // Check if there's anything to send
               if (hasText ||
                   hasImages ||
                   hasSingleImage ||
@@ -133,13 +157,12 @@ class _ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget>
                 } else {
                   _sendMessage();
                 }
-                return KeyEventResult.handled; // Prevent default behavior
+                return KeyEventResult.handled;
               }
             }
-            // If Shift is pressed, allow default behavior (newline)
           }
         }
-        return KeyEventResult.ignored; // Allow default behavior for other keys
+        return KeyEventResult.ignored;
       },
     );
     _model.messageFocusNode!.addListener(() {
@@ -153,10 +176,11 @@ class _ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget>
         // The overlay will be closed when a selection is made or user taps elsewhere
       }
     });
-    _model.scrollController ??= ScrollController();
+    _model.itemScrollController ??= ItemScrollController();
+    _model.itemPositionsListener ??= ItemPositionsListener.create();
 
     // Add scroll listener for pagination
-    _model.scrollController?.addListener(_onScroll);
+    _model.itemPositionsListener?.itemPositions.addListener(_onScroll);
 
     animationsMap.addAll({
       'containerOnActionTriggerAnimation1': AnimationInfo(
@@ -202,11 +226,24 @@ class _ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget>
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       safeSetState(() {});
-      // Mark existing messages as read when chat is first opened (with delay to avoid flicker)
-      Future.delayed(const Duration(milliseconds: 500), () {
-        if (mounted && widget.chatReference != null) {
-          _markMessagesAsRead();
-        }
+      // NOTE: Removed auto mark-as-read to prevent badge flickering
+      // Messages should only be marked as read when user explicitly interacts
+      // _markMessagesAsRead();
+
+      _fetchMentionableUsers();
+
+      // Listen to blocked users in real-time
+      _blockedUsersSubscription = BlockedUsersRecord.collection
+          .where('blocker_user', isEqualTo: currentUserReference)
+          .snapshots()
+          .listen((snapshot) {
+        setState(() {
+          _blockedUserIds = snapshot.docs
+              .map((doc) => BlockedUsersRecord.fromSnapshot(doc).blockedUser?.id)
+              .whereType<String>()
+              .toSet();
+          print('Debug: Updated blocked user IDs: $_blockedUserIds');
+        });
       });
     });
   }
@@ -214,16 +251,10 @@ class _ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget>
   @override
   void didUpdateWidget(ChatThreadComponentWidget oldWidget) {
     super.didUpdateWidget(oldWidget);
-    // When chat changes, mark existing messages as read (with delay to avoid flicker)
-    if (oldWidget.chatReference?.reference != widget.chatReference?.reference) {
-      _lastAutoMarkedLatestMessageId = null; // Reset for new chat
-      // Mark as read after a short delay to avoid flickering
-      Future.delayed(const Duration(milliseconds: 500), () {
-        if (mounted && widget.chatReference != null) {
-          _markMessagesAsRead();
-        }
-      });
-    }
+    // NOTE: Removed auto mark-as-read to prevent badge flickering
+    // if (oldWidget.chatReference?.reference != widget.chatReference?.reference) {
+    //   _markMessagesAsRead();
+    // }
   }
 
   /// Marks messages as read for the current chat
@@ -239,19 +270,25 @@ class _ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget>
     await _markIndividualMessagesAsRead(chat);
 
     // Then update chat-level lastMessageSeen
-    if (chat.lastMessage.isNotEmpty &&
+    if (!chat.lastMessageSeen.contains(currentUserReference) &&
+        chat.lastMessage.isNotEmpty &&
         chat.lastMessageSent != currentUserReference) {
-      // Use arrayUnion to be idempotent and avoid depending on a potentially stale local list.
-      chat.reference.update({
-        ...mapToFirestore({
-          'last_message_seen': FieldValue.arrayUnion([currentUserReference]),
-        }),
-      }).then((_) {
-        print(
-            '✅ Successfully marked chat-level read for chat: ${chat.reference.id}');
-      }).catchError((e) {
-        print('❌ Error marking chat-level read: $e');
-      });
+      // Add current user to the lastMessageSeen list
+      final updatedSeenList =
+          List<DocumentReference>.from(chat.lastMessageSeen);
+      if (!updatedSeenList.contains(currentUserReference)) {
+        updatedSeenList.add(currentUserReference!);
+
+        // Update Firestore
+        chat.reference.update({
+          'last_message_seen': updatedSeenList.map((ref) => ref).toList(),
+        }).then((_) {
+          print(
+              '✅ Successfully marked messages as read for chat: ${chat.reference.id}');
+        }).catchError((e) {
+          print('❌ Error marking messages as read: $e');
+        });
+      }
     }
   }
 
@@ -309,14 +346,53 @@ class _ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget>
   }
 
   @override
+  @override
   void dispose() {
     _autoMarkReadDebounce?.cancel();
     _removeMentionOverlay(); // Clean up mention overlay
-    _model.scrollController?.removeListener(_onScroll);
-    _model.scrollController?.dispose();
+    _model.itemPositionsListener?.itemPositions.removeListener(_onScroll);
+    _blockedUsersSubscription?.cancel();
     _model.maybeDispose();
 
     super.dispose();
+  }
+
+  Future<void> _fetchMentionableUsers() async {
+    if (widget.chatReference == null) return;
+
+    try {
+      // Get members from chat reference
+      final members = widget.chatReference!.members;
+      print('DEBUG: Fetching mentionable users for ${members.length} members');
+      if (members.isEmpty) return;
+
+      // Fetch user documents
+      final futures = members.map((ref) => ref.get()).toList();
+      final snapshots = await Future.wait(futures);
+
+      final names = <String>[];
+      for (final snap in snapshots) {
+        if (snap.exists) {
+          final data = snap.data() as Map<String, dynamic>;
+          if (data.containsKey('display_name')) {
+            final name = data['display_name'] as String?;
+            if (name != null && name.isNotEmpty) {
+              names.add(name);
+            }
+          }
+        }
+      }
+
+      print('DEBUG: Fetched mentionable users: $names');
+
+      if (mounted) {
+        setState(() {
+          _mentionableUserNames = names;
+        });
+      }
+    } catch (e) {
+      print('Error fetching mentionable users: $e');
+    }
   }
 
   // Reset pagination state when chat changes
@@ -331,15 +407,20 @@ class _ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget>
 
   // Scroll listener to detect when user scrolls to top (for loading older messages)
   void _onScroll() {
-    if (_model.scrollController == null ||
-        !_model.scrollController!.hasClients) {
-      return;
-    }
+    if (_model.itemPositionsListener == null) return;
 
-    // For reversed ListView, maxScrollExtent is at the top (oldest messages)
-    // When user scrolls near the top (within 200px), load more older messages
-    final position = _model.scrollController!.position;
-    if (position.pixels >= position.maxScrollExtent - 200) {
+    final positions = _model.itemPositionsListener!.itemPositions.value;
+    if (positions.isEmpty) return;
+
+    // effective max index visible
+    final maxIndex = positions
+        .where((ItemPosition position) => position.itemTrailingEdge > 0)
+        .fold(
+            0, (max, position) => position.index > max ? position.index : max);
+
+    // If we are near the end of the list (top of chat view in reverse mode)
+    // Trigger load more. Threshold: within last 5 items
+    if (maxIndex >= _totalMessageCount - 5) {
       if (!_isLoadingOlderMessages &&
           _hasMoreOlderMessages &&
           widget.chatReference != null) {
@@ -412,8 +493,8 @@ class _ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget>
   }
 
   void _scrollToMessage(String messageId, List<MessagesRecord> messages) {
-    if (_model.scrollController == null ||
-        !_model.scrollController!.hasClients) {
+    if (_model.itemScrollController == null ||
+        !_model.itemScrollController!.isAttached) {
       return;
     }
 
@@ -428,126 +509,54 @@ class _ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget>
 
     if (targetIndex == null) return;
 
-    final scrollController = _model.scrollController!;
-    final finalTargetIndex =
-        targetIndex; // Capture non-nullable value for use in callback
+    // Account for loading indicator if present (it's at index 0 or similar depending on implementation)
+    // In our build method, we put loading indicator at index 0 if _isLoadingOlderMessages is true?
+    // Let's check logic: itemCount: listViewMessagesRecordList.length + (_isLoadingOlderMessages ? 1 : 0)
+    // Loading indicator is at index 0 if loading.
+    // However, messages list passed here doesn't include loading indicator.
+    // We need to adjust index.
 
-    // Wait for the next frame to ensure layout is complete
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!scrollController.hasClients) return;
+    // Actually, in the build method below (which I will update next),
+    // if _isLoadingOlderMessages is true, the loading indicator is at index `listViewMessagesRecordList.length`?
+    // Wait, usually in reverse list, index 0 is bottom.
+    // If I put loading indicator at the "top" (visual top), that is the END of the list mechanically.
+    // so index = length.
 
-      final maxScrollExtent = scrollController.position.maxScrollExtent;
-      final minScrollExtent = scrollController.position.minScrollExtent;
-      final viewportHeight = scrollController.position.viewportDimension;
-      final currentPosition = scrollController.position.pixels;
+    // Let's verify the build logic plan:
+    // item 0: newest message (bottom)
+    // item N: oldest message
+    // item N+1: loading indicator (top)
 
-      // For reversed ListView:
-      // - Index 0 is at the bottom (scroll position 0)
-      // - Higher indices are at the top (higher scroll positions)
-      // - Scroll position = how far we've scrolled from the bottom
+    // If that's the case, key adaptation is handled in build.
+    // Here we just need the index of the message.
 
-      // Calculate the position where the target message starts (from bottom)
-      double heightBeforeTarget = 0.0;
-      for (int j = 0; j < finalTargetIndex && j < messages.length; j++) {
-        heightBeforeTarget += _estimateMessageHeight(messages[j]);
-      }
+    // Scroll to the item
+    // Use alignment 0.5 to center it? Or automatic.
+    // In reverse list:
+    // alignment: 0.0 means "leading edge" which is BOTTOM of screen?
+    // alignment: 1.0 means "trailing edge" which is TOP of screen?
+    // Let's try 0.5 for center.
 
-      // Calculate the center of the target message (from bottom)
-      final targetMessageHeight =
-          _estimateMessageHeight(messages[finalTargetIndex]);
-      final messageCenterFromBottom =
-          heightBeforeTarget + (targetMessageHeight / 2);
+    _model.itemScrollController!
+        .scrollTo(
+      index: targetIndex,
+      duration: const Duration(milliseconds: 600),
+      curve: Curves.easeInOut,
+      alignment: 0.5, // Center the item
+    )
+        .then((_) {
+      // Highlight logic
+      safeSetState(() {
+        _model.highlightedMessageId = messageId;
+      });
 
-      // Capture for use in fine-tuning callback
-      final capturedMessageCenter = messageCenterFromBottom;
-
-      // To center the message with equal space above and below:
-      // Scroll so that messageCenterFromBottom is at viewportHeight/2 from top
-      // This means: scrollPosition = messageCenterFromBottom - (viewportHeight / 2)
-      double targetPosition = messageCenterFromBottom - (viewportHeight / 2);
-
-      // Critical: Ensure we don't scroll beyond bounds
-      targetPosition = targetPosition.clamp(minScrollExtent, maxScrollExtent);
-
-      // Additional safety: never scroll to more than 90% of maxScrollExtent
-      // This prevents scrolling to the very top
-      if (targetPosition > maxScrollExtent * 0.9) {
-        targetPosition = maxScrollExtent * 0.9;
-      }
-
-      // Also ensure we don't go negative (for messages near the bottom)
-      if (targetPosition < 0) {
-        targetPosition = 0;
-      }
-
-      // Only scroll if the target is significantly different from current position
-      if ((targetPosition - currentPosition).abs() > 50.0) {
-        scrollController
-            .animateTo(
-          targetPosition,
-          duration: const Duration(milliseconds: 600),
-          curve: Curves.easeInOut,
-        )
-            .then((_) {
-          // Wait a bit for layout to stabilize, then fine-tune centering
-          Future.delayed(const Duration(milliseconds: 100), () {
-            if (!scrollController.hasClients) return;
-
-            // Recalculate to ensure perfect centering after layout
-            final currentScrollPosition = scrollController.position.pixels;
-            final newViewportHeight =
-                scrollController.position.viewportDimension;
-
-            // Fine-tune: Recalculate the exact center position
-            // This ensures perfect centering with equal space above and below
-            final fineTunePosition =
-                capturedMessageCenter - (newViewportHeight / 2);
-            final adjustment = fineTunePosition - currentScrollPosition;
-
-            // Make adjustment to center the message perfectly
-            // Allow larger adjustments (up to 200px) to ensure proper centering
-            if (adjustment.abs() > 5) {
-              final clampedPosition = fineTunePosition.clamp(
-                scrollController.position.minScrollExtent,
-                scrollController.position.maxScrollExtent,
-              );
-              scrollController.animateTo(
-                clampedPosition,
-                duration: const Duration(milliseconds: 300),
-                curve: Curves.easeOut,
-              );
-            }
-          });
-
-          // After scrolling completes, highlight the message
+      Future.delayed(const Duration(seconds: 3), () {
+        if (mounted && _model.highlightedMessageId == messageId) {
           safeSetState(() {
-            _model.highlightedMessageId = messageId;
+            _model.highlightedMessageId = null;
           });
-
-          // Clear highlight after 3 seconds
-          Future.delayed(const Duration(seconds: 3), () {
-            if (mounted && _model.highlightedMessageId == messageId) {
-              safeSetState(() {
-                _model.highlightedMessageId = null;
-              });
-            }
-          });
-        });
-      } else {
-        // Even if we don't scroll, still highlight the message
-        safeSetState(() {
-          _model.highlightedMessageId = messageId;
-        });
-
-        // Clear highlight after 3 seconds
-        Future.delayed(const Duration(seconds: 3), () {
-          if (mounted && _model.highlightedMessageId == messageId) {
-            safeSetState(() {
-              _model.highlightedMessageId = null;
-            });
-          }
-        });
-      }
+        }
+      });
     });
   }
 
@@ -559,8 +568,12 @@ class _ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget>
       safeSetState(() {});
 
       // Update the existing message directly
+      // Strip quotes from mentions before saving
+      final editedContent = _stripQuotesFromMentions(
+        _model.messageTextController?.text ?? '',
+      );
       await _model.editingMessage!.reference.update({
-        'content': _model.messageTextController?.text ?? '',
+        'content': editedContent,
         'is_edited': true,
         'edited_at': FieldValue.serverTimestamp(),
       });
@@ -597,11 +610,12 @@ class _ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget>
     safeSetState(() {});
   }
 
-  /// Send a new message to the chat
-  Future<void> _sendMessage() async {
+  /// Send a new message to the chat.
+  /// [contentOverride] when set (e.g. from file preview caption) is used as the message content instead of the text field.
+  Future<void> _sendMessage({String? contentOverride}) async {
     if (widget.chatReference == null || currentUserReference == null) return;
 
-    final messageText = _model.messageTextController?.text.trim() ?? '';
+    final messageText = contentOverride ?? (_model.messageTextController?.text.trim() ?? '');
     final hasText = messageText.isNotEmpty;
     final hasImages = _model.images.isNotEmpty;
     final hasSingleImage = _model.image != null && _model.image!.isNotEmpty;
@@ -659,10 +673,10 @@ class _ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget>
       }
 
       // Create message data
-      String finalContent = messageText;
-      // For file messages, use the original filename as content ONLY if no caption provided
-      // If text is provided, keep the text as content
-      if (hasFile && messageText.isEmpty) {
+      // Strip quotes from mentions before sending (@"name" -> @name)
+      String finalContent = _stripQuotesFromMentions(messageText);
+      // For file messages with no caption, use the original filename as content
+      if (hasFile && messageText.trim().isEmpty) {
         if (_model.uploadedLocalFile_uploadDataFile.name != null) {
           finalContent = _model.uploadedLocalFile_uploadDataFile.name!;
         }
@@ -698,102 +712,41 @@ class _ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget>
         messageData['audio'] = audioUrl;
       }
 
-      // Handle files in uploadedFileUrls_uploadData (from drag-drop or file picker)
-      // This handles both single and multiple files
-      final hasFilesInUploadData =
-          _model.uploadedFileUrls_uploadData.isNotEmpty;
-
-      if (hasFilesInUploadData) {
-        // Send a separate message for each file
-        for (int i = 0; i < _model.uploadedFileUrls_uploadData.length; i++) {
-          final fileUrl = _model.uploadedFileUrls_uploadData[i];
-          final uploadedFile = _model.uploadedLocalFiles_uploadData.length > i
-              ? _model.uploadedLocalFiles_uploadData[i]
-              : null;
-
-          final fileMessageData = Map<String, dynamic>.from(messageData);
-          fileMessageData['attachment_url'] = fileUrl;
-          if (uploadedFile?.name != null) {
-            fileMessageData['file_name'] = uploadedFile!.name;
-          }
-          // IMPORTANT: Only use filename as content if no text provided
-          // If text is provided, keep the text as content (don't overwrite it)
-          if (messageText.isEmpty && uploadedFile?.name != null) {
-            fileMessageData['content'] = uploadedFile!.name!;
-          }
-          // If messageText is not empty, messageData already has the correct content
-
-          // Add reply context only to the first file message
-          if (i == 0 && _model.replyingToMessage != null) {
-            fileMessageData['reply_to'] =
-                _model.replyingToMessage!.reference.id;
-            fileMessageData['reply_to_content'] =
-                _model.replyingToMessage!.content;
-            fileMessageData['reply_to_sender'] =
-                _model.replyingToMessage!.senderName;
-          } else if (i > 0) {
-            // Remove reply context from subsequent messages
-            fileMessageData.remove('reply_to');
-            fileMessageData.remove('reply_to_content');
-            fileMessageData.remove('reply_to_sender');
-          }
-
-          final fileMessageRef =
-              MessagesRecord.createDoc(widget.chatReference!.reference);
-          await fileMessageRef.set(fileMessageData);
+      // Add file if present
+      if (hasFile) {
+        messageData['attachment_url'] = _model.file;
+        // Try to get original filename from uploaded file
+        if (_model.uploadedLocalFile_uploadDataFile.name != null) {
+          messageData['file_name'] =
+              _model.uploadedLocalFile_uploadDataFile.name;
         }
+      }
 
-        // Update chat metadata with the last file message
-        String lastMessageText = messageText.isNotEmpty
-            ? messageText
-            : (_model.uploadedLocalFiles_uploadData.isNotEmpty &&
-                    _model.uploadedLocalFiles_uploadData.last.name != null
-                ? _model.uploadedLocalFiles_uploadData.last.name!
-                : '📎 File');
-        await widget.chatReference!.reference.update({
-          'last_message': lastMessageText,
-          'last_message_at': getCurrentTimestamp,
-          'last_message_sent': currentUserReference,
-          'last_message_type': MessageType.file.serialize(),
-          'last_message_seen': [currentUserReference],
-        });
-      } else {
-        // Single file or no file - use original logic
-        // Check if there's a single file in uploadedFileUrls_uploadData (from drag-drop/file picker)
-        final hasSingleFileInUploadData =
-            _model.uploadedFileUrls_uploadData.isNotEmpty &&
-                _model.uploadedFileUrls_uploadData.length == 1;
+      // Add reply context if replying
+      if (_model.replyingToMessage != null) {
+        messageData['reply_to'] = _model.replyingToMessage!.reference.id;
+        messageData['reply_to_content'] = _model.replyingToMessage!.content;
+        messageData['reply_to_sender'] = _model.replyingToMessage!.senderName;
+      }
 
-        // Add file if present (either from _model.file or uploadedFileUrls_uploadData)
-        if (hasFile) {
-          messageData['attachment_url'] = _model.file;
-          // Try to get original filename from uploaded file
-          if (_model.uploadedLocalFile_uploadDataFile.name != null) {
-            messageData['file_name'] =
-                _model.uploadedLocalFile_uploadDataFile.name;
-          }
-        } else if (hasSingleFileInUploadData) {
-          // Handle single file from uploadedFileUrls_uploadData
-          messageData['attachment_url'] =
-              _model.uploadedFileUrls_uploadData.first;
-          if (_model.uploadedLocalFiles_uploadData.isNotEmpty &&
-              _model.uploadedLocalFiles_uploadData.first.name != null) {
-            messageData['file_name'] =
-                _model.uploadedLocalFiles_uploadData.first.name;
-          }
+      // Create the message document
+      final messageRef =
+          MessagesRecord.createDoc(widget.chatReference!.reference);
+      await messageRef.set(messageData);
+
+      // Check if message contains @linkai and call AI function
+      if (functions.containsAIMention(finalContent)) {
+        try {
+          // Extract chat ID from reference path (chats/chatId -> chatId)
+          final chatId = widget.chatReference!.reference.id;
+          await actions.callAIAgent(
+            chatId,
+            finalContent,
+          );
+        } catch (e) {
+          // Log error but don't block message sending
+          print('Error calling AI agent: $e');
         }
-
-        // Add reply context if replying
-        if (_model.replyingToMessage != null) {
-          messageData['reply_to'] = _model.replyingToMessage!.reference.id;
-          messageData['reply_to_content'] = _model.replyingToMessage!.content;
-          messageData['reply_to_sender'] = _model.replyingToMessage!.senderName;
-        }
-
-        // Create the message document
-        final messageRef =
-            MessagesRecord.createDoc(widget.chatReference!.reference);
-        await messageRef.set(messageData);
       }
 
       // Determine last message text for chat metadata
@@ -826,16 +779,6 @@ class _ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget>
             chatDoc.members.where((m) => m != currentUserReference).toList();
 
         if (otherMembers.isNotEmpty) {
-          // First, send mention notifications if any users are mentioned
-          if (chatDoc.isGroup && finalContent.contains('@')) {
-            await _sendMentionNotifications(
-              chatDoc: chatDoc,
-              messageContent: finalContent,
-              otherMembers: otherMembers,
-            );
-          }
-
-          // Then send regular notification to other members
           final notificationTitle =
               chatDoc.isGroup ? chatDoc.title : currentUserDisplayName;
           print('🔍 DEBUG: Creating notification with:');
@@ -858,22 +801,6 @@ class _ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget>
         print('Error sending push notifications: $e');
       }
 
-      // Check if message contains @linkai and call AI function
-      if (functions.containsAIMention(finalContent)) {
-        print('🤖 Message contains @linkai, calling AI function...');
-        try {
-          final chatRefPath = widget.chatReference!.reference.id;
-          await actions.callAIAgent(
-            chatRefPath,
-            finalContent,
-          );
-          print('✅ AI function called successfully');
-        } catch (e) {
-          print('❌ Error calling AI function: $e');
-          // Don't show error to user, just log it
-        }
-      }
-
       // Clear all input state
       _model.messageTextController?.clear();
       _model.images.clear();
@@ -886,6 +813,8 @@ class _ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget>
       _model.uploadedLocalFiles_uploadData.clear();
       _model.uploadedFileUrl_uploadDataCamera = '';
       _model.uploadedFileUrl_uploadDataFile = '';
+      _model.uploadedLocalFile_uploadDataFile =
+          FFUploadedFile(bytes: Uint8List.fromList([]));
       _model.showEmojiPicker = false;
 
       safeSetState(() {});
@@ -906,96 +835,6 @@ class _ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget>
     }
   }
 
-  /// Send special notification to users who were @mentioned in the message
-  /// Notification format: "UserA mentioned you in GroupName" + message body
-  Future<void> _sendMentionNotifications({
-    required ChatsRecord chatDoc,
-    required String messageContent,
-    required List<DocumentReference> otherMembers,
-  }) async {
-    try {
-      print('📢 Checking for mentions in message: "$messageContent"');
-      
-      // Extract mentioned names from the message using the same regex as display
-      final mentionRegex = RegExp(
-        r'@(?:linkai|[A-Z][a-zA-Z]*(?:\s+[A-Z][a-zA-Z]*)?|[a-z]+)',
-      );
-      final matches = mentionRegex.allMatches(messageContent);
-      
-      if (matches.isEmpty) {
-        print('📢 No mentions found in message');
-        return;
-      }
-      
-      // Get mentioned names (without @)
-      final mentionedNames = matches.map((m) {
-        final match = m.group(0) ?? '';
-        return match.startsWith('@') ? match.substring(1).toLowerCase() : match.toLowerCase();
-      }).toSet().toList();
-      
-      print('📢 Found mentioned names: $mentionedNames');
-      
-      // Load member user records and find matches
-      final mentionedUserRefs = <DocumentReference>[];
-      
-      for (final memberRef in otherMembers) {
-        try {
-          final user = await UsersRecord.getDocumentOnce(memberRef);
-          final displayName = user.displayName.toLowerCase();
-          
-          // Check if this user was mentioned (exact match or starts with)
-          for (final mentionedName in mentionedNames) {
-            // Skip linkai - it's not a real user
-            if (mentionedName == 'linkai') continue;
-            
-            // Check if display name matches the mention
-            // Handle both "First Last" and "First" matches
-            if (displayName == mentionedName ||
-                displayName.startsWith('$mentionedName ') ||
-                (mentionedName.contains(' ') && displayName.startsWith(mentionedName))) {
-              mentionedUserRefs.add(memberRef);
-              print('📢 Matched mention "$mentionedName" to user "${user.displayName}"');
-              break;
-            }
-          }
-        } catch (e) {
-          print('📢 Error loading user for mention check: $e');
-        }
-      }
-      
-      if (mentionedUserRefs.isEmpty) {
-        print('📢 No members matched the mentions');
-        return;
-      }
-      
-      // Get the current user's display name for the notification
-      final senderName = currentUserDisplayName.isNotEmpty
-          ? currentUserDisplayName
-          : 'Someone';
-      
-      // Create the mention notification
-      final notificationTitle = '$senderName mentioned you in ${chatDoc.title}';
-      
-      print('📢 Sending mention notification to ${mentionedUserRefs.length} users');
-      print('📢 Title: "$notificationTitle"');
-      print('📢 Body: "$messageContent"');
-      
-      triggerPushNotification(
-        notificationTitle: notificationTitle,
-        notificationText: messageContent,
-        userRefs: mentionedUserRefs,
-        initialPageName: 'ChatDetail',
-        parameterData: {
-          'chatDoc': chatDoc.reference.path,
-        },
-      );
-      
-      print('📢 Mention notifications sent successfully!');
-    } catch (e) {
-      print('📢 Error sending mention notifications: $e');
-    }
-  }
-
   // ═══════════════════════════════════════════════════════════════════════════
   // MEDIA SELECTION HANDLERS
   // ═══════════════════════════════════════════════════════════════════════════
@@ -1004,243 +843,140 @@ class _ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget>
     _model.isSendingImage = true;
     safeSetState(() {});
     final selectedMedia = await selectMedia(
+      context: context,
       mediaSource: MediaSource.photoGallery,
-      multiImage: true,
+      multiImage: false, // Changed to single image for preview
     );
     if (selectedMedia != null &&
-        selectedMedia
-            .every((m) => validateFileFormat(m.storagePath, context))) {
-      // Check if more than 10 images selected
-      if (selectedMedia.length > 10) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Row(
-              children: [
-                const Icon(Icons.warning, color: Colors.white),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Text('You can only select up to 10 images at once'),
-                ),
-              ],
-            ),
-            backgroundColor: Colors.orange,
+        selectedMedia.isNotEmpty &&
+        validateFileFormat(selectedMedia.first.storagePath, context)) {
+      final mediaFile = selectedMedia.first;
+      
+      // Navigate to preview screen
+      await Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => MediaPreviewWidget(
+            mediaFile: mediaFile,
+            mediaType: 'image',
+            onSend: (caption, file) async {
+              // Upload and send the image with caption
+              await _sendImageWithCaption(caption, file);
+            },
           ),
-        );
-        _model.isSendingImage = false;
-        safeSetState(() {});
-        return;
-      }
-      safeSetState(() => _model.isDataUploading_uploadData = true);
-      var selectedUploadedFiles = <FFUploadedFile>[];
-
-      var downloadUrls = <String>[];
-      try {
-        selectedUploadedFiles = selectedMedia
-            .map((m) => FFUploadedFile(
-                  name: m.storagePath.split('/').last,
-                  bytes: m.bytes,
-                  height: m.dimensions?.height,
-                  width: m.dimensions?.width,
-                  blurHash: m.blurHash,
-                ))
-            .toList();
-
-        downloadUrls = (await Future.wait(
-          selectedMedia.map(
-            (m) async => await uploadData(m.storagePath, m.bytes),
-          ),
-        ))
-            .where((u) => u != null)
-            .map((u) => u!)
-            .toList();
-      } finally {
-        _model.isDataUploading_uploadData = false;
-      }
-      if (selectedUploadedFiles.length == selectedMedia.length &&
-          downloadUrls.length == selectedMedia.length) {
-        safeSetState(() {
-          _model.uploadedLocalFiles_uploadData = selectedUploadedFiles;
-          _model.uploadedFileUrls_uploadData = downloadUrls;
-        });
-      } else {
-        safeSetState(() {});
-        _model.isSendingImage = false;
-        return;
-      }
-    }
-
-    if ((_model.uploadedFileUrls_uploadData.isNotEmpty) == true) {
-      _model.images = _model.uploadedFileUrls_uploadData
-          .map((url) => url.toString())
-          .toList();
-      safeSetState(() {});
+        ),
+      );
     }
     _model.isSendingImage = false;
     safeSetState(() {});
   }
 
+  Future<void> _sendImageWithCaption(String caption, SelectedFile imageFile) async {
+    try {
+      _model.isSendingImage = true;
+      safeSetState(() {});
+
+      // Upload the image
+      final imageUrl = await uploadData(imageFile.storagePath, imageFile.bytes);
+      
+      if (imageUrl != null && imageUrl.isNotEmpty) {
+        // Set the image and caption
+        _model.image = imageUrl;
+        if (caption.isNotEmpty) {
+          _model.messageTextController?.text = caption;
+        }
+        safeSetState(() {});
+        
+        // Send the message
+        await _sendMessage();
+      }
+    } catch (e) {
+      debugPrint('Error sending image with caption: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error sending image: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } finally {
+      _model.isSendingImage = false;
+      safeSetState(() {});
+    }
+  }
+
   Future<void> _handleCameraCapture() async {
     _model.isSendingImage = true;
     safeSetState(() {});
-    final selectedMedia = await selectMediaWithSourceBottomSheet(
+    // Directly open camera (photo mode) without showing bottom sheet
+    final selectedMedia = await selectMedia(
       context: context,
-      allowPhoto: true,
-      allowVideo: true,
+      isVideo: false,
+      mediaSource: MediaSource.camera,
     );
     if (selectedMedia != null &&
-        selectedMedia
-            .every((m) => validateFileFormat(m.storagePath, context))) {
-      safeSetState(() => _model.isDataUploading_uploadDataCamera = true);
-      var selectedUploadedFiles = <FFUploadedFile>[];
-
-      var downloadUrls = <String>[];
-      try {
-        selectedUploadedFiles = selectedMedia
-            .map((m) => FFUploadedFile(
-                  name: m.storagePath.split('/').last,
-                  bytes: m.bytes,
-                  height: m.dimensions?.height,
-                  width: m.dimensions?.width,
-                  blurHash: m.blurHash,
-                ))
-            .toList();
-
-        downloadUrls = (await Future.wait(
-          selectedMedia.map(
-            (m) async => await uploadData(m.storagePath, m.bytes),
+        selectedMedia.isNotEmpty &&
+        validateFileFormat(selectedMedia.first.storagePath, context)) {
+      final mediaFile = selectedMedia.first;
+      
+      // Navigate to preview screen
+      await Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => MediaPreviewWidget(
+            mediaFile: mediaFile,
+            mediaType: 'image',
+            onSend: (caption, file) async {
+              await _sendImageWithCaption(caption, file);
+            },
           ),
-        ))
-            .where((u) => u != null)
-            .map((u) => u!)
-            .toList();
-      } finally {
-        _model.isDataUploading_uploadDataCamera = false;
-      }
-      if (selectedUploadedFiles.length == selectedMedia.length &&
-          downloadUrls.length == selectedMedia.length) {
-        safeSetState(() {
-          _model.uploadedLocalFile_uploadDataCamera =
-              selectedUploadedFiles.first;
-          _model.uploadedFileUrl_uploadDataCamera = downloadUrls.first;
-        });
-      } else {
-        safeSetState(() {});
-        _model.isSendingImage = false;
-        return;
-      }
-    }
-
-    if (_model.uploadedFileUrl_uploadDataCamera != '') {
-      _model.image = _model.uploadedFileUrl_uploadDataCamera;
-      safeSetState(() {});
+        ),
+      );
     }
     _model.isSendingImage = false;
     safeSetState(() {});
   }
 
   Future<void> _handleFilePicker() async {
-    // Get original filename from file picker
     final pickedFiles = await FilePicker.platform.pickFiles(
       type: FileType.any,
       withData: true,
-      allowMultiple: true,
+      allowMultiple: false,
     );
 
-    if (pickedFiles == null || pickedFiles.files.isEmpty) {
-      return;
-    }
+    if (pickedFiles == null || pickedFiles.files.isEmpty) return;
 
-    // Limit to maximum 5 files
-    final filesToProcess = pickedFiles.files.length > 5
-        ? pickedFiles.files.take(5).toList()
-        : pickedFiles.files;
+    final pickedFile = pickedFiles.files.first;
+    if (pickedFile.bytes == null) return;
 
-    if (pickedFiles.files.length > 5) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Row(
-            children: const [
-              Icon(Icons.warning, color: Colors.white),
-              SizedBox(width: 12),
-              Expanded(
-                  child: Text('You can only upload up to 5 files at once')),
-            ],
-          ),
-          backgroundColor: Colors.orange,
+    final originalFileName = pickedFile.name;
+    final currentUserUid = currentUserReference?.id ?? '';
+    final pathPrefix = 'users/$currentUserUid/uploads';
+    final timestamp = DateTime.now().microsecondsSinceEpoch;
+    final ext = originalFileName.contains('.')
+        ? originalFileName.split('.').last
+        : 'file';
+    final storagePath = '$pathPrefix/$timestamp.$ext';
+
+    final selectedFile = SelectedFile(
+      storagePath: storagePath,
+      filePath: kIsWeb ? originalFileName : (pickedFile.path ?? originalFileName),
+      bytes: pickedFile.bytes!,
+    );
+
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => FilePreviewWidget(
+          mediaFile: selectedFile,
+          fileName: originalFileName,
+          onSend: (caption, file, fileName) async {
+            await _sendFileWithCaption(caption, file, fileName);
+          },
         ),
-      );
-    }
-
-    // Filter out files without bytes
-    final validFiles = filesToProcess
-        .where((file) => file.bytes != null && file.bytes!.isNotEmpty)
-        .toList();
-
-    if (validFiles.isEmpty) {
-      return;
-    }
-
-    safeSetState(() => _model.isDataUploading_uploadDataFile = true);
-    var selectedUploadedFiles = <FFUploadedFile>[];
-    var downloadUrls = <String>[];
-
-    try {
-      // Generate storage path (similar to selectFiles)
-      // Format: users/{uid}/uploads/{timestamp}.{ext}
-      final currentUserUid = currentUserReference?.id ?? '';
-      final pathPrefix = 'users/$currentUserUid/uploads';
-
-      // Upload each file
-      for (int i = 0; i < validFiles.length; i++) {
-        final pickedFile = validFiles[i];
-        final originalFileName = pickedFile.name;
-        final timestamp = DateTime.now().microsecondsSinceEpoch;
-        final ext = originalFileName.contains('.')
-            ? originalFileName.split('.').last
-            : 'file';
-        final storagePath = '$pathPrefix/$timestamp${i > 0 ? '_$i' : ''}.$ext';
-
-        // Use the original filename instead of storage path
-        selectedUploadedFiles.add(
-          FFUploadedFile(
-            name: originalFileName,
-            bytes: pickedFile.bytes!,
-          ),
-        );
-
-        final downloadUrl = await uploadData(storagePath, pickedFile.bytes!);
-        if (downloadUrl != null && downloadUrl.isNotEmpty) {
-          downloadUrls.add(downloadUrl);
-        }
-      }
-    } finally {
-      _model.isDataUploading_uploadDataFile = false;
-    }
-
-    // If only one file, use the single file fields for backward compatibility
-    if (selectedUploadedFiles.length == 1 && downloadUrls.length == 1) {
-      safeSetState(() {
-        _model.uploadedLocalFile_uploadDataFile = selectedUploadedFiles.first;
-        _model.uploadedFileUrl_uploadDataFile = downloadUrls.first;
-        _model.file = downloadUrls.first;
-      });
-    } else if (selectedUploadedFiles.length > 1 && downloadUrls.length > 1) {
-      // For multiple files, store the first file in the single file field
-      // Additional files are stored in the multi-file fields
-      safeSetState(() {
-        _model.uploadedLocalFile_uploadDataFile = selectedUploadedFiles.first;
-        _model.uploadedFileUrl_uploadDataFile = downloadUrls.first;
-        _model.file = downloadUrls.first;
-        // Store additional files for potential future use
-        _model.uploadedLocalFiles_uploadData = selectedUploadedFiles;
-        _model.uploadedFileUrls_uploadData = downloadUrls;
-      });
-    } else {
-      safeSetState(() {});
-      return;
-    }
-
-    safeSetState(() {});
+      ),
+    );
   }
 
   Future<void> _handleVideoCapture() async {
@@ -1252,14 +988,98 @@ class _ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget>
       allowVideo: true,
     );
     if (selectedMedia != null &&
-        selectedMedia
-            .every((m) => validateFileFormat(m.storagePath, context))) {
-      // Store the selected video file locally for preview
-      _model.selectedVideoFile = selectedMedia.first;
-      safeSetState(() {});
+        selectedMedia.isNotEmpty &&
+        validateFileFormat(selectedMedia.first.storagePath, context)) {
+      final videoFile = selectedMedia.first;
+      
+      // Navigate to preview screen
+      await Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => MediaPreviewWidget(
+            mediaFile: videoFile,
+            mediaType: 'video',
+            onSend: (caption, file) async {
+              // Upload and send the video with caption
+              await _sendVideoWithCaption(caption, file);
+            },
+          ),
+        ),
+      );
     }
     _model.isSendingImage = false;
     safeSetState(() {});
+  }
+
+  Future<void> _sendVideoWithCaption(String caption, SelectedFile videoFile) async {
+    try {
+      _model.isSendingImage = true;
+      safeSetState(() {});
+
+      // Store the video file
+      _model.selectedVideoFile = videoFile;
+      if (caption.isNotEmpty) {
+        _model.messageTextController?.text = caption;
+      }
+      safeSetState(() {});
+      
+      // Send the message
+      await _sendMessage();
+    } catch (e) {
+      debugPrint('Error sending video with caption: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error sending video: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } finally {
+      _model.isSendingImage = false;
+      safeSetState(() {});
+    }
+  }
+
+  Future<void> _sendFileWithCaption(
+      String caption, SelectedFile file, String fileName) async {
+    try {
+      _model.isDataUploading_uploadDataFile = true;
+      safeSetState(() {});
+
+      final currentUserUid = currentUserReference?.id ?? '';
+      final pathPrefix = 'users/$currentUserUid/uploads';
+      final timestamp = DateTime.now().microsecondsSinceEpoch;
+      final ext =
+          fileName.contains('.') ? fileName.split('.').last : 'file';
+      final storagePath = '$pathPrefix/$timestamp.$ext';
+
+      final downloadUrl = await uploadData(storagePath, file.bytes);
+      if (downloadUrl != null && downloadUrl.isNotEmpty) {
+        _model.uploadedLocalFile_uploadDataFile = FFUploadedFile(
+          name: fileName,
+          bytes: file.bytes,
+        );
+        _model.uploadedFileUrl_uploadDataFile = downloadUrl;
+        _model.file = downloadUrl;
+        safeSetState(() {});
+        // Pass caption directly so it is always saved with the file (avoids controller timing issues)
+        await _sendMessage(contentOverride: caption.isNotEmpty ? caption : null);
+      }
+    } catch (e) {
+      debugPrint('Error sending file with caption: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error sending file: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } finally {
+      _model.isDataUploading_uploadDataFile = false;
+      safeSetState(() {});
+    }
   }
 
   /// Handle files dropped via drag-and-drop
@@ -1283,7 +1103,7 @@ class _ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget>
       return;
     }
 
-    // Separate images from other files
+    // Separate images, videos, and other files
     final imageExtensions = [
       'jpg',
       'jpeg',
@@ -1293,7 +1113,19 @@ class _ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget>
       'bmp',
       'heic'
     ];
+    final videoExtensions = [
+      'mp4',
+      'mov',
+      'avi',
+      'mkv',
+      'webm',
+      'flv',
+      'wmv',
+      'm4v',
+      '3gp'
+    ];
     final imageFiles = <XFile>[];
+    final videoFiles = <XFile>[];
     final otherFiles = <XFile>[];
 
     for (final file in droppedFiles) {
@@ -1305,108 +1137,198 @@ class _ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget>
           fileName.contains('.') ? fileName.split('.').last.toLowerCase() : '';
       if (imageExtensions.contains(ext)) {
         imageFiles.add(file);
+      } else if (videoExtensions.contains(ext)) {
+        videoFiles.add(file);
       } else {
         otherFiles.add(file);
       }
     }
 
-    // Handle images (up to 10)
-    // If both images and files are selected, only process images
-    if (imageFiles.isNotEmpty && otherFiles.isNotEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Row(
-            children: const [
-              Icon(Icons.info_outline, color: Colors.white),
-              SizedBox(width: 12),
-              Expanded(
-                  child: Text(
-                      'Only images will be uploaded. Files will be ignored.')),
-            ],
-          ),
-          backgroundColor: Colors.blue,
-          duration: Duration(seconds: 2),
-        ),
-      );
-    }
-
+    // Handle images - show preview for single image, multiple images handled differently
     if (imageFiles.isNotEmpty) {
-      if (imageFiles.length > 10) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Row(
-              children: const [
-                Icon(Icons.warning, color: Colors.white),
-                SizedBox(width: 12),
-                Expanded(
-                    child: Text('You can only upload up to 10 images at once')),
-              ],
+      if (imageFiles.length > 1) {
+        // Multiple images - handle as before (no preview for multiple)
+        if (imageFiles.length > 10) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Row(
+                children: const [
+                  Icon(Icons.warning, color: Colors.white),
+                  SizedBox(width: 12),
+                  Expanded(
+                      child: Text('You can only upload up to 10 images at once')),
+                ],
+              ),
+              backgroundColor: Colors.orange,
             ),
-            backgroundColor: Colors.orange,
-          ),
-        );
-        return;
-      }
-
-      _model.isSendingImage = true;
-      safeSetState(() {});
-
-      try {
-        safeSetState(() => _model.isDataUploading_uploadData = true);
-        var selectedUploadedFiles = <FFUploadedFile>[];
-        var downloadUrls = <String>[];
-
-        // Read bytes and upload each image
-        for (final file in imageFiles) {
-          final bytes = await file.readAsBytes();
-          final selectedFile = FFUploadedFile(
-            name: file.name,
-            bytes: bytes,
           );
-          selectedUploadedFiles.add(selectedFile);
+          return;
+        }
+
+        _model.isSendingImage = true;
+        safeSetState(() {});
+
+        try {
+          safeSetState(() => _model.isDataUploading_uploadData = true);
+          var selectedUploadedFiles = <FFUploadedFile>[];
+          var downloadUrls = <String>[];
+
+          // Read bytes and upload each image
+          for (final file in imageFiles) {
+            final bytes = await file.readAsBytes();
+            final selectedFile = FFUploadedFile(
+              name: file.name,
+              bytes: bytes,
+            );
+            selectedUploadedFiles.add(selectedFile);
+
+            // Generate storage path
+            final currentUserUid = currentUserReference?.id ?? '';
+            final pathPrefix = 'users/$currentUserUid/uploads';
+            final timestamp = DateTime.now().microsecondsSinceEpoch;
+            final ext =
+                file.name.contains('.') ? file.name.split('.').last : 'jpg';
+            final storagePath = '$pathPrefix/$timestamp.$ext';
+
+            final downloadUrl = await uploadData(storagePath, bytes);
+            if (downloadUrl != null) {
+              downloadUrls.add(downloadUrl);
+            }
+          }
+
+          _model.isDataUploading_uploadData = false;
+
+          if (selectedUploadedFiles.length == imageFiles.length &&
+              downloadUrls.length == imageFiles.length) {
+            safeSetState(() {
+              _model.uploadedLocalFiles_uploadData = selectedUploadedFiles;
+              _model.uploadedFileUrls_uploadData = downloadUrls;
+            });
+
+            _model.images = downloadUrls.map((url) => url.toString()).toList();
+            safeSetState(() {});
+          }
+        } catch (e) {
+          debugPrint('Error uploading images: $e');
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Error uploading images: $e'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        } finally {
+          _model.isSendingImage = false;
+          safeSetState(() {});
+        }
+      } else {
+        // Single image - show preview
+        final imageFile = imageFiles.first;
+        try {
+          final bytes = await imageFile.readAsBytes();
+          final originalFileName = imageFile.name;
 
           // Generate storage path
           final currentUserUid = currentUserReference?.id ?? '';
           final pathPrefix = 'users/$currentUserUid/uploads';
           final timestamp = DateTime.now().microsecondsSinceEpoch;
-          final ext =
-              file.name.contains('.') ? file.name.split('.').last : 'jpg';
+          final ext = originalFileName.contains('.')
+              ? originalFileName.split('.').last
+              : 'jpg';
           final storagePath = '$pathPrefix/$timestamp.$ext';
 
-          final downloadUrl = await uploadData(storagePath, bytes);
-          if (downloadUrl != null) {
-            downloadUrls.add(downloadUrl);
-          }
-        }
+          // Convert XFile to SelectedFile format
+          final selectedImageFile = SelectedFile(
+            storagePath: storagePath,
+            filePath: kIsWeb ? originalFileName : imageFile.path,
+            bytes: bytes,
+          );
 
-        _model.isDataUploading_uploadData = false;
-
-        if (selectedUploadedFiles.length == imageFiles.length &&
-            downloadUrls.length == imageFiles.length) {
-          safeSetState(() {
-            // Only add images to _model.images, NOT to uploadedLocalFiles_uploadData
-            // This prevents mixing images with files in the file preview section
-            _model.images = downloadUrls.map((url) => url.toString()).toList();
-          });
-          safeSetState(() {});
+          // Navigate to preview screen
+          await Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => MediaPreviewWidget(
+                mediaFile: selectedImageFile,
+                mediaType: 'image',
+                onSend: (caption, file) async {
+                  await _sendImageWithCaption(caption, file);
+                },
+              ),
+            ),
+          );
+        } catch (e) {
+          debugPrint('Error processing image: $e');
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Error processing image: $e'),
+              backgroundColor: Colors.red,
+            ),
+          );
         }
-      } catch (e) {
-        debugPrint('Error uploading images: $e');
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error uploading images: $e'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      } finally {
-        _model.isSendingImage = false;
-        safeSetState(() {});
       }
     }
 
-    // Handle other files (one at a time)
-    // IMPORTANT: Skip processing files if images were selected to prevent mixing
-    if (otherFiles.isNotEmpty && imageFiles.isEmpty) {
+    // Handle videos (one at a time) - show preview
+    if (videoFiles.isNotEmpty) {
+      if (videoFiles.length > 1) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Row(
+              children: const [
+                Icon(Icons.info_outline, color: Colors.white),
+                SizedBox(width: 12),
+                Expanded(child: Text('You can only upload one video at a time')),
+              ],
+            ),
+            backgroundColor: Colors.blue,
+          ),
+        );
+      }
+
+      final videoFile = videoFiles.first;
+      try {
+        final bytes = await videoFile.readAsBytes();
+        final originalFileName = videoFile.name;
+
+        // Generate storage path for video
+        final currentUserUid = currentUserReference?.id ?? '';
+        final pathPrefix = 'users/$currentUserUid/uploads';
+        final timestamp = DateTime.now().microsecondsSinceEpoch;
+        final storagePath = '$pathPrefix/$timestamp.mp4';
+
+        // Convert XFile to SelectedFile format
+        final selectedVideoFile = SelectedFile(
+          storagePath: storagePath,
+          filePath: kIsWeb ? originalFileName : videoFile.path,
+          bytes: bytes,
+        );
+
+        // Navigate to preview screen
+        await Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => MediaPreviewWidget(
+              mediaFile: selectedVideoFile,
+              mediaType: 'video',
+              onSend: (caption, file) async {
+                await _sendVideoWithCaption(caption, file);
+              },
+            ),
+          ),
+        );
+      } catch (e) {
+        debugPrint('Error processing video: $e');
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error processing video: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+
+    // Handle other files (one at a time) - show preview with caption
+    if (otherFiles.isNotEmpty) {
       if (otherFiles.length > 1) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -1425,13 +1347,9 @@ class _ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget>
       final file = otherFiles.first;
       try {
         final bytes = await file.readAsBytes();
-        final originalFileName = file.name;
+        final originalFileName =
+            file.name.isNotEmpty ? file.name : file.path.split('/').last;
 
-        safeSetState(() => _model.isDataUploading_uploadDataFile = true);
-        var selectedUploadedFiles = <FFUploadedFile>[];
-        var downloadUrls = <String>[];
-
-        // Generate storage path
         final currentUserUid = currentUserReference?.id ?? '';
         final pathPrefix = 'users/$currentUserUid/uploads';
         final timestamp = DateTime.now().microsecondsSinceEpoch;
@@ -1440,40 +1358,32 @@ class _ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget>
             : 'file';
         final storagePath = '$pathPrefix/$timestamp.$ext';
 
-        selectedUploadedFiles = [
-          FFUploadedFile(
-            name: originalFileName,
-            bytes: bytes,
-          )
-        ];
+        final selectedFile = SelectedFile(
+          storagePath: storagePath,
+          filePath: kIsWeb ? originalFileName : file.path,
+          bytes: bytes,
+        );
 
-        final downloadUrl = await uploadData(storagePath, bytes);
-        if (downloadUrl != null) {
-          downloadUrls = [downloadUrl];
-        }
-
-        _model.isDataUploading_uploadDataFile = false;
-
-        if (selectedUploadedFiles.length == 1 && downloadUrls.length == 1) {
-          safeSetState(() {
-            _model.uploadedLocalFile_uploadDataFile =
-                selectedUploadedFiles.first;
-            _model.uploadedFileUrl_uploadDataFile = downloadUrls.first;
-          });
-
-          _model.file = _model.uploadedFileUrl_uploadDataFile;
-          safeSetState(() {});
-        }
+        await Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => FilePreviewWidget(
+              mediaFile: selectedFile,
+              fileName: originalFileName,
+              onSend: (caption, f, fileName) async {
+                await _sendFileWithCaption(caption, f, fileName);
+              },
+            ),
+          ),
+        );
       } catch (e) {
-        debugPrint('Error uploading file: $e');
+        debugPrint('Error processing file: $e');
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Error uploading file: $e'),
+            content: Text('Error processing file: $e'),
             backgroundColor: Colors.red,
           ),
         );
-      } finally {
-        safeSetState(() {});
       }
     }
   }
@@ -1486,293 +1396,38 @@ class _ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget>
 
     setState(() {
       _model.showEmojiPicker = !_model.showEmojiPicker;
-      // Close mention overlay when emoji picker is toggled
-      if (_model.showEmojiPicker) {
-        _model.showMentionOverlay = false;
-      }
     });
   }
 
-  // ═══════════════════════════════════════════════════════════════════════════
-  // MENTION OVERLAY - Using proper Overlay API for guaranteed tap handling
-  // ═══════════════════════════════════════════════════════════════════════════
-  
-  void _showMentionOverlay() {
-    _removeMentionOverlay(); // Remove any existing overlay first
-    
-    if (_model.filteredMembers.isEmpty) return;
-    
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    
-    _mentionOverlayEntry = OverlayEntry(
-      builder: (context) => Positioned(
-        left: 24,
-        right: 24,
-        bottom: MediaQuery.of(context).viewInsets.bottom + 80,
-        child: Material(
-          elevation: 8,
-          borderRadius: BorderRadius.circular(12),
-          color: isDark ? const Color(0xFF1C1C1E) : Colors.white,
-          child: Container(
-            constraints: BoxConstraints(maxHeight: 250),
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(
-                color: isDark
-                    ? Colors.white.withOpacity(0.15)
-                    : Colors.black.withOpacity(0.1),
-                width: 1,
-              ),
-            ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                // Header
-                Container(
-                  padding: EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                  decoration: BoxDecoration(
-                    border: Border(
-                      bottom: BorderSide(
-                        color: isDark
-                            ? Colors.white.withOpacity(0.1)
-                            : Colors.black.withOpacity(0.1),
-                        width: 1,
-                      ),
-                    ),
-                  ),
-                  child: Row(
-                    children: [
-                      Icon(
-                        CupertinoIcons.at,
-                        size: 16,
-                        color: isDark ? Colors.white70 : Colors.black54,
-                      ),
-                      SizedBox(width: 8),
-                      Text(
-                        'Mention',
-                        style: TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w600,
-                          color: isDark ? Colors.white70 : Colors.black54,
-                        ),
-                      ),
-                      Spacer(),
-                      // Close button
-                      GestureDetector(
-                        onTap: () {
-                          _removeMentionOverlay();
-                          _model.showMentionOverlay = false;
-                          _model.mentionQuery = '';
-                        },
-                        child: Icon(
-                          CupertinoIcons.xmark_circle_fill,
-                          size: 20,
-                          color: isDark ? Colors.white38 : Colors.black38,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                // LinkAI option (if query matches "link" or empty)
-                if (_model.mentionQuery.isEmpty ||
-                    'linkai'.startsWith(_model.mentionQuery.toLowerCase()))
-                  _buildMentionItem(
-                    onTap: () => _selectLinkAIMention(),
-                    avatar: Container(
-                      width: 36,
-                      height: 36,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        gradient: LinearGradient(
-                          colors: [Color(0xFF3B82F6), Color(0xFF8B5CF6)],
-                        ),
-                      ),
-                      child: Icon(CupertinoIcons.sparkles, size: 18, color: Colors.white),
-                    ),
-                    name: 'LinkAI',
-                    subtitle: 'AI Assistant',
-                    isDark: isDark,
-                  ),
-                // Members list
-                Flexible(
-                  child: ListView.builder(
-                    shrinkWrap: true,
-                    padding: EdgeInsets.zero,
-                    itemCount: _model.filteredMembers.length,
-                    itemBuilder: (context, index) {
-                      final user = _model.filteredMembers[index];
-                      return _buildMentionItem(
-                        onTap: () => _selectUserMention(user),
-                        avatar: Container(
-                          width: 36,
-                          height: 36,
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            color: FlutterFlowTheme.of(context).primary,
-                          ),
-                          child: user.photoUrl.isNotEmpty
-                              ? ClipOval(
-                                  child: CachedNetworkImage(
-                                    imageUrl: user.photoUrl,
-                                    fit: BoxFit.cover,
-                                    errorWidget: (_, __, ___) => Center(
-                                      child: Text(
-                                        user.displayName.isNotEmpty
-                                            ? user.displayName[0].toUpperCase()
-                                            : '?',
-                                        style: TextStyle(
-                                          color: Colors.white,
-                                          fontSize: 14,
-                                          fontWeight: FontWeight.w600,
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                                )
-                              : Center(
-                                  child: Text(
-                                    user.displayName.isNotEmpty
-                                        ? user.displayName[0].toUpperCase()
-                                        : '?',
-                                    style: TextStyle(
-                                      color: Colors.white,
-                                      fontSize: 14,
-                                      fontWeight: FontWeight.w600,
-                                    ),
-                                  ),
-                                ),
-                        ),
-                        name: user.displayName,
-                        subtitle: user.email,
-                        isDark: isDark,
-                      );
-                    },
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-    
-    Overlay.of(context).insert(_mentionOverlayEntry!);
-  }
-  
-  Widget _buildMentionItem({
-    required VoidCallback onTap,
-    required Widget avatar,
-    required String name,
-    required String subtitle,
-    required bool isDark,
-  }) {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
-        child: Padding(
-          padding: EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-          child: Row(
-            children: [
-              avatar,
-              SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      name,
-                      style: TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w500,
-                        color: isDark ? Colors.white : Colors.black87,
-                      ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    if (subtitle.isNotEmpty)
-                      Text(
-                        subtitle,
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: isDark ? Colors.white54 : Colors.black54,
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-  
-  void _selectLinkAIMention() {
-    print('🟢 Selected LinkAI mention');
-    final controller = _model.messageTextController;
-    if (controller == null) return;
-
-    final text = controller.text;
-    final selection = controller.selection;
-    final cursorPosition = selection.start >= 0 ? selection.start : text.length;
-
-    // Find the @ symbol before the cursor
-    int lastAtIndex = _findLastAtIndex(text, cursorPosition);
-
-    final mentionText = '@linkai ';
-    final newText = lastAtIndex == -1
-        ? text.replaceRange(cursorPosition, cursorPosition, mentionText)
-        : text.replaceRange(lastAtIndex, cursorPosition, mentionText);
-
-    controller.value = TextEditingValue(
-      text: newText,
-      selection: TextSelection.collapsed(
-        offset: (lastAtIndex == -1 ? cursorPosition : lastAtIndex) + mentionText.length,
-      ),
-    );
-
-    _removeMentionOverlay();
-    _model.showMentionOverlay = false;
-    _model.mentionQuery = '';
-    
-    // Re-focus the text field
-    _model.messageFocusNode?.requestFocus();
-  }
-  
-  void _selectUserMention(UsersRecord user) {
-    print('🟢 Selected user mention: ${user.displayName}');
-    _insertMention(user);
-    _removeMentionOverlay();
-    _model.showMentionOverlay = false;
-    
-    // Re-focus the text field
-    _model.messageFocusNode?.requestFocus();
-  }
-  
-  int _findLastAtIndex(String text, int cursorPosition) {
-    for (int i = cursorPosition - 1; i >= 0; i--) {
-      if (text[i] == '@') {
-        if (i == 0 || text[i - 1] == ' ' || text[i - 1] == '\n') {
-          return i;
-        }
-      } else if (text[i] == ' ' || text[i] == '\n') {
-        break;
-      }
+  void _openMentionPopup() {
+    // Only open if it's a group chat
+    if (widget.chatReference == null || !widget.chatReference!.isGroup) {
+      return;
     }
-    return -1;
-  }
-  
-  void _removeMentionOverlay() {
-    _mentionOverlayEntry?.remove();
-    _mentionOverlayEntry = null;
-  }
-  
-  // Legacy method - now returns empty since we use OverlayEntry
-  Widget _buildMentionOverlay() {
-    return SizedBox.shrink();
+
+    // Insert @ symbol at cursor position
+    final controller = _model.messageTextController;
+    if (controller != null) {
+      final text = controller.text;
+      final selection = controller.selection;
+      final cursorPosition =
+          selection.start >= 0 ? selection.start : text.length;
+
+      // Insert @ at cursor
+      final newText = text.replaceRange(cursorPosition, cursorPosition, '@');
+      controller.value = TextEditingValue(
+        text: newText,
+        selection: TextSelection.collapsed(offset: cursorPosition + 1),
+      );
+
+      // Trigger mention detection to show popup
+      _handleMentionDetection(newText);
+    } else {
+      // If no controller, just trigger mention detection with @
+      _model.mentionQuery = '';
+      _model.showMentionOverlay = true;
+      _filterGroupMembers('');
+    }
   }
 
   Widget _buildInlineEmojiPicker() {
@@ -1897,18 +1552,26 @@ class _ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget>
     safeSetState(() {});
   }
 
+  /// Strip quotes from mentions in message text
+  /// Converts @"name with spaces" to @name with spaces (without quotes)
+  String _stripQuotesFromMentions(String text) {
+    // Match quoted mentions: @"name with spaces"
+    final quotedMentionRegex = RegExp(r'@"([^"]+)"');
+    return text.replaceAllMapped(quotedMentionRegex, (match) {
+      // Replace @"name" with @name
+      return '@${match.group(1)}';
+    });
+  }
+
   // Handle mention detection and filtering
   void _handleMentionDetection(String text) {
-    print('🔎 _handleMentionDetection called with text: "$text"');
     if (widget.chatReference == null || !widget.chatReference!.isGroup) {
-      print('❌ Not a group chat or chatReference is null');
       _removeMentionOverlay();
       _model.showMentionOverlay = false;
       return;
     }
 
     final mentionQuery = functions.extractMentionQuery(text);
-    print('🔎 Mention query extracted: "$mentionQuery"');
 
     // Check if text ends with @ (user just typed @)
     final textTrimmed = text.trim();
@@ -1920,12 +1583,10 @@ class _ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget>
                 text[text.length - 2] == '\n'));
 
     if (mentionQuery != null || hasActiveAt) {
-      print('✅ Mention query found or active @, showing overlay');
       _model.mentionQuery = mentionQuery ?? '';
       _model.showMentionOverlay = true;
       _filterGroupMembers(mentionQuery ?? '');
     } else {
-      print('❌ No mention query, hiding overlay');
       _removeMentionOverlay();
       _model.showMentionOverlay = false;
     }
@@ -1933,16 +1594,13 @@ class _ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget>
 
   // Filter group members based on mention query
   Future<void> _filterGroupMembers(String query) async {
-    print('🔍 _filterGroupMembers called with query: "$query"');
     if (widget.chatReference == null || currentUserReference == null) {
-      print('❌ chatReference or currentUserReference is null');
       return;
     }
 
     try {
       final chat = widget.chatReference!;
       final members = chat.members;
-      print('👥 Found ${members.length} members in group');
 
       // Load all member user records
       final memberUsers = <UsersRecord>[];
@@ -1957,8 +1615,6 @@ class _ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget>
         }
       }
 
-      print('👥 Loaded ${memberUsers.length} user records');
-
       // Filter based on query
       final lowerQuery = query.toLowerCase();
       final filtered = memberUsers.where((user) {
@@ -1967,33 +1623,87 @@ class _ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget>
         return name.contains(lowerQuery) || email.contains(lowerQuery);
       }).toList();
 
-      print('✅ Filtered to ${filtered.length} members');
       _model.filteredMembers = filtered;
-      
+
       // Show the overlay using proper Overlay API
       if (mounted && _model.showMentionOverlay) {
         _showMentionOverlay();
       }
     } catch (e) {
-      print('❌ Error filtering members: $e');
+      // Error filtering members
     }
   }
 
-  // Insert mention into text
-  void _insertMention(UsersRecord user) {
-    print('🔵 _insertMention called for: ${user.displayName}');
-    final controller = _model.messageTextController;
-    if (controller == null) {
-      print('❌ Controller is null!');
-      return;
+  int _findLastAtIndex(String text, int cursorPosition) {
+    for (int i = cursorPosition - 1; i >= 0; i--) {
+      if (text[i] == '@') {
+        if (i == 0 || text[i - 1] == ' ' || text[i - 1] == '\n') {
+          return i;
+        }
+      } else if (text[i] == ' ' || text[i] == '\n') {
+        break;
+      }
     }
+    return -1;
+  }
+
+  void _selectLinkAIMention() {
+    final controller = _model.messageTextController;
+    if (controller == null) return;
 
     final text = controller.text;
     final selection = controller.selection;
     final cursorPosition = selection.start >= 0 ? selection.start : text.length;
 
-    print('📝 Current text: "$text"');
-    print('📍 Cursor position: $cursorPosition');
+    // Find the @ symbol before the cursor
+    int lastAtIndex = _findLastAtIndex(text, cursorPosition);
+
+    final mentionText = '@linkai ';
+    final newText = lastAtIndex == -1
+        ? text.replaceRange(cursorPosition, cursorPosition, mentionText)
+        : text.replaceRange(lastAtIndex, cursorPosition, mentionText);
+
+    controller.value = TextEditingValue(
+      text: newText,
+      selection: TextSelection.collapsed(
+        offset: (lastAtIndex == -1 ? cursorPosition : lastAtIndex) +
+            mentionText.length,
+      ),
+    );
+
+    _model.showMentionOverlay = false;
+    _model.mentionQuery = '';
+
+    // Re-focus the text field and trigger mention detection to ensure overlay stays hidden
+    _model.messageFocusNode?.requestFocus();
+
+    // Trigger mention detection after a short delay to ensure overlay is hidden
+    Future.delayed(const Duration(milliseconds: 100), () {
+      if (mounted && _model.messageTextController != null) {
+        _handleMentionDetection(_model.messageTextController!.text);
+      }
+    });
+
+    safeSetState(() {});
+  }
+
+  void _selectUserMention(UsersRecord user) {
+    _insertMention(user);
+    _removeMentionOverlay();
+    _model.showMentionOverlay = false;
+
+    // Re-focus the text field
+    _model.messageFocusNode?.requestFocus();
+  }
+
+  // Insert mention into text
+  void _insertMention(UsersRecord user) {
+    final controller = _model.messageTextController;
+    if (controller == null) return;
+
+    final text = controller.text;
+    final selection = controller.selection;
+    final cursorPosition = selection.start >= 0 ? selection.start : text.length;
 
     // Find the @ symbol before the cursor
     int lastAtIndex = -1;
@@ -2010,14 +1720,11 @@ class _ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget>
       }
     }
 
-    print('🔍 Found @ at index: $lastAtIndex');
-
     if (lastAtIndex == -1) {
       // If no @ found, just insert at cursor
       final mentionText = '@${user.displayName} ';
       final newText =
           text.replaceRange(cursorPosition, cursorPosition, mentionText);
-      print('✅ Inserting mention at cursor: "$mentionText"');
       controller.value = TextEditingValue(
         text: newText,
         selection: TextSelection.collapsed(
@@ -2029,7 +1736,6 @@ class _ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget>
       final mentionText = '@${user.displayName} ';
       final newText =
           text.replaceRange(lastAtIndex, cursorPosition, mentionText);
-      print('✅ Replacing mention: "$mentionText"');
       controller.value = TextEditingValue(
         text: newText,
         selection: TextSelection.collapsed(
@@ -2041,41 +1747,229 @@ class _ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget>
     _model.showMentionOverlay = false;
     _model.mentionQuery = '';
     safeSetState(() {});
-    print('✅ Mention inserted, overlay closed');
   }
 
-  double _estimateMessageHeight(MessagesRecord message) {
-    // Estimate message height based on content
-    double baseHeight = 60.0; // Base height for message container
+  void _removeMentionOverlay() {
+    _mentionOverlayEntry?.remove();
+    _mentionOverlayEntry = null;
+  }
 
-    // Add height for text content
-    if (message.content.isNotEmpty) {
-      final textLength = message.content.length;
-      final lines = (textLength / 50).ceil(); // Approximate 50 chars per line
-      baseHeight += lines * 20.0; // 20 pixels per line
-    }
+  // ═══════════════════════════════════════════════════════════════════════════
+  // MENTION OVERLAY - Using proper Overlay API for guaranteed tap handling
+  // ═══════════════════════════════════════════════════════════════════════════
 
-    // Add height for images
-    if (message.images.isNotEmpty) {
-      baseHeight += 200.0; // Approximate height for images
-    }
+  void _showMentionOverlay() {
+    _removeMentionOverlay(); // Remove any existing overlay first
 
-    // Add height for video
-    if (message.video.isNotEmpty) {
-      baseHeight += 250.0; // Approximate height for video
-    }
+    if (_model.filteredMembers.isEmpty) return;
 
-    // Add height for audio
-    if (message.audio.isNotEmpty) {
-      baseHeight += 80.0; // Approximate height for audio player
-    }
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
-    // Add height for reply context
-    if (message.replyTo.isNotEmpty) {
-      baseHeight += 60.0; // Height for reply context
-    }
+    _mentionOverlayEntry = OverlayEntry(
+      builder: (context) => Positioned(
+        left: 24,
+        right: 24,
+        bottom: MediaQuery.of(context).viewInsets.bottom + 80,
+        child: Material(
+          elevation: 8,
+          borderRadius: BorderRadius.circular(12),
+          color: isDark ? const Color(0xFF1C1C1E) : Colors.white,
+          child: Container(
+            constraints: BoxConstraints(maxHeight: 250),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                color: isDark
+                    ? Colors.white.withOpacity(0.15)
+                    : Colors.black.withOpacity(0.1),
+                width: 1,
+              ),
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // Header
+                Container(
+                  padding: EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                  decoration: BoxDecoration(
+                    border: Border(
+                      bottom: BorderSide(
+                        color: isDark
+                            ? Colors.white.withOpacity(0.1)
+                            : Colors.black.withOpacity(0.1),
+                        width: 1,
+                      ),
+                    ),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(
+                        CupertinoIcons.at,
+                        size: 16,
+                        color: isDark ? Colors.white70 : Colors.black54,
+                      ),
+                      SizedBox(width: 8),
+                      Text(
+                        'Mention',
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                          color: isDark ? Colors.white70 : Colors.black54,
+                        ),
+                      ),
+                      Spacer(),
+                      // Close button
+                      GestureDetector(
+                        onTap: () {
+                          _removeMentionOverlay();
+                          _model.showMentionOverlay = false;
+                          _model.mentionQuery = '';
+                        },
+                        child: Icon(
+                          CupertinoIcons.xmark_circle_fill,
+                          size: 20,
+                          color: isDark ? Colors.white38 : Colors.black38,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                // LinkAI option (if query matches "link" or empty)
+                if (_model.mentionQuery.isEmpty ||
+                    'linkai'.startsWith(_model.mentionQuery.toLowerCase()))
+                  _buildMentionItem(
+                    onTap: () => _selectLinkAIMention(),
+                    avatar: Container(
+                      width: 36,
+                      height: 36,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        gradient: LinearGradient(
+                          colors: [Color(0xFF3B82F6), Color(0xFF8B5CF6)],
+                        ),
+                      ),
+                      child: Icon(CupertinoIcons.sparkles,
+                          size: 18, color: Colors.white),
+                    ),
+                    name: 'LinkAI',
+                    subtitle: 'AI Assistant',
+                    isDark: isDark,
+                  ),
+                // Members list
+                Flexible(
+                  child: ListView.builder(
+                    shrinkWrap: true,
+                    padding: EdgeInsets.zero,
+                    itemCount: _model.filteredMembers.length,
+                    itemBuilder: (context, index) {
+                      final user = _model.filteredMembers[index];
+                      return _buildMentionItem(
+                        onTap: () => _selectUserMention(user),
+                        avatar: Container(
+                          width: 36,
+                          height: 36,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: FlutterFlowTheme.of(context).primary,
+                          ),
+                          child: user.photoUrl.isNotEmpty
+                              ? ClipOval(
+                                  child: CachedNetworkImage(
+                                    imageUrl: user.photoUrl,
+                                    fit: BoxFit.cover,
+                                    errorWidget: (_, __, ___) => Center(
+                                      child: Text(
+                                        user.displayName.isNotEmpty
+                                            ? user.displayName[0].toUpperCase()
+                                            : '?',
+                                        style: TextStyle(
+                                          color: Colors.white,
+                                          fontSize: 14,
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                )
+                              : Center(
+                                  child: Text(
+                                    user.displayName.isNotEmpty
+                                        ? user.displayName[0].toUpperCase()
+                                        : '?',
+                                    style: TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                ),
+                        ),
+                        name: user.displayName,
+                        subtitle: user.email,
+                        isDark: isDark,
+                      );
+                    },
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
 
-    return baseHeight;
+    Overlay.of(context).insert(_mentionOverlayEntry!);
+  }
+
+  Widget _buildMentionItem({
+    required VoidCallback onTap,
+    required Widget avatar,
+    required String name,
+    required String subtitle,
+    required bool isDark,
+  }) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        child: Padding(
+          padding: EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          child: Row(
+            children: [
+              avatar,
+              SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      name,
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w500,
+                        color: isDark ? Colors.white : Colors.black87,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    if (subtitle.isNotEmpty)
+                      Text(
+                        subtitle,
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: isDark ? Colors.white54 : Colors.black54,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 
   @override
@@ -2109,10 +2003,6 @@ class _ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget>
         children: [
           GestureDetector(
             onTap: () async {
-              // Don't handle taps if mention overlay is visible - let overlay items handle taps
-              if (_model.showMentionOverlay) {
-                return;
-              }
               _model.select = false;
               // Close emoji picker on tap outside
               if (_model.showEmojiPicker) {
@@ -2120,7 +2010,6 @@ class _ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget>
               }
               safeSetState(() {});
             },
-            behavior: HitTestBehavior.translucent,
             child: Container(
               decoration: const BoxDecoration(),
               child: Stack(
@@ -2157,32 +2046,6 @@ class _ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget>
                             // Get recent messages from stream (latest 50)
                             List<MessagesRecord> recentMessages =
                                 snapshot.data!;
-
-                            // WhatsApp-like behavior: if this chat is currently open, a newly arrived message
-                            // should not create an unread badge/dot in the chat list.
-                            // We debounce and de-dupe by latest message id to avoid rebuild flicker.
-                            if (recentMessages.isNotEmpty &&
-                                currentUserReference != null &&
-                                widget.chatReference != null) {
-                              final latestMessage =
-                                  recentMessages.first; // newest (descending)
-                              final latestId = latestMessage.reference.id;
-                              final isFromOtherUser = latestMessage.senderRef !=
-                                  currentUserReference;
-
-                              if (isFromOtherUser &&
-                                  latestId != _lastAutoMarkedLatestMessageId) {
-                                _lastAutoMarkedLatestMessageId = latestId;
-                                _autoMarkReadDebounce?.cancel();
-                                _autoMarkReadDebounce = Timer(
-                                  const Duration(milliseconds: 250),
-                                  () {
-                                    if (!mounted) return;
-                                    _markMessagesAsRead();
-                                  },
-                                );
-                              }
-                            }
 
                             // Initialize pagination marker from stream's oldest message (first time only)
                             if (recentMessages.isNotEmpty &&
@@ -2236,34 +2099,41 @@ class _ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget>
                               return bTime.compareTo(aTime);
                             });
 
+                            // Filter out messages from blocked users (UID based)
+                            listViewMessagesRecordList = listViewMessagesRecordList
+                                .where((message) {
+                                  final senderId = message.senderRef?.id;
+                                  final isBlocked = senderId != null && _blockedUserIds.contains(senderId);
+                                  if (isBlocked) {
+                                    print('Debug: Filtering blocked message from $senderId');
+                                  }
+                                  return !isBlocked;
+                                })
+                                .toList();
+
+                            // Update total count for pagination and scroll logic
+                            _totalMessageCount =
+                                listViewMessagesRecordList.length +
+                                    (_isLoadingOlderMessages ? 1 : 0);
+
                             return GestureDetector(
                               onTap: () async {
-                                // Don't close keyboard if mention overlay is showing
-                                if (!_model.showMentionOverlay) {
-                                  await actions.closekeyboard();
-                                }
+                                await actions.closekeyboard();
                               },
-                              child: ListView.builder(
-                                controller: _model.scrollController,
-                                // Top padding for floating top bar, bottom for floating input bar
-                                // Add extra padding at top when loading older messages
+                              child: ScrollablePositionedList.builder(
+                                itemScrollController:
+                                    _model.itemScrollController,
+                                itemPositionsListener:
+                                    _model.itemPositionsListener,
                                 padding: EdgeInsets.only(
                                   top: 120 + (_isLoadingOlderMessages ? 50 : 0),
                                   bottom:
                                       100 + (_model.showEmojiPicker ? 320 : 0),
                                 ),
                                 reverse: true,
-                                shrinkWrap:
-                                    false, // Better performance when false
+                                shrinkWrap: false,
                                 scrollDirection: Axis.vertical,
-                                cacheExtent:
-                                    500, // Cache more items for smoother scrolling
-                                addAutomaticKeepAlives:
-                                    false, // Don't keep items alive unnecessarily
-                                addRepaintBoundaries:
-                                    true, // Add repaint boundaries for better performance
-                                itemCount: listViewMessagesRecordList.length +
-                                    (_isLoadingOlderMessages ? 1 : 0),
+                                itemCount: _totalMessageCount,
                                 itemBuilder: (context, listViewIndex) {
                                   // Show loading indicator at the top (first item in reversed list)
                                   if (_isLoadingOlderMessages &&
@@ -2294,7 +2164,7 @@ class _ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget>
                                   final listViewMessagesRecord =
                                       listViewMessagesRecordList[messageIndex];
                                   return Container(
-                                    child: wrapWithModel(
+                                    child: wrapWithModel<ChatThreadModel>(
                                       model: _model.chatThreadModels.getModel(
                                         listViewMessagesRecord.reference.id,
                                         messageIndex,
@@ -2312,6 +2182,7 @@ class _ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget>
                                             widget.chatReference!.reference,
                                         userRef:
                                             listViewMessagesRecord.senderRef!,
+                                        mentionableUsers: _mentionableUserNames,
                                         action: () async {
                                           _model.select = false;
                                           safeSetState(() {});
@@ -2497,10 +2368,6 @@ class _ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget>
                           if (_model.images.isNotEmpty ||
                               _model.image != null ||
                               _model.file != null ||
-                              (_model.uploadedLocalFiles_uploadData
-                                      .isNotEmpty &&
-                                  _model.uploadedFileUrls_uploadData.length >
-                                      1) ||
                               _model.audiopath != null ||
                               _model.selectedVideoFile != null)
                             Padding(
@@ -2688,200 +2555,8 @@ class _ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget>
                                           ],
                                         ),
                                       ),
-                                    // Multiple Files Preview
-                                    if (_model.uploadedLocalFiles_uploadData
-                                            .isNotEmpty &&
-                                        _model.uploadedFileUrls_uploadData
-                                                .length >
-                                            1)
-                                      ..._model.uploadedLocalFiles_uploadData
-                                          .asMap()
-                                          .entries
-                                          .map((entry) {
-                                        final index = entry.key;
-                                        final file = entry.value;
-                                        return Padding(
-                                          padding:
-                                              const EdgeInsets.only(right: 8.0),
-                                          child: Stack(
-                                            children: [
-                                              ClipRRect(
-                                                borderRadius:
-                                                    BorderRadius.circular(12),
-                                                child: BackdropFilter(
-                                                  filter: ImageFilter.blur(
-                                                      sigmaX: 15, sigmaY: 15),
-                                                  child: Container(
-                                                    width: 70,
-                                                    height: 70,
-                                                    decoration: BoxDecoration(
-                                                      gradient: LinearGradient(
-                                                        begin:
-                                                            Alignment.topLeft,
-                                                        end: Alignment
-                                                            .bottomRight,
-                                                        colors: [
-                                                          (Theme.of(context)
-                                                                          .brightness ==
-                                                                      Brightness
-                                                                          .dark
-                                                                  ? Colors.white
-                                                                  : Colors
-                                                                      .black)
-                                                              .withOpacity(
-                                                                  0.12),
-                                                          (Theme.of(context)
-                                                                          .brightness ==
-                                                                      Brightness
-                                                                          .dark
-                                                                  ? Colors.white
-                                                                  : Colors
-                                                                      .black)
-                                                              .withOpacity(
-                                                                  0.06),
-                                                        ],
-                                                      ),
-                                                      borderRadius:
-                                                          BorderRadius.circular(
-                                                              12),
-                                                      border: Border.all(
-                                                        color: (Theme.of(context)
-                                                                        .brightness ==
-                                                                    Brightness
-                                                                        .dark
-                                                                ? Colors.white
-                                                                : Colors.black)
-                                                            .withOpacity(0.1),
-                                                        width: 0.5,
-                                                      ),
-                                                    ),
-                                                    child: Column(
-                                                      mainAxisAlignment:
-                                                          MainAxisAlignment
-                                                              .center,
-                                                      children: [
-                                                        Icon(
-                                                          CupertinoIcons
-                                                              .doc_fill,
-                                                          size: 24,
-                                                          color: FlutterFlowTheme
-                                                                  .of(context)
-                                                              .primary,
-                                                        ),
-                                                        if (file.name != null)
-                                                          Padding(
-                                                            padding:
-                                                                const EdgeInsets
-                                                                    .only(
-                                                                    top: 4),
-                                                            child: Text(
-                                                              file.name!.length >
-                                                                      8
-                                                                  ? '${file.name!.substring(0, 8)}...'
-                                                                  : file.name!,
-                                                              style: TextStyle(
-                                                                fontSize: 8,
-                                                                color: FlutterFlowTheme.of(
-                                                                        context)
-                                                                    .primary,
-                                                                fontWeight:
-                                                                    FontWeight
-                                                                        .w500,
-                                                              ),
-                                                              maxLines: 1,
-                                                              overflow:
-                                                                  TextOverflow
-                                                                      .ellipsis,
-                                                            ),
-                                                          ),
-                                                      ],
-                                                    ),
-                                                  ),
-                                                ),
-                                              ),
-                                              Positioned(
-                                                top: 4,
-                                                right: 4,
-                                                child: GestureDetector(
-                                                  onTap: () {
-                                                    // Remove this specific file
-                                                    if (index <
-                                                        _model
-                                                            .uploadedLocalFiles_uploadData
-                                                            .length) {
-                                                      _model
-                                                          .uploadedLocalFiles_uploadData
-                                                          .removeAt(index);
-                                                    }
-                                                    if (index <
-                                                        _model
-                                                            .uploadedFileUrls_uploadData
-                                                            .length) {
-                                                      _model
-                                                          .uploadedFileUrls_uploadData
-                                                          .removeAt(index);
-                                                    }
-                                                    // If only one file left, move it to single file field
-                                                    if (_model
-                                                            .uploadedLocalFiles_uploadData
-                                                            .length ==
-                                                        1) {
-                                                      _model.uploadedLocalFile_uploadDataFile =
-                                                          _model
-                                                              .uploadedLocalFiles_uploadData
-                                                              .first;
-                                                      _model.uploadedFileUrl_uploadDataFile =
-                                                          _model
-                                                              .uploadedFileUrls_uploadData
-                                                              .first;
-                                                      _model.file = _model
-                                                          .uploadedFileUrls_uploadData
-                                                          .first;
-                                                      _model
-                                                          .uploadedLocalFiles_uploadData
-                                                          .clear();
-                                                      _model
-                                                          .uploadedFileUrls_uploadData
-                                                          .clear();
-                                                    } else if (_model
-                                                        .uploadedLocalFiles_uploadData
-                                                        .isEmpty) {
-                                                      // If all files removed, clear single file field too
-                                                      _model.file = null;
-                                                      _model.uploadedLocalFile_uploadDataFile =
-                                                          FFUploadedFile();
-                                                      _model.uploadedFileUrl_uploadDataFile =
-                                                          '';
-                                                    }
-                                                    safeSetState(() {});
-                                                  },
-                                                  child: Container(
-                                                    padding:
-                                                        const EdgeInsets.all(4),
-                                                    decoration: BoxDecoration(
-                                                      color: Colors.black
-                                                          .withOpacity(0.6),
-                                                      shape: BoxShape.circle,
-                                                    ),
-                                                    child: const Icon(
-                                                      CupertinoIcons.xmark,
-                                                      size: 12,
-                                                      color: Colors.white,
-                                                    ),
-                                                  ),
-                                                ),
-                                              ),
-                                            ],
-                                          ),
-                                        );
-                                      }),
-                                    // Single File Preview - Liquid Glass
-                                    if (_model.file != null &&
-                                        (_model.uploadedLocalFiles_uploadData
-                                                .isEmpty ||
-                                            _model.uploadedFileUrls_uploadData
-                                                    .length <=
-                                                1))
+                                    // File Preview - Liquid Glass
+                                    if (_model.file != null)
                                       Padding(
                                         padding:
                                             const EdgeInsets.only(right: 8.0),
@@ -2948,16 +2623,9 @@ class _ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget>
                                               child: GestureDetector(
                                                 onTap: () {
                                                   _model.file = null;
+                                                  _model.uploadedFileUrl_uploadDataFile = '';
                                                   _model.uploadedLocalFile_uploadDataFile =
-                                                      FFUploadedFile();
-                                                  _model.uploadedFileUrl_uploadDataFile =
-                                                      '';
-                                                  _model
-                                                      .uploadedLocalFiles_uploadData
-                                                      .clear();
-                                                  _model
-                                                      .uploadedFileUrls_uploadData
-                                                      .clear();
+                                                      FFUploadedFile(bytes: Uint8List.fromList([]));
                                                   safeSetState(() {});
                                                 },
                                                 child: Container(
@@ -3084,13 +2752,6 @@ class _ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget>
                                 AdaptivePopupMenuButton.widget<String>(
                                   items: [
                                     AdaptivePopupMenuItem(
-                                      label: 'Images',
-                                      icon: PlatformInfo.isIOS26OrHigher()
-                                          ? 'photo.on.rectangle'
-                                          : Icons.image_rounded,
-                                      value: 'images',
-                                    ),
-                                    AdaptivePopupMenuItem(
                                       label: 'Camera',
                                       icon: PlatformInfo.isIOS26OrHigher()
                                           ? 'camera'
@@ -3098,11 +2759,11 @@ class _ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget>
                                       value: 'camera',
                                     ),
                                     AdaptivePopupMenuItem(
-                                      label: 'File',
+                                      label: 'Images',
                                       icon: PlatformInfo.isIOS26OrHigher()
-                                          ? 'paperclip'
-                                          : Icons.attach_file_rounded,
-                                      value: 'file',
+                                          ? 'photo.on.rectangle'
+                                          : Icons.image_rounded,
+                                      value: 'images',
                                     ),
                                     AdaptivePopupMenuItem(
                                       label: 'Video',
@@ -3110,6 +2771,13 @@ class _ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget>
                                           ? 'video'
                                           : Icons.videocam,
                                       value: 'video',
+                                    ),
+                                    AdaptivePopupMenuItem(
+                                      label: 'File',
+                                      icon: PlatformInfo.isIOS26OrHigher()
+                                          ? 'paperclip'
+                                          : Icons.attach_file_rounded,
+                                      value: 'file',
                                     ),
                                   ],
                                   onSelected: (index, item) async {
@@ -3228,96 +2896,45 @@ class _ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget>
                                                   width: 0.5,
                                                 ),
                                               ),
-                                              child: KeyboardListener(
-                                                focusNode: FocusNode(),
-                                                onKeyEvent: (event) {
-                                                  // Handle Return/Enter key press for macOS
-                                                  if (event is KeyDownEvent ||
-                                                      event is KeyRepeatEvent) {
-                                                    // Check if Return/Enter key is pressed
-                                                    if (event.logicalKey ==
-                                                            LogicalKeyboardKey
-                                                                .enter ||
-                                                        event.logicalKey ==
-                                                            LogicalKeyboardKey
-                                                                .numpadEnter) {
-                                                      // Check if Shift is pressed - if yes, allow newline; if no, send message
-                                                      final isShiftPressed =
-                                                          HardwareKeyboard
-                                                              .instance
-                                                              .isShiftPressed;
-
-                                                      if (!isShiftPressed &&
-                                                          _model
-                                                              .messageFocusNode!
-                                                              .hasFocus) {
-                                                        // Send message on Return (without Shift)
-                                                        final messageText = _model
-                                                                .messageTextController
-                                                                ?.text
-                                                                .trim() ??
-                                                            '';
-                                                        final hasText =
-                                                            messageText
-                                                                .isNotEmpty;
-                                                        final hasImages = _model
-                                                            .images.isNotEmpty;
-                                                        final hasSingleImage =
-                                                            _model.image !=
-                                                                    null &&
-                                                                _model.image!
-                                                                    .isNotEmpty;
-                                                        final hasFile =
-                                                            _model.file !=
-                                                                    null &&
-                                                                _model.file!
-                                                                    .isNotEmpty;
-                                                        final hasAudio =
-                                                            _model.audiopath !=
-                                                                    null &&
-                                                                _model
-                                                                    .audiopath!
-                                                                    .isNotEmpty;
-                                                        final hasVideo = _model
-                                                                .selectedVideoFile !=
-                                                            null;
-
-                                                        // Only send if there's content to send
-                                                        if (hasText ||
-                                                            hasImages ||
-                                                            hasSingleImage ||
-                                                            hasFile ||
-                                                            hasAudio ||
-                                                            hasVideo) {
-                                                          if (_model
-                                                                  .editingMessage !=
-                                                              null) {
-                                                            _updateMessage();
-                                                          } else {
-                                                            _sendMessage();
-                                                          }
-                                                        }
-                                                      }
-                                                      // If Shift is pressed, allow default behavior (newline)
-                                                    }
-                                                  }
-                                                },
-                                                child: Row(
-                                                  crossAxisAlignment:
-                                                      CrossAxisAlignment.end,
-                                                  children: [
-                                                    // Emoji Button
+                                              child: Row(
+                                                crossAxisAlignment:
+                                                    CrossAxisAlignment.end,
+                                                children: [
+                                                  // Emoji Button
+                                                  GestureDetector(
+                                                    onTap: () =>
+                                                        _toggleEmojiPicker(),
+                                                    child: Padding(
+                                                      padding:
+                                                          const EdgeInsets.only(
+                                                              left: 12,
+                                                              bottom: 10),
+                                                      child: Icon(
+                                                        CupertinoIcons.smiley,
+                                                        size: 24,
+                                                        color:
+                                                            FlutterFlowTheme.of(
+                                                                    context)
+                                                                .secondaryText,
+                                                      ),
+                                                    ),
+                                                  ),
+                                                  // @ Mention Button (only show for group chats)
+                                                  if (widget.chatReference !=
+                                                          null &&
+                                                      widget.chatReference!
+                                                          .isGroup)
                                                     GestureDetector(
                                                       onTap: () =>
-                                                          _toggleEmojiPicker(),
+                                                          _openMentionPopup(),
                                                       child: Padding(
                                                         padding:
                                                             const EdgeInsets
                                                                 .only(
-                                                                left: 12,
+                                                                left: 8,
                                                                 bottom: 10),
                                                         child: Icon(
-                                                          CupertinoIcons.smiley,
+                                                          CupertinoIcons.at,
                                                           size: 24,
                                                           color: FlutterFlowTheme
                                                                   .of(context)
@@ -3325,8 +2942,97 @@ class _ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget>
                                                         ),
                                                       ),
                                                     ),
-                                                    // Text Input
-                                                    Expanded(
+                                                  // Text Input
+                                                  Expanded(
+                                                    child: KeyboardListener(
+                                                      focusNode: FocusNode(),
+                                                      onKeyEvent: (event) {
+                                                        // Handle Return/Enter key press for macOS/web
+                                                        if (event
+                                                                is KeyDownEvent ||
+                                                            event
+                                                                is KeyRepeatEvent) {
+                                                          // Check if Return/Enter key is pressed
+                                                          if (event.logicalKey ==
+                                                                  LogicalKeyboardKey
+                                                                      .enter ||
+                                                              event.logicalKey ==
+                                                                  LogicalKeyboardKey
+                                                                      .numpadEnter) {
+                                                            // Check if Shift or Command (Meta) is pressed
+                                                            final isShiftPressed =
+                                                                HardwareKeyboard
+                                                                    .instance
+                                                                    .isShiftPressed;
+                                                            final isMetaPressed =
+                                                                HardwareKeyboard
+                                                                    .instance
+                                                                    .isMetaPressed;
+
+                                                            // Get user preference: 0 = Enter sends, 1 = Shift+Enter sends, 2 = Command+Enter sends
+                                                            final shortcut = FFAppState().sendMessageShortcut;
+                                                            final shouldSend = shortcut == 0
+                                                                ? !isShiftPressed
+                                                                : shortcut == 1
+                                                                    ? isShiftPressed
+                                                                    : (shortcut == 2 && isMetaPressed);
+
+                                                            if (shouldSend &&
+                                                                _model
+                                                                    .messageFocusNode!
+                                                                    .hasFocus) {
+                                                              final messageText =
+                                                                  _model.messageTextController
+                                                                          ?.text
+                                                                          .trim() ??
+                                                                      '';
+                                                              final hasText =
+                                                                  messageText
+                                                                      .isNotEmpty;
+                                                              final hasImages =
+                                                                  _model.images
+                                                                      .isNotEmpty;
+                                                              final hasSingleImage =
+                                                                  _model.image !=
+                                                                          null &&
+                                                                      _model
+                                                                          .image!
+                                                                          .isNotEmpty;
+                                                              final hasFile =
+                                                                  _model.file !=
+                                                                          null &&
+                                                                      _model
+                                                                          .file!
+                                                                          .isNotEmpty;
+                                                              final hasAudio = _model
+                                                                          .audiopath !=
+                                                                      null &&
+                                                                  _model
+                                                                      .audiopath!
+                                                                      .isNotEmpty;
+                                                              final hasVideo =
+                                                                  _model.selectedVideoFile !=
+                                                                      null;
+
+                                                              // Check if there's anything to send
+                                                              if (hasText ||
+                                                                  hasImages ||
+                                                                  hasSingleImage ||
+                                                                  hasFile ||
+                                                                  hasAudio ||
+                                                                  hasVideo) {
+                                                                if (_model
+                                                                        .editingMessage !=
+                                                                    null) {
+                                                                  _updateMessage();
+                                                                } else {
+                                                                  _sendMessage();
+                                                                }
+                                                              }
+                                                            }
+                                                          }
+                                                        }
+                                                      },
                                                       child: CupertinoTextField(
                                                         controller: _model
                                                             .messageTextController,
@@ -3378,71 +3084,69 @@ class _ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget>
                                                         },
                                                       ),
                                                     ),
-                                                    // ═══════════════════════════════════════
-                                                    // INLINE SEND BUTTON - System Blue, iMessage style
-                                                    // ═══════════════════════════════════════
-                                                    AnimatedOpacity(
-                                                      opacity:
-                                                          1.0, // Always visible
+                                                  ),
+                                                  // ═══════════════════════════════════════
+                                                  // INLINE SEND BUTTON - System Blue, iMessage style
+                                                  // ═══════════════════════════════════════
+                                                  AnimatedOpacity(
+                                                    opacity:
+                                                        1.0, // Always visible
+                                                    duration: const Duration(
+                                                        milliseconds: 150),
+                                                    child: AnimatedScale(
+                                                      scale:
+                                                          1.0, // Always full scale
                                                       duration: const Duration(
                                                           milliseconds: 150),
-                                                      child: AnimatedScale(
-                                                        scale:
-                                                            1.0, // Always full scale
-                                                        duration:
-                                                            const Duration(
-                                                                milliseconds:
-                                                                    150),
-                                                        child: Padding(
-                                                          padding:
-                                                              const EdgeInsets
-                                                                  .only(
-                                                                  right: 6,
-                                                                  bottom: 6),
-                                                          child:
-                                                              GestureDetector(
-                                                            onTap: () async {
-                                                              if (_model
-                                                                      .editingMessage !=
-                                                                  null) {
-                                                                await _updateMessage();
-                                                              } else {
-                                                                await _sendMessage();
-                                                              }
-                                                            },
-                                                            child: Container(
-                                                              width: 32,
-                                                              height: 32,
-                                                              decoration:
-                                                                  BoxDecoration(
-                                                                // System Blue
-                                                                color: CupertinoColors
-                                                                    .systemBlue,
-                                                                shape: BoxShape
-                                                                    .circle,
-                                                              ),
-                                                              child: _model
-                                                                          .isSending ==
-                                                                      true
-                                                                  ? const CupertinoActivityIndicator(
-                                                                      color: Colors
-                                                                          .white,
-                                                                      radius: 8,
-                                                                    )
-                                                                  : const Icon(
-                                                                      CupertinoIcons
-                                                                          .arrow_up,
-                                                                      size: 18,
-                                                                      color: Colors
-                                                                          .white,
-                                                                    ),
+                                                      child: Padding(
+                                                        padding:
+                                                            const EdgeInsets
+                                                                .only(
+                                                                right: 6,
+                                                                bottom: 6),
+                                                        child: GestureDetector(
+                                                          onTap: () async {
+                                                            if (_model
+                                                                    .editingMessage !=
+                                                                null) {
+                                                              await _updateMessage();
+                                                            } else {
+                                                              await _sendMessage();
+                                                            }
+                                                          },
+                                                          child: Container(
+                                                            width: 32,
+                                                            height: 32,
+                                                            decoration:
+                                                                BoxDecoration(
+                                                              // System Blue
+                                                              color:
+                                                                  CupertinoColors
+                                                                      .systemBlue,
+                                                              shape: BoxShape
+                                                                  .circle,
                                                             ),
+                                                            child: _model
+                                                                        .isSending ==
+                                                                    true
+                                                                ? const CupertinoActivityIndicator(
+                                                                    color: Colors
+                                                                        .white,
+                                                                    radius: 8,
+                                                                  )
+                                                                : const Icon(
+                                                                    CupertinoIcons
+                                                                        .arrow_up,
+                                                                    size: 18,
+                                                                    color: Colors
+                                                                        .white,
+                                                                  ),
                                                           ),
                                                         ),
                                                       ),
                                                     ),
-                                                  ],
-                                                ),
+                                                  ),
+                                                ],
                                               ),
                                             ),
                                           ),
@@ -3455,9 +3159,6 @@ class _ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget>
                       ),
                     ),
                   ),
-
-                  // Mention Overlay (Above input field) - MUST be after input bar to receive taps
-                  _buildMentionOverlay(),
                 ],
               ),
             ),
@@ -3628,6 +3329,7 @@ class _ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget>
                 ),
               ),
             ).animate().fadeIn(duration: 200.ms),
+          // Mention Overlay is handled by OverlayEntry (_showMentionOverlay)
         ],
       ),
     );

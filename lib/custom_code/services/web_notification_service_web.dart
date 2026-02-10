@@ -157,7 +157,7 @@ class WebNotificationService {
 
   /// Request permission manually (useful for testing)
   Future<String> requestPermission() async {
-    if (!kIsWeb || !_isSupported) return 'unsupported';
+    if (!kIsWeb || !html.Notification.supported) return 'unsupported';
 
     try {
       final permission = await html.Notification.requestPermission();
