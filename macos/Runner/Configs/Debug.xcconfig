@@ -1,0 +1,7 @@
+#include "../../Flutter/Flutter-Debug.xcconfig"
+#include "Warnings.xcconfig"
+
+// AppInfo content preserved from AppInfo.xcconfig
+PRODUCT_NAME = Lona
+PRODUCT_BUNDLE_IDENTIFIER = com.focuskpi.linkedup
+PRODUCT_COPYRIGHT = Copyright © 2025 Lona. All rights reserved.

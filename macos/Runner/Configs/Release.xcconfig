@@ -1,0 +1,13 @@
+#include "Pods/Target Support Files/Pods-Runner/Pods-Runner.release.xcconfig"
+#include "Flutter/ephemeral/Flutter-Generated.xcconfig"
+#include "Warnings.xcconfig"
+
+APP_ID = com.linkedup.club
+APP_NAME = LinkedUp
+COPYRIGHT = Copyright © 2024 LinkedUp Club. All rights reserved.
+MACOSX_DEPLOYMENT_TARGET = 13.0
+PRODUCT_BUNDLE_IDENTIFIER = com.linkedup.club
+PRODUCT_NAME = LinkedUp
+
+// Force arm64 only to avoid x86_64 build issues
+ARCHS = arm64

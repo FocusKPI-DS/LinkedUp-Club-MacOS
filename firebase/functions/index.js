@@ -1,0 +1,3016 @@
+const functions = require("firebase-functions");
+const admin = require("firebase-admin");
+admin.initializeApp();
+
+const kFcmTokensCollection = "fcm_tokens";
+const kPushNotificationsCollection = "ff_push_notifications";
+const kUserPushNotificationsCollection = "ff_user_push_notifications";
+const firestore = admin.firestore();
+
+// Export news push notifications trigger from separate module
+exports.newsOnCreate = require('./newsNotifications').newsOnCreate;
+
+// Export workspace invitation email function
+exports.sendWorkspaceInviteEmail = require('./sendWorkspaceInviteEmail').sendWorkspaceInviteEmail;
+exports.sendInviteEmail = require('./sendInviteEmail').sendInviteEmail;
+
+// Export Gmail integration functions
+exports.gmailOAuth = require('./gmailIntegration').gmailOAuth;
+exports.gmailOAuthCallback = require('./gmailIntegration').gmailOAuthCallback;
+exports.gmailListEmails = require('./gmailIntegration').gmailListEmails;
+exports.gmailGetEmail = require('./gmailIntegration').gmailGetEmail;
+exports.gmailSendEmail = require('./gmailIntegration').gmailSendEmail;
+exports.gmailReply = require('./gmailIntegration').gmailReply;
+exports.gmailDownloadAttachment = require('./gmailIntegration').gmailDownloadAttachment;
+exports.gmailMarkAsRead = require('./gmailIntegration').gmailMarkAsRead;
+exports.gmailPrefetchPriority = require('./gmailIntegration').gmailPrefetchPriority;
+exports.gmailPrefetchBatch = require('./gmailIntegration').gmailPrefetchBatch;
+exports.gmailRefreshCache = require('./gmailIntegration').gmailRefreshCache;
+exports.gmailCheckForNewEmails = require('./gmailIntegration').gmailCheckForNewEmails;
+// Gmail Watch functions temporarily removed
+// exports.gmailSetupWatch = require('./gmailIntegration').gmailSetupWatch;
+// exports.gmailRenewWatch = require('./gmailIntegration').gmailRenewWatch;
+// exports.gmailNotificationHandler = require('./gmailIntegration').gmailNotificationHandler;
+// exports.gmailAutoRenewWatches = require('./gmailIntegration').gmailAutoRenewWatches;
+
+// Export Google Calendar integration functions
+exports.calendarListCalendars = require('./gmailIntegration').calendarListCalendars;
+exports.calendarListEvents = require('./gmailIntegration').calendarListEvents;
+exports.calendarGetEvent = require('./gmailIntegration').calendarGetEvent;
+exports.calendarCreateEvent = require('./gmailIntegration').calendarCreateEvent;
+exports.calendarUpdateEvent = require('./gmailIntegration').calendarUpdateEvent;
+exports.calendarDeleteEvent = require('./gmailIntegration').calendarDeleteEvent;
+
+const kPushNotificationRuntimeOpts = {
+  timeoutSeconds: 540,
+  memory: "2GB",
+};
+
+// Helper function for web search (using Tavily API - better search results)
+async function performWebSearch(query) {
+  try {
+    console.log(`🔍 Searching for: "${query}"`);
+    const fetch = await import("node-fetch");
+
+    // Use Tavily Search API (better results than DuckDuckGo)
+    // Free tier: 1000 requests/month
+    const tavilyKey = functions.config().tavily?.key;
+
+    if (tavilyKey) {
+      // Use Tavily API
+      const response = await fetch.default("https://api.tavily.com/search", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          api_key: tavilyKey,
+          query: query,
+          search_depth: "basic",
+          max_results: 3
+        })
+      });
+
+      const data = await response.json();
+      console.log("🔍 Tavily search response:", JSON.stringify(data).substring(0, 300));
+
+      const results = [];
+      if (data.results && data.results.length > 0) {
+        data.results.forEach(result => {
+          results.push({
+            title: result.title || query,
+            url: result.url || "",
+            snippet: result.content || ""
+          });
+        });
+      }
+
+      console.log(`🔍 Found ${results.length} results using Tavily`);
+      return results;
+    } else {
+      // Fallback to DuckDuckGo
+      console.log("⚠️ No Tavily key found, using DuckDuckGo fallback");
+      const response = await fetch.default(`https://api.duckduckgo.com/?q=${encodeURIComponent(query)}&format=json&no_redirect=1`);
+      const data = await response.json();
+
+      // Extract relevant URLs and titles
+      const results = [];
+      if (data.AbstractText) {
+        results.push({
+          title: data.Heading || query,
+          url: data.AbstractURL || "",
+          snippet: data.AbstractText
+        });
+      }
+
+      // Add related topics if available
+      if (data.RelatedTopics && data.RelatedTopics.length > 0) {
+        data.RelatedTopics.slice(0, 2).forEach(topic => {
+          if (topic.FirstURL) {
+            results.push({
+              title: topic.Text || topic.FirstURL,
+              url: topic.FirstURL,
+              snippet: topic.Text || ""
+            });
+          }
+        });
+      }
+
+      console.log(`🔍 Found ${results.length} results using DuckDuckGo fallback`);
+      return results;
+    }
+  } catch (error) {
+    console.error("❌ Web search error:", error);
+    return [];
+  }
+}
+
+// ==========================================
+// TASKMANAGERAI HELPER FUNCTION
+// ==========================================
+async function extractAndSaveActionItems({ summary, chatId, chatData, userId, requestingUserRef }) {
+  try {
+    console.log("🤖 TaskManagerAI: Starting action item extraction...");
+
+    const openaiApiKey = functions.config().openai?.key;
+    if (!openaiApiKey) {
+      console.error("OpenAI API key not configured");
+      return;
+    }
+
+    const OpenAI = require("openai");
+    const openai = new OpenAI({
+      apiKey: openaiApiKey,
+    });
+
+    // Get actual member display names from chat members
+    const memberNames = [];
+    if (chatData.members && chatData.members.length > 0) {
+      const memberPromises = chatData.members.map(async (memberRef) => {
+        try {
+          const memberDoc = await memberRef.get();
+          if (memberDoc.exists) {
+            const memberData = memberDoc.data();
+            const displayName = memberData.display_name || memberData.displayName || memberData.name;
+            if (displayName && !displayName.includes('ai_agent') && !displayName.toLowerCase().includes('summer')) {
+              return displayName;
+            }
+          }
+        } catch (e) {
+          console.log(`Error fetching member ${memberRef.path}:`, e);
+        }
+        return null;
+      });
+
+      const names = await Promise.all(memberPromises);
+      memberNames.push(...names.filter(n => n !== null));
+    }
+
+    // Get actual group name for prompt
+    const actualGroupName = chatData.title || chatData.group_name || chatData.name || "Group Chat";
+
+    // Build member names list for prompt
+    const memberNamesText = memberNames.length > 0
+      ? `\n\nEXACT MEMBER NAMES (USE THESE EXACT NAMES ONLY - DO NOT GUESS OR USE PARTIAL NAMES):\n${memberNames.map((n, i) => `${i + 1}. ${n}`).join('\n')}\n\nCRITICAL: When assigning tasks, use ONLY the exact names from this list. If a name appears in the summary as "Mitansh" but the exact name is "Mitansh Patel", you MUST use "Mitansh Patel". Do NOT use partial names or guess names.`
+      : '';
+
+    // TaskManagerAI System Prompt (refined)
+    const taskManagerPrompt = `You are TaskManagerAI, an intelligent task extraction assistant.
+Your job is to carefully analyze SummerAI's summary and extract ONLY real, actionable tasks with accurate priority, owners, and a clear "Details" text. Do NOT include or infer due dates; due dates are set by humans later.
+
+CRITICAL RULES:
+1) Extract ONLY explicit action items; ignore general comments or observations.
+2) Do NOT invent tasks, people, due dates, or context not present in the input.
+3) Prefer items listed under any "Action Items" sections; if action-like directives appear elsewhere, include them only if they are clearly tasks.
+4) Each item MUST include: title, priority, involvedPeople, and description (Details). Do NOT include a due date field.
+
+OUTPUT FORMAT (JSON ONLY):
+{
+  "actionItems": [
+    {
+      "title": "Verb-first, specific task (<= 80 chars)",
+      "priority": "Urgent" | "High" | "Moderate" | "Low",
+      "involvedPeople": ["Exact Participant Name"],
+      "description": "Details text per template below"
+    }
+  ]
+}
+
+NOTE: Do NOT include "groupName" in your output. The actual group name will be provided separately and will be used automatically.
+
+DETAILS (description) TEMPLATE:
+Write a clear, engaging description that tells the story of this task. Format it naturally:
+
+"During the ${actualGroupName} discussion on {CurrentDate}, {PeopleInvolved} identified the need to {action summary}. This task involves {specific steps and context}. {Why this matters - business impact or reason}. {Any dependencies, blockers, or important context if relevant - otherwise omit this part}."
+
+IMPORTANT: The actual group name is "${actualGroupName}". Use this exact name in your descriptions, not generic terms like "Group" or "the group".
+
+Guidelines:
+- Write in a natural, conversational tone (2-3 sentences)
+- Make it clear why this task exists and what it accomplishes
+- Focus on the "what" and "why", not just dry facts
+- Always use the actual group name "${actualGroupName}" in descriptions
+- If People/Date are unclear, write naturally without forcing those details
+- No markdown, no bullet points - just flowing prose
+- Make it interesting and easy to understand at a glance
+
+PRIORITY RUBRIC:
+- Urgent: deadline ≤ 48h, blocks others, explicit urgency ("ASAP", "today/tomorrow").
+- High: business-critical within ~3–7 days or external commitments.
+- Moderate: important but flexible timeline.
+- Low: nice-to-have or exploratory.
+If mixed signals, choose the highest justified and briefly reflect that in description.
+
+INVOLVED PEOPLE:
+- Use ONLY the exact member names provided in the list below. DO NOT guess names, use partial names, or create variations.
+- If a name appears in the summary as "Mitansh" but the exact name is "Mitansh Patel", you MUST use "Mitansh Patel".
+- Match names from the summary to the exact names in the provided list. If unsure, leave involvedPeople empty rather than guessing.
+- Exclude bots/assistants (SummerAI, etc.).
+${memberNamesText}
+
+QUALITY + SAFETY CHECKS BEFORE RETURNING:
+- Deduplicate tasks (same intent/owner). If multiple tasks have the same core objective, merge them into ONE task.
+- Remove non-actionable items.
+- If you see similar tasks (e.g., "integrate Gmail" and "focus on Gmail integration"), return ONLY ONE consolidated task.
+- Ensure valid JSON ONLY (no prose outside JSON). Start with { and end with }.`;
+
+    // Call GPT-4
+    const completion = await openai.chat.completions.create({
+      model: "gpt-4",
+      messages: [
+        { role: "system", content: taskManagerPrompt },
+        { role: "user", content: summary }
+      ],
+      temperature: 0.3
+    });
+
+    const responseContent = completion.choices[0].message.content;
+    console.log("🤖 TaskManagerAI Response:", responseContent);
+
+    let parsed;
+    try {
+      parsed = JSON.parse(responseContent);
+    } catch (parseError) {
+      console.error("❌ Failed to parse TaskManagerAI response as JSON:", parseError);
+      console.log("Response was:", responseContent);
+      return; // Exit if JSON parsing fails
+    }
+
+    const actionItems = parsed.actionItems || [];
+
+    if (actionItems.length === 0) {
+      console.log("🤖 No action items found in summary");
+      return;
+    }
+
+    console.log(`🤖 Found ${actionItems.length} action items`);
+
+    // Get chat reference
+    const chatRef = firestore.collection("chats").doc(chatId);
+    // Always use the actual chat/group name - never use generic "Group" or AI guesses
+    const groupName = chatData.title || chatData.group_name || chatData.name || "Group Chat";
+    const workspaceRef = chatData.workspace_ref;
+
+    // Log the actual group name being used
+    console.log(`📋 Using actual group name: "${groupName}" for chat: ${chatId}`);
+
+    // Build dedupe window (last 48 hours)
+    const now = new Date();
+    const fortyEightHoursAgo = new Date(now.getTime() - 48 * 60 * 60 * 1000);
+    const cutoffTs = admin.firestore.Timestamp.fromDate(fortyEightHoursAgo);
+
+    // Helper to normalize titles for dedupe - improved to catch semantic duplicates
+    const normalizeTitle = (t) => {
+      if (!t) return '';
+      // Remove articles, common words, and normalize
+      let normalized = t
+        .toLowerCase()
+        .replace(/\b(the|a|an|on|of|in|into|for|to|with|and|or|but)\b/gi, ' ') // Remove articles and common words
+        .replace(/[\p{P}\p{S}]/gu, ' ') // Remove punctuation
+        .replace(/\s+/g, ' ') // Normalize whitespace
+        .trim();
+
+      // Sort words to catch word order variations (e.g., "gmail calendar integration" vs "integration gmail calendar")
+      const words = normalized.split(' ').filter(w => w.length > 2); // Filter out very short words
+      return words.sort().join(' ');
+    };
+
+    // Fetch existing recent tasks for this chat across ALL users to avoid duplicates
+    const existingRecentSnapshot = await firestore
+      .collection("action_items")
+      .where("chat_ref", "==", chatRef)
+      .where("created_time", ">=", cutoffTs)
+      .get();
+
+    const existingTitleKeys = new Set();
+    existingRecentSnapshot.forEach((doc) => {
+      const d = doc.data() || {};
+      const key = d.dedupe_key || normalizeTitle(d.title || '');
+      if (key) existingTitleKeys.add(key);
+    });
+
+    // Create batch to save all non-duplicate action items
+    const batch = firestore.batch();
+
+    // Track keys within this batch to avoid duplicates in the same run
+    const batchTitleKeys = new Set();
+    let createdCount = 0;
+
+    for (const item of actionItems) {
+      const incomingKey = normalizeTitle(item.title || '');
+      if (!incomingKey) {
+        console.log(`⚠️ Skipping task with empty normalized title: "${item.title}"`);
+        continue; // skip empty titles
+      }
+
+      // Check against existing tasks AND tasks in this batch
+      if (existingTitleKeys.has(incomingKey) || batchTitleKeys.has(incomingKey)) {
+        console.log(`⚠️ Skipping duplicate task: "${item.title}" (normalized: "${incomingKey}")`);
+        continue; // Duplicate: skip creating
+      }
+
+      // Track this key to dedupe within the same run as well
+      existingTitleKeys.add(incomingKey);
+      batchTitleKeys.add(incomingKey);
+      createdCount++;
+
+      // Create action item document
+      const actionItemRef = firestore.collection("action_items").doc();
+
+      // Map involvedPeople names to exact member names
+      const exactInvolvedPeople = [];
+      if (item.involvedPeople && item.involvedPeople.length > 0 && memberNames.length > 0) {
+        for (const nameFromAI of item.involvedPeople) {
+          // Find exact match or closest match from member names
+          const exactMatch = memberNames.find(memberName =>
+            memberName.toLowerCase() === nameFromAI.toLowerCase() ||
+            memberName.toLowerCase().includes(nameFromAI.toLowerCase()) ||
+            nameFromAI.toLowerCase().includes(memberName.toLowerCase().split(' ')[0])
+          );
+
+          if (exactMatch) {
+            exactInvolvedPeople.push(exactMatch);
+          } else {
+            // If no match found, use the name from AI but log warning
+            console.log(`⚠️ Name "${nameFromAI}" not found in member list, using as-is`);
+            exactInvolvedPeople.push(nameFromAI);
+          }
+        }
+      }
+
+      // Always use the actual group name - never use AI's groupName guess
+      // The AI might return "Group" or generic names, but we have the actual chat name
+      const actualGroupName = groupName; // Use the real chat name, not AI's guess
+
+      const actionItemData = {
+        title: item.title || "",
+        group_name: actualGroupName, // Always use actual chat name, ignore AI's groupName
+        priority: item.priority || "Moderate",
+        status: "pending",
+        user_ref: requestingUserRef,
+        workspace_ref: workspaceRef || null,
+        chat_ref: chatRef,
+        involved_people: exactInvolvedPeople.length > 0 ? exactInvolvedPeople : (item.involvedPeople || []),
+        created_time: admin.firestore.FieldValue.serverTimestamp(),
+        last_summary_at: admin.firestore.FieldValue.serverTimestamp(),
+        description: item.description || "",
+        dedupe_key: incomingKey
+      };
+
+      // Due dates are added manually by humans; ignore any AI-provided dates
+
+      batch.set(actionItemRef, actionItemData);
+    }
+
+    // Commit all action items at once
+    if (createdCount > 0) {
+      await batch.commit();
+      console.log(`✅ TaskManagerAI: Successfully created ${createdCount} action items (${actionItems.length - createdCount} duplicates skipped)`);
+    } else {
+      console.log(`⚠️ TaskManagerAI: All ${actionItems.length} action items were duplicates - none created`);
+    }
+
+  } catch (error) {
+    console.error("❌ TaskManagerAI Error:", error);
+    throw error;
+  }
+}
+
+exports.addFcmToken = functions.https.onCall(async (data, context) => {
+  if (!context.auth) {
+    return "Failed: Unauthenticated calls are not allowed.";
+  }
+  const userDocPath = data.userDocPath;
+  const fcmToken = data.fcmToken;
+  const deviceType = data.deviceType;
+  if (
+    typeof userDocPath === "undefined" ||
+    typeof fcmToken === "undefined" ||
+    typeof deviceType === "undefined" ||
+    userDocPath.split("/").length <= 1 ||
+    fcmToken.length === 0 ||
+    deviceType.length === 0
+  ) {
+    return "Invalid arguments encoutered when adding FCM token.";
+  }
+  if (context.auth.uid != userDocPath.split("/")[1]) {
+    return "Failed: Authenticated user doesn't match user provided.";
+  }
+  const existingTokens = await firestore
+    .collectionGroup(kFcmTokensCollection)
+    .where("fcm_token", "==", fcmToken)
+    .get();
+  var userAlreadyHasToken = false;
+  for (var doc of existingTokens.docs) {
+    const user = doc.ref.parent.parent;
+    if (user.path != userDocPath) {
+      // Should never have the same FCM token associated with multiple users.
+      await doc.ref.delete();
+    } else {
+      userAlreadyHasToken = true;
+    }
+  }
+  if (userAlreadyHasToken) {
+    return "FCM token already exists for this user. Ignoring...";
+  }
+  await getUserFcmTokensCollection(userDocPath).doc().set({
+    fcm_token: fcmToken,
+    device_type: deviceType,
+    created_at: admin.firestore.FieldValue.serverTimestamp(),
+  });
+  return "Successfully added FCM token!";
+});
+
+exports.sendPushNotificationsTrigger = functions
+  .runWith(kPushNotificationRuntimeOpts)
+  .firestore.document(`${kPushNotificationsCollection}/{id}`)
+  .onCreate(async (snapshot, _) => {
+    try {
+      // Ignore scheduled push notifications on create
+      const scheduledTime = snapshot.data().scheduled_time || "";
+      if (scheduledTime) {
+        return;
+      }
+
+      await sendPushNotifications(snapshot);
+    } catch (e) {
+      console.log(`Error: ${e}`);
+      await snapshot.ref.update({ status: "failed", error: `${e}` });
+    }
+  });
+
+exports.sendUserPushNotificationsTrigger = functions
+  .runWith({
+    timeoutSeconds: 300,  // Reduced from 540
+    memory: "512MB",      // Reduced from 2GB for faster cold start
+  })
+  .firestore.document(`${kUserPushNotificationsCollection}/{id}`)
+  .onCreate(async (snapshot, _) => {
+    try {
+      // Ignore scheduled push notifications on create
+      const scheduledTime = snapshot.data().scheduled_time || "";
+      if (scheduledTime) {
+        return;
+      }
+
+      // Don't let user-triggered notifications to be sent to all users.
+      const userRefsStr = snapshot.data().user_refs || "";
+      if (userRefsStr) {
+        await sendPushNotifications(snapshot);
+      }
+    } catch (e) {
+      console.log(`Error: ${e}`);
+      await snapshot.ref.update({ status: "failed", error: `${e}` });
+    }
+  });
+
+// Trigger for emoji reaction notifications
+exports.sendReactionNotificationTrigger = functions
+  .runWith({
+    timeoutSeconds: 60,
+    memory: "256MB",
+  })
+  .firestore.document('chats/{chatId}/messages/{messageId}')
+  .onUpdate(async (change, context) => {
+    try {
+      const beforeData = change.before.data();
+      const afterData = change.after.data();
+
+      // Check if reactions_by_user field changed
+      const beforeReactions = beforeData.reactions_by_user || {};
+      const afterReactions = afterData.reactions_by_user || {};
+
+      // Find new reactions added
+      const newReactions = {};
+      for (const [userId, emojis] of Object.entries(afterReactions)) {
+        const beforeEmojis = beforeReactions[userId] || [];
+        const newEmojis = emojis.filter(emoji => !beforeEmojis.includes(emoji));
+        if (newEmojis.length > 0) {
+          newReactions[userId] = newEmojis;
+        }
+      }
+
+      // If no new reactions, skip
+      if (Object.keys(newReactions).length === 0) {
+        return;
+      }
+
+      // Get message author info
+      const messageAuthorRef = afterData.sender_ref;
+      if (!messageAuthorRef) {
+        console.log('No sender_ref found for message');
+        return;
+      }
+
+      // Get chat info for workspace context
+      const chatDoc = await firestore.doc(`chats/${context.params.chatId}`).get();
+      if (!chatDoc.exists) {
+        console.log('Chat document not found');
+        return;
+      }
+
+      const chatData = chatDoc.data();
+      const workspaceRef = chatData.workspace_ref;
+
+      // Get workspace name
+      let workspaceName = "Unknown Workspace";
+      if (workspaceRef) {
+        try {
+          const workspaceDoc = await workspaceRef.get();
+          if (workspaceDoc.exists) {
+            workspaceName = workspaceDoc.data().name || workspaceDoc.data().title || "Unknown Workspace";
+          }
+        } catch (e) {
+          console.log('Error getting workspace name:', e);
+        }
+      }
+
+      // Send notification for each new reaction
+      for (const [reactingUserId, emojis] of Object.entries(newReactions)) {
+        // Don't notify the person who reacted
+        if (reactingUserId === messageAuthorRef.id) {
+          continue;
+        }
+
+        // Get reacting user's name
+        let reactingUserName = "Someone";
+        try {
+          const reactingUserDoc = await firestore.doc(`users/${reactingUserId}`).get();
+          if (reactingUserDoc.exists) {
+            reactingUserName = reactingUserDoc.data().display_name || reactingUserDoc.data().name || "Someone";
+          }
+        } catch (e) {
+          console.log('Error getting reacting user name:', e);
+        }
+
+        // Create notification for each emoji
+        for (const emoji of emojis) {
+          const notificationData = {
+            notification_title: "New Reaction",
+            notification_text: `${reactingUserName} reacted ${emoji} to your message`,
+            notification_image_url: "",
+            notification_sound: "default",
+            user_refs: messageAuthorRef.path,
+            initial_page_name: "ChatDetail",
+            parameter_data: JSON.stringify({
+              chatDoc: `chats/${context.params.chatId}`,
+              workspaceName: workspaceName
+            }),
+            sender: firestore.doc(`users/${reactingUserId}`),
+            timestamp: admin.firestore.FieldValue.serverTimestamp(),
+          };
+
+          // Add to notifications collection to trigger the existing notification system
+          await firestore.collection(kUserPushNotificationsCollection).add(notificationData);
+        }
+      }
+
+    } catch (e) {
+      console.log(`Error in reaction notification trigger: ${e}`);
+    }
+  });
+
+// exports.sendMessageNotificationTrigger = functions
+//   .runWith({
+//     timeoutSeconds: 60,
+//     memory: "256MB",
+//   })
+//   .firestore.document('chats/{chatId}/messages/{messageId}')
+//   .onCreate(async (snapshot, context) => {
+//     try {
+//       const messageData = snapshot.data();
+//       
+//       // Only process text messages (not reactions)
+//       if (messageData.message_type !== 'text' && messageData.content) {
+//         return;
+//       }
+//       
+//       const senderRef = messageData.sender_ref;
+//       if (!senderRef) {
+//         console.log('No sender_ref found for message');
+//         return;
+//       }
+//       
+//       // Get chat info for workspace context
+//       const chatDoc = await firestore.doc(`chats/${context.params.chatId}`).get();
+//       if (!chatDoc.exists) {
+//         console.log('Chat document not found');
+//         return;
+//       }
+//       
+//       const chatData = chatDoc.data();
+//       const workspaceRef = chatData.workspace_ref;
+//       
+//       // Get workspace name
+//       let workspaceName = "Unknown Workspace";
+//       if (workspaceRef) {
+//         try {
+//           const workspaceDoc = await workspaceRef.get();
+//           if (workspaceDoc.exists) {
+//             workspaceName = workspaceDoc.data().name || workspaceDoc.data().title || "Unknown Workspace";
+//           }
+//         } catch (e) {
+//           console.log('Error getting workspace name:', e);
+//         }
+//       }
+//       
+//       // Get sender name
+//       let senderName = "Someone";
+//       try {
+//         const senderDoc = await firestore.doc(`users/${senderRef.id}`).get();
+//         if (senderDoc.exists) {
+//           senderName = senderDoc.data().display_name || senderDoc.data().name || "Someone";
+//         }
+//       } catch (e) {
+//         console.log('Error getting sender name:', e);
+//       }
+//       
+//       // Get other chat members (exclude sender)
+//       const members = chatData.members || [];
+//       const otherMembers = members.filter(member => member.id !== senderRef.id);
+//       
+//       if (otherMembers.length === 0) {
+//         console.log('No other members to notify');
+//         return;
+//       }
+//       
+//       // Create notification for each member
+//       const notificationData = {
+//         notification_title: workspaceName,
+//         notification_text: `${senderName}: ${messageData.content || 'sent a message'}`,
+//         notification_image_url: "",
+//         notification_sound: "default",
+//         user_refs: otherMembers.map(member => member.path).join(','),
+//         initial_page_name: "ChatDetail",
+//         parameter_data: JSON.stringify({
+//           chatDoc: `chats/${context.params.chatId}`,
+//           workspaceName: workspaceName
+//         }),
+//         sender: senderRef,
+//         timestamp: admin.firestore.FieldValue.serverTimestamp(),
+//       };
+//       
+//       await firestore.collection(kUserPushNotificationsCollection).add(notificationData);
+//       console.log(`Message notification sent for workspace: ${workspaceName}`);
+//       
+//     } catch (e) {
+//       console.log(`Error in message notification trigger: ${e}`);
+//     }
+//   });
+
+// Trigger for Lona Service message broadcasting
+exports.sendLonaServiceMessageTrigger = functions
+  .runWith({
+    timeoutSeconds: 300,
+    memory: "512MB",
+  })
+  .firestore.document('chats/lona-service-chat/messages/{messageId}')
+  .onCreate(async (snapshot, context) => {
+    try {
+      const messageData = snapshot.data();
+
+      // Verify sender is lona-service
+      const senderRef = messageData.sender_ref;
+      if (!senderRef) {
+        console.log('No sender_ref found for message');
+        return;
+      }
+
+      // Check if sender is lona-service
+      if (senderRef.id !== 'lona-service') {
+        console.log('Message not from lona-service, skipping broadcast');
+        return;
+      }
+
+      console.log('🔔 Lona Service message detected, broadcasting to all users');
+
+      // Get message content
+      const messageContent = messageData.content || messageData.text || 'New message from Lona Service';
+
+      // Determine message preview text
+      let messagePreview = messageContent;
+      if (messageData.images && messageData.images.length > 0) {
+        messagePreview = '📷 Photo';
+      } else if (messageData.video) {
+        messagePreview = '🎬 Video';
+      } else if (messageData.audio) {
+        messagePreview = '🎤 Voice message';
+      } else if (messageData.attachment_url || messageData.file) {
+        messagePreview = '📎 File';
+      }
+
+      // Query all users from Firestore
+      const usersSnapshot = await firestore.collection('users').get();
+      const userRefs = usersSnapshot.docs.map(doc => doc.ref);
+
+      if (userRefs.length === 0) {
+        console.log('No users found to notify');
+        return;
+      }
+
+      console.log(`📤 Broadcasting to ${userRefs.length} users`);
+
+      // Update the service chat document with last message info
+      // Use the message's created_at timestamp if available, otherwise use server timestamp
+      const chatRef = firestore.doc('chats/lona-service-chat');
+      const messageTimestamp = messageData.created_at || admin.firestore.FieldValue.serverTimestamp();
+      await chatRef.update({
+        last_message: messagePreview,
+        last_message_at: messageTimestamp,
+        last_message_sent: senderRef,
+        last_message_type: messageData.message_type || 'text',
+        last_message_seen: [senderRef], // Only lona-service has seen it
+      });
+      console.log(`✅ Updated chat document with last message info (timestamp: ${messageData.created_at ? 'from message' : 'server'})`);
+
+      // Create push notification document
+      const notificationData = {
+        notification_title: 'Lona Service',
+        notification_text: messagePreview,
+        notification_image_url: messageData.sender_photo || '',
+        notification_sound: 'default',
+        user_refs: userRefs.map(ref => ref.path).join(','),
+        initial_page_name: 'ChatDetail',
+        parameter_data: JSON.stringify({
+          chatDoc: 'chats/lona-service-chat',
+        }),
+        sender: senderRef,
+        timestamp: admin.firestore.FieldValue.serverTimestamp(),
+      };
+
+      await firestore.collection(kUserPushNotificationsCollection).add(notificationData);
+      console.log(`✅ Lona Service message broadcast notification created for ${userRefs.length} users`);
+
+    } catch (e) {
+      console.log(`❌ Error in Lona Service message trigger: ${e}`);
+    }
+  });
+
+// Trigger for connection request notifications
+exports.sendConnectionRequestNotificationTrigger = functions
+  .runWith({
+    timeoutSeconds: 60,
+    memory: "256MB",
+  })
+  .firestore.document('users/{userId}')
+  .onUpdate(async (change, context) => {
+    try {
+      console.log(`🔔 Connection request trigger fired for user: ${context.params.userId}`);
+
+      const beforeData = change.before.data();
+      const afterData = change.after.data();
+
+      // Check if friend_requests field exists and changed
+      const beforeFriendRequests = beforeData.friend_requests || [];
+      const afterFriendRequests = afterData.friend_requests || [];
+
+      // Better comparison for DocumentReference arrays
+      const beforeCount = Array.isArray(beforeFriendRequests) ? beforeFriendRequests.length : 0;
+      const afterCount = Array.isArray(afterFriendRequests) ? afterFriendRequests.length : 0;
+
+      console.log(`friend_requests - Before count: ${beforeCount}, After count: ${afterCount}`);
+
+      // Early return if friend_requests didn't change or is empty
+      if (beforeCount === afterCount && afterCount === 0) {
+        console.log(`friend_requests is empty and didn't change, skipping notification`);
+        return;
+      }
+
+      // If count didn't increase, no new requests
+      if (afterCount <= beforeCount) {
+        console.log(`friend_requests count didn't increase (${beforeCount} -> ${afterCount}), skipping notification`);
+        return;
+      }
+
+      // friend_requests arrays already retrieved above
+      console.log(`Before friend_requests type: ${Array.isArray(beforeFriendRequests) ? 'array' : typeof beforeFriendRequests}`);
+      console.log(`After friend_requests type: ${Array.isArray(afterFriendRequests) ? 'array' : typeof afterFriendRequests}`);
+
+      // Debug: Log the actual data structure
+      if (beforeFriendRequests.length > 0) {
+        console.log(`Before first item type:`, typeof beforeFriendRequests[0]);
+        console.log(`Before first item:`, beforeFriendRequests[0]);
+      }
+      if (afterFriendRequests.length > 0) {
+        console.log(`After first item type:`, typeof afterFriendRequests[0]);
+        console.log(`After first item:`, afterFriendRequests[0]);
+      }
+
+      // Convert to IDs for comparison (DocumentReference objects have .id property)
+      const beforeIds = beforeFriendRequests.map(ref => {
+        if (ref && typeof ref === 'object' && ref.id) {
+          return ref.id;
+        } else if (ref && typeof ref === 'object' && ref.path) {
+          return ref.path.split('/').pop();
+        } else if (typeof ref === 'string') {
+          return ref.split('/').pop();
+        }
+        return null;
+      }).filter(Boolean);
+
+      const afterIds = afterFriendRequests.map(ref => {
+        if (ref && typeof ref === 'object' && ref.id) {
+          return ref.id;
+        } else if (ref && typeof ref === 'object' && ref.path) {
+          return ref.path.split('/').pop();
+        } else if (typeof ref === 'string') {
+          return ref.split('/').pop();
+        }
+        return null;
+      }).filter(Boolean);
+
+      console.log(`Before IDs:`, beforeIds);
+      console.log(`After IDs:`, afterIds);
+
+      // Find new connection requests (users added to friend_requests array)
+      const newRequestIds = afterIds.filter(
+        (afterId) => !beforeIds.includes(afterId)
+      );
+
+      console.log(`New request IDs:`, newRequestIds);
+
+      // Convert back to DocumentReference objects from afterFriendRequests
+      const newRequests = afterFriendRequests.filter((ref) => {
+        let refId = null;
+        if (ref && typeof ref === 'object' && ref.id) {
+          refId = ref.id;
+        } else if (ref && typeof ref === 'object' && ref.path) {
+          refId = ref.path.split('/').pop();
+        } else if (typeof ref === 'string') {
+          refId = ref.split('/').pop();
+        }
+        return refId && newRequestIds.includes(refId);
+      });
+
+      // If no new requests, skip
+      if (newRequests.length === 0) {
+        console.log(`No new connection requests detected for user ${context.params.userId}`);
+        return;
+      }
+
+      console.log(`Found ${newRequests.length} new connection request(s) for user ${context.params.userId}`);
+
+      // Get the recipient user (the one who received the request)
+      const recipientUserId = context.params.userId;
+      const recipientUserRef = firestore.doc(`users/${recipientUserId}`);
+
+      // Check if recipient has connection request notifications enabled
+      const recipientUserDoc = await recipientUserRef.get();
+      if (!recipientUserDoc.exists) {
+        console.log('Recipient user document not found');
+        return;
+      }
+
+      const recipientData = recipientUserDoc.data();
+      // Connection request notifications are always enabled (important notifications)
+      // We don't check connection_requests_enabled setting - connection requests are always notified
+      console.log(`✅ Processing connection request notification for user ${recipientUserId}`);
+
+      // Process each new connection request
+      for (const senderRef of newRequests) {
+        try {
+          // Handle DocumentReference - get path and ID
+          let senderRefPath, senderRefId;
+          if (senderRef && typeof senderRef === 'object') {
+            senderRefPath = senderRef.path || (senderRef.id ? `users/${senderRef.id}` : null);
+            senderRefId = senderRef.id || (senderRefPath ? senderRefPath.split('/').pop() : null);
+          } else if (typeof senderRef === 'string') {
+            senderRefPath = senderRef;
+            senderRefId = senderRef.split('/').pop();
+          } else {
+            console.log('Invalid senderRef format:', senderRef);
+            continue;
+          }
+
+          // Get sender's display name
+          let senderName = "Someone";
+          try {
+            // Use the path to get the document
+            const senderDocRef = senderRefPath ? firestore.doc(senderRefPath) : null;
+            if (senderDocRef) {
+              const senderDoc = await senderDocRef.get();
+              if (senderDoc.exists) {
+                const senderData = senderDoc.data();
+                senderName = senderData.display_name || senderData.name || "Someone";
+              }
+            }
+          } catch (e) {
+            console.log('Error getting sender name:', e);
+          }
+
+          // Create notification data
+          const notificationData = {
+            notification_title: senderName,
+            notification_text: "wants to Connect",
+            notification_image_url: "",
+            notification_sound: "default",
+            user_refs: recipientUserRef.path,
+            initial_page_name: "Connections",
+            parameter_data: JSON.stringify({
+              senderId: senderRefId,
+              senderRef: senderRefPath,
+            }),
+            sender: senderRefPath ? firestore.doc(senderRefPath) : null,
+            timestamp: admin.firestore.FieldValue.serverTimestamp(),
+          };
+
+          // Add to notifications collection to trigger the existing notification system
+          await firestore.collection(kUserPushNotificationsCollection).add(notificationData);
+
+          console.log(`✅ Connection request notification sent: ${senderName} -> ${recipientUserId}`);
+        } catch (e) {
+          console.log(`❌ Error sending connection request notification:`, e);
+          console.log(`   SenderRef:`, senderRef);
+        }
+      }
+    } catch (e) {
+      console.log(`Error in connection request notification trigger: ${e}`);
+    }
+  });
+
+// Trigger for connection accepted notifications
+exports.sendConnectionAcceptedNotificationTrigger = functions
+  .runWith({
+    timeoutSeconds: 60,
+    memory: "256MB",
+  })
+  .firestore.document('users/{userId}')
+  .onUpdate(async (change, context) => {
+    try {
+      const beforeData = change.before.data();
+      const afterData = change.after.data();
+
+      // Check if friends field exists and changed
+      const beforeFriends = beforeData.friends || [];
+      const afterFriends = afterData.friends || [];
+
+      // Better comparison for DocumentReference arrays
+      const beforeCount = Array.isArray(beforeFriends) ? beforeFriends.length : 0;
+      const afterCount = Array.isArray(afterFriends) ? afterFriends.length : 0;
+
+      // Early return if friends count didn't increase
+      if (afterCount <= beforeCount) {
+        return;
+      }
+
+      console.log(`🔔 Connection accepted trigger fired for user: ${context.params.userId}`);
+
+      // Convert to IDs for comparison
+      const beforeIds = beforeFriends.map(ref => {
+        if (ref && typeof ref === 'object' && ref.id) return ref.id;
+        else if (typeof ref === 'string') return ref.split('/').pop();
+        return null;
+      }).filter(Boolean);
+
+      const afterIds = afterFriends.map(ref => {
+        if (ref && typeof ref === 'object' && ref.id) return ref.id;
+        else if (typeof ref === 'string') return ref.split('/').pop();
+        return null;
+      }).filter(Boolean);
+
+      // Find new friends (users added to friends array)
+      const newFriendIds = afterIds.filter(id => !beforeIds.includes(id));
+
+      if (newFriendIds.length === 0) {
+        return;
+      }
+
+      console.log(`Found ${newFriendIds.length} new connection(s) for user ${context.params.userId}`);
+
+      // Get the accepter user (the one who accepted the request)
+      const accepterUserId = context.params.userId;
+      const accepterUserRef = firestore.doc(`users/${accepterUserId}`);
+
+      // Get accepter's name for the notification
+      let accepterName = "Someone";
+      if (afterData.display_name || afterData.name) {
+        accepterName = afterData.display_name || afterData.name;
+      }
+
+      // Check for previous incoming requests to confirm this was an acceptance
+      const beforeFriendRequests = beforeData.friend_requests || [];
+      const beforeRequestIds = beforeFriendRequests.map(ref => {
+        if (ref && typeof ref === 'object' && ref.id) return ref.id;
+        else if (typeof ref === 'string') return ref.split('/').pop();
+        return null;
+      }).filter(Boolean);
+
+      // Process each new friend
+      for (const friendId of newFriendIds) {
+        // We only want to notify if this was a result of accepting a request
+        // So check if this friend was previously in the friend_requests list
+        // OR check if we have to be less strict due to race conditions (batch updates remove request same time)
+        // Since we are looking at 'before' data for requests, it should be there.
+
+        const wasInRequests = beforeRequestIds.includes(friendId);
+
+        if (!wasInRequests) {
+          console.log(`User ${friendId} was not in friend_requests, skipping (might be direct add or sync)`);
+          continue;
+        }
+
+        try {
+          // The recipient of the notification is the person who sent the request (newFriend)
+          const validRecipientRef = firestore.doc(`users/${friendId}`);
+
+          // Create notification data
+          const notificationData = {
+            notification_title: accepterName,
+            notification_text: "accepted your connection request",
+            notification_image_url: afterData.photo_url || "",
+            notification_sound: "default",
+            user_refs: validRecipientRef.path,
+            initial_page_name: "Connections", // Or Profile
+            parameter_data: JSON.stringify({
+              userId: accepterUserId,
+              userRef: accepterUserRef.path,
+            }),
+            sender: accepterUserRef,
+            timestamp: admin.firestore.FieldValue.serverTimestamp(),
+          };
+
+          // Add to notifications collection
+          await firestore.collection(kUserPushNotificationsCollection).add(notificationData);
+
+          console.log(`✅ Connection accepted notification sent: ${accepterName} -> ${friendId}`);
+        } catch (e) {
+          console.log(`❌ Error sending connection accepted notification to ${friendId}:`, e);
+        }
+      }
+
+    } catch (e) {
+      console.log(`Error in connection accepted notification trigger: ${e}`);
+    }
+  });
+
+async function sendPushNotifications(snapshot) {
+  const notificationData = snapshot.data();
+  const title = notificationData.notification_title || "";
+  const body = notificationData.notification_text || "";
+  const imageUrl = notificationData.notification_image_url || "";
+  const sound = notificationData.notification_sound || "";
+  const parameterData = notificationData.parameter_data || "";
+  const targetAudience = notificationData.target_audience || "";
+  const initialPageName = notificationData.initial_page_name || "";
+
+  console.log("🔍 DEBUG: Original notification data:", {
+    title,
+    body,
+    notification_title: notificationData.notification_title,
+    notification_text: notificationData.notification_text,
+    parameterData: parameterData,
+    initialPageName: initialPageName
+  });
+  const userRefsStr = notificationData.user_refs || "";
+  const batchIndex = notificationData.batch_index || 0;
+  const numBatches = notificationData.num_batches || 0;
+  const status = notificationData.status || "";
+
+  // Use the original title and body - no workspace logic needed
+  let formattedBody = body;
+  let formattedTitle = title;
+  let formattedBodyIOS = body; // Separate body for iOS/macOS
+  let formattedImageUrlIOS = imageUrl; // Separate image URL for iOS/macOS
+
+  // Check if this is a group chat notification and get sender name for iOS/macOS formatting
+  // Group chat: ChatDetail notification where title (group name) is different from sender name
+  const isChatNotification = initialPageName === 'ChatDetail' && notificationData.sender && title && title !== '';
+  
+  if (isChatNotification) {
+    try {
+      // Get sender's display name
+      let senderName = "Someone";
+      const senderRef = notificationData.sender;
+      
+      if (senderRef) {
+        // Handle both DocumentReference and string path
+        let senderDocRef;
+        if (typeof senderRef === 'object' && senderRef.path) {
+          senderDocRef = firestore.doc(senderRef.path);
+        } else if (typeof senderRef === 'string') {
+          senderDocRef = firestore.doc(senderRef);
+        } else if (senderRef.id) {
+          senderDocRef = firestore.doc(`users/${senderRef.id}`);
+        }
+        
+        if (senderDocRef) {
+          const senderDoc = await senderDocRef.get();
+          if (senderDoc.exists) {
+            const senderData = senderDoc.data();
+            senderName = senderData.display_name || senderData.name || "Someone";
+          }
+        }
+      }
+      
+      // Check if it's a group chat (title is different from sender name)
+      // For group chats: title = group name, senderName = sender's name (different)
+      // For DMs: title = sender's name, senderName = sender's name (same)
+      const isGroupChat = title.toLowerCase() !== senderName.toLowerCase();
+      
+      if (isGroupChat) {
+        // Format iOS/macOS body for group chats: "Username: Message content"
+        formattedBodyIOS = `${senderName}: ${body}`;
+        console.log(`📱 Formatted iOS/macOS notification for group chat: "${formattedBodyIOS}"`);
+        
+        // Get group logo from chat document
+        try {
+          let chatDocPath = null;
+          // Parse parameter_data to get chatDoc path
+          if (parameterData) {
+            try {
+              const params = JSON.parse(parameterData);
+              chatDocPath = params.chatDoc;
+            } catch (e) {
+              console.log('Error parsing parameter_data:', e);
+            }
+          }
+          
+          if (chatDocPath) {
+            const chatDocRef = firestore.doc(chatDocPath);
+            const chatDoc = await chatDocRef.get();
+            if (chatDoc.exists) {
+              const chatData = chatDoc.data();
+              const groupImageUrl = chatData.chat_image_url || '';
+              // Only use group logo if it exists and is not empty
+              if (groupImageUrl && groupImageUrl.trim() !== '') {
+                formattedImageUrlIOS = groupImageUrl;
+                console.log(`🖼️ Using group logo for iOS/macOS notification: "${formattedImageUrlIOS}"`);
+              } else {
+                // No group logo found, keep original imageUrl (formattedImageUrlIOS already equals imageUrl)
+                console.log('No group logo found, using original imageUrl');
+              }
+            }
+          }
+        } catch (e) {
+          console.log('Error getting group logo from chat document:', e);
+          // Keep original imageUrl if error (formattedImageUrlIOS already equals imageUrl)
+        }
+      }
+    } catch (e) {
+      console.log('Error getting sender name for chat notification:', e);
+      // Fallback to original body if error
+      formattedBodyIOS = body;
+    }
+  }
+
+  if (status !== "" && status !== "started") {
+    console.log(`Already processed ${snapshot.ref.path}. Skipping...`);
+    return;
+  }
+
+  if (title === "" || body === "") {
+    await snapshot.ref.update({ status: "failed" });
+    return;
+  }
+
+  const userRefs = userRefsStr === "" ? [] : userRefsStr.trim().split(",");
+  var tokens = new Set();
+  if (userRefsStr) {
+    for (var userRef of userRefs) {
+      const userTokens = await firestore
+        .doc(userRef)
+        .collection(kFcmTokensCollection)
+        .get();
+      userTokens.docs.forEach((token) => {
+        const fcmToken = token.data().fcm_token;
+        if (fcmToken && fcmToken.length > 0) {
+          tokens.add(fcmToken);
+        }
+      });
+    }
+  } else {
+    var userTokensQuery = firestore.collectionGroup(kFcmTokensCollection);
+    // Handle batched push notifications by splitting tokens up by document
+    // id.
+    if (numBatches > 0) {
+      userTokensQuery = userTokensQuery
+        .orderBy(admin.firestore.FieldPath.documentId())
+        .startAt(getDocIdBound(batchIndex, numBatches))
+        .endBefore(getDocIdBound(batchIndex + 1, numBatches));
+    }
+    const userTokens = await userTokensQuery.get();
+    userTokens.docs.forEach((token) => {
+      const data = token.data();
+      const audienceMatches =
+        targetAudience === "All" || data.device_type === targetAudience;
+      const fcmToken = data.fcm_token;
+      if (audienceMatches && fcmToken && fcmToken.length > 0) {
+        tokens.add(fcmToken);
+      }
+    });
+  }
+
+  const tokensArr = Array.from(tokens);
+  var messageBatches = [];
+  for (let i = 0; i < tokensArr.length; i += 500) {
+    const tokensBatch = tokensArr.slice(i, Math.min(i + 500, tokensArr.length));
+    // Build message object
+    const messageObj = {
+      notification: {
+        title: formattedTitle,
+        body: formattedBody,
+        ...(imageUrl && { imageUrl: imageUrl }),
+      },
+      data: {
+        initialPageName,
+        parameterData,
+      },
+      android: {
+        notification: {
+          ...(sound && { sound: sound }),
+        },
+      },
+      apns: {
+        headers: {
+          "apns-priority": "10",
+          "apns-push-type": "alert",
+        },
+        payload: {
+          aps: {
+            alert: {
+              title: formattedTitle,
+              body: formattedBodyIOS, // Use formatted body for iOS/macOS
+            },
+            sound: {
+              name: 'Glass',
+              critical: false,
+              volume: 1.0
+            },
+            badge: 1,
+            'mutable-content': 1,
+            'content-available': 1,
+          },
+        },
+      },
+      tokens: tokensBatch,
+    };
+    
+    // Add image for iOS/macOS group chats using fcm_options
+    // Only add if we have a group logo (different from original imageUrl)
+    // If no group logo exists, formattedImageUrlIOS will equal imageUrl, so fcm_options won't be added
+    // and the original notification.imageUrl will be used instead
+    if (formattedImageUrlIOS && formattedImageUrlIOS !== imageUrl && formattedImageUrlIOS.trim() !== '') {
+      messageObj.fcm_options = {
+        image: formattedImageUrlIOS, // Use group logo for iOS/macOS group chats
+      };
+    }
+    
+    const messages = messageObj;
+    messageBatches.push(messages);
+  }
+
+  var numSent = 0;
+  await Promise.all(
+    messageBatches.map(async (messages) => {
+      const response = await admin.messaging().sendEachForMulticast(messages);
+      numSent += response.successCount;
+    }),
+  );
+
+  await snapshot.ref.update({ status: "succeeded", num_sent: numSent });
+}
+
+function getUserFcmTokensCollection(userDocPath) {
+  return firestore.doc(userDocPath).collection(kFcmTokensCollection);
+}
+
+function getDocIdBound(index, numBatches) {
+  if (index <= 0) {
+    return "users/(";
+  }
+  if (index >= numBatches) {
+    return "users/}";
+  }
+  const numUidChars = 62;
+  const twoCharOptions = Math.pow(numUidChars, 2);
+
+  var twoCharIdx = (index * twoCharOptions) / numBatches;
+  var firstCharIdx = Math.floor(twoCharIdx / numUidChars);
+  var secondCharIdx = Math.floor(twoCharIdx % numUidChars);
+  const firstChar = getCharForIndex(firstCharIdx);
+  const secondChar = getCharForIndex(secondCharIdx);
+  return "users/" + firstChar + secondChar;
+}
+
+function getCharForIndex(charIdx) {
+  if (charIdx < 10) {
+    return String.fromCharCode(charIdx + "0".charCodeAt(0));
+  } else if (charIdx < 36) {
+    return String.fromCharCode("A".charCodeAt(0) + charIdx - 10);
+  } else {
+    return String.fromCharCode("a".charCodeAt(0) + charIdx - 36);
+  }
+}
+exports.onUserDeleted = functions.auth.user().onDelete(async (user) => {
+  let firestore = admin.firestore();
+  let userRef = firestore.doc("users/" + user.uid);
+  await firestore.collection("users").doc(user.uid).delete();
+});
+
+// ==========================================
+// DAILY EVENT ENGAGEMENT CLOUD FUNCTION
+// ==========================================
+// COMMENTED OUT - Function disabled to prevent automatic triggering
+// exports.sendDailyEventEngagement = functions
+//   .runWith({
+//     timeoutSeconds: 540,
+//     memory: "2GB",
+//     maxInstances: 5,
+//   })
+//   .pubsub
+//   .schedule("0 * * * *") // Runs every hour
+//   .timeZone("America/Los_Angeles") // Set your preferred timezone
+//   .onRun(async (context) => {
+//     const currentHour = new Date().getHours();
+//     console.log(`Starting hourly group engagement check at hour ${currentHour}`);
+//     
+//     try {
+//       const openaiApiKey = functions.config().openai?.key;
+//       
+//       if (!openaiApiKey) {
+//         console.error("OpenAI API key not configured");
+//         return;
+//       }
+
+//       // Query all group chats (both event and non-event groups)
+//       const groupChatsSnapshot = await firestore
+//         .collection("chats")
+//         .where("is_group", "==", true)
+//         .get();
+
+//       if (groupChatsSnapshot.empty) {
+//         console.log("No group chats found");
+//         return;
+//       }
+
+//       console.log(`Found ${groupChatsSnapshot.size} group chats`);
+
+//       // Create AI bot user reference
+//       const aiBotUserRef = firestore.doc("users/ai_agent_linkai");
+
+//       // Process each chat
+//       const promises = groupChatsSnapshot.docs.map(async (chatDoc) => {
+//         try {
+//           const chatData = chatDoc.data();
+//           const chatRef = chatDoc.ref.path;
+//           
+//           // Get or set reminder_frequency
+//           let reminderFrequency = chatData.reminder_frequency;
+//           if (typeof reminderFrequency === 'undefined' || reminderFrequency === null) {
+//             // Set default reminder_frequency to 1
+//             reminderFrequency = 1;
+//             await chatDoc.ref.update({ reminder_frequency: 1 });
+//             console.log(`Set default reminder_frequency=1 for chat: ${chatRef}`);
+//           }
+
+//           // Calculate if we should send a message this hour
+//           // Distribute messages evenly throughout the day (8 AM to 8 PM)
+//           const startHour = 8;
+//           const endHour = 20;
+//           const availableHours = endHour - startHour;
+//           
+//           if (currentHour < startHour || currentHour >= endHour) {
+//             // Outside of active hours
+//             return;
+//           }
+
+//           // Calculate which hours this chat should receive messages
+//           const hoursForThisChat = [];
+//           if (reminderFrequency === 1) {
+//             // Send at 9 AM for once-daily messages
+//             hoursForThisChat.push(9);
+//           } else {
+//             // Distribute evenly across the day
+//             const interval = Math.floor(availableHours / reminderFrequency);
+//             for (let i = 0; i < reminderFrequency; i++) {
+//               const hour = startHour + (i * interval);
+//               if (hour < endHour) {
+//                 hoursForThisChat.push(hour);
+//               }
+//             }
+//           }
+
+//           // Check if current hour is in the list
+//           if (!hoursForThisChat.includes(currentHour)) {
+//             return; // Skip this chat for this hour
+//           }
+
+//           const chatType = chatData.event_ref ? 'event' : 'general';
+//           console.log(`Sending message to ${chatType} chat ${chatRef} (frequency: ${reminderFrequency}, hour: ${currentHour})`);
+//           
+//           // Skip if the chat has been inactive for more than 30 days
+//           const lastMessageAt = chatData.last_message_at;
+//           if (lastMessageAt) {
+//             const daysSinceLastMessage = (Date.now() - lastMessageAt.toDate().getTime()) / (1000 * 60 * 60 * 24);
+//             if (daysSinceLastMessage > 30) {
+//               console.log(`Skipping inactive chat: ${chatRef}`);
+//               return;
+//             }
+//           }
+
+//           // Fetch event info (if available) and recent messages in parallel
+//           const [eventInfo, messagesSnapshot] = await Promise.all([
+//             chatData.event_ref 
+//               ? chatData.event_ref.get().then(eventDoc => {
+//                   if (eventDoc.exists) {
+//                     const eventData = eventDoc.data();
+//                     return {
+//                       title: eventData.title || "",
+//                       description: eventData.description || "",
+//                       location: eventData.location || "",
+//                       startDate: eventData.start_date ? eventData.start_date.toDate().toISOString() : "",
+//                       endDate: eventData.end_date ? eventData.end_date.toDate().toISOString() : "",
+//                       speakers: eventData.speakers || [],
+//                       category: eventData.category || [],
+//                       dateSchedule: eventData.dateSchedule || []
+//                     };
+//                   }
+//                   return null;
+//                 })
+//               : Promise.resolve(null),
+//             firestore
+//               .doc(chatRef)
+//               .collection("messages")
+//               .orderBy("created_at", "desc")
+//               .limit(20) // Get last 20 messages for better context
+//               .get()
+//           ]);
+
+//           // Prepare recent messages context
+//           const recentMessages = [];
+//           messagesSnapshot.docs.forEach(doc => {
+//             const msgData = doc.data();
+//             // Skip AI messages to avoid self-referencing
+//             if (msgData.sender_ref?.path !== "users/ai_agent_linkai") {
+//               recentMessages.push({
+//                 sender: msgData.sender_name || "Unknown",
+//                 content: msgData.content || "",
+//                 timestamp: msgData.created_at ? msgData.created_at.toDate().toISOString() : ""
+//               });
+//             }
+//           });
+//           recentMessages.reverse(); // Chronological order
+
+//           // Calculate event timing context or set general context
+//           const now = new Date();
+//           let timingContext = "";
+//           let eventPhase = "general"; // upcoming, ongoing, concluded, general
+//           
+//           if (eventInfo) {
+//             const eventStart = eventInfo.startDate ? new Date(eventInfo.startDate) : null;
+//             const eventEnd = eventInfo.endDate ? new Date(eventInfo.endDate) : null;
+//             
+//             if (eventStart && eventEnd) {
+//               if (now < eventStart) {
+//                 const daysUntil = Math.ceil((eventStart - now) / (1000 * 60 * 60 * 24));
+//                 timingContext = `The event starts in ${daysUntil} days.`;
+//                 eventPhase = "upcoming";
+//               } else if (now >= eventStart && now <= eventEnd) {
+//                 timingContext = "The event is currently ongoing!";
+//                 eventPhase = "ongoing";
+//               } else {
+//                 timingContext = "The event has concluded.";
+//                 eventPhase = "concluded";
+//               }
+//             }
+//           } else {
+//             // Non-event group context
+//             timingContext = "This is a general discussion group.";
+//             eventPhase = "general";
+//           }
+
+//           // Add time of day context for varied messages
+//           let timeOfDayContext = "";
+//           if (currentHour < 12) {
+//             timeOfDayContext = "morning";
+//           } else if (currentHour < 17) {
+//             timeOfDayContext = "afternoon";
+//           } else {
+//             timeOfDayContext = "evening";
+//           }
+
+//           // Analyze recent conversation topics
+//           let conversationThemes = [];
+//           let mostActiveUser = null;
+//           let userMessageCount = {};
+//           
+//           recentMessages.forEach(msg => {
+//             // Count messages per user
+//             userMessageCount[msg.sender] = (userMessageCount[msg.sender] || 0) + 1;
+//             
+//             // Extract themes from messages (simple keyword analysis)
+//             const keywords = msg.content.toLowerCase().match(/\b\w{4,}\b/g) || [];
+//             conversationThemes.push(...keywords);
+//           });
+//           
+//           // Find most active user
+//           if (Object.keys(userMessageCount).length > 0) {
+//             mostActiveUser = Object.entries(userMessageCount).reduce((a, b) => a[1] > b[1] ? a : b)[0];
+//           }
+//           
+//           // Get most common themes
+//           const themeFrequency = {};
+//           conversationThemes.forEach(theme => {
+//             if (!['that', 'this', 'with', 'from', 'have', 'been', 'what', 'your', 'about'].includes(theme)) {
+//               themeFrequency[theme] = (themeFrequency[theme] || 0) + 1;
+//             }
+//           });
+//           const topThemes = Object.entries(themeFrequency)
+//             .sort((a, b) => b[1] - a[1])
+//             .slice(0, 3)
+//             .map(([theme]) => theme);
+
+//           // Check previous AI messages today to ensure variety
+//           const todayStart = new Date();
+//           todayStart.setHours(0, 0, 0, 0);
+//           
+//           const previousAIMessagesToday = messagesSnapshot.docs.filter(doc => {
+//             const msgData = doc.data();
+//             return msgData.sender_ref?.path === "users/ai_agent_linkai" && 
+//                    msgData.created_at && 
+//                    msgData.created_at.toDate() >= todayStart;
+//           });
+
+//           const usedMessageStyles = previousAIMessagesToday.map(doc => {
+//             const content = doc.data().content.toLowerCase();
+//             // Simple pattern matching to identify message types
+//             if (content.includes('poll') || content.includes('would you rather')) return 'poll';
+//             if (content.includes('did you know') || content.includes('fact')) return 'fact';
+//             if (content.includes('challenge')) return 'challenge';
+//             if (content.includes('tip')) return 'tip';
+//             if (content.includes('quote')) return 'quote';
+//             if (content.includes('who') && content.includes('?')) return 'question';
+//             return 'general';
+//           });
+
+//           // Prepare system prompt for engaging message
+//           let systemPrompt = `You are Linkai, an AI assistant for the LinkedUp networking app. Your primary goal is to foster active and meaningful engagement within this group chat by sending ONE proactive, thoughtful message. 
+
+// Your Message Generation Process:
+// -Analyze & Summarize: First, analyze the recentMessages. If there's an active discussion (more than ~5 recent messages), your message must begin with a concise, 1-2 sentence summary of the main topic. This demonstrates you are listening to the conversation. (e.g., "It sounds like there's a great discussion about Dr. Anya Sharma's keynote on AI ethics..." or "Loving the debate on the pros and cons of remote vs. hybrid work..."). If the chat is quiet, you can skip the summary and proceed to step 2.
+// -Engage & Extend: Based on the conversation you just summarized (or the group's general purpose if the chat is quiet), craft a meaningful follow-up. Your goal is to extend the current topic, not pivot away from it. Ask a specific follow-up question, introduce a new angle, or connect two ideas from the discussion.
+// -Add a "Hook": Conclude your message with an engaging hook that is directly related to the topic. This gives members an easy and interesting way to respond. Good hooks include a surprising piece of trivia, a relevant fun fact, or a quick poll.
+
+// CRITICAL REQUIREMENTS:
+// - Follow the 3-Step Process: Your message structure must follow the Analyze -> Engage -> Hook model described above.
+// - If people have been discussing specific topics, acknowledge or build on them
+// - Be aware that it's ${timeOfDayContext}
+// - Vary Your Style: You MUST vary your message style and avoid generic greetings. Today you've already sent ${previousAIMessagesToday.length} messages with styles: ${usedMessageStyles.join(', ')}. AVOID repeating these.
+
+// ${eventInfo ? `Event Context:
+// - The event is ${eventPhase}
+// - Use the Message Style Options below as inspiration for the "Engage & Extend" and "Hook" parts of your message.
+
+// Message Style Options for Event Groups (prioritize unused styles):
+// 1. Ask about a specific speaker or session by name
+// 2. Share a fun fact or trivia related to the event's topic/category
+// 3. Create a mini-poll or "would you rather" question about event topics
+// 4. Highlight an upcoming session or speaker with enthusiasm
+// 5. Share a networking tip specific to the event's industry/category
+// 6. Ask about specific challenges in the event's field
+// 7. Suggest a creative networking activity for attendees
+// 8. Share an inspiring quote related to the event theme
+// 9. Ask about implementation plans for learnings from specific sessions
+// 10. Create a playful challenge or game related to the event topic
+// 11. Share a ${timeOfDayContext} greeting with event-specific content
+// 12. Suggest interesting resources or tools related to ${eventInfo.category[0] || 'the event'}`
+// : `General Group Context:
+// - This is a general discussion group without a specific event
+// - Focus on facilitating engaging conversations
+// - Be helpful and friendly
+
+// Message Style Options for General Groups (prioritize unused styles):
+// 1. Ask a follow-up question: Deepen the current discussion with a thoughtful question.
+// 2. Share a related fun fact: Find a surprising fact related to the group's interests.
+// 3. Create a mini-poll: Create a poll based on the current conversation.
+// 4. Share a motivational quote: Find a quote that resonates with the group's goals.
+// 5. Pose a challenge: Create a fun group challenge related to the discussion.
+// 6. Share a ${timeOfDayContext} greeting with a conversation starter
+// 7. Ask about people's interests or hobbies
+// 8. Share tips or life hacks
+// 9. Create a word game or riddle
+// 10. Ask about current projects or goals
+// 11. Start a discussion about trending topics`}
+
+// ${recentMessages.length > 5 ? `\nCONVERSATION CONTEXT:
+// - Most active participant: ${mostActiveUser || 'No clear leader'}
+// - Topics being discussed: ${topThemes.join(', ') || 'General discussion'}
+// - Consider acknowledging these themes or the active participants\n` : ''}
+
+// Guidelines:
+// - Keep messages concise (2-3 sentences max)
+// - Phase: ${eventPhase} - ${timingContext}
+// - Time of day: ${timeOfDayContext}
+// - Be creative and unexpected - surprise and delight members
+// - With ${reminderFrequency} messages per day, this is message ${previousAIMessagesToday.length + 1}
+// ${eventInfo ? `- Reference specific names, topics, or details from below
+// - Make it impossible to use this message for any other event
+
+// Current Event Information:
+// Title: ${eventInfo.title}
+// Description: ${eventInfo.description}
+// Location: ${eventInfo.location}
+// ${timingContext}
+// Categories: ${eventInfo.category.join(", ")}` 
+// : `
+// Group Information:
+// Name: ${chatData.group_name || chatData.title || 'Discussion Group'}
+// ${chatData.description ? `Description: ${chatData.description}` : ''}
+// Members: ${chatData.members ? chatData.members.length : 'Unknown'} participants`}`;
+
+//           if (eventInfo) {
+//             if (eventInfo.speakers && eventInfo.speakers.length > 0) {
+//               systemPrompt += "\n\nSpeakers (USE THESE NAMES):";
+//               eventInfo.speakers.forEach(speaker => {
+//                 systemPrompt += `\n- ${speaker.name || "Unknown"}: ${speaker.bio || "No bio available"}`;
+//               });
+//             }
+
+//             if (eventInfo.dateSchedule && eventInfo.dateSchedule.length > 0) {
+//               systemPrompt += "\n\nSchedule Sessions (REFERENCE THESE):";
+//               eventInfo.dateSchedule.slice(0, 3).forEach(schedule => {
+//                 systemPrompt += `\n- ${schedule.title || "Unknown"}: ${schedule.description || "No description"}`;
+//               });
+//             }
+//           }
+
+//           // Add conversation context if messages exist
+//           if (recentMessages.length > 0) {
+//             systemPrompt += "\n\nRecent messages (DO NOT repeat these topics directly):";
+//             recentMessages.slice(-5).forEach(msg => {
+//               systemPrompt += `\n${msg.sender}: ${msg.content.substring(0, 100)}...`;
+//             });
+//           }
+
+//           // Create varied user prompts based on event phase, time, and conversation
+//           const getPhaseAndTimeSpecificPrompts = () => {
+//             const basePrompts = [];
+//             
+//             if (eventInfo) {
+//               // Event-specific prompts
+//               if (eventPhase === "upcoming") {
+//                 basePrompts.push(
+//                   `Create an exciting ${timeOfDayContext} countdown message for "${eventInfo.title}" that builds anticipation by mentioning a specific speaker or session.`,
+//                   `Generate a fun icebreaker question for attendees who will be at "${eventInfo.title}" in ${eventInfo.location}.`,
+//                   `Write a ${timeOfDayContext} message sharing a fascinating fact about ${eventInfo.category[0] || 'the event topic'} to get people excited for "${eventInfo.title}".`,
+//                   `Create a networking challenge for "${eventInfo.title}" attendees to complete before the event starts.`,
+//                   `Ask what people are most looking forward to learning from specific speakers at "${eventInfo.title}".`
+//                 );
+//               } else if (eventPhase === "ongoing") {
+//                 basePrompts.push(
+//                   `Create a ${timeOfDayContext} poll about which session at "${eventInfo.title}" people are most excited to attend next.`,
+//                   `Generate an energetic message encouraging people to share their real-time insights from "${eventInfo.title}".`,
+//                   `Write a fun ${timeOfDayContext} networking prompt for people currently at "${eventInfo.title}" in ${eventInfo.location}.`,
+//                   `Ask about surprising discoveries or unexpected connections being made at "${eventInfo.title}".`,
+//                   `Create a mini-challenge related to ${eventInfo.category[0] || 'the event'} for attendees to complete during their ${timeOfDayContext} break.`
+//                 );
+//               } else if (eventPhase === "concluded") {
+//                 basePrompts.push(
+//                   `Ask about specific implementation plans for learnings from "${eventInfo.title}" - mention a speaker or session.`,
+//                   `Create a ${timeOfDayContext} reflection prompt about the most surprising insight from "${eventInfo.title}".`,
+//                   `Generate a fun "event aftermath" question about applying ${eventInfo.category[0] || 'event'} concepts.`,
+//                   `Ask who people connected with at "${eventInfo.title}" and what collaborations might emerge.`,
+//                   `Share a thought-provoking ${timeOfDayContext} question about the future of ${eventInfo.category[0] || 'the industry'} based on event discussions.`
+//                 );
+//               }
+//             } else {
+//               // General group prompts
+//               basePrompts.push(
+//                 `Create an engaging ${timeOfDayContext} conversation starter for the group "${chatData.group_name || 'discussion group'}".`,
+//                 `Generate a fun "would you rather" question to spark discussion in this ${timeOfDayContext}.`,
+//                 `Write a ${timeOfDayContext} message with an interesting fact or trivia to share with the group.`,
+//                 `Ask the group about their current projects or what they're working on.`,
+//                 `Create a mini-poll or fun question about ${timeOfDayContext === 'morning' ? 'how everyone is starting their day' : timeOfDayContext === 'afternoon' ? 'afternoon plans' : 'evening activities'}.`,
+//                 `Share a motivational quote or thought perfect for this ${timeOfDayContext}.`,
+//                 `Ask an engaging question about hobbies, interests, or weekend plans.`,
+//                 `Create a word game, riddle, or brain teaser for the group to solve together.`
+//               );
+//             }
+//             
+//             // Filter out prompts that match already used styles
+//             return basePrompts.filter(prompt => {
+//               const promptLower = prompt.toLowerCase();
+//               if (usedMessageStyles.includes('poll') && promptLower.includes('poll')) return false;
+//               if (usedMessageStyles.includes('fact') && promptLower.includes('fact')) return false;
+//               if (usedMessageStyles.includes('challenge') && promptLower.includes('challenge')) return false;
+//               return true;
+//             });
+//           };
+
+//           // Add conversation-aware prompts if themes detected
+//           const conversationAwarePrompts = topThemes.length > 0 ? [
+//             eventInfo 
+//               ? `Build on the current ${timeOfDayContext} discussion about "${topThemes[0]}" with a related insight specific to "${eventInfo.title}".`
+//               : `Build on the current ${timeOfDayContext} discussion about "${topThemes[0]}" with a related insight or question.`,
+//             eventInfo
+//               ? `Acknowledge that people are discussing "${topThemes.join('", "')}" and add a fresh ${timeOfDayContext} perspective related to the event.`
+//               : `Acknowledge that people are discussing "${topThemes.join('", "')}" and add a fresh ${timeOfDayContext} perspective.`,
+//             mostActiveUser ? (eventInfo 
+//               ? `Thank ${mostActiveUser} for their active participation and ask a follow-up question about "${eventInfo.title}".`
+//               : `Thank ${mostActiveUser} for their active participation and ask a follow-up question to keep the conversation going.`) : null
+//           ].filter(Boolean) : [];
+
+//           const allPrompts = [...getPhaseAndTimeSpecificPrompts(), ...conversationAwarePrompts];
+//           const selectedUserPrompt = allPrompts[Math.floor(Math.random() * allPrompts.length)] || 
+//             (eventInfo 
+//               ? `Create a unique ${timeOfDayContext} message for "${eventInfo.title}" that references specific event details.`
+//               : `Create an engaging ${timeOfDayContext} message for the group to spark conversation.`);
+
+//           console.log(`Generating AI message for ${chatType} chat ${chatRef} (message ${previousAIMessagesToday.length + 1}/${reminderFrequency} today)`);
+
+//           // Generate engaging message using OpenAI
+//           const fetch = await import("node-fetch");
+//           const response = await fetch.default("https://api.openai.com/v1/chat/completions", {
+//             method: "POST",
+//             headers: {
+//               "Content-Type": "application/json",
+//               "Authorization": `Bearer ${openaiApiKey}`
+//             },
+//             body: JSON.stringify({
+//               model: "gpt-4o-mini",
+//               messages: [
+//                 {
+//                   role: "system",
+//                   content: systemPrompt
+//                 },
+//                 {
+//                   role: "user",
+//                   content: selectedUserPrompt
+//                 }
+//               ],
+//               max_tokens: 150,
+//               temperature: 0.9, // Higher for more creative/varied messages
+//               top_p: 0.95,
+//               frequency_penalty: 0.5, // Reduce repetitive patterns
+//               presence_penalty: 0.5
+//             })
+//           });
+
+//           if (!response.ok) {
+//             const error = await response.text();
+//             console.error(`OpenAI API error for chat ${chatRef}:`, error);
+//             return;
+//           }
+
+//           const aiResponse = await response.json();
+//           const aiMessage = aiResponse.choices[0].message.content;
+
+//           // Prepare message data
+//           const messageData = {
+//             sender_ref: aiBotUserRef,
+//             content: aiMessage,
+//             created_at: admin.firestore.FieldValue.serverTimestamp(),
+//             message_type: "text",
+//             sender_name: "Linkai AI",
+//             sender_photo: "https://firebasestorage.googleapis.com/v0/b/linkedup-c3e29.firebasestorage.app/o/asset%2F67b27b2cda06e9c69e5d000615c1153f80b09576.png?alt=media&token=5caa8d82-6b67-4503-9258-d4732fb9c0bd",
+//             is_read_by: []
+//           };
+
+//           const chatUpdateData = {
+//             last_message: `Linkai AI: ${aiMessage.substring(0, 50)}...`,
+//             last_message_at: admin.firestore.FieldValue.serverTimestamp(),
+//             last_message_sent: aiBotUserRef,
+//             last_message_type: "text"
+//           };
+
+//           // Create message and update chat using batch
+//           const batch = firestore.batch();
+//           
+//           const messageRef = firestore.doc(chatRef).collection("messages").doc();
+//           batch.set(messageRef, messageData);
+//           batch.update(firestore.doc(chatRef), chatUpdateData);
+//           
+//           await batch.commit();
+//           
+//           console.log(`Successfully sent engagement message to chat: ${chatRef}`);
+//           
+//         } catch (error) {
+//           console.error(`Error processing chat ${chatDoc.ref.path}:`, error);
+//         }
+//       });
+
+//       // Process all chats with controlled concurrency
+//       const batchSize = 5;
+//       for (let i = 0; i < promises.length; i += batchSize) {
+//         await Promise.all(promises.slice(i, i + batchSize));
+//         // Add small delay between batches to avoid rate limiting
+//         if (i + batchSize < promises.length) {
+//           await new Promise(resolve => setTimeout(resolve, 1000));
+//         }
+//       }
+
+//       console.log(`Completed hourly group engagement check at hour ${currentHour}`);
+//       
+//     } catch (error) {
+//       console.error("Error in sendDailyEventEngagement:", error);
+//     }
+//   });
+
+// ==========================================
+// AI AGENT CLOUD FUNCTION (processAIMention)
+// ==========================================
+exports.processAIMention = functions
+  .runWith({
+    timeoutSeconds: 300,
+    memory: "1GB",
+    minInstances: 1,    // Keep 1 instance warm to avoid cold starts
+    maxInstances: 10,   // Limit scaling to control costs
+    vpcConnector: null, // No VPC needed for external API calls
+    ingressSettings: "ALLOW_ALL",
+  })
+  .https.onCall(async (data, context) => {
+    // Check authentication
+    if (!context.auth) {
+      throw new functions.https.HttpsError(
+        "unauthenticated",
+        "The function must be called while authenticated."
+      );
+    }
+
+    try {
+      const { chatRef, messageContent, senderName } = data;
+
+      if (!chatRef || !messageContent) {
+        throw new functions.https.HttpsError(
+          "invalid-argument",
+          "Missing required parameters"
+        );
+      }
+
+      // Get chat document and event info in parallel for better performance
+      const [chatDoc, openaiApiKey] = await Promise.all([
+        firestore.doc(chatRef).get(),
+        Promise.resolve(functions.config().openai?.key)
+      ]);
+
+      if (!chatDoc.exists) {
+        throw new functions.https.HttpsError(
+          "not-found",
+          "Chat not found"
+        );
+      }
+
+      if (!openaiApiKey) {
+        throw new functions.https.HttpsError(
+          "internal",
+          "OpenAI API key not configured"
+        );
+      }
+
+      const chatData = chatDoc.data();
+
+      // Fetch event info and messages in parallel
+      const [eventInfo, messagesSnapshot] = await Promise.all([
+        // Get event information if available
+        chatData.event_ref ?
+          chatData.event_ref.get().then(eventDoc => {
+            if (eventDoc.exists) {
+              const eventData = eventDoc.data();
+              return {
+                title: eventData.title || "",
+                description: eventData.description || "",
+                location: eventData.location || "",
+                startDate: eventData.start_date ? eventData.start_date.toDate().toISOString() : "",
+                endDate: eventData.end_date ? eventData.end_date.toDate().toISOString() : "",
+                speakers: eventData.speakers || [],
+                category: eventData.category || [],
+                dateSchedule: eventData.dateSchedule || []
+              };
+            }
+            return null;
+          }) : Promise.resolve(null),
+
+        // Get last 20 messages for context (increased from 10 for better context in non-event chats)
+        firestore
+          .doc(chatRef)
+          .collection("messages")
+          .orderBy("created_at", "desc")
+          .limit(20)
+          .get()
+      ]);
+
+      const recentMessages = [];
+      messagesSnapshot.docs.forEach(doc => {
+        const msgData = doc.data();
+        recentMessages.push({
+          sender: msgData.sender_name || "Unknown",
+          content: msgData.content || "",
+          timestamp: msgData.created_at ? msgData.created_at.toDate().toISOString() : ""
+        });
+      });
+
+      // Reverse to get chronological order
+      recentMessages.reverse();
+
+      // Prepare context for OpenAI
+      let systemPrompt = "You are Linkai, an AI assistant for the LinkedUp event networking app. ";
+
+      if (eventInfo) {
+        systemPrompt += "You help users with questions about events, schedules, speakers, and general event information. Be friendly, helpful, and concise in your responses.";
+        systemPrompt += `\n\nCurrent Event Information:
+Title: ${eventInfo.title}
+Description: ${eventInfo.description}
+Location: ${eventInfo.location}
+Start Date: ${eventInfo.startDate}
+End Date: ${eventInfo.endDate}
+Categories: ${eventInfo.category.join(", ")}`;
+
+        if (eventInfo.speakers && eventInfo.speakers.length > 0) {
+          systemPrompt += "\n\nSpeakers:";
+          eventInfo.speakers.forEach(speaker => {
+            systemPrompt += `\n- ${speaker.name || "Unknown"}: ${speaker.bio || "No bio available"}`;
+          });
+        }
+
+        if (eventInfo.dateSchedule && eventInfo.dateSchedule.length > 0) {
+          systemPrompt += "\n\nSchedule:";
+          eventInfo.dateSchedule.forEach(schedule => {
+            systemPrompt += `\n- ${schedule.title || "Unknown"}: ${schedule.description || "No description"}`;
+          });
+        }
+      } else {
+        // Non-event group chat context
+        systemPrompt += "You are participating in a general group chat. Be friendly, helpful, and engaging. You can discuss various topics, answer questions, and help facilitate conversations among group members. Be concise and natural in your responses.";
+
+        // Add group chat info if available
+        if (chatData.group_name) {
+          systemPrompt += `\n\nGroup Chat: ${chatData.group_name}`;
+        }
+        if (chatData.description) {
+          systemPrompt += `\nDescription: ${chatData.description}`;
+        }
+      }
+
+      // Add recent messages context
+      let conversationContext = "\n\nRecent conversation:";
+      recentMessages.forEach(msg => {
+        conversationContext += `\n${msg.sender}: ${msg.content}`;
+      });
+
+      // Clean the user's message (remove @linkai mention)
+      const cleanedMessage = messageContent.replace(/@linkai/gi, "").trim();
+
+      // Make OpenAI API call with optimized settings
+      const fetch = await import("node-fetch");
+      const response = await fetch.default("https://api.openai.com/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${openaiApiKey}`
+        },
+        body: JSON.stringify({
+          model: "gpt-4o-mini",  // Using mini model for faster responses
+          messages: [
+            {
+              role: "system",
+              content: systemPrompt + conversationContext
+            },
+            {
+              role: "user",
+              content: `${senderName} asked: ${cleanedMessage}`
+            }
+          ],
+          max_tokens: 300,      // Reduced for faster responses
+          temperature: 0.7,
+          top_p: 0.9,          // Added for better quality
+          frequency_penalty: 0.3, // Reduce repetitive responses
+          presence_penalty: 0.3   // Encourage diverse responses
+        })
+      });
+
+      if (!response.ok) {
+        const error = await response.text();
+        console.error("OpenAI API error:", error);
+        throw new functions.https.HttpsError(
+          "internal",
+          "Failed to get AI response"
+        );
+      }
+
+      const aiResponse = await response.json();
+      const aiMessage = aiResponse.choices[0].message.content;
+
+      // Create AI bot user reference
+      const aiBotUserRef = firestore.doc("users/ai_agent_linkai");
+
+      // Prepare message data
+      const messageData = {
+        sender_ref: aiBotUserRef,
+        sender_type: "ai", // This is the missing field!
+        content: aiMessage,
+        created_at: admin.firestore.FieldValue.serverTimestamp(),
+        message_type: "text",
+        sender_name: "Linkai AI",
+        sender_photo: "https://firebasestorage.googleapis.com/v0/b/linkedup-c3e29.firebasestorage.app/o/asset%2F67b27b2cda06e9c69e5d000615c1153f80b09576.png?alt=media&token=5caa8d82-6b67-4503-9258-d4732fb9c0bd",
+        is_read_by: []
+      };
+
+      const chatUpdateData = {
+        last_message: `Linkai AI: ${aiMessage.substring(0, 50)}...`,
+        last_message_at: admin.firestore.FieldValue.serverTimestamp(),
+        last_message_sent: aiBotUserRef,
+        last_message_type: "text"
+      };
+
+      // Create message and update chat in parallel using batch for atomicity
+      const batch = firestore.batch();
+
+      const messageRef = firestore.doc(chatRef).collection("messages").doc();
+      batch.set(messageRef, messageData);
+      batch.update(firestore.doc(chatRef), chatUpdateData);
+
+      await batch.commit();
+
+      return {
+        success: true,
+        message: "AI response sent successfully",
+        aiResponse: aiMessage
+      };
+
+    } catch (error) {
+      console.error("Error in processAIMention:", error);
+
+      // Return a more specific error based on the type
+      if (error instanceof functions.https.HttpsError) {
+        throw error;
+      }
+
+      throw new functions.https.HttpsError(
+        "internal",
+        error.message || "An error occurred processing the AI mention"
+      );
+    }
+  });
+
+// ==========================================
+// DAILY SUMMARY CLOUD FUNCTION (SUMMERAI)
+// ==========================================
+exports.dailySummary = functions
+  .runWith({
+    timeoutSeconds: 300,
+    memory: "1GB",
+    minInstances: 0,
+    maxInstances: 10,
+  })
+  .https.onCall(async (data, context) => {
+    // Check authentication
+    if (!context.auth) {
+      throw new functions.https.HttpsError(
+        "unauthenticated",
+        "The function must be called while authenticated."
+      );
+    }
+
+    try {
+      const { chatId } = data;
+
+      if (!chatId) {
+        throw new functions.https.HttpsError(
+          "invalid-argument",
+          "Missing required parameter: chatId"
+        );
+      }
+
+      // Get chat document and verify permissions
+      const chatDoc = await firestore.collection("chats").doc(chatId).get();
+
+      if (!chatDoc.exists) {
+        throw new functions.https.HttpsError(
+          "not-found",
+          "Chat not found"
+        );
+      }
+
+      const chatData = chatDoc.data();
+      const userId = context.auth.uid;
+
+      // Verify user is a member of the chat
+      if (!chatData.members || !chatData.members.some(memberRef => {
+        // Handle both DocumentReference objects and string paths
+        const memberPath = typeof memberRef === 'string' ? memberRef : memberRef.path;
+        return memberPath.includes(userId);
+      })) {
+        throw new functions.https.HttpsError(
+          "permission-denied",
+          "You do not have permission to trigger this summary."
+        );
+      }
+
+      // Get OpenAI API key
+      const openaiApiKey = functions.config().openai?.key;
+      if (!openaiApiKey) {
+        throw new functions.https.HttpsError(
+          "internal",
+          "OpenAI API key not configured"
+        );
+      }
+
+      // Create SummerAI user reference
+      const summerAiUserRef = firestore.doc("users/ai_agent_summerai");
+
+      // Fetch messages from the last 24 hours
+      const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+
+      const messagesSnapshot = await firestore
+        .collection("chats")
+        .doc(chatId)
+        .collection("messages")
+        .where("created_at", ">=", twentyFourHoursAgo)
+        .orderBy("created_at", "asc")
+        .get();
+
+      if (messagesSnapshot.empty) {
+        // Create or get DM chat between SummerAI and the requesting user
+        const requestingUserRef = firestore.doc(`users/${userId}`);
+
+        // Check if DM already exists between SummerAI and the user
+        const existingDMs = await firestore
+          .collection("chats")
+          .where("members", "array-contains", summerAiUserRef)
+          .where("is_group", "==", false)
+          .get();
+
+        let dmChatRef = null;
+        for (const dmDoc of existingDMs.docs) {
+          const dmData = dmDoc.data();
+          if (dmData.members &&
+            dmData.members.length === 2 &&
+            dmData.members.some(memberRef => {
+              const memberPath = typeof memberRef === 'string' ? memberRef : memberRef.path;
+              return memberPath.includes(userId);
+            })) {
+            dmChatRef = dmDoc.ref;
+            break;
+          }
+        }
+
+        // Create new DM if it doesn't exist
+        if (!dmChatRef) {
+          dmChatRef = firestore.collection("chats").doc();
+          await dmChatRef.set({
+            title: '', // Empty for direct chats
+            is_group: false,
+            created_by: summerAiUserRef,
+            created_at: admin.firestore.FieldValue.serverTimestamp(),
+            members: [summerAiUserRef, requestingUserRef],
+            last_message: '',
+            last_message_at: admin.firestore.FieldValue.serverTimestamp(),
+            last_message_sent: summerAiUserRef,
+            last_message_type: "text",
+            last_message_seen: [summerAiUserRef],
+            workspace_ref: chatData.workspace_ref || null,
+          });
+        }
+
+        // Send DM saying no messages found
+        const noMessagesData = {
+          sender_ref: summerAiUserRef,
+          sender_type: "ai",
+          content: "📊 **Daily Summary**\n\nNo messages were found in the last 24 hours to summarize. The chat has been quiet today!",
+          created_at: admin.firestore.FieldValue.serverTimestamp(),
+          message_type: "text",
+          sender_name: "SummerAI",
+          sender_photo: "https://firebasestorage.googleapis.com/v0/b/linkedup-c3e29.firebasestorage.app/o/asset%2Fsoftware-agent.png?alt=media&token=99761584-999d-4f8e-b3d1-f9d1baf86120",
+          is_read_by: []
+        };
+
+        await dmChatRef.collection("messages").add(noMessagesData);
+
+        // Send push notification to the user
+        try {
+          await firestore.collection("ff_user_push_notifications").add({
+            notification_title: "New Message",
+            notification_text: "Summer has sent you a daily summary",
+            notification_image_url: "https://firebasestorage.googleapis.com/v0/b/linkedup-c3e29.firebasestorage.app/o/asset%2Fsoftware-agent.png?alt=media&token=99761584-999d-4f8e-b3d1-f9d1baf86120",
+            notification_sound: "notification_sound.mp3",
+            user_refs: requestingUserRef.path,
+            initial_page_name: "Chat",
+            parameter_data: JSON.stringify({
+              chatDoc: dmChatRef.path
+            }),
+            sender: summerAiUserRef,
+            timestamp: admin.firestore.FieldValue.serverTimestamp(),
+          });
+          console.log("Push notification triggered for Summer DM (no messages)");
+        } catch (notificationError) {
+          console.error("Error sending push notification:", notificationError);
+        }
+
+        return {
+          success: true,
+          message: "No messages found in the last 24 hours"
+        };
+      }
+
+      // Prepare messages for AI analysis - EXCLUDE AI messages to prevent feedback loop
+      const recentMessages = messagesSnapshot.docs
+        .map((doc) => {
+          const msgData = doc.data();
+          return {
+            sender: msgData.sender_name || "Unknown",
+            content: msgData.content || "",
+            senderType: msgData.sender_type || "user",
+          };
+        })
+        .filter((msg) => {
+          // Filter out AI messages (SummerAI, Linkai AI, etc.)
+          const isAIMessage = msg.senderType === "ai" ||
+            msg.sender === "SummerAI" ||
+            msg.sender === "Linkai AI" ||
+            msg.sender === "LonaAI";
+          return !isAIMessage; // Only keep non-AI messages
+        });
+
+      // Check if we have any real user messages after filtering
+      if (recentMessages.length === 0) {
+        // Create or get DM chat between SummerAI and the requesting user
+        const requestingUserRef = firestore.doc(`users/${userId}`);
+
+        // Check if DM already exists between SummerAI and the user
+        const existingDMs = await firestore
+          .collection("chats")
+          .where("members", "array-contains", summerAiUserRef)
+          .where("is_group", "==", false)
+          .get();
+
+        let dmChatRef = null;
+        for (const dmDoc of existingDMs.docs) {
+          const dmData = dmDoc.data();
+          if (dmData.members &&
+            dmData.members.length === 2 &&
+            dmData.members.some(memberRef => {
+              const memberPath = typeof memberRef === 'string' ? memberRef : memberRef.path;
+              return memberPath.includes(userId);
+            })) {
+            dmChatRef = dmDoc.ref;
+            break;
+          }
+        }
+
+        // Create new DM if it doesn't exist
+        if (!dmChatRef) {
+          dmChatRef = firestore.collection("chats").doc();
+          await dmChatRef.set({
+            title: '', // Empty for direct chats
+            is_group: false,
+            created_by: summerAiUserRef,
+            created_at: admin.firestore.FieldValue.serverTimestamp(),
+            members: [summerAiUserRef, requestingUserRef],
+            last_message: '',
+            last_message_at: admin.firestore.FieldValue.serverTimestamp(),
+            last_message_sent: summerAiUserRef,
+            last_message_type: "text",
+            last_message_seen: [summerAiUserRef],
+            workspace_ref: chatData.workspace_ref || null,
+          });
+        }
+
+        // Send DM saying no user messages found
+        const noUserMessagesData = {
+          sender_ref: summerAiUserRef,
+          sender_type: "ai",
+          content: "📊 **Daily Summary**\n\nNo user messages were found in the last 24 hours. Only AI messages were posted during this time.",
+          created_at: admin.firestore.FieldValue.serverTimestamp(),
+          message_type: "text",
+          sender_name: "SummerAI",
+          sender_photo: "https://firebasestorage.googleapis.com/v0/b/linkedup-c3e29.firebasestorage.app/o/asset%2Fsoftware-agent.png?alt=media&token=99761584-999d-4f8e-b3d1-f9d1baf86120",
+          is_read_by: []
+        };
+
+        await dmChatRef.collection("messages").add(noUserMessagesData);
+
+        // Send push notification to the user
+        try {
+          await firestore.collection("ff_user_push_notifications").add({
+            notification_title: "New Message",
+            notification_text: "Summer has sent you a daily summary",
+            notification_image_url: "https://firebasestorage.googleapis.com/v0/b/linkedup-c3e29.firebasestorage.app/o/asset%2Fsoftware-agent.png?alt=media&token=99761584-999d-4f8e-b3d1-f9d1baf86120",
+            notification_sound: "notification_sound.mp3",
+            user_refs: requestingUserRef.path,
+            initial_page_name: "Chat",
+            parameter_data: JSON.stringify({
+              chatDoc: dmChatRef.path
+            }),
+            sender: summerAiUserRef,
+            timestamp: admin.firestore.FieldValue.serverTimestamp(),
+          });
+          console.log("Push notification triggered for Summer DM (no user messages)");
+        } catch (notificationError) {
+          console.error("Error sending push notification:", notificationError);
+        }
+
+        return {
+          success: true,
+          message: "No user messages found in the last 24 hours"
+        };
+      }
+
+      // Get event information if available
+      let eventInfo = null;
+      if (chatData.event_ref) {
+        const eventDoc = await chatData.event_ref.get();
+        if (eventDoc.exists) {
+          const eventData = eventDoc.data();
+          eventInfo = {
+            title: eventData.title || "",
+            description: eventData.description || "",
+            location: eventData.location || "",
+            startDate: eventData.start_date ? eventData.start_date.toDate().toISOString() : "",
+            endDate: eventData.end_date ? eventData.end_date.toDate().toISOString() : "",
+          };
+        }
+      }
+
+      // Prepare previous summary context
+      const lastSummary = chatData.last_summary || "None";
+      const lastSummaryDate = chatData.last_summary_at
+        ? chatData.last_summary_at.toDate().toLocaleDateString()
+        : "N/A";
+
+      // Format the current date (same day)
+      const currentDate = new Date();
+      const currentDateFormatted = currentDate.toLocaleDateString('en-US', {
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric'
+      });
+
+      // Define web search tool for the model
+      const webSearchTool = {
+        type: "function",
+        function: {
+          name: "web_search",
+          description: "Search the web for current information, latest news, or up-to-date details about topics mentioned in the conversation. Use this when discussing current events, recent developments, or when you need accurate real-time information to enhance your summary.",
+          parameters: {
+            type: "object",
+            properties: {
+              query: {
+                type: "string",
+                description: "The search query to look up on the web"
+              }
+            },
+            required: ["query"]
+          }
+        }
+      };
+
+      // Build system prompt
+      let systemPrompt = `You are SummerAI, an AI assistant for a networking app. Your role is to analyze a day's worth of group chat messages and generate a structured summary in bullet format.
+
+**WEB SEARCH REQUIREMENT:** You MUST use web search for EVERY summary. Search for at least 2-3 topics discussed in the conversation to find relevant, up-to-date information that enhances your summary. This is mandatory for all summaries.
+
+**CRITICAL INSTRUCTIONS:**
+1. **Analyze ONLY Real User Messages:** You will receive ONLY real user messages (AI messages have been filtered out). Do NOT make up topics, people, or content that isn't explicitly mentioned in the provided messages. Only summarize what was actually discussed by real users.
+
+2. **Identify Multiple Topics:** This format should be used for ALL topics discussed. Identify multiple topics from the conversation, even if they seem unimportant. Give priorities accordingly:
+   - **Technical topics:** High/Medium priority
+   - **Non-technical topics:** Low/Medium priority
+   - **Business/Professional topics:** Medium/High priority
+   - **Casual/Social topics:** Low priority
+
+3. **Summarize in Bullet Format:** Your output MUST follow this exact format for each topic:
+
+> **Topic Name** (Priority: High/Medium/Low)
+- **Details:** Brief description of what was discussed
+- **Action Items:** Any tasks, decisions, or follow-ups identified (if none, write "None")
+- **Involved People:** Names of members who participated most actively (ONLY use names that appear in the actual messages below)
+- **SummerAI's Thoughts:** A 1-2 sentence personal insight or observation about the topic
+- **Useful Links:** ONLY include this section if you performed a web search for this topic. Format: "1. [Article Title](URL) - Brief description". If no search was performed, omit this section entirely.
+
+4. **Be Comprehensive:** Cover all topics discussed, from technical discussions to casual conversations. Don't skip topics just because they seem minor.
+
+5. **Previous Summary Note:** You last summarized on ${lastSummaryDate}. Try to connect today's summary to previous discussions if relevant.
+
+6. **Start with Header:** Begin with "Summary for ` + (chatData.title || chatData.group_name || 'Group') + ` for ` + currentDateFormatted + `"
+
+7. **No Additional Greeting:** After the header, go straight into the bullet format summary without any additional greetings.
+
+**CONVERSATION CONTEXT:**`;
+
+      if (eventInfo) {
+        systemPrompt += `\n- The conversation happened in a group for the event titled "${eventInfo.title}".`;
+        if (eventInfo.description) {
+          systemPrompt += `\n- Event Description: ${eventInfo.description}`;
+        }
+      } else {
+        systemPrompt += `\n- Group Name: ${chatData.title || chatData.group_name || 'Discussion Group'}`;
+      }
+
+      systemPrompt += `\n- Timeframe: Messages from the last 24 hours.
+- Here are the messages from the last 24 hours for you to analyze:`;
+
+      // Format messages for AI
+      const messagesForAI = recentMessages.map(msg => `\n- ${msg.sender}: ${msg.content}`).join('');
+
+      // Call OpenAI API with tool calling support
+      const fetch = await import("node-fetch");
+      let messages = [
+        {
+          role: "system",
+          content: systemPrompt
+        },
+        {
+          role: "user",
+          content: messagesForAI
+        }
+      ];
+
+      let aiMessage = "";
+      let searchResults = "";
+      let searchCompleted = false;
+
+      // Loop to handle tool calling if needed
+      while (true) {
+        const response = await fetch.default("https://api.openai.com/v1/chat/completions", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${openaiApiKey}`
+          },
+          body: JSON.stringify({
+            model: "gpt-4o-mini",
+            messages: messages,
+            tools: [webSearchTool],
+            tool_choice: searchCompleted ? "none" : { type: "function", function: { name: "web_search" } }, // Force web search first time only
+            max_tokens: 800,
+            temperature: 0.7,
+            top_p: 0.9,
+            frequency_penalty: 0.3,
+            presence_penalty: 0.3
+          })
+        });
+
+        if (!response.ok) {
+          const error = await response.text();
+          console.error("OpenAI API error:", error);
+          throw new functions.https.HttpsError(
+            "internal",
+            "Failed to get AI response"
+          );
+        }
+
+        const aiResponse = await response.json();
+        const responseMessage = aiResponse.choices[0].message;
+
+        // Add assistant's response to conversation
+        messages.push(responseMessage);
+
+        // Check if the model wants to call a tool
+        if (responseMessage.tool_calls && responseMessage.tool_calls.length > 0) {
+          // Handle tool calls
+          for (const toolCall of responseMessage.tool_calls) {
+            if (toolCall.function.name === "web_search") {
+              const query = JSON.parse(toolCall.function.arguments).query;
+              console.log(`Executing web search for: ${query}`);
+              const results = await performWebSearch(query);
+
+              // Format results
+              const formattedResults = results.map((result, idx) =>
+                `${idx + 1}. [${result.title}](${result.url}) - ${result.snippet}`
+              ).join('\n');
+
+              console.log(`📄 Formatted search results (${results.length} items):\n${formattedResults.substring(0, 200)}`);
+
+              searchResults += `\n\n**Search Results for "${query}":**\n${formattedResults}`;
+
+              // Add tool result to messages
+              messages.push({
+                role: "tool",
+                tool_call_id: toolCall.id,
+                content: formattedResults
+              });
+              searchCompleted = true; // Mark that search is done
+            }
+          }
+        } else {
+          // No tool calls, we have the final answer
+          aiMessage = responseMessage.content;
+          console.log(`📝 Final summary generated (${aiMessage.length} chars)`);
+          break;
+        }
+      }
+
+      // Create or get DM chat between SummerAI and the requesting user
+      const requestingUserRef = firestore.doc(`users/${userId}`);
+
+      // Check if DM already exists between SummerAI and the user in the same workspace
+      const existingDMs = await firestore
+        .collection("chats")
+        .where("members", "array-contains", summerAiUserRef)
+        .where("is_group", "==", false)
+        .where("workspace_ref", "==", chatData.workspace_ref)
+        .get();
+
+      let dmChatRef = null;
+      for (const dmDoc of existingDMs.docs) {
+        const dmData = dmDoc.data();
+        if (dmData.members &&
+          dmData.members.length === 2 &&
+          dmData.members.some(memberRef => {
+            const memberPath = typeof memberRef === 'string' ? memberRef : memberRef.path;
+            return memberPath.includes(userId);
+          })) {
+          dmChatRef = dmDoc.ref;
+          break;
+        }
+      }
+
+      // Create new DM if it doesn't exist
+      if (!dmChatRef) {
+        dmChatRef = firestore.collection("chats").doc();
+        await dmChatRef.set({
+          title: '', // Empty for direct chats
+          is_group: false,
+          created_by: summerAiUserRef,
+          created_at: admin.firestore.FieldValue.serverTimestamp(),
+          members: [summerAiUserRef, requestingUserRef],
+          last_message: '',
+          last_message_at: admin.firestore.FieldValue.serverTimestamp(),
+          last_message_sent: summerAiUserRef,
+          last_message_type: "text",
+          last_message_seen: [summerAiUserRef],
+          workspace_ref: chatData.workspace_ref, // Use same workspace as group chat
+        });
+      }
+
+      // Prepare message data for SummerAI DM
+      const messageData = {
+        sender_ref: summerAiUserRef,
+        sender_type: "ai",
+        content: aiMessage,
+        created_at: admin.firestore.FieldValue.serverTimestamp(),
+        message_type: "text",
+        sender_name: "SummerAI",
+        sender_photo: "https://firebasestorage.googleapis.com/v0/b/linkedup-c3e29.firebasestorage.app/o/asset%2Fsoftware-agent.png?alt=media&token=99761584-999d-4f8e-b3d1-f9d1baf86120",
+        is_read_by: []
+      };
+
+      const dmChatUpdateData = {
+        last_message: `SummerAI: Daily Summary`,
+        last_message_at: admin.firestore.FieldValue.serverTimestamp(),
+        last_message_sent: summerAiUserRef,
+        last_message_type: "text",
+        last_summary: aiMessage,
+        last_summary_at: admin.firestore.FieldValue.serverTimestamp(),
+      };
+
+      // Create message in DM and update DM chat using batch for atomicity
+      const batch = firestore.batch();
+
+      const messageRef = dmChatRef.collection("messages").doc();
+      batch.set(messageRef, messageData);
+      batch.update(dmChatRef, dmChatUpdateData);
+
+      await batch.commit();
+
+      // ==========================================
+      // TASKMANAGERAI: Extract and save action items
+      // ==========================================
+      try {
+        await extractAndSaveActionItems({
+          summary: aiMessage,
+          chatId: chatId,
+          chatData: chatData,
+          userId: userId,
+          requestingUserRef: requestingUserRef
+        });
+      } catch (taskError) {
+        console.error("Error extracting action items:", taskError);
+        // Don't fail the whole operation if task extraction fails
+      }
+
+      // Send push notification to the user
+      try {
+        await firestore.collection("ff_user_push_notifications").add({
+          notification_title: "New Message",
+          notification_text: "Summer has sent you a daily summary",
+          notification_image_url: "https://firebasestorage.googleapis.com/v0/b/linkedup-c3e29.firebasestorage.app/o/asset%2Fsoftware-agent.png?alt=media&token=99761584-999d-4f8e-b3d1-f9d1baf86120",
+          notification_sound: "notification_sound.mp3",
+          user_refs: requestingUserRef.path,
+          initial_page_name: "ChatDetail",
+          parameter_data: JSON.stringify({
+            chatDoc: dmChatRef.path
+          }),
+          sender: summerAiUserRef,
+          timestamp: admin.firestore.FieldValue.serverTimestamp(),
+        });
+        console.log("Push notification triggered for Summer DM");
+      } catch (notificationError) {
+        console.error("Error sending push notification:", notificationError);
+        // Don't fail the whole operation if notification fails
+      }
+
+      return {
+        success: true,
+        message: "Daily summary generated and sent successfully",
+        summaryPreview: aiMessage.substring(0, 100) + "..."
+      };
+
+    } catch (error) {
+      console.error("Error in dailySummary:", error);
+
+      // Return a more specific error based on the type
+      if (error instanceof functions.https.HttpsError) {
+        throw error;
+      }
+
+      throw new functions.https.HttpsError(
+        "internal",
+        error.message || "An error occurred generating the daily summary"
+      );
+    }
+  });
+
+// ==========================================
+// IN-GROUP SUMMER CLOUD FUNCTION (SCHEDULED DAILY SUMMARY)
+// ==========================================
+exports.InGroupSummer = functions
+  .runWith({
+    timeoutSeconds: 300,
+    memory: "1GB",
+    minInstances: 0,
+    maxInstances: 10,
+  })
+  .pubsub
+  .schedule("0 9 * * *") // Runs daily at 9:00 AM EST
+  .timeZone("America/New_York") // EST timezone
+  .onRun(async (context) => {
+    console.log('Starting scheduled daily group summary generation...');
+
+    try {
+      // Get OpenAI API key
+      const openaiApiKey = functions.config().openai?.key;
+      if (!openaiApiKey) {
+        console.error("OpenAI API key not configured");
+        return;
+      }
+
+      // Create SummerAI user reference
+      const summerAiUserRef = firestore.doc("users/ai_agent_summerai");
+
+      // Get all group chats
+      const groupChatsSnapshot = await firestore
+        .collection("chats")
+        .where("is_group", "==", true)
+        .get();
+
+      if (groupChatsSnapshot.empty) {
+        console.log("No group chats found for scheduled summary");
+        return;
+      }
+
+      console.log(`Found ${groupChatsSnapshot.size} group chats for scheduled summary`);
+
+      // Process each group chat
+      const promises = groupChatsSnapshot.docs.map(async (chatDoc) => {
+        try {
+          const chatData = chatDoc.data();
+          const chatId = chatDoc.id;
+          const chatRef = chatDoc.ref.path;
+
+          // Skip if chat has been inactive for more than 7 days
+          const lastMessageAt = chatData.last_message_at;
+          if (lastMessageAt) {
+            const daysSinceLastMessage = (Date.now() - lastMessageAt.toDate().getTime()) / (1000 * 60 * 60 * 24);
+            if (daysSinceLastMessage > 7) {
+              console.log(`Skipping inactive chat: ${chatRef}`);
+              return;
+            }
+          }
+
+          // Fetch messages from the previous day (yesterday)
+          const yesterday = new Date();
+          yesterday.setDate(yesterday.getDate() - 1);
+          yesterday.setHours(0, 0, 0, 0);
+
+          const today = new Date();
+          today.setHours(0, 0, 0, 0);
+
+          const messagesSnapshot = await firestore
+            .collection("chats")
+            .doc(chatId)
+            .collection("messages")
+            .where("created_at", ">=", yesterday)
+            .where("created_at", "<", today)
+            .orderBy("created_at", "asc")
+            .get();
+
+          if (messagesSnapshot.empty) {
+            console.log(`No messages found for yesterday in chat: ${chatRef}`);
+            return;
+          }
+
+          // Prepare messages for AI analysis - EXCLUDE AI messages to prevent feedback loop
+          const recentMessages = messagesSnapshot.docs
+            .map((doc) => {
+              const msgData = doc.data();
+              return {
+                sender: msgData.sender_name || "Unknown",
+                content: msgData.content || "",
+                senderType: msgData.sender_type || "user",
+              };
+            })
+            .filter((msg) => {
+              // Filter out AI messages (SummerAI, Linkai AI, etc.)
+              const isAIMessage = msg.senderType === "ai" ||
+                msg.sender === "SummerAI" ||
+                msg.sender === "Linkai AI" ||
+                msg.sender === "LonaAI";
+              return !isAIMessage; // Only keep non-AI messages
+            });
+
+          // Check if we have any real user messages after filtering
+          if (recentMessages.length === 0) {
+            console.log(`No user messages found for yesterday in chat: ${chatRef}`);
+            return;
+          }
+
+          // Get event information if available
+          let eventInfo = null;
+          if (chatData.event_ref) {
+            const eventDoc = await chatData.event_ref.get();
+            if (eventDoc.exists) {
+              const eventData = eventDoc.data();
+              eventInfo = {
+                title: eventData.title || "",
+                description: eventData.description || "",
+                location: eventData.location || "",
+                startDate: eventData.start_date ? eventData.start_date.toDate().toISOString() : "",
+                endDate: eventData.end_date ? eventData.end_date.toDate().toISOString() : "",
+              };
+            }
+          }
+
+          // Prepare previous summary context
+          const lastSummary = chatData.last_summary || "None";
+          const lastSummaryDate = chatData.last_summary_at
+            ? chatData.last_summary_at.toDate().toLocaleDateString()
+            : "N/A";
+
+          // Format yesterday's date (previous day)
+          const yesterdayFormatted = yesterday.toLocaleDateString('en-US', {
+            year: 'numeric',
+            month: 'long',
+            day: 'numeric'
+          });
+
+          // Define web search tool for the model
+          const webSearchTool = {
+            type: "function",
+            function: {
+              name: "web_search",
+              description: "Search the web for current information, latest news, or up-to-date details about topics mentioned in the conversation. Use this when discussing current events, recent developments, or when you need accurate real-time information to enhance your summary.",
+              parameters: {
+                type: "object",
+                properties: {
+                  query: {
+                    type: "string",
+                    description: "The search query to look up on the web"
+                  }
+                },
+                required: ["query"]
+              }
+            }
+          };
+
+          // Build system prompt with bullet format
+          let systemPrompt = `You are SummerAI, an AI assistant for a networking app. Your role is to analyze yesterday's group chat messages and generate a structured summary in bullet format.
+
+**WEB SEARCH REQUIREMENT:** You MUST use web search for EVERY summary. Search for at least 2-3 topics discussed in the conversation to find relevant, up-to-date information that enhances your summary. This is mandatory for all summaries.
+
+**CRITICAL INSTRUCTIONS:**
+1. **Analyze ONLY Real User Messages:** You will receive ONLY real user messages (AI messages have been filtered out). Do NOT make up topics, people, or content that isn't explicitly mentioned in the provided messages. Only summarize what was actually discussed by real users.
+
+2. **Identify Multiple Topics:** This format should be used for ALL topics discussed. Identify multiple topics from the conversation, even if they seem unimportant. Give priorities accordingly:
+   - **Technical topics:** High/Medium priority
+   - **Non-technical topics:** Low/Medium priority
+   - **Business/Professional topics:** Medium/High priority
+   - **Casual/Social topics:** Low priority
+
+3. **Summarize in Bullet Format:** Your output MUST follow this exact format for each topic:
+
+> **Topic Name** (Priority: High/Medium/Low)
+- **Details:** Brief description of what was discussed
+- **Action Items:** Any tasks, decisions, or follow-ups identified (if none, write "None")
+- **Involved People:** Names of members who participated most actively (ONLY use names that appear in the actual messages below)
+- **SummerAI's Thoughts:** A 1-2 sentence personal insight or observation about the topic
+- **Useful Links:** ONLY include this section if you performed a web search for this topic. Format: "1. [Article Title](URL) - Brief description". If no search was performed, omit this section entirely.
+
+4. **Be Comprehensive:** Cover all topics discussed, from technical discussions to casual conversations. Don't skip topics just because they seem minor.
+
+5. **Previous Summary Note:** You last summarized on ${lastSummaryDate}. Try to connect today's summary to previous discussions if relevant.
+
+6. **Start with Header:** Begin with "Summary for ` + (chatData.name || 'Group') + ` for ` + yesterdayFormatted + `"
+
+7. **No Additional Greeting:** After the header, go straight into the bullet format summary without any additional greetings.
+
+**CONVERSATION CONTEXT:**`;
+
+          if (eventInfo) {
+            systemPrompt += `\n- The conversation happened in a group for the event titled "${eventInfo.title}".`;
+            if (eventInfo.description) {
+              systemPrompt += `\n- Event Description: ${eventInfo.description}`;
+            }
+          } else {
+            systemPrompt += `\n- Group Name: ${chatData.title || chatData.group_name || 'Discussion Group'}`;
+          }
+
+          systemPrompt += `\n- Timeframe: Messages from yesterday (${yesterday.toLocaleDateString()}).
+- Here are the messages from yesterday for you to analyze:`;
+
+          // Format messages for AI
+          const messagesForAI = recentMessages.map(msg => `\n- ${msg.sender}: ${msg.content}`).join('');
+
+          // Call OpenAI API with tool calling support
+          const fetch = await import("node-fetch");
+          let messages = [
+            {
+              role: "system",
+              content: systemPrompt
+            },
+            {
+              role: "user",
+              content: messagesForAI
+            }
+          ];
+
+          let aiMessage = "";
+          let searchResults = "";
+          let searchCompleted = false;
+
+          // Loop to handle tool calling if needed
+          while (true) {
+            const response = await fetch.default("https://api.openai.com/v1/chat/completions", {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                "Authorization": `Bearer ${openaiApiKey}`
+              },
+              body: JSON.stringify({
+                model: "gpt-4o-mini",
+                messages: messages,
+                tools: [webSearchTool],
+                tool_choice: searchCompleted ? "none" : { type: "function", function: { name: "web_search" } }, // Force web search first time only
+                max_tokens: 800,
+                temperature: 0.7,
+                top_p: 0.9,
+                frequency_penalty: 0.3,
+                presence_penalty: 0.3
+              })
+            });
+
+            if (!response.ok) {
+              const error = await response.text();
+              console.error(`OpenAI API error for chat ${chatRef}:`, error);
+              return;
+            }
+
+            const aiResponse = await response.json();
+            const responseMessage = aiResponse.choices[0].message;
+
+            // Add assistant's response to conversation
+            messages.push(responseMessage);
+
+            // Check if the model wants to call a tool
+            if (responseMessage.tool_calls && responseMessage.tool_calls.length > 0) {
+              // Handle tool calls
+              for (const toolCall of responseMessage.tool_calls) {
+                if (toolCall.function.name === "web_search") {
+                  const query = JSON.parse(toolCall.function.arguments).query;
+                  console.log(`Executing web search for: ${query}`);
+                  const results = await performWebSearch(query);
+
+                  // Format results
+                  const formattedResults = results.map((result, idx) =>
+                    `${idx + 1}. [${result.title}](${result.url}) - ${result.snippet}`
+                  ).join('\n');
+
+                  console.log(`📄 Formatted search results (${results.length} items):\n${formattedResults.substring(0, 200)}`);
+
+                  searchResults += `\n\n**Search Results for "${query}":**\n${formattedResults}`;
+
+                  // Add tool result to messages
+                  messages.push({
+                    role: "tool",
+                    tool_call_id: toolCall.id,
+                    content: formattedResults
+                  });
+                  searchCompleted = true; // Mark that search is done
+                }
+              }
+            } else {
+              // No tool calls, we have the final answer
+              aiMessage = responseMessage.content;
+              console.log(`📝 Final summary generated (${aiMessage.length} chars)`);
+              break;
+            }
+          }
+
+          // Prepare message data for SummerAI
+          const messageData = {
+            sender_ref: summerAiUserRef,
+            sender_type: "ai",
+            content: aiMessage,
+            created_at: admin.firestore.FieldValue.serverTimestamp(),
+            message_type: "text",
+            sender_name: "SummerAI",
+            sender_photo: "https://firebasestorage.googleapis.com/v0/b/linkedup-c3e29.firebasestorage.app/o/asset%2Fsoftware-agent.png?alt=media&token=99761584-999d-4f8e-b3d1-f9d1baf86120",
+            is_read_by: []
+          };
+
+          const chatUpdateData = {
+            last_message: `SummerAI: Daily Summary`,
+            last_message_at: admin.firestore.FieldValue.serverTimestamp(),
+            last_message_sent: summerAiUserRef,
+            last_message_type: "text",
+            last_summary: aiMessage,
+            last_summary_at: admin.firestore.FieldValue.serverTimestamp(),
+          };
+
+          // Create message and update chat using batch for atomicity
+          const batch = firestore.batch();
+
+          const messageRef = firestore.doc(chatRef).collection("messages").doc();
+          batch.set(messageRef, messageData);
+          batch.update(firestore.doc(chatRef), chatUpdateData);
+
+          await batch.commit();
+
+          console.log(`Successfully sent scheduled daily summary to chat: ${chatRef}`);
+
+          // ==========================================
+          // TASKMANAGERAI: Extract and save action items for each member
+          // ==========================================
+          try {
+            // Get all members of the group chat
+            if (chatData.members && chatData.members.length > 0) {
+              const memberPromises = chatData.members.map(async (memberRef) => {
+                try {
+                  await extractAndSaveActionItems({
+                    summary: aiMessage,
+                    chatId: chatId,
+                    chatData: chatData,
+                    userId: null, // Not needed for scheduled
+                    requestingUserRef: memberRef // Each member gets the tasks
+                  });
+                } catch (memberError) {
+                  console.error(`Error creating tasks for member ${memberRef.path}:`, memberError);
+                }
+              });
+
+              // Create tasks for all members in parallel
+              // Wait for completion to ensure tasks are created successfully
+              try {
+                await Promise.all(memberPromises);
+                console.log(`✅ TaskManagerAI: Successfully created tasks for all ${chatData.members.length} members`);
+              } catch (err) {
+                console.error("❌ Error in parallel task creation:", err);
+                // Don't throw - continue with other chats even if task creation fails
+              }
+            }
+          } catch (taskError) {
+            console.error("Error extracting action items:", taskError);
+            // Don't fail the whole operation if task extraction fails
+          }
+
+        } catch (error) {
+          console.error(`Error processing chat ${chatDoc.ref.path}:`, error);
+        }
+      });
+
+      // Process all chats with controlled concurrency
+      const batchSize = 5;
+      for (let i = 0; i < promises.length; i += batchSize) {
+        await Promise.all(promises.slice(i, i + batchSize));
+        // Add small delay between batches to avoid rate limiting
+        if (i + batchSize < promises.length) {
+          await new Promise(resolve => setTimeout(resolve, 1000));
+        }
+      }
+
+      console.log('Completed scheduled daily group summary generation');
+
+    } catch (error) {
+      console.error("Error in InGroupSummer:", error);
+    }
+  });

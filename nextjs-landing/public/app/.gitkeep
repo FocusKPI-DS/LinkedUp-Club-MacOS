@@ -1,0 +1,3 @@
+# Flutter build will be copied here
+# Run: cp -r ../build/web/* ./public/app/
+

@@ -1,0 +1,42 @@
+{
+  "name": "cloud-functions",
+  "description": "Firebase Cloud Functions",
+  "dependencies": {
+    "@google-cloud/firestore": "^8.3.0",
+    "@langchain/anthropic": "^0.1.1",
+    "@langchain/core": "^0.3.19",
+    "@langchain/google-genai": "^0.0.8",
+    "@langchain/langgraph": "^0.2.23",
+    "@langchain/openai": "^0.3.14",
+    "@mux/mux-node": "^7.3.3",
+    "@onesignal/node-onesignal": "^2.0.1-beta2",
+    "axios": "1.8.2",
+    "braintree": "^3.6.0",
+    "firebase-admin": "^11.11.1",
+    "firebase-functions": "^4.4.1",
+    "google-auth-library": "^10.5.0",
+    "googleapis": "^164.1.0",
+    "node-fetch": "^2.7.0",
+    "qs": "^6.7.0",
+    "razorpay": "^2.8.4",
+    "resend": "^3.0.0",
+    "stripe": "^8.0.1",
+    "uuid": "^9.0.0"
+  },
+  "devDependencies": {
+    "eslint": "^6.8.0",
+    "eslint-plugin-promise": "^4.2.1"
+  },
+  "scripts": {
+    "lint": "./node_modules/.bin/eslint --max-warnings=0 .",
+    "serve": "firebase -P linkedup-c3e29 emulators:start --only functions",
+    "shell": "firebase -P linkedup-c3e29 functions:shell",
+    "start": "npm run shell",
+    "logs": "firebase -P linkedup-c3e29 functions:log",
+    "compile": "cp ../../tsconfig.template.json ./tsconfig-compile.json && tsc --project tsconfig-compile.json"
+  },
+  "engines": {
+    "node": "20"
+  },
+  "private": true
+}
