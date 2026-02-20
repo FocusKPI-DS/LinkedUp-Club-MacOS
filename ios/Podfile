@@ -29,7 +29,7 @@ flutter_ios_podfile_setup
 
 target 'Runner' do
   pod 'GoogleUtilities'
-  use_frameworks! :linkage => :static
+  use_frameworks!
   use_modular_headers!
 
   flutter_install_all_ios_pods File.dirname(File.realpath(__FILE__))
@@ -41,6 +41,18 @@ post_install do |installer|
     flutter_additional_ios_build_settings(target)
     target.build_configurations.each do |config|
       config.build_settings.delete 'IPHONEOS_DEPLOYMENT_TARGET'
+      
+      # Fix DT_TOOLCHAIN_DIR error for Xcode 15
+      if config.base_configuration_reference
+        xcconfig_path = config.base_configuration_reference.real_path
+        if File.exist?(xcconfig_path)
+          xcconfig = File.read(xcconfig_path)
+          if xcconfig.include?("DT_TOOLCHAIN_DIR")
+            xcconfig.gsub!("DT_TOOLCHAIN_DIR", "TOOLCHAIN_DIR")
+            File.open(xcconfig_path, "w") { |file| file << xcconfig }
+          end
+        end
+      end
       config.build_settings['GCC_PREPROCESSOR_DEFINITIONS'] ||= [
         '$(inherited)',
 
@@ -61,7 +73,7 @@ post_install do |installer|
 end
 
 target 'ImageNotification' do
-  use_frameworks! :linkage => :static
+  use_frameworks!
   pod 'Firebase/Messaging'
   pod 'GoogleUtilities'
 end

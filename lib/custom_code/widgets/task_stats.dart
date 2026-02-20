@@ -436,7 +436,7 @@ class _TaskStatsState extends State<TaskStats> {
             ),
           ),
           const SizedBox(height: 24),
-          Center(
+          const Center(
             child: SizedBox(
               width: 200,
               height: 200,
@@ -449,12 +449,12 @@ class _TaskStatsState extends State<TaskStats> {
                     child: CircularProgressIndicator(
                       value: 0.0,
                       strokeWidth: 20,
-                      backgroundColor: const Color(0xFFF1F5F9),
-                      valueColor: const AlwaysStoppedAnimation<Color>(
+                      backgroundColor: Color(0xFFF1F5F9),
+                      valueColor: AlwaysStoppedAnimation<Color>(
                           Color.fromARGB(255, 16, 184, 239)),
                     ),
                   ),
-                  const Column(
+                  Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
                       Text(

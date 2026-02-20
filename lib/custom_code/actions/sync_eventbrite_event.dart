@@ -1,13 +1,7 @@
 // Automatic FlutterFlow imports
 import '/backend/backend.dart';
-import '/backend/schema/structs/index.dart';
-import '/backend/schema/enums/enums.dart';
-import '/actions/actions.dart' as action_blocks;
-import 'package:ff_theme/flutter_flow/flutter_flow_theme.dart';
-import '/flutter_flow/flutter_flow_util.dart';
-import 'index.dart'; // Imports other custom actions
-import '/flutter_flow/custom_functions.dart'; // Imports custom functions
-import 'package:flutter/material.dart';
+// Imports other custom actions
+// Imports custom functions
 // Begin custom action code
 // DO NOT REMOVE OR MODIFY THE CODE ABOVE!
 
@@ -17,7 +11,6 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import '/auth/firebase_auth/auth_util.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:branchio_dynamic_linking_akp5u6/custom_code/actions/index.dart'
     as branchio_dynamic_linking_akp5u6_actions;
 import 'package:branchio_dynamic_linking_akp5u6/flutter_flow/custom_functions.dart'

@@ -7,13 +7,13 @@ import 'dart:io';
 
 class VideoMessageWidget extends StatefulWidget {
   const VideoMessageWidget({
-    Key? key,
+    super.key,
     required this.videoUrl,
     this.thumbnailUrl,
     this.width = 250.0,
     this.height = 200.0,
     this.isOwnMessage = false,
-  }) : super(key: key);
+  });
 
   final String videoUrl;
   final String? thumbnailUrl;
@@ -180,7 +180,7 @@ class _VideoMessageWidgetState extends State<VideoMessageWidget> {
     // Container with constraints to prevent overflow
     Widget buildContainer({required Widget child, double? width, double? height}) {
       return Container(
-        constraints: BoxConstraints(
+        constraints: const BoxConstraints(
           maxWidth: 280.0,
           maxHeight: 400.0,
         ),
@@ -235,7 +235,7 @@ class _VideoMessageWidgetState extends State<VideoMessageWidget> {
     final aspectRatio = _videoPlayerController!.value.aspectRatio;
     
     return Container(
-      constraints: BoxConstraints(
+      constraints: const BoxConstraints(
         maxWidth: 280.0,
         maxHeight: 400.0,
       ),

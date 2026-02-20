@@ -19,7 +19,7 @@ class SummerAITodos extends StatefulWidget {
 
 class _SummerAITodosState extends State<SummerAITodos> {
   final Set<String> _completedTasks = {};
-  String _selectedFilter = 'pending'; // 'all', 'pending', or 'completed'
+  final String _selectedFilter = 'pending'; // 'all', 'pending', or 'completed'
   List<ActionItemsRecord>? _cachedTodos; // Cache to prevent flickering
 
   // Track tasks being completed with animation progress
@@ -187,7 +187,7 @@ class _SummerAITodosState extends State<SummerAITodos> {
             // Check if both names have the same words (bidirectional exact match)
             final userWordsSet = userWords.toSet();
             final involvedWordsSet = involvedWords.toSet();
-            if (userWordsSet.length > 0 && involvedWordsSet.length > 0) {
+            if (userWordsSet.isNotEmpty && involvedWordsSet.isNotEmpty) {
               // All user words must be in involved words AND all involved words must be in user words
               // This ensures "Mitansh Patel" matches "Mitansh Patel" but "Mitansh" doesn't match "Dan Zhang"
               bool userWordsAllMatch =
@@ -209,10 +209,10 @@ class _SummerAITodosState extends State<SummerAITodos> {
               
               // More flexible: if user name contains any significant word from involved name
               // This helps with variations like "Mitansh P." vs "Mitansh Patel"
-              if (userWordsSet.length > 0) {
+              if (userWordsSet.isNotEmpty) {
                 final significantUserWords = userWordsSet.where((w) => w.length >= 3).toSet();
                 final significantInvolvedWords = involvedWordsSet.where((w) => w.length >= 3).toSet();
-                if (significantUserWords.length > 0 && significantInvolvedWords.length > 0) {
+                if (significantUserWords.isNotEmpty && significantInvolvedWords.isNotEmpty) {
                   // If at least one significant word matches
                   if (significantUserWords.intersection(significantInvolvedWords).isNotEmpty) {
                     // Additional check: first name or last name should match
@@ -363,14 +363,14 @@ class _SummerAITodosState extends State<SummerAITodos> {
                         child: Row(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Expanded(
+                            const Expanded(
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   // Action Items title
                                   Text(
                                     'Action Items',
-                                    style: const TextStyle(
+                                    style: TextStyle(
                                       fontFamily: '.SF Pro Display',
                                       fontSize: 28,
                                       fontWeight: FontWeight.w700,
@@ -379,11 +379,11 @@ class _SummerAITodosState extends State<SummerAITodos> {
                                       height: 1.1,
                                     ),
                                   ),
-                                  const SizedBox(height: 4),
+                                  SizedBox(height: 4),
                                   // Subtitle on separate line
                                   Text(
                                     'Focus on what matters most.',
-                                    style: const TextStyle(
+                                    style: TextStyle(
                                       fontFamily: '.SF Pro Text',
                                       fontSize: 15,
                                       fontWeight: FontWeight.w400,
@@ -411,7 +411,7 @@ class _SummerAITodosState extends State<SummerAITodos> {
                                   onPressed: () {
                                     _showAddNewDialog();
                                   },
-                                  child: Row(
+                                  child: const Row(
                                     mainAxisSize: MainAxisSize.min,
                                     children: [
                                       Icon(
@@ -419,8 +419,8 @@ class _SummerAITodosState extends State<SummerAITodos> {
                                         size: 16,
                                         color: CupertinoColors.white,
                                       ),
-                                      const SizedBox(width: 6),
-                                      const Text(
+                                      SizedBox(width: 6),
+                                      Text(
                                         'Task',
                                         style: TextStyle(
                                           fontFamily: '.SF Pro Text',
@@ -473,14 +473,14 @@ class _SummerAITodosState extends State<SummerAITodos> {
                     child: Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Expanded(
+                        const Expanded(
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               // Action Items title
                               Text(
                                 'Action Items',
-                                style: const TextStyle(
+                                style: TextStyle(
                                   fontFamily: '.SF Pro Display',
                                   fontSize: 28,
                                   fontWeight: FontWeight.w700,
@@ -489,11 +489,11 @@ class _SummerAITodosState extends State<SummerAITodos> {
                                   height: 1.1,
                                 ),
                               ),
-                              const SizedBox(height: 4),
+                              SizedBox(height: 4),
                               // Subtitle on separate line
                               Text(
                                 'Focus on what matters most.',
-                                style: const TextStyle(
+                                style: TextStyle(
                                   fontFamily: '.SF Pro Text',
                                   fontSize: 15,
                                   fontWeight: FontWeight.w400,
@@ -521,7 +521,7 @@ class _SummerAITodosState extends State<SummerAITodos> {
                               onPressed: () {
                                 _showAddNewDialog();
                               },
-                              child: Row(
+                              child: const Row(
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
                                   Icon(
@@ -529,8 +529,8 @@ class _SummerAITodosState extends State<SummerAITodos> {
                                     size: 16,
                                     color: CupertinoColors.white,
                                   ),
-                                  const SizedBox(width: 6),
-                                  const Text(
+                                  SizedBox(width: 6),
+                                  Text(
                                     'Task',
                                     style: TextStyle(
                                       fontFamily: '.SF Pro Text',
@@ -881,7 +881,7 @@ class _SummerAITodosState extends State<SummerAITodos> {
     if (widget.isMobile) {
       // Mobile: Fill available space
       return ListView.builder(
-        key: ValueKey('todos-list-${_selectedFilter}'),
+        key: ValueKey('todos-list-$_selectedFilter'),
         shrinkWrap: false,
         physics: const BouncingScrollPhysics(),
         itemCount: todos.length,
@@ -899,7 +899,7 @@ class _SummerAITodosState extends State<SummerAITodos> {
       return SizedBox(
         height: maxHeight,
         child: ListView.builder(
-          key: ValueKey('todos-list-${_selectedFilter}'),
+          key: ValueKey('todos-list-$_selectedFilter'),
           shrinkWrap: false,
           physics: const BouncingScrollPhysics(),
           itemCount: todos.length,
@@ -1122,7 +1122,7 @@ class _SummerAITodosState extends State<SummerAITodos> {
                     child: material.LinearProgressIndicator(
                       value: _completingTasks[todo.reference.id],
                       backgroundColor: CupertinoColors.systemGrey6,
-                      valueColor: AlwaysStoppedAnimation<Color>(
+                      valueColor: const AlwaysStoppedAnimation<Color>(
                           CupertinoColors.systemGreen),
                       minHeight: 3,
                     ),
@@ -1165,10 +1165,10 @@ class _SummerAITodosState extends State<SummerAITodos> {
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Icon(
+                const Icon(
                   CupertinoIcons.group_solid,
                   size: 11,
-                  color: const Color(0xFF64748B),
+                  color: Color(0xFF64748B),
                 ),
                 const SizedBox(width: 4),
                 Text(
@@ -1201,10 +1201,10 @@ class _SummerAITodosState extends State<SummerAITodos> {
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(
+                  const Icon(
                     CupertinoIcons.group_solid,
                     size: 11,
-                    color: const Color(0xFF64748B),
+                    color: Color(0xFF64748B),
                   ),
                   const SizedBox(width: 4),
                   Text(
@@ -1420,7 +1420,7 @@ class _SummerAITodosState extends State<SummerAITodos> {
             const SizedBox(height: 16),
             Text(
               title,
-              style: TextStyle(
+              style: const TextStyle(
                 fontFamily: '.SF Pro Display',
                 fontSize: 17,
                 fontWeight: FontWeight.w600,
@@ -1431,7 +1431,7 @@ class _SummerAITodosState extends State<SummerAITodos> {
             const SizedBox(height: 8),
             Text(
               subtitle,
-              style: TextStyle(
+              style: const TextStyle(
                 fontFamily: '.SF Pro Text',
                 fontSize: 15,
                 color: CupertinoColors.secondaryLabel,
@@ -1524,7 +1524,7 @@ class _AvatarWithTooltipState extends State<_AvatarWithTooltip> {
               (estimatedWidth / 2), // Center tooltip below avatar
           top: position.dy + size.height + 4,
           child: Container(
-            padding: EdgeInsets.symmetric(horizontal: 9, vertical: 6),
+            padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 6),
             decoration: BoxDecoration(
               color: CupertinoColors.systemBackground,
               borderRadius: BorderRadius.circular(6),
@@ -1532,14 +1532,14 @@ class _AvatarWithTooltipState extends State<_AvatarWithTooltip> {
                 BoxShadow(
                   color: CupertinoColors.black.withOpacity(0.2),
                   blurRadius: 10,
-                  offset: Offset(0, 2),
+                  offset: const Offset(0, 2),
                   spreadRadius: 1,
                 ),
               ],
             ),
             child: Text(
               text,
-              style: TextStyle(
+              style: const TextStyle(
                 color: CupertinoColors.label,
                 fontSize: 10,
                 fontWeight: FontWeight.w500,
@@ -1701,7 +1701,7 @@ class _FilterDropdownButtonState extends State<_FilterDropdownButton> {
                     Container(
                       padding: const EdgeInsets.symmetric(
                           horizontal: 12, vertical: 8),
-                      decoration: BoxDecoration(
+                      decoration: const BoxDecoration(
                         border: Border(
                           bottom: BorderSide(
                             color: CupertinoColors.separator,
@@ -1809,7 +1809,6 @@ class _FilterDropdownButtonState extends State<_FilterDropdownButton> {
                                 child: CupertinoButton(
                                   padding:
                                       const EdgeInsets.symmetric(vertical: 8),
-                                  minSize: 0,
                                   onPressed: () {
                                     widget.onClearAll();
                                     _closeDropdown();
@@ -1822,7 +1821,7 @@ class _FilterDropdownButtonState extends State<_FilterDropdownButton> {
                                       fontWeight: FontWeight.w500,
                                       color: CupertinoColors.secondaryLabel,
                                     ),
-                                  ),
+                                  ), minimumSize: Size(0, 0),
                                 ),
                               ),
                             ],
@@ -1870,7 +1869,6 @@ class _FilterDropdownButtonState extends State<_FilterDropdownButton> {
           children: filteredOptions.map((option) {
             return CupertinoButton(
               padding: EdgeInsets.zero,
-              minSize: 0,
               onPressed: () => onChanged(option.value),
               child: Container(
                 padding:
@@ -1898,7 +1896,7 @@ class _FilterDropdownButtonState extends State<_FilterDropdownButton> {
                         : CupertinoColors.label,
                   ),
                 ),
-              ),
+              ), minimumSize: Size(0, 0),
             );
           }).toList(),
         ),
@@ -1950,11 +1948,10 @@ class _FilterDropdownButtonState extends State<_FilterDropdownButton> {
           ),
           child: CupertinoButton(
             padding: EdgeInsets.zero,
-            minSize: 0,
             onPressed: () {
               showCupertinoModalPopup(
                 context: context,
-                builder: (context) => Container(
+                builder: (context) => SizedBox(
                   height: 200,
                   child: CupertinoPicker(
                     itemExtent: 32,
@@ -1994,7 +1991,7 @@ class _FilterDropdownButtonState extends State<_FilterDropdownButton> {
                   color: CupertinoColors.secondaryLabel,
                 ),
               ],
-            ),
+            ), minimumSize: Size(0, 0),
           ),
         ),
       ],
@@ -2029,12 +2026,12 @@ class _FilterDropdownButtonState extends State<_FilterDropdownButton> {
               decoration: BoxDecoration(
                 // Liquid Glass effect with semi-transparent background
                 color: isActive
-                    ? CupertinoColors.systemBlue.withOpacity(0.7)
+                    ? CupertinoColors.systemBlue.withValues(alpha: 0.7)
                     : CupertinoColors.white.withOpacity(0.7),
                 borderRadius: BorderRadius.circular(20.0),
                 border: Border.all(
                   color: isActive
-                      ? CupertinoColors.systemBlue.withOpacity(0.8)
+                      ? CupertinoColors.systemBlue.withValues(alpha: 0.8)
                       : CupertinoColors.white.withOpacity(0.8),
                   width: 1.5,
                 ),

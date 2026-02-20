@@ -9,7 +9,7 @@ import 'create_workspace_model.dart';
 export 'create_workspace_model.dart';
 
 class CreateWorkspaceWidget extends StatefulWidget {
-  const CreateWorkspaceWidget({Key? key}) : super(key: key);
+  const CreateWorkspaceWidget({super.key});
 
   @override
   _CreateWorkspaceWidgetState createState() => _CreateWorkspaceWidgetState();
@@ -61,7 +61,7 @@ class _CreateWorkspaceWidgetState extends State<CreateWorkspaceWidget> {
         body: SafeArea(
           top: true,
           child: Padding(
-            padding: EdgeInsetsDirectional.fromSTEB(24, 24, 24, 24),
+            padding: const EdgeInsetsDirectional.fromSTEB(24, 24, 24, 24),
             child: Column(
               mainAxisSize: MainAxisSize.max,
               children: [
@@ -83,7 +83,7 @@ class _CreateWorkspaceWidgetState extends State<CreateWorkspaceWidget> {
                                 letterSpacing: 0,
                               ),
                         ),
-                        SizedBox(height: 8),
+                        const SizedBox(height: 8),
                         Text(
                           'Create a workspace where your team can collaborate and communicate.',
                           style: FlutterFlowTheme.of(context)
@@ -97,7 +97,7 @@ class _CreateWorkspaceWidgetState extends State<CreateWorkspaceWidget> {
                                     FlutterFlowTheme.of(context).secondaryText,
                               ),
                         ),
-                        SizedBox(height: 32),
+                        const SizedBox(height: 32),
 
                         // Workspace Name Field
                         Text(
@@ -110,7 +110,7 @@ class _CreateWorkspaceWidgetState extends State<CreateWorkspaceWidget> {
                                     letterSpacing: 0,
                                   ),
                         ),
-                        SizedBox(height: 8),
+                        const SizedBox(height: 8),
                         TextFormField(
                           controller: _model.workspaceNameController,
                           autofocus: false,
@@ -155,7 +155,7 @@ class _CreateWorkspaceWidgetState extends State<CreateWorkspaceWidget> {
                               borderRadius: BorderRadius.circular(8),
                             ),
                             contentPadding:
-                                EdgeInsetsDirectional.fromSTEB(16, 16, 16, 16),
+                                const EdgeInsetsDirectional.fromSTEB(16, 16, 16, 16),
                           ),
                           style:
                               FlutterFlowTheme.of(context).bodyMedium.override(
@@ -167,7 +167,7 @@ class _CreateWorkspaceWidgetState extends State<CreateWorkspaceWidget> {
                           validator: _model.workspaceNameControllerValidator
                               .asValidator(context),
                         ),
-                        SizedBox(height: 24),
+                        const SizedBox(height: 24),
 
                         // Description Field
                         Text(
@@ -180,7 +180,7 @@ class _CreateWorkspaceWidgetState extends State<CreateWorkspaceWidget> {
                                     letterSpacing: 0,
                                   ),
                         ),
-                        SizedBox(height: 8),
+                        const SizedBox(height: 8),
                         TextFormField(
                           controller: _model.descriptionController,
                           autofocus: false,
@@ -225,7 +225,7 @@ class _CreateWorkspaceWidgetState extends State<CreateWorkspaceWidget> {
                               borderRadius: BorderRadius.circular(8),
                             ),
                             contentPadding:
-                                EdgeInsetsDirectional.fromSTEB(16, 16, 16, 16),
+                                const EdgeInsetsDirectional.fromSTEB(16, 16, 16, 16),
                           ),
                           style:
                               FlutterFlowTheme.of(context).bodyMedium.override(
@@ -238,12 +238,12 @@ class _CreateWorkspaceWidgetState extends State<CreateWorkspaceWidget> {
                           validator: _model.descriptionControllerValidator
                               .asValidator(context),
                         ),
-                        SizedBox(height: 32),
+                        const SizedBox(height: 32),
 
                         // Info Card
                         Container(
                           width: double.infinity,
-                          padding: EdgeInsets.all(16),
+                          padding: const EdgeInsets.all(16),
                           decoration: BoxDecoration(
                             color:
                                 FlutterFlowTheme.of(context).primaryBackground,
@@ -260,7 +260,7 @@ class _CreateWorkspaceWidgetState extends State<CreateWorkspaceWidget> {
                                 color: FlutterFlowTheme.of(context).primary,
                                 size: 20,
                               ),
-                              SizedBox(width: 12),
+                              const SizedBox(width: 12),
                               Expanded(
                                 child: Text(
                                   'You will be the owner of this workspace and can invite team members later.',
@@ -295,9 +295,9 @@ class _CreateWorkspaceWidgetState extends State<CreateWorkspaceWidget> {
                         text: 'Cancel',
                         options: FFButtonOptions(
                           height: 48,
-                          padding: EdgeInsetsDirectional.fromSTEB(24, 0, 24, 0),
+                          padding: const EdgeInsetsDirectional.fromSTEB(24, 0, 24, 0),
                           iconPadding:
-                              EdgeInsetsDirectional.fromSTEB(0, 0, 0, 0),
+                              const EdgeInsetsDirectional.fromSTEB(0, 0, 0, 0),
                           color:
                               FlutterFlowTheme.of(context).secondaryBackground,
                           textStyle: FlutterFlowTheme.of(context)
@@ -318,7 +318,7 @@ class _CreateWorkspaceWidgetState extends State<CreateWorkspaceWidget> {
                         ),
                       ),
                     ),
-                    SizedBox(width: 16),
+                    const SizedBox(width: 16),
                     Expanded(
                       child: FFButtonWidget(
                         onPressed: () async {
@@ -327,9 +327,9 @@ class _CreateWorkspaceWidgetState extends State<CreateWorkspaceWidget> {
                         text: 'Create Workspace',
                         options: FFButtonOptions(
                           height: 48,
-                          padding: EdgeInsetsDirectional.fromSTEB(24, 0, 24, 0),
+                          padding: const EdgeInsetsDirectional.fromSTEB(24, 0, 24, 0),
                           iconPadding:
-                              EdgeInsetsDirectional.fromSTEB(0, 0, 0, 0),
+                              const EdgeInsetsDirectional.fromSTEB(0, 0, 0, 0),
                           color: FlutterFlowTheme.of(context).primary,
                           textStyle:
                               FlutterFlowTheme.of(context).titleSmall.override(
@@ -357,7 +357,7 @@ class _CreateWorkspaceWidgetState extends State<CreateWorkspaceWidget> {
   Future<void> _createWorkspace() async {
     if (_model.workspaceNameController.text.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Please enter a workspace name')),
+        const SnackBar(content: Text('Please enter a workspace name')),
       );
       return;
     }
@@ -367,7 +367,7 @@ class _CreateWorkspaceWidgetState extends State<CreateWorkspaceWidget> {
       showDialog(
         context: context,
         barrierDismissible: false,
-        builder: (context) => Center(
+        builder: (context) => const Center(
           child: CircularProgressIndicator(),
         ),
       );
@@ -377,7 +377,7 @@ class _CreateWorkspaceWidgetState extends State<CreateWorkspaceWidget> {
       if (currentUser == null) {
         Navigator.pop(context); // Close loading dialog
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Please log in to create a workspace')),
+          const SnackBar(content: Text('Please log in to create a workspace')),
         );
         return;
       }
@@ -417,7 +417,7 @@ class _CreateWorkspaceWidgetState extends State<CreateWorkspaceWidget> {
       Navigator.pop(context); // Close create workspace page
 
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Workspace created successfully!')),
+        const SnackBar(content: Text('Workspace created successfully!')),
       );
     } catch (e) {
       Navigator.pop(context); // Close loading dialog

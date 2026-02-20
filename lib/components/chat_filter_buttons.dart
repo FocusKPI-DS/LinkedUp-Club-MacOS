@@ -75,7 +75,7 @@ class _FilterButton extends StatelessWidget {
       interactionScale: 1.05,
       child: GlassGlow(
         glowColor: isSelected
-            ? CupertinoColors.systemBlue.withOpacity(0.3)
+            ? CupertinoColors.systemBlue.withValues(alpha: 0.3)
             : Colors.white24,
         glowRadius: 1.0,
         child: Material(

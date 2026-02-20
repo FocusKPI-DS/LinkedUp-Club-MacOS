@@ -97,7 +97,7 @@ class _MobileGroupMediaWidgetState
             links.add({
               'url': url,
               'preview': msg.content.length > 100
-                  ? msg.content.substring(0, 100) + '...'
+                  ? '${msg.content.substring(0, 100)}...'
                   : msg.content,
               'sender': msg.senderName.isNotEmpty ? msg.senderName : null,
             });
@@ -322,7 +322,7 @@ class _MobileGroupMediaWidgetState
             Text(
               'No images',
               style: PlatformInfo.isIOS26OrHigher()
-                  ? TextStyle(
+                  ? const TextStyle(
                       fontSize: 17,
                       color: CupertinoColors.secondaryLabel,
                     )
@@ -347,7 +347,7 @@ class _MobileGroupMediaWidgetState
       itemCount: images.length,
       itemBuilder: (context, index) {
         final imageUrl = images[index];
-        final tapHandler = () async {
+        Future<void> tapHandler() async {
           await Navigator.push(
             context,
             PageTransition(
@@ -366,7 +366,7 @@ class _MobileGroupMediaWidgetState
               ),
             ),
           );
-        };
+        }
         
         final imageWidget = Hero(
           tag: imageUrl,
@@ -418,7 +418,7 @@ class _MobileGroupMediaWidgetState
             Text(
               'No documents',
               style: PlatformInfo.isIOS26OrHigher()
-                  ? TextStyle(
+                  ? const TextStyle(
                       fontSize: 17,
                       color: CupertinoColors.secondaryLabel,
                     )
@@ -566,7 +566,7 @@ class _MobileGroupMediaWidgetState
             Text(
               'No links',
               style: PlatformInfo.isIOS26OrHigher()
-                  ? TextStyle(
+                  ? const TextStyle(
                       fontSize: 17,
                       color: CupertinoColors.secondaryLabel,
                     )

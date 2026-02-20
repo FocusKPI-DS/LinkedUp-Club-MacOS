@@ -177,7 +177,7 @@ class _FlutterFlowExpandedImageViewState
             } else if (contentType.contains('webp')) {
               extension = 'webp';
             }
-            safeFileName = '${safeFileName}.$extension';
+            safeFileName = '$safeFileName.$extension';
           }
 
           await downloadFileOnWeb(url, safeFileName, response.bodyBytes);
@@ -199,7 +199,7 @@ class _FlutterFlowExpandedImageViewState
               safeFileName.replaceAll('/', '_').replaceAll('\\', '_');
           safeFileName = safeFileName.split('/').last.split('\\').last;
           if (!safeFileName.contains('.')) {
-            safeFileName = '${safeFileName}.jpg';
+            safeFileName = '$safeFileName.jpg';
           }
 
           // Download the file first
@@ -276,7 +276,7 @@ class _FlutterFlowExpandedImageViewState
                 safeFileName.replaceAll('/', '_').replaceAll('\\', '_');
             safeFileName = safeFileName.split('/').last.split('\\').last;
             if (!safeFileName.contains('.')) {
-              safeFileName = '${safeFileName}.jpg';
+              safeFileName = '$safeFileName.jpg';
             }
             final file = File('${directory.path}/$safeFileName');
             await file.writeAsBytes(response.bodyBytes);

@@ -345,7 +345,7 @@ class _HomeWidgetState extends State<HomeWidget> with TickerProviderStateMixin {
                           greeting,
                           style: TextStyle(
                             fontFamily: '.SF Pro Display',
-                            color: Color(0xFF1E293B),
+                            color: const Color(0xFF1E293B),
                             fontSize: isMobile ? 30 : 32,
                             fontWeight: FontWeight.w800,
                             letterSpacing: isMobile ? -0.4 : -0.5,
@@ -364,7 +364,7 @@ class _HomeWidgetState extends State<HomeWidget> with TickerProviderStateMixin {
                               child: AdaptiveFloatingActionButton(
                                 mini: true,
                                 backgroundColor: Colors.white,
-                                foregroundColor: Color(0xFF007AFF),
+                                foregroundColor: const Color(0xFF007AFF),
                                 onPressed: () => _showEmailInviteDialog(),
                                 child: Icon(
                                   CupertinoIcons.mail_solid,
@@ -383,7 +383,7 @@ class _HomeWidgetState extends State<HomeWidget> with TickerProviderStateMixin {
                               child: AdaptiveFloatingActionButton(
                                 mini: true,
                                 backgroundColor: Colors.white,
-                                foregroundColor: Color(0xFF007AFF),
+                                foregroundColor: const Color(0xFF007AFF),
                                 onPressed: () => _showInviteDialog(context),
                                 child: Icon(
                                   CupertinoIcons.person_add_solid,
@@ -402,7 +402,7 @@ class _HomeWidgetState extends State<HomeWidget> with TickerProviderStateMixin {
                     userName,
                     style: TextStyle(
                       fontFamily: '.SF Pro Display',
-                      color: Color(0xFF2563EB),
+                      color: const Color(0xFF2563EB),
                       fontSize: isMobile ? 30 : 32,
                       fontWeight: FontWeight.w800,
                       letterSpacing: isMobile ? -0.4 : -0.5,
@@ -413,7 +413,7 @@ class _HomeWidgetState extends State<HomeWidget> with TickerProviderStateMixin {
                     "Here's your command center for today.",
                     style: TextStyle(
                       fontFamily: '.SF Pro Text',
-                      color: Color(0xFF64748B),
+                      color: const Color(0xFF64748B),
                       fontSize: isMobile ? 16 : 16,
                       fontWeight: FontWeight.w500,
                       letterSpacing: isMobile ? -0.1 : -0.2,
@@ -518,7 +518,7 @@ class _HomeWidgetState extends State<HomeWidget> with TickerProviderStateMixin {
     showCupertinoDialog(
       context: context,
       builder: (dialogContext) => CupertinoAlertDialog(
-        title: Text('Invite via Email'),
+        title: const Text('Invite via Email'),
         content: Padding(
           padding: const EdgeInsets.only(top: 10.0),
           child: CupertinoTextField(
@@ -529,11 +529,11 @@ class _HomeWidgetState extends State<HomeWidget> with TickerProviderStateMixin {
         ),
         actions: [
           CupertinoDialogAction(
-            child: Text('Cancel'),
+            child: const Text('Cancel'),
             onPressed: () => Navigator.pop(dialogContext),
           ),
           CupertinoDialogAction(
-            child: Text('Send Invite'),
+            child: const Text('Send Invite'),
             onPressed: () async {
               final email = emailController.text.trim();
               if (email.isEmpty || !email.contains('@')) {
@@ -578,26 +578,26 @@ class _HomeWidgetState extends State<HomeWidget> with TickerProviderStateMixin {
         child: Center(
           child: TweenAnimationBuilder<double>(
             tween: Tween(begin: 0.0, end: 1.0),
-            duration: Duration(milliseconds: 300),
+            duration: const Duration(milliseconds: 300),
             builder: (context, value, child) {
               return Opacity(
                 opacity: value,
                 child: Transform.scale(
                   scale: value,
                   child: Container(
-                    padding: EdgeInsets.all(16),
+                    padding: const EdgeInsets.all(16),
                     decoration: BoxDecoration(
-                      color: Color(0xFF10B981),
+                      color: const Color(0xFF10B981),
                       shape: BoxShape.circle,
                       boxShadow: [
                         BoxShadow(
-                          color: Color(0xFF10B981).withOpacity(0.3),
+                          color: const Color(0xFF10B981).withOpacity(0.3),
                           blurRadius: 20,
                           spreadRadius: 5,
                         ),
                       ],
                     ),
-                    child: Icon(
+                    child: const Icon(
                       Icons.check,
                       color: Colors.white,
                       size: 32,
@@ -614,7 +614,7 @@ class _HomeWidgetState extends State<HomeWidget> with TickerProviderStateMixin {
     overlay.insert(entry);
     
     // Remove after 1.5 seconds
-    Future.delayed(Duration(milliseconds: 1500), () {
+    Future.delayed(const Duration(milliseconds: 1500), () {
       entry.remove();
     });
   }

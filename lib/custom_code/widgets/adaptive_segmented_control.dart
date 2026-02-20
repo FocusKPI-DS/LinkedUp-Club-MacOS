@@ -37,7 +37,7 @@ class AdaptiveSegmentedControl extends StatelessWidget {
   final Color? selectedTextColor;
 
   AdaptiveSegmentedControl({
-    Key? key,
+    super.key,
     this.labels,
     this.sfSymbols,
     required this.selectedIndex,
@@ -58,8 +58,7 @@ class AdaptiveSegmentedControl extends StatelessWidget {
               labels.isEmpty ||
               sfSymbols.isEmpty,
           'Cannot provide both labels and sfSymbols',
-        ),
-        super(key: key);
+        );
 
   @override
   Widget build(BuildContext context) {
@@ -87,7 +86,7 @@ class AdaptiveSegmentedControl extends StatelessWidget {
               padding: const EdgeInsets.symmetric(horizontal: 8.0),
               child: Text(
                 labels![index],
-                style: TextStyle(
+                style: const TextStyle(
                   fontSize: 13,
                   fontWeight: FontWeight.w500,
                 ),
@@ -105,7 +104,7 @@ class AdaptiveSegmentedControl extends StatelessWidget {
               ),
             );
           }
-          return SizedBox.shrink();
+          return const SizedBox.shrink();
         },
       ),
     );

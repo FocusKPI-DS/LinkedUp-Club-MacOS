@@ -103,8 +103,10 @@ class ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget>
   final LayerLink _mentionLayerLink = LayerLink();
   OverlayEntry? _mentionOverlayEntry;
   int _selectedMentionIndex = 0; // For keyboard navigation in mention list
-  bool _mentionKeyConsumed = false; // Prevents Enter from both selecting mention AND sending message
-  DateTime? _lastMentionSelectTime; // Timestamp guard for mention selection vs send race
+  bool _mentionKeyConsumed =
+      false; // Prevents Enter from both selecting mention AND sending message
+  DateTime?
+      _lastMentionSelectTime; // Timestamp guard for mention selection vs send race
   bool _isScreenRecording = false; // Track screen recording state
 
   // Rich Text Editor Controller
@@ -124,7 +126,8 @@ class ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget>
   List<MessagesRecord> _currentMessages = [];
 
   // Global translation notifier - accessible from mobile menu
-  static final ValueNotifier<String?> translateNotifier = ValueNotifier<String?>(null);
+  static final ValueNotifier<String?> translateNotifier =
+      ValueNotifier<String?>(null);
 
   /// Static method to trigger translate on a specific message (called from mobile menu)
   static void triggerTranslate(MessagesRecord message) {
@@ -147,7 +150,7 @@ class ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget>
     print('📦 ChatThreadComponentWidget initState called');
     _model = createModel(context, () => ChatThreadComponentModel());
 
-          // Initialize Quill Controller
+    // Initialize Quill Controller
     _quillController = QuillController.basic();
     _quillController.addListener(_onQuillChanged);
 
@@ -167,7 +170,6 @@ class ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget>
       onKeyEvent: (node, event) {
         // Handle Return/Enter key press
         if (event is KeyDownEvent || event is KeyRepeatEvent) {
-
           // If a mention key was just consumed by _mentionKeyboardHandler,
           // block it here too so it doesn't trigger send-message or scroll.
           if (_mentionKeyConsumed) {
@@ -189,7 +191,6 @@ class ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget>
           // Check if Return/Enter key is pressed
           if (event.logicalKey == LogicalKeyboardKey.enter ||
               event.logicalKey == LogicalKeyboardKey.numpadEnter) {
-            
             // CRITICAL FIX: Check for IME composition (active input method)
             // If composing range is valid (start != -1), it means user is navigating IME candidates
             if (_model.messageTextController?.value.composing.isValid == true) {
@@ -212,11 +213,13 @@ class ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget>
                     ? isShiftPressed
                     : (shortcut == 2 && isMetaPressed);
 
-
             if (shouldSend) {
               // Guard: if a mention was just selected, don't send
               if (_lastMentionSelectTime != null &&
-                  DateTime.now().difference(_lastMentionSelectTime!).inMilliseconds < 300) {
+                  DateTime.now()
+                          .difference(_lastMentionSelectTime!)
+                          .inMilliseconds <
+                      300) {
                 _lastMentionSelectTime = null;
                 return KeyEventResult.handled;
               }
@@ -232,7 +235,8 @@ class ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget>
               final hasAudio =
                   _model.audiopath != null && _model.audiopath!.isNotEmpty;
               final hasVideo = _model.selectedVideoFile != null;
-              final hasPendingAttachments = _model.pendingAttachments.isNotEmpty;
+              final hasPendingAttachments =
+                  _model.pendingAttachments.isNotEmpty;
 
               // Check if there's anything to send
               if (hasText ||
@@ -250,10 +254,10 @@ class ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget>
                 return KeyEventResult.handled; // PREVENT NEWLINE
               } else {
                 // If nothing to send, we might want to return handled to prevent newline if we want "Enter does nothing if empty"
-                // But usually Enter in empty field -> newline? Or do nothing? 
+                // But usually Enter in empty field -> newline? Or do nothing?
                 // If user wants Enter to Send, then Enter in empty field probably should do nothing or newline.
                 // Standard chat apps: Enter in empty field does nothing (no newline).
-                return KeyEventResult.handled; 
+                return KeyEventResult.handled;
               }
             }
           }
@@ -338,7 +342,8 @@ class ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget>
           .listen((snapshot) {
         setState(() {
           _blockedUserIds = snapshot.docs
-              .map((doc) => BlockedUsersRecord.fromSnapshot(doc).blockedUser?.id)
+              .map(
+                  (doc) => BlockedUsersRecord.fromSnapshot(doc).blockedUser?.id)
               .whereType<String>()
               .toSet();
           print('Debug: Updated blocked user IDs: $_blockedUserIds');
@@ -465,7 +470,8 @@ class ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget>
     _model.maybeDispose();
 
     // Unregister clipboard listener
-    ClipboardEvents.instance?.unregisterPasteEventListener(_handleClipboardPaste);
+    ClipboardEvents.instance
+        ?.unregisterPasteEventListener(_handleClipboardPaste);
 
     // Unregister mention keyboard handler
     HardwareKeyboard.instance.removeHandler(_mentionKeyboardHandler);
@@ -486,14 +492,17 @@ class ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget>
     final text = _quillController.document.toPlainText();
     // Handles mention detection based on plain text
     _handleMentionDetection(text);
-    
+
     // Sync to model controller for legacy compatibility if needed
-    if (_model.messageTextController != null && _model.messageTextController!.text != text) {
+    if (_model.messageTextController != null &&
+        _model.messageTextController!.text != text) {
       // Avoid infinite loop if possible, or just sync one way
       // We mainly need this for `_sendMessage` checking emptiness or older logic
-       _model.messageTextController!.value = _model.messageTextController!.value.copyWith(
+      _model.messageTextController!.value =
+          _model.messageTextController!.value.copyWith(
         text: text,
-        selection: TextSelection.collapsed(offset: _quillController.selection.baseOffset),
+        selection: TextSelection.collapsed(
+            offset: _quillController.selection.baseOffset),
         composing: TextRange.empty,
       );
     }
@@ -521,14 +530,16 @@ class ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget>
     if (key == LogicalKeyboardKey.arrowUp) {
       final totalItems = _model.filteredMembers.length + 1;
       setState(() {
-        _selectedMentionIndex = (_selectedMentionIndex - 1 + totalItems) % totalItems;
+        _selectedMentionIndex =
+            (_selectedMentionIndex - 1 + totalItems) % totalItems;
       });
       _showMentionOverlay();
       return true;
     }
 
     // Enter: select the currently highlighted mention
-    if (key == LogicalKeyboardKey.enter || key == LogicalKeyboardKey.numpadEnter) {
+    if (key == LogicalKeyboardKey.enter ||
+        key == LogicalKeyboardKey.numpadEnter) {
       _mentionKeyConsumed = true; // Prevent FocusNode from also triggering send
       if (_selectedMentionIndex == 0) {
         _selectLinkAIMention();
@@ -686,7 +697,8 @@ class ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget>
     }
   }
 
-  Future<void> scrollToMessage(String messageId, [List<MessagesRecord>? messages]) async {
+  Future<void> scrollToMessage(String messageId,
+      [List<MessagesRecord>? messages]) async {
     // 1. Try to find in current list
     if (_tryScrollToMessage(messageId, messages)) {
       return;
@@ -729,7 +741,7 @@ class ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget>
     // Try loading up to 5 batches (250 messages)
     while (!found && attempts < 5 && _hasMoreOlderMessages) {
       await _loadOlderMessages();
-      
+
       // Give a small delay for UI rebuild to update _currentMessages
       await Future.delayed(const Duration(milliseconds: 200));
 
@@ -744,7 +756,7 @@ class ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget>
         SnackBar(
           content: Text(
             'Message is too far back in history.',
-             style: TextStyle(
+            style: TextStyle(
               color: FlutterFlowTheme.of(context).primaryText,
             ),
           ),
@@ -756,10 +768,10 @@ class ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget>
 
   bool _tryScrollToMessage(String messageId, [List<MessagesRecord>? messages]) {
     final targetMessages = messages ?? _currentMessages;
-    
+
     print('DEBUG: _tryScrollToMessage for ID: $messageId');
     print('DEBUG: targetMessages length: ${targetMessages.length}');
-    
+
     if (_model.itemScrollController == null) {
       print('DEBUG: itemScrollController is NULL');
       return false;
@@ -782,22 +794,25 @@ class ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget>
       // Logic from builder:
       // int messageIndex = _isLoadingOlderMessages ? listViewIndex - 1 : listViewIndex;
       // So listViewIndex = messageIndex + (_isLoadingOlderMessages ? 1 : 0)
-      
+
       int scrollIndex = targetIndex + (_isLoadingOlderMessages ? 1 : 0);
-      print('DEBUG: Scrolling to listViewIndex: $scrollIndex (isLoadingOlder: $_isLoadingOlderMessages)');
+      print(
+          'DEBUG: Scrolling to listViewIndex: $scrollIndex (isLoadingOlder: $_isLoadingOlderMessages)');
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Found at index $scrollIndex. Scrolling...')),
       );
 
-      _model.itemScrollController!.scrollTo(
+      _model.itemScrollController!
+          .scrollTo(
         index: scrollIndex,
         duration: const Duration(milliseconds: 600),
         curve: Curves.easeInOut,
         alignment: 0.5,
-      ).then((_) {
-         print('DEBUG: Scroll command sent successfully');
-         safeSetState(() {
+      )
+          .then((_) {
+        print('DEBUG: Scroll command sent successfully');
+        safeSetState(() {
           _model.highlightedMessageId = messageId;
         });
         Future.delayed(const Duration(seconds: 3), () {
@@ -812,7 +827,7 @@ class ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget>
       });
       return true;
     }
-    
+
     print('DEBUG: Message ID not found in current list scan');
     return false;
   }
@@ -880,7 +895,7 @@ class ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget>
       final delta = _quillController.document.toDelta();
       messageText = quillDeltaToMarkdownSimplified(delta).trim();
     }
-    
+
     final hasText = messageText.isNotEmpty;
     final hasImages = _model.images.isNotEmpty;
     final hasSingleImage = _model.image != null && _model.image!.isNotEmpty;
@@ -1247,14 +1262,16 @@ class ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget>
                   right: 0,
                   child: Center(
                     child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 16, vertical: 8),
                       decoration: BoxDecoration(
                         color: Colors.black54,
                         borderRadius: BorderRadius.circular(20),
                       ),
                       child: Text(
                         att.fileName,
-                        style: const TextStyle(color: Colors.white, fontSize: 14),
+                        style:
+                            const TextStyle(color: Colors.white, fontSize: 14),
                       ),
                     ),
                   ),
@@ -1311,7 +1328,8 @@ class ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget>
                                 aspectRatio: vController!.value.aspectRatio,
                                 child: Chewie(controller: cController!),
                               )
-                            : const CircularProgressIndicator(color: Colors.white),
+                            : const CircularProgressIndicator(
+                                color: Colors.white),
                       ),
                       Positioned(
                         top: 16,
@@ -1389,7 +1407,8 @@ class ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget>
                               aspectRatio: vController.value.aspectRatio,
                               child: Chewie(controller: cController!),
                             )
-                          : const CircularProgressIndicator(color: Colors.white),
+                          : const CircularProgressIndicator(
+                              color: Colors.white),
                     ),
                     Positioned(
                       top: 16,
@@ -1516,7 +1535,8 @@ class ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget>
   Future<void> _handleScreenRecord() async {
     if (!kIsWeb) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Screen recording is only supported on web')),
+        const SnackBar(
+            content: Text('Screen recording is only supported on web')),
       );
       return;
     }
@@ -1562,7 +1582,8 @@ class ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget>
                 children: const [
                   Icon(Icons.fiber_manual_record, color: Colors.red, size: 16),
                   SizedBox(width: 8),
-                  Text('Recording screen... Click \"Stop Recording\" when done.'),
+                  Text(
+                      'Recording screen... Click \"Stop Recording\" when done.'),
                 ],
               ),
               duration: const Duration(seconds: 3),
@@ -1583,8 +1604,26 @@ class ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget>
 
     if (pickedFiles == null || pickedFiles.files.isEmpty) return;
 
-    final imageExtensions = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 'heic'];
-    final videoExtensions = ['mp4', 'mov', 'avi', 'mkv', 'webm', 'flv', 'wmv', 'm4v', '3gp'];
+    final imageExtensions = [
+      'jpg',
+      'jpeg',
+      'png',
+      'gif',
+      'webp',
+      'bmp',
+      'heic'
+    ];
+    final videoExtensions = [
+      'mp4',
+      'mov',
+      'avi',
+      'mkv',
+      'webm',
+      'flv',
+      'wmv',
+      'm4v',
+      '3gp'
+    ];
 
     for (final pickedFile in pickedFiles.files) {
       if (pickedFile.bytes == null) continue;
@@ -1600,7 +1639,8 @@ class ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget>
 
       final selectedFile = SelectedFile(
         storagePath: storagePath,
-        filePath: kIsWeb ? originalFileName : (pickedFile.path ?? originalFileName),
+        filePath:
+            kIsWeb ? originalFileName : (pickedFile.path ?? originalFileName),
         bytes: pickedFile.bytes!,
       );
 
@@ -1626,6 +1666,7 @@ class ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget>
     }
     safeSetState(() {});
   }
+
   Future<void> _handleVideoCapture() async {
     final selectedMedia = await selectMediaWithSourceBottomSheet(
       context: context,
@@ -1649,7 +1690,7 @@ class ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget>
     try {
       final picker = ImagePicker();
       final pickedFiles = await picker.pickMultipleMedia();
-      
+
       if (pickedFiles.isEmpty) return;
 
       for (final pickedFile in pickedFiles) {
@@ -1672,8 +1713,26 @@ class ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget>
         // Determine attachment type from extension or mime
         // ImagePicker pickMultipleMedia returns images and videos.
         // We can inspect extension.
-        final imageExtensions = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 'heic'];
-        final videoExtensions = ['mp4', 'mov', 'avi', 'mkv', 'webm', 'flv', 'wmv', 'm4v', '3gp'];
+        final imageExtensions = [
+          'jpg',
+          'jpeg',
+          'png',
+          'gif',
+          'webp',
+          'bmp',
+          'heic'
+        ];
+        final videoExtensions = [
+          'mp4',
+          'mov',
+          'avi',
+          'mkv',
+          'webm',
+          'flv',
+          'wmv',
+          'm4v',
+          '3gp'
+        ];
 
         AttachmentType type;
         if (imageExtensions.contains(ext)) {
@@ -1690,7 +1749,7 @@ class ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget>
           fileName: originalFileName,
           type: type,
         ));
-        
+
         if (!added) {
           _showAttachmentLimitSnackbar();
           break;
@@ -1708,8 +1767,8 @@ class ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget>
   Future<void> _handleCamera() async {
     try {
       final picker = ImagePicker();
-      // For now, default to taking a photo. 
-      // User asked for "Camera to send video OR photo". 
+      // For now, default to taking a photo.
+      // User asked for "Camera to send video OR photo".
       // Providing choice via action sheet or just default to photo for simplicity first as requested in plan.
       // Or I can show a dialog to ask Photo or Video?
       // Let's implement Photo for now as per plan, but I'll add a check.
@@ -1722,39 +1781,38 @@ class ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget>
       // So I should probably prompt or check if I can allow both.
       // `pickImage` is photo. `pickVideo` is video.
       // I will show a small action sheet when "Camera" is clicked to choose "Photo" or "Video".
-      
-      if (Platform.isIOS) {
-          showCupertinoModalPopup(
-            context: context,
-            builder: (context) => CupertinoActionSheet(
-              actions: [
-                CupertinoActionSheetAction(
-                  onPressed: () {
-                    Navigator.pop(context);
-                    _pickFromCamera(false); // Photo
-                  },
-                  child: Text('Take Photo'),
-                ),
-                CupertinoActionSheetAction(
-                  onPressed: () {
-                    Navigator.pop(context);
-                    _pickFromCamera(true); // Video
-                  },
-                  child: Text('Record Video'),
-                ),
-              ],
-              cancelButton: CupertinoActionSheetAction(
-                onPressed: () => Navigator.pop(context),
-                child: Text('Cancel'),
-                isDestructiveAction: true,
-              ),
-            ),
-          );
-      } else {
-         // Android fallback (material dialog)
-         _pickFromCamera(false); 
-      }
 
+      if (Platform.isIOS) {
+        showCupertinoModalPopup(
+          context: context,
+          builder: (context) => CupertinoActionSheet(
+            actions: [
+              CupertinoActionSheetAction(
+                onPressed: () {
+                  Navigator.pop(context);
+                  _pickFromCamera(false); // Photo
+                },
+                child: Text('Take Photo'),
+              ),
+              CupertinoActionSheetAction(
+                onPressed: () {
+                  Navigator.pop(context);
+                  _pickFromCamera(true); // Video
+                },
+                child: Text('Record Video'),
+              ),
+            ],
+            cancelButton: CupertinoActionSheetAction(
+              onPressed: () => Navigator.pop(context),
+              child: Text('Cancel'),
+              isDestructiveAction: true,
+            ),
+          ),
+        );
+      } else {
+        // Android fallback (material dialog)
+        _pickFromCamera(false);
+      }
     } catch (e) {
       print('Error accessing camera: $e');
     }
@@ -1764,7 +1822,7 @@ class ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget>
     try {
       final picker = ImagePicker();
       final XFile? pickedFile;
-      
+
       if (isVideo) {
         pickedFile = await picker.pickVideo(source: ImageSource.camera);
       } else {
@@ -1779,40 +1837,35 @@ class ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget>
       final pathPrefix = 'users/$currentUserUid/uploads';
       final timestamp = DateTime.now().microsecondsSinceEpoch;
       final ext = originalFileName.contains('.')
-            ? originalFileName.split('.').last.toLowerCase()
-            : (isVideo ? 'mp4' : 'jpg');
+          ? originalFileName.split('.').last.toLowerCase()
+          : (isVideo ? 'mp4' : 'jpg');
       final storagePath = '$pathPrefix/$timestamp.$ext';
 
       final selectedFile = SelectedFile(
-          storagePath: storagePath,
-          filePath: pickedFile.path,
-          bytes: bytes,
+        storagePath: storagePath,
+        filePath: pickedFile.path,
+        bytes: bytes,
       );
-      
+
       final type = isVideo ? AttachmentType.video : AttachmentType.image;
 
       final added = _model.addPendingAttachment(PendingAttachment(
-          file: selectedFile,
-          fileName: originalFileName,
-          type: type,
+        file: selectedFile,
+        fileName: originalFileName,
+        type: type,
       ));
 
       if (!added) {
-          _showAttachmentLimitSnackbar();
+        _showAttachmentLimitSnackbar();
       }
       safeSetState(() {});
-
     } catch (e) {
       print('Error capturing media: $e');
-       ScaffoldMessenger.of(context).showSnackBar(
+      ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Error capturing media')),
       );
     }
   }
-
-
-
-
 
   /// Handle files dropped via drag-and-drop
   Future<void> _handleDroppedFiles(List<XFile> droppedFiles) async {
@@ -1835,14 +1888,35 @@ class ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget>
       return;
     }
 
-    final imageExtensions = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 'heic'];
-    final videoExtensions = ['mp4', 'mov', 'avi', 'mkv', 'webm', 'flv', 'wmv', 'm4v', '3gp'];
+    final imageExtensions = [
+      'jpg',
+      'jpeg',
+      'png',
+      'gif',
+      'webp',
+      'bmp',
+      'heic'
+    ];
+    final videoExtensions = [
+      'mp4',
+      'mov',
+      'avi',
+      'mkv',
+      'webm',
+      'flv',
+      'wmv',
+      'm4v',
+      '3gp'
+    ];
 
     for (final file in droppedFiles) {
       try {
         final bytes = await file.readAsBytes();
-        String fileName = file.name.isNotEmpty ? file.name : file.path.split('/').last;
-        final ext = fileName.contains('.') ? fileName.split('.').last.toLowerCase() : 'file';
+        String fileName =
+            file.name.isNotEmpty ? file.name : file.path.split('/').last;
+        final ext = fileName.contains('.')
+            ? fileName.split('.').last.toLowerCase()
+            : 'file';
 
         final currentUserUid = currentUserReference?.id ?? '';
         final pathPrefix = 'users/$currentUserUid/uploads';
@@ -1881,73 +1955,44 @@ class ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget>
   }
 
   /// Handle clipboard paste events
+  /// Handle clipboard paste events
   void _handleClipboardPaste(ClipboardReadEvent event) async {
     final reader = await event.getClipboardReader();
+    _handleClipboardReader(reader);
+  }
 
-    // 0. Check for Plain Text (Fix for regression)
-    if (reader.canProvide(Formats.plainText)) {
-      reader.getValue(
-        Formats.plainText,
-        (text) {
-          if (text == null) return;
-          final String textContent = text;
-          
-          if (mounted && textContent.isNotEmpty) {
-            // Insert into QuillController (the active rich text editor)
-            final selection = _quillController.selection;
-            final index = selection.baseOffset;
-            final length = selection.extentOffset - index;
-            _quillController.replaceText(
-              index,
-              length < 0 ? 0 : length,
-              textContent,
-              null,
-            );
-          }
-        },
-        onError: (error) {
-           debugPrint('Error reading text from clipboard: $error');
-        }
-      );
-      return; 
-    }
-
+  void _handleClipboardReader(ClipboardReader reader) async {
     // 1. Check for Images
     if (reader.canProvide(Formats.png) ||
         reader.canProvide(Formats.jpeg) ||
         reader.canProvide(Formats.webp)) {
-      
-      reader.getFile(
-        Formats.png,
-        (file) async {
-          final bytes = await file.readAll();
-          final fileName = file.fileName ?? 'pasted_image.png';
-          
-          final currentUserUid = currentUserReference?.id ?? '';
-          final pathPrefix = 'users/$currentUserUid/uploads';
-          final timestamp = DateTime.now().microsecondsSinceEpoch;
-          final storagePath = '$pathPrefix/$timestamp.png';
+      reader.getFile(Formats.png, (file) async {
+        final bytes = await file.readAll();
+        final fileName = file.fileName ?? 'pasted_image.png';
 
-          final selectedFile = SelectedFile(
-            storagePath: storagePath,
-            filePath: fileName,
-            bytes: bytes,
-          );
+        final currentUserUid = currentUserReference?.id ?? '';
+        final pathPrefix = 'users/$currentUserUid/uploads';
+        final timestamp = DateTime.now().microsecondsSinceEpoch;
+        final storagePath = '$pathPrefix/$timestamp.png';
 
-          if (mounted) {
-            final added = _model.addPendingAttachment(PendingAttachment(
-              file: selectedFile,
-              fileName: fileName,
-              type: AttachmentType.image,
-            ));
-            if (!added) _showAttachmentLimitSnackbar();
-            safeSetState(() {});
-          }
-        },
-        onError: (error) {
-           debugPrint('Error reading image from clipboard: $error');
+        final selectedFile = SelectedFile(
+          storagePath: storagePath,
+          filePath: fileName,
+          bytes: bytes,
+        );
+
+        if (mounted) {
+          final added = _model.addPendingAttachment(PendingAttachment(
+            file: selectedFile,
+            fileName: fileName,
+            type: AttachmentType.image,
+          ));
+          if (!added) _showAttachmentLimitSnackbar();
+          safeSetState(() {});
         }
-      );
+      }, onError: (error) {
+        debugPrint('Error reading image from clipboard: $error');
+      });
       return;
     }
 
@@ -1962,38 +2007,34 @@ class ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget>
 
     for (final format in videoFormats) {
       if (reader.canProvide(format)) {
-        reader.getFile(
-          format,
-          (file) async {
-            final bytes = await file.readAll();
-            final fileName = file.fileName ?? 'pasted_video.mp4';
-            
-            final currentUserUid = currentUserReference?.id ?? '';
-            final pathPrefix = 'users/$currentUserUid/uploads';
-            final timestamp = DateTime.now().microsecondsSinceEpoch;
-            final ext = fileName.contains('.') ? fileName.split('.').last : 'mp4';
-            final storagePath = '$pathPrefix/$timestamp.$ext';
+        reader.getFile(format, (file) async {
+          final bytes = await file.readAll();
+          final fileName = file.fileName ?? 'pasted_video.mp4';
 
-            final selectedFile = SelectedFile(
-              storagePath: storagePath,
-              filePath: fileName,
-              bytes: bytes,
-            );
+          final currentUserUid = currentUserReference?.id ?? '';
+          final pathPrefix = 'users/$currentUserUid/uploads';
+          final timestamp = DateTime.now().microsecondsSinceEpoch;
+          final ext = fileName.contains('.') ? fileName.split('.').last : 'mp4';
+          final storagePath = '$pathPrefix/$timestamp.$ext';
 
-            if (mounted) {
-              final added = _model.addPendingAttachment(PendingAttachment(
-                file: selectedFile,
-                fileName: fileName,
-                type: AttachmentType.video,
-              ));
-              if (!added) _showAttachmentLimitSnackbar();
-              safeSetState(() {});
-            }
-          },
-          onError: (error) {
-             debugPrint('Error reading video from clipboard: $error');
+          final selectedFile = SelectedFile(
+            storagePath: storagePath,
+            filePath: fileName,
+            bytes: bytes,
+          );
+
+          if (mounted) {
+            final added = _model.addPendingAttachment(PendingAttachment(
+              file: selectedFile,
+              fileName: fileName,
+              type: AttachmentType.video,
+            ));
+            if (!added) _showAttachmentLimitSnackbar();
+            safeSetState(() {});
           }
-        );
+        }, onError: (error) {
+          debugPrint('Error reading video from clipboard: $error');
+        });
         return;
       }
     }
@@ -2012,40 +2053,246 @@ class ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget>
 
     for (final format in fileFormats) {
       if (reader.canProvide(format)) {
-        reader.getFile(
-          format,
-          (file) async {
-            final bytes = await file.readAll();
-            final fileName = file.fileName ?? 'pasted_file';
-            
+        reader.getFile(format, (file) async {
+          final bytes = await file.readAll();
+          final fileName = file.fileName ?? 'pasted_file';
+
+          final currentUserUid = currentUserReference?.id ?? '';
+          final pathPrefix = 'users/$currentUserUid/uploads';
+          final timestamp = DateTime.now().microsecondsSinceEpoch;
+          final ext =
+              fileName.contains('.') ? fileName.split('.').last : 'file';
+          final storagePath = '$pathPrefix/$timestamp.$ext';
+
+          final selectedFile = SelectedFile(
+            storagePath: storagePath,
+            filePath: fileName,
+            bytes: bytes,
+          );
+
+          if (mounted) {
+            final added = _model.addPendingAttachment(PendingAttachment(
+              file: selectedFile,
+              fileName: fileName,
+              type: AttachmentType.file,
+            ));
+            if (!added) _showAttachmentLimitSnackbar();
+            safeSetState(() {});
+          }
+        }, onError: (error) {
+          debugPrint('Error reading file from clipboard: $error');
+        });
+        return;
+      }
+    }
+
+    // 4. Check for TIFF (macOS Screenshots)
+    if (reader.canProvide(Formats.tiff)) {
+      reader.getFile(Formats.tiff, (file) async {
+        final bytes = await file.readAll();
+        // Convert TIFF to PNG or just save as is (Flutter might handle TIFF, but PNG is safer)
+        // Here we just save as .tiff for now or .png if we could convert,
+        // but simple save as .tiff is better than nothing.
+        // Actually, let's name it .png and hope the bytes are compatible or just use .tiff
+        final fileName =
+            'screenshot_${DateTime.now().millisecondsSinceEpoch}.tiff';
+
+        final currentUserUid = currentUserReference?.id ?? '';
+        final pathPrefix = 'users/$currentUserUid/uploads';
+        final timestamp = DateTime.now().microsecondsSinceEpoch;
+        final storagePath = '$pathPrefix/$timestamp.tiff';
+
+        final selectedFile = SelectedFile(
+          storagePath: storagePath,
+          filePath: fileName,
+          bytes: bytes,
+        );
+
+        if (mounted) {
+          final added = _model.addPendingAttachment(PendingAttachment(
+            file: selectedFile,
+            fileName: fileName,
+            type: AttachmentType.image,
+          ));
+          if (!added) _showAttachmentLimitSnackbar();
+          safeSetState(() {});
+        }
+      }, onError: (error) {
+        debugPrint('Error reading TIFF from clipboard: $error');
+      });
+      return;
+    }
+
+    // 5. Check for File URIs (Finder Files)
+    if (reader.canProvide(Formats.fileUri)) {
+      reader.getValue(Formats.fileUri, (uri) async {
+        if (uri == null) return;
+        try {
+          // uri is a Uri object
+          final fileUri = uri as Uri;
+          final String filePath = fileUri.toFilePath();
+          final File file = File(filePath);
+
+          if (await file.exists()) {
+            final bytes = await file.readAsBytes();
+            final fileName = filePath.split('/').last;
+            final ext = fileName.contains('.')
+                ? fileName.split('.').last.toLowerCase()
+                : 'file';
+
             final currentUserUid = currentUserReference?.id ?? '';
             final pathPrefix = 'users/$currentUserUid/uploads';
             final timestamp = DateTime.now().microsecondsSinceEpoch;
-            final ext = fileName.contains('.') ? fileName.split('.').last : 'file';
             final storagePath = '$pathPrefix/$timestamp.$ext';
 
             final selectedFile = SelectedFile(
               storagePath: storagePath,
-              filePath: fileName,
+              filePath: filePath,
               bytes: bytes,
             );
+
+            final imageExtensions = [
+              'jpg',
+              'jpeg',
+              'png',
+              'gif',
+              'webp',
+              'bmp',
+              'heic',
+              'tiff'
+            ];
+            final videoExtensions = [
+              'mp4',
+              'mov',
+              'avi',
+              'mkv',
+              'webm',
+              'flv',
+              'wmv',
+              'm4v',
+              '3gp'
+            ];
+
+            AttachmentType type;
+            if (imageExtensions.contains(ext)) {
+              type = AttachmentType.image;
+            } else if (videoExtensions.contains(ext)) {
+              type = AttachmentType.video;
+            } else {
+              type = AttachmentType.file;
+            }
 
             if (mounted) {
               final added = _model.addPendingAttachment(PendingAttachment(
                 file: selectedFile,
                 fileName: fileName,
-                type: AttachmentType.file,
+                type: type,
               ));
               if (!added) _showAttachmentLimitSnackbar();
               safeSetState(() {});
             }
-          },
-          onError: (error) {
-             debugPrint('Error reading file from clipboard: $error');
           }
-        );
-        return;
-      }
+        } catch (e) {
+          debugPrint('Error processing file URI: $e');
+        }
+      }, onError: (err) {
+        debugPrint('Error reading file URI: $err');
+      });
+      return;
+    }
+
+    // 6. Fallback: Check for Plain Text
+    if (reader.canProvide(Formats.plainText)) {
+      reader.getValue(Formats.plainText, (text) async {
+        if (text == null) return;
+        final String textContent = text;
+
+        if (mounted) {
+          // Heuristic: Check if the text is actually a valid file path on disk
+          // This handles cases where clipboard provides file path as text but fails fileUri check
+          try {
+            final possibleFile = File(textContent.trim());
+            if (await possibleFile.exists()) {
+              print('DEBUG: Text is a valid file path: ${textContent.trim()}');
+              final bytes = await possibleFile.readAsBytes();
+              final fileName = textContent.trim().split('/').last;
+              final ext = fileName.contains('.')
+                  ? fileName.split('.').last.toLowerCase()
+                  : 'file';
+
+              final currentUserUid = currentUserReference?.id ?? '';
+              final pathPrefix = 'users/$currentUserUid/uploads';
+              final timestamp = DateTime.now().microsecondsSinceEpoch;
+              final storagePath = '$pathPrefix/$timestamp.$ext';
+
+              final selectedFile = SelectedFile(
+                storagePath: storagePath,
+                filePath: textContent.trim(),
+                bytes: bytes,
+              );
+
+              final imageExtensions = [
+                'jpg',
+                'jpeg',
+                'png',
+                'gif',
+                'webp',
+                'bmp',
+                'heic',
+                'tiff'
+              ];
+              final videoExtensions = [
+                'mp4',
+                'mov',
+                'avi',
+                'mkv',
+                'webm',
+                'flv',
+                'wmv',
+                'm4v',
+                '3gp'
+              ];
+
+              AttachmentType type;
+              if (imageExtensions.contains(ext)) {
+                type = AttachmentType.image;
+              } else if (videoExtensions.contains(ext)) {
+                type = AttachmentType.video;
+              } else {
+                type = AttachmentType.file;
+              }
+
+              final added = _model.addPendingAttachment(PendingAttachment(
+                file: selectedFile,
+                fileName: fileName,
+                type: type,
+              ));
+              if (!added) _showAttachmentLimitSnackbar();
+              safeSetState(() {});
+              return; // Stop here, processed as file
+            }
+          } catch (e) {
+            // Not a file or error checking, proceed as text
+          }
+
+          // Normal Text Paste
+          if (textContent.isNotEmpty) {
+            // Insert into QuillController (the active rich text editor)
+            final selection = _quillController.selection;
+            final index = selection.baseOffset;
+            final length = selection.extentOffset - index;
+            _quillController.replaceText(
+              index,
+              length < 0 ? 0 : length,
+              textContent,
+              null,
+            );
+          }
+        }
+      }, onError: (error) {
+        debugPrint('Error reading text from clipboard: $error');
+      });
+      return;
     }
   }
 
@@ -2069,7 +2316,8 @@ class ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget>
     // Insert @ symbol at cursor position using QuillController
     final text = _quillController.document.toPlainText();
     final selection = _quillController.selection;
-    final cursorPosition = selection.baseOffset >= 0 ? selection.baseOffset : text.length - 1;
+    final cursorPosition =
+        selection.baseOffset >= 0 ? selection.baseOffset : text.length - 1;
 
     // Insert @ at cursor position in Quill document
     _quillController.replaceText(cursorPosition, 0, '@', null);
@@ -2185,20 +2433,20 @@ class ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget>
 
   void _insertEmoji(String emoji) {
     if (_quillController.document.isEmpty()) {
-       _quillController.document.insert(0, emoji);
+      _quillController.document.insert(0, emoji);
     } else {
-       final index = _quillController.selection.baseOffset;
-       final length = _quillController.selection.extentOffset - index;
-       // Ensure index is valid
-       if (index >= 0) {
-         _quillController.replaceText(index, length, emoji, null);
-         _quillController.moveCursorToPosition(index + emoji.length);
-       } else {
-         // Append if no selection/cursor
-         final len = _quillController.document.length - 1; // -1 for newline
-         _quillController.document.insert(len, emoji);
-         _quillController.moveCursorToPosition(len + emoji.length);
-       }
+      final index = _quillController.selection.baseOffset;
+      final length = _quillController.selection.extentOffset - index;
+      // Ensure index is valid
+      if (index >= 0) {
+        _quillController.replaceText(index, length, emoji, null);
+        _quillController.moveCursorToPosition(index + emoji.length);
+      } else {
+        // Append if no selection/cursor
+        final len = _quillController.document.length - 1; // -1 for newline
+        _quillController.document.insert(len, emoji);
+        _quillController.moveCursorToPosition(len + emoji.length);
+      }
     }
     safeSetState(() {});
   }
@@ -2230,7 +2478,9 @@ class ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget>
     final hasActiveAt = cursorPos > 0 &&
         cursorPos <= text.length &&
         text[cursorPos - 1] == '@' &&
-        (cursorPos == 1 || text[cursorPos - 2] == ' ' || text[cursorPos - 2] == '\n');
+        (cursorPos == 1 ||
+            text[cursorPos - 2] == ' ' ||
+            text[cursorPos - 2] == '\n');
 
     if (mentionQuery != null || hasActiveAt) {
       _model.mentionQuery = mentionQuery ?? '';
@@ -2302,7 +2552,8 @@ class ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget>
     _lastMentionSelectTime = DateTime.now();
     final text = _quillController.document.toPlainText();
     final selection = _quillController.selection;
-    final cursorPosition = selection.baseOffset >= 0 ? selection.baseOffset : text.length - 1;
+    final cursorPosition =
+        selection.baseOffset >= 0 ? selection.baseOffset : text.length - 1;
 
     // Find the @ symbol before the cursor
     int lastAtIndex = _findLastAtIndex(text, cursorPosition);
@@ -2310,8 +2561,9 @@ class ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget>
     final mentionText = '@linkai ';
     final replaceStart = lastAtIndex == -1 ? cursorPosition : lastAtIndex;
     final replaceLength = cursorPosition - replaceStart;
-    
-    _quillController.replaceText(replaceStart, replaceLength, mentionText, null);
+
+    _quillController.replaceText(
+        replaceStart, replaceLength, mentionText, null);
     _quillController.moveCursorToPosition(replaceStart + mentionText.length);
 
     _model.showMentionOverlay = false;
@@ -2319,7 +2571,7 @@ class ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget>
 
     // Re-focus the text field (Quill)
     // Note: RichChatInputWidget manages focus node, we might need access to it?
-    // We already passed _model.messageFocusNode to existing TextField, 
+    // We already passed _model.messageFocusNode to existing TextField,
     // we should pass it to RichChatInputWidget too.
     _model.messageFocusNode?.requestFocus();
 
@@ -2347,7 +2599,8 @@ class ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget>
   void _insertMention(UsersRecord user) {
     final text = _quillController.document.toPlainText();
     final selection = _quillController.selection;
-    final cursorPosition = selection.baseOffset >= 0 ? selection.baseOffset : text.length - 1;
+    final cursorPosition =
+        selection.baseOffset >= 0 ? selection.baseOffset : text.length - 1;
 
     // Find the @ symbol before the cursor
     int lastAtIndex = -1;
@@ -2368,7 +2621,8 @@ class ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget>
     final replaceStart = lastAtIndex == -1 ? cursorPosition : lastAtIndex;
     final replaceLength = cursorPosition - replaceStart;
 
-    _quillController.replaceText(replaceStart, replaceLength, mentionText, null);
+    _quillController.replaceText(
+        replaceStart, replaceLength, mentionText, null);
     _quillController.moveCursorToPosition(replaceStart + mentionText.length);
 
     _model.showMentionOverlay = false;
@@ -2535,7 +2789,8 @@ class ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget>
                         name: user.displayName,
                         subtitle: user.email,
                         isDark: isDark,
-                        isSelected: _selectedMentionIndex == index + 1, // +1 because LinkAI is index 0
+                        isSelected: _selectedMentionIndex ==
+                            index + 1, // +1 because LinkAI is index 0
                       );
                     },
                   ),
@@ -2560,7 +2815,9 @@ class ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget>
   }) {
     return Material(
       color: isSelected
-          ? (isDark ? Colors.white.withOpacity(0.12) : Colors.blue.withOpacity(0.08))
+          ? (isDark
+              ? Colors.white.withOpacity(0.12)
+              : Colors.blue.withOpacity(0.08))
           : Colors.transparent,
       child: InkWell(
         onTap: onTap,
@@ -2578,7 +2835,8 @@ class ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget>
                       name,
                       style: TextStyle(
                         fontSize: 14,
-                        fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
+                        fontWeight:
+                            isSelected ? FontWeight.w600 : FontWeight.w500,
                         color: isDark ? Colors.white : Colors.black87,
                       ),
                       maxLines: 1,
@@ -2622,9 +2880,9 @@ class ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget>
           setState(() => _isDragging = true);
         }
       },
-        onDragExited: (details) {
-          setState(() => _isDragging = false);
-        },
+      onDragExited: (details) {
+        setState(() => _isDragging = false);
+      },
       onDragDone: (details) async {
         setState(() => _isDragging = false);
         if (!_isServiceChatReadOnly()) {
@@ -2732,16 +2990,17 @@ class ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget>
                             });
 
                             // Filter out messages from blocked users (UID based)
-                            listViewMessagesRecordList = listViewMessagesRecordList
-                                .where((message) {
-                                  final senderId = message.senderRef?.id;
-                                  final isBlocked = senderId != null && _blockedUserIds.contains(senderId);
-                                  if (isBlocked) {
-                                    print('Debug: Filtering blocked message from $senderId');
-                                  }
-                                  return !isBlocked;
-                                })
-                                .toList();
+                            listViewMessagesRecordList =
+                                listViewMessagesRecordList.where((message) {
+                              final senderId = message.senderRef?.id;
+                              final isBlocked = senderId != null &&
+                                  _blockedUserIds.contains(senderId);
+                              if (isBlocked) {
+                                print(
+                                    'Debug: Filtering blocked message from $senderId');
+                              }
+                              return !isBlocked;
+                            }).toList();
 
                             // Update local state for external access
                             _currentMessages = listViewMessagesRecordList;
@@ -2824,7 +3083,9 @@ class ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget>
                                         },
                                         onMessageLongPress:
                                             widget.onMessageLongPress,
-                                        translateNotifier: ChatThreadComponentWidgetState.translateNotifier,
+                                        translateNotifier:
+                                            ChatThreadComponentWidgetState
+                                                .translateNotifier,
                                         onReplyToMessage: (message) {
                                           _model.replyingToMessage = message;
                                           safeSetState(() {});
@@ -2837,13 +3098,17 @@ class ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget>
                                           _model.editingMessage = message;
                                           _model.messageTextController?.text =
                                               message.content;
-                                          
+
                                           // Initialize Quill Controller with message content
                                           // TODO: Parse Markdown to Delta for full rich text editing support
                                           // For now, load as plain text (Markdown source)
-                                          _quillController.document = Document.fromDelta(Delta()..insert(message.content + '\n'));
+                                          _quillController.document =
+                                              Document.fromDelta(Delta()
+                                                ..insert(
+                                                    message.content + '\n'));
                                           // Move cursor to end
-                                          _quillController.moveCursorToPosition(message.content.length);
+                                          _quillController.moveCursorToPosition(
+                                              message.content.length);
 
                                           safeSetState(() {});
                                         },
@@ -3011,35 +3276,43 @@ class ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget>
                           // Preview moved inside the input container
                           // Main Input Row (Replaced with RichChatInputWidget)
                           Padding(
-                            padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 8.0),
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 8.0, vertical: 8.0),
                             child: Column(
                               mainAxisSize: MainAxisSize.min,
                               crossAxisAlignment: CrossAxisAlignment.stretch,
                               children: [
                                 // Attachment Previews
                                 _buildAttachmentPreviews(),
-                                
+
                                 const SizedBox(height: 4),
 
                                 RichChatInputWidget(
+                                  onPaste: _handleClipboardReader,
                                   controller: _quillController,
                                   focusNode: _model.messageFocusNode,
                                   isMentionActive: _model.showMentionOverlay,
                                   isScreenRecording: _isScreenRecording,
-                                  hasAttachments: _model.pendingAttachments.isNotEmpty ||
-                                      _model.images.isNotEmpty ||
-                                      (_model.image != null && _model.image!.isNotEmpty) ||
-                                      (_model.file != null && _model.file!.isNotEmpty) ||
-                                      (_model.audiopath != null && _model.audiopath!.isNotEmpty) ||
-                                      _model.selectedVideoFile != null,
-                                  onSend: (markdown) => _sendMessage(contentOverride: markdown),
+                                  hasAttachments:
+                                      _model.pendingAttachments.isNotEmpty ||
+                                          _model.images.isNotEmpty ||
+                                          (_model.image != null &&
+                                              _model.image!.isNotEmpty) ||
+                                          (_model.file != null &&
+                                              _model.file!.isNotEmpty) ||
+                                          (_model.audiopath != null &&
+                                              _model.audiopath!.isNotEmpty) ||
+                                          _model.selectedVideoFile != null,
+                                  onSend: (markdown) =>
+                                      _sendMessage(contentOverride: markdown),
                                   onAttachment: () async {
-                                     if (_isServiceChatReadOnly()) return;
-                                     await _handleFilePicker();
+                                    if (_isServiceChatReadOnly()) return;
+                                    await _handleFilePicker();
                                   },
                                   onEmoji: _toggleEmojiPicker,
-                                  onMention: (widget.chatReference != null && widget.chatReference!.isGroup) 
-                                      ? _openMentionPopup 
+                                  onMention: (widget.chatReference != null &&
+                                          widget.chatReference!.isGroup)
+                                      ? _openMentionPopup
                                       : null,
                                   onScreenshot: () async {
                                     if (_isServiceChatReadOnly()) return;
@@ -3050,12 +3323,12 @@ class ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget>
                                     await _handleScreenRecord();
                                   },
                                   onPhotoLibrary: () async {
-                                      if (_isServiceChatReadOnly()) return;
-                                      await _handlePhotoLibrary();
+                                    if (_isServiceChatReadOnly()) return;
+                                    await _handlePhotoLibrary();
                                   },
                                   onCamera: () async {
-                                      if (_isServiceChatReadOnly()) return;
-                                      await _handleCamera();
+                                    if (_isServiceChatReadOnly()) return;
+                                    await _handleCamera();
                                   },
                                   placeholder: _model.editingMessage != null
                                       ? 'Edit your message...'
@@ -3316,6 +3589,7 @@ class ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget>
       ),
     );
   }
+
   // Attachment Previews - Discord-Style Helper
   Widget _buildAttachmentPreviews() {
     // Check if we have any attachments
@@ -3459,7 +3733,8 @@ class ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget>
                                           ? CupertinoIcons.play_circle_fill
                                           : CupertinoIcons.doc_fill,
                                       size: 32,
-                                      color: FlutterFlowTheme.of(context).primary,
+                                      color:
+                                          FlutterFlowTheme.of(context).primary,
                                     ),
                                   ),
                           ),
@@ -3631,10 +3906,14 @@ class ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget>
                         width: 70,
                         height: 70,
                         decoration: BoxDecoration(
-                          color: FlutterFlowTheme.of(context).primaryBackground.withOpacity(0.8),
+                          color: FlutterFlowTheme.of(context)
+                              .primaryBackground
+                              .withOpacity(0.8),
                           borderRadius: BorderRadius.circular(12),
                           border: Border.all(
-                            color: FlutterFlowTheme.of(context).primary.withOpacity(0.3),
+                            color: FlutterFlowTheme.of(context)
+                                .primary
+                                .withOpacity(0.3),
                             width: 1,
                           ),
                         ),

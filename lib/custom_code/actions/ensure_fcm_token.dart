@@ -11,7 +11,6 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'dart:io' show Platform;
-import 'dart:math' show min;
 import '/flutter_flow/platform_utils/platform_util.dart';
 import '/backend/cloud_functions/cloud_functions.dart';
 

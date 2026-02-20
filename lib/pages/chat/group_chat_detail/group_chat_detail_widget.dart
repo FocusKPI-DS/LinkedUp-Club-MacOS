@@ -162,7 +162,7 @@ class _GroupChatDetailWidgetState extends State<GroupChatDetailWidget>
             links.add({
               'url': url,
               'preview': msg.content.length > 100
-                  ? msg.content.substring(0, 100) + '...'
+                  ? '${msg.content.substring(0, 100)}...'
                   : msg.content,
               'sender': msg.senderName.isNotEmpty ? msg.senderName : null,
             });
@@ -596,8 +596,9 @@ class _GroupChatDetailWidgetState extends State<GroupChatDetailWidget>
 
   /// Save group description changes
   Future<void> _saveGroupDescription() async {
-    if (widget.chatDoc == null || _model.groupDescriptionController == null)
+    if (widget.chatDoc == null || _model.groupDescriptionController == null) {
       return;
+    }
 
     final newDescription = _model.groupDescriptionController!.text.trim();
     final oldDescription = widget.chatDoc?.description ?? '';
@@ -977,14 +978,14 @@ class _GroupChatDetailWidgetState extends State<GroupChatDetailWidget>
                     ),
                   ],
                 ),
-                child: Column(
+                child: const Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    const CircularProgressIndicator(
+                    CircularProgressIndicator(
                       color: Color(0xFF3B82F6),
                     ),
-                    const SizedBox(height: 16.0),
-                    const Text(
+                    SizedBox(height: 16.0),
+                    Text(
                       'Uploading photo...',
                       style: TextStyle(
                         fontFamily: 'Inter',
@@ -1716,19 +1717,19 @@ class _GroupChatDetailWidgetState extends State<GroupChatDetailWidget>
                             }).toList();
 
                             if (candidateUserRefs.isEmpty) {
-                              return Center(
+                              return const Center(
                                 child: Padding(
-                                  padding: const EdgeInsets.all(24.0),
+                                  padding: EdgeInsets.all(24.0),
                                   child: Column(
                                     mainAxisAlignment: MainAxisAlignment.center,
                                     children: [
                                       Icon(
                                         Icons.people_outline,
                                         size: 48.0,
-                                        color: const Color(0xFFE5E7EB),
+                                        color: Color(0xFFE5E7EB),
                                       ),
-                                      const SizedBox(height: 16.0),
-                                      const Text(
+                                      SizedBox(height: 16.0),
+                                      Text(
                                         'No connections available',
                                         style: TextStyle(
                                           fontFamily: 'Inter',
@@ -1737,8 +1738,8 @@ class _GroupChatDetailWidgetState extends State<GroupChatDetailWidget>
                                           color: Color(0xFF6B7280),
                                         ),
                                       ),
-                                      const SizedBox(height: 8.0),
-                                      const Text(
+                                      SizedBox(height: 8.0),
+                                      Text(
                                         'All your connections are already in this group',
                                         textAlign: TextAlign.center,
                                         style: TextStyle(
@@ -1839,8 +1840,8 @@ class _GroupChatDetailWidgetState extends State<GroupChatDetailWidget>
                                             Container(
                                               width: 48.0,
                                               height: 48.0,
-                                              decoration: BoxDecoration(
-                                                color: const Color(0xFFEBF4FF),
+                                              decoration: const BoxDecoration(
+                                                color: Color(0xFFEBF4FF),
                                                 shape: BoxShape.circle,
                                               ),
                                               child: ClipRRect(
@@ -2026,9 +2027,9 @@ class _GroupChatDetailWidgetState extends State<GroupChatDetailWidget>
               ? FlutterFlowIconButton(
                   borderRadius: 20.0,
                   buttonSize: 40.0,
-                  icon: Icon(
+                  icon: const Icon(
                     Icons.close,
-                    color: const Color(0xFF1A1F36),
+                    color: Color(0xFF1A1F36),
                     size: 24.0,
                   ),
                   onPressed: () {
@@ -2038,9 +2039,9 @@ class _GroupChatDetailWidgetState extends State<GroupChatDetailWidget>
               : FlutterFlowIconButton(
                   borderRadius: 20.0,
                   buttonSize: 40.0,
-                  icon: Icon(
+                  icon: const Icon(
                     Icons.arrow_back,
-                    color: const Color(0xFF1A1F36),
+                    color: Color(0xFF1A1F36),
                     size: 24.0,
                   ),
                   onPressed: () async {
@@ -2048,7 +2049,7 @@ class _GroupChatDetailWidgetState extends State<GroupChatDetailWidget>
                   },
                 ),
           title: Padding(
-            padding: EdgeInsetsDirectional.only(start: 16.0),
+            padding: const EdgeInsetsDirectional.only(start: 16.0),
             child: Text(
               'Group Info',
               style: FlutterFlowTheme.of(context).headlineMedium.override(
@@ -2119,7 +2120,7 @@ class _GroupChatDetailWidgetState extends State<GroupChatDetailWidget>
                               children: [
                                 // Group Info Section - Now Scrollable
                                 Container(
-                                  decoration: BoxDecoration(
+                                  decoration: const BoxDecoration(
                                     color: Colors.white,
                                   ),
                                   child: Padding(
@@ -2198,14 +2199,14 @@ class _GroupChatDetailWidgetState extends State<GroupChatDetailWidget>
                                                       color: Colors.white,
                                                       elevation: 8,
                                                       items: [
-                                                        PopupMenuItem<String>(
+                                                        const PopupMenuItem<String>(
                                                           value: 'view',
                                                           height: 40,
                                                           child: Row(
                                                             mainAxisSize:
                                                                 MainAxisSize
                                                                     .min,
-                                                            children: const [
+                                                            children: [
                                                               Icon(
                                                                 Icons
                                                                     .visibility,
@@ -2230,14 +2231,14 @@ class _GroupChatDetailWidgetState extends State<GroupChatDetailWidget>
                                                             ],
                                                           ),
                                                         ),
-                                                        PopupMenuItem<String>(
+                                                        const PopupMenuItem<String>(
                                                           value: 'edit',
                                                           height: 40,
                                                           child: Row(
                                                             mainAxisSize:
                                                                 MainAxisSize
                                                                     .min,
-                                                            children: const [
+                                                            children: [
                                                               Icon(
                                                                 Icons.edit,
                                                                 size: 18.0,
@@ -2481,7 +2482,7 @@ class _GroupChatDetailWidgetState extends State<GroupChatDetailWidget>
                                                                     'Public Group' ||
                                                                 currentChatDoc
                                                                         ?.description
-                                                                        ?.isEmpty ==
+                                                                        .isEmpty ==
                                                                     true)
                                                             ? const Color(
                                                                 0xFF9CA3AF)
@@ -2543,10 +2544,10 @@ class _GroupChatDetailWidgetState extends State<GroupChatDetailWidget>
                                   ),
                                 ),
 
-                                Divider(
+                                const Divider(
                                   height: 1,
                                   thickness: 1,
-                                  color: const Color(0xFFE5E7EB),
+                                  color: Color(0xFFE5E7EB),
                                 ),
                                 Container(
                                   decoration: const BoxDecoration(
@@ -3000,10 +3001,10 @@ class _GroupChatDetailWidgetState extends State<GroupChatDetailWidget>
                                     ),
                                   ),
                                 ),
-                                Divider(
+                                const Divider(
                                   height: 1,
                                   thickness: 1,
-                                  color: const Color(0xFFE5E7EB),
+                                  color: Color(0xFFE5E7EB),
                                 ),
                                 const SizedBox(height: 4),
                                 Container(
@@ -3191,10 +3192,10 @@ class _GroupChatDetailWidgetState extends State<GroupChatDetailWidget>
                                                                   CrossAxisAlignment
                                                                       .start,
                                                               children: [
-                                                                Text(
+                                                                const Text(
                                                                   'Action Tasks',
                                                                   style:
-                                                                      const TextStyle(
+                                                                      TextStyle(
                                                                     fontFamily:
                                                                         'Inter',
                                                                     color: Color(
@@ -3240,10 +3241,10 @@ class _GroupChatDetailWidgetState extends State<GroupChatDetailWidget>
                                     ),
                                   ),
                                 ),
-                                Divider(
+                                const Divider(
                                   height: 1,
                                   thickness: 1,
-                                  color: const Color(0xFFE5E7EB),
+                                  color: Color(0xFFE5E7EB),
                                 ),
                                 const SizedBox(height: 4),
                                 Container(
@@ -3465,21 +3466,25 @@ class _GroupChatDetailWidgetState extends State<GroupChatDetailWidget>
                                                                   // Put admin first
                                                                   if (a ==
                                                                       containerChatsRecord
-                                                                          .admin)
+                                                                          .admin) {
                                                                     return -1;
+                                                                  }
                                                                   if (b ==
                                                                       containerChatsRecord
-                                                                          .admin)
+                                                                          .admin) {
                                                                     return 1;
+                                                                  }
                                                                   // Put creator first if not admin
                                                                   if (a ==
                                                                       containerChatsRecord
-                                                                          .createdBy)
+                                                                          .createdBy) {
                                                                     return -1;
+                                                                  }
                                                                   if (b ==
                                                                       containerChatsRecord
-                                                                          .createdBy)
+                                                                          .createdBy) {
                                                                     return 1;
+                                                                  }
                                                                   return 0;
                                                                 });
                                                                 final members =
@@ -4510,7 +4515,7 @@ class _GroupChatDetailWidgetState extends State<GroupChatDetailWidget>
                       Container(
                         width: double.infinity,
                         height: double.infinity,
-                        decoration: BoxDecoration(
+                        decoration: const BoxDecoration(
                           color: Colors.white,
                         ),
                         child: Padding(

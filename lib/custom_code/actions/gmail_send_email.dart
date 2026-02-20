@@ -148,7 +148,7 @@ Future<bool> gmailSendEmail({
           TaskSnapshot snapshot;
           try {
             snapshot = await uploadTask.timeout(
-              Duration(minutes: 5), // 5 minute timeout per file
+              const Duration(minutes: 5), // 5 minute timeout per file
               onTimeout: () {
                 uploadTask.cancel();
                 throw Exception('Upload timeout for ${file.name}');

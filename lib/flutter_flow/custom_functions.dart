@@ -333,7 +333,7 @@ bool isDateScheduleNull(List<DateScheduleStruct>? thisSchedule) {
 List<ScheduleStruct> getScheduleFromEvent(EventsRecord? event) {
   if (event?.dateSchedule != null && event!.dateSchedule.isNotEmpty) {
     final firstDateSchedule = event.dateSchedule.first;
-    return firstDateSchedule.schedule!.toList();
+    return firstDateSchedule.schedule.toList();
     }
   return [];
 }

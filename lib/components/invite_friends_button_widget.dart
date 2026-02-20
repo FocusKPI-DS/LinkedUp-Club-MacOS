@@ -85,7 +85,7 @@ class InviteFriendsButtonWidget extends StatelessWidget {
                   ),
                 ],
               ),
-              child: Icon(
+              child: const Icon(
                 CupertinoIcons.person_add_solid,
                 color: CupertinoColors.systemBlue,
                 size: 20.0,

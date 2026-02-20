@@ -109,7 +109,9 @@ class AIAssistantController extends GetxController {
   // Load messages for current conversation
   void loadMessages() {
     if (currentConversationId.value.isEmpty ||
-        currentConversationId.value == 'fallback_conversation') return;
+        currentConversationId.value == 'fallback_conversation') {
+      return;
+    }
 
     FirebaseFirestore.instance
         .collection('ai_assistant_conversations')
@@ -170,7 +172,7 @@ class AIAssistantController extends GetxController {
     if (lastSpace > 20) {
       return '${truncated.substring(0, lastSpace)}...';
     }
-    return '${truncated}...';
+    return '$truncated...';
   }
 
   // Send message

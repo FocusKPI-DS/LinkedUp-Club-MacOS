@@ -212,8 +212,8 @@ class _ProductivityTrendChartState extends State<ProductivityTrendChart> {
                   drawVerticalLine: false,
                   horizontalInterval: 5,
                   getDrawingHorizontalLine: (value) {
-                    return FlLine(
-                      color: const Color(0xFFE5E7EB),
+                    return const FlLine(
+                      color: Color(0xFFE5E7EB),
                       strokeWidth: 1,
                     );
                   },

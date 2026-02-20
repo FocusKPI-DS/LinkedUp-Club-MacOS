@@ -64,7 +64,7 @@ class _ChatHistoryWidgetState extends State<ChatHistoryWidget> {
         typeMatch = m.messageType == MessageType.video;
       } else if (filter == 'File') {
          // Assuming MessageType.file exists, or check attachmentUrl
-        typeMatch = m.messageType == MessageType.file || (m.attachmentUrl != null && m.attachmentUrl!.isNotEmpty && m.messageType != MessageType.image && m.messageType != MessageType.video);
+        typeMatch = m.messageType == MessageType.file || (m.attachmentUrl.isNotEmpty && m.messageType != MessageType.image && m.messageType != MessageType.video);
       } else if (filter == 'Link') {
         typeMatch = m.content.contains('http');
       } else if (filter == 'Pinned') {
@@ -77,7 +77,7 @@ class _ChatHistoryWidgetState extends State<ChatHistoryWidget> {
       if (query.isNotEmpty) {
         if (m.messageType == MessageType.text) {
           return m.content.toLowerCase().contains(query);
-        } else if (filter == 'File' && m.attachmentUrl != null) {
+        } else if (filter == 'File') {
              // Basic check if filename might be in content or just allow all files if query is present?
              // Let's search content as it might contain filename
              return m.content.toLowerCase().contains(query);
@@ -188,22 +188,22 @@ class _ChatHistoryWidgetState extends State<ChatHistoryWidget> {
               Container(
                  color: FlutterFlowTheme.of(context).secondaryBackground,
                  width: double.infinity,
-                 padding: EdgeInsets.only(bottom: 12),
+                 padding: const EdgeInsets.only(bottom: 12),
                  child: SingleChildScrollView(
                   scrollDirection: Axis.horizontal,
-                  padding: EdgeInsets.symmetric(horizontal: 16),
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
                   child: Row(
                     children: [
                       _buildFilterChip('All'),
-                      SizedBox(width: 8),
+                      const SizedBox(width: 8),
                       _buildFilterChip('Image'),
-                      SizedBox(width: 8),
+                      const SizedBox(width: 8),
                       _buildFilterChip('Video'),
-                      SizedBox(width: 8),
+                      const SizedBox(width: 8),
                       _buildFilterChip('File'),
-                      SizedBox(width: 8),
+                      const SizedBox(width: 8),
                       _buildFilterChip('Link'),
-                      SizedBox(width: 8),
+                      const SizedBox(width: 8),
                       _buildFilterChip('Pinned'),
                     ],
                   ),
@@ -240,7 +240,7 @@ class _ChatHistoryWidgetState extends State<ChatHistoryWidget> {
                            mainAxisSize: MainAxisSize.min,
                            children: [
                              Icon(Icons.search_off_rounded, size: 64, color: FlutterFlowTheme.of(context).secondaryText),
-                             SizedBox(height: 12),
+                             const SizedBox(height: 12),
                              Text(
                                'No results found',
                                style: FlutterFlowTheme.of(context).bodyMedium.override(
@@ -254,7 +254,7 @@ class _ChatHistoryWidgetState extends State<ChatHistoryWidget> {
                     }
 
                     return ListView.separated(
-                      padding: EdgeInsets.symmetric(vertical: 12),
+                      padding: const EdgeInsets.symmetric(vertical: 12),
                       itemCount: filteredMessages.length,
                       separatorBuilder: (_, __) => Divider(height: 1, color: FlutterFlowTheme.of(context).alternate.withOpacity(0.5)),
                       itemBuilder: (context, index) {
@@ -281,8 +281,8 @@ class _ChatHistoryWidgetState extends State<ChatHistoryWidget> {
         });
       },
       child: AnimatedContainer(
-        duration: Duration(milliseconds: 200),
-        padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        duration: const Duration(milliseconds: 200),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
         decoration: BoxDecoration(
           color: isSelected 
               ? FlutterFlowTheme.of(context).primary.withOpacity(0.1) 
@@ -335,12 +335,12 @@ class _ChatHistoryWidgetState extends State<ChatHistoryWidget> {
                      imageUrl: snapshot.data!.photoUrl,
                      fit: BoxFit.cover,
                      placeholder: (context, url) => Container(color: FlutterFlowTheme.of(context).alternate),
-                     errorWidget: (context, url, error) => Icon(Icons.person),
+                     errorWidget: (context, url, error) => const Icon(Icons.person),
                    );
                  },
                ),
             ),
-            SizedBox(width: 12),
+            const SizedBox(width: 12),
             
             // Content
             Expanded(
@@ -354,7 +354,7 @@ class _ChatHistoryWidgetState extends State<ChatHistoryWidget> {
                         child: StreamBuilder<UsersRecord>(
                            stream: UsersRecord.getDocument(message.senderRef!),
                            builder: (context, snapshot) {
-                             if (!snapshot.hasData) return Text('...');
+                             if (!snapshot.hasData) return const Text('...');
                              return Text(
                                snapshot.data!.displayName,
                                style: FlutterFlowTheme.of(context).bodyMedium.override(
@@ -368,7 +368,7 @@ class _ChatHistoryWidgetState extends State<ChatHistoryWidget> {
                            },
                         ),
                       ),
-                      SizedBox(width: 8),
+                      const SizedBox(width: 8),
                       Text(
                         dateTimeFormat('relative', message.createdAt),
                         style: FlutterFlowTheme.of(context).bodySmall.override(
@@ -379,7 +379,7 @@ class _ChatHistoryWidgetState extends State<ChatHistoryWidget> {
                       ),
                     ],
                   ),
-                  SizedBox(height: 4),
+                  const SizedBox(height: 4),
                   
                   // Message Content
                   if (message.messageType == MessageType.text)
@@ -388,13 +388,12 @@ class _ChatHistoryWidgetState extends State<ChatHistoryWidget> {
                     Builder(
                       builder: (context) {
                         String imageUrl = message.image;
-                        if ((imageUrl == null || imageUrl.isEmpty) && 
-                            message.images != null && 
+                        if ((imageUrl.isEmpty) && 
                             message.images.isNotEmpty) {
                           imageUrl = message.images.first;
                         }
                         return Padding(
-                          padding: EdgeInsets.only(top: 4),
+                          padding: const EdgeInsets.only(top: 4),
                           child: InkWell(
                             onTap: () async {
                               await Navigator.push(
@@ -459,13 +458,13 @@ class _ChatHistoryWidgetState extends State<ChatHistoryWidget> {
                     Row(
                       children: [
                         Icon(Icons.videocam_rounded, size: 20, color: FlutterFlowTheme.of(context).primary),
-                        SizedBox(width: 6),
+                        const SizedBox(width: 6),
                         Text('Video Message', style: FlutterFlowTheme.of(context).bodyMedium),
                       ],
                     )
                   else if (message.messageType == MessageType.file)
                     Container(
-                      padding: EdgeInsets.all(8),
+                      padding: const EdgeInsets.all(8),
                       decoration: BoxDecoration(
                         color: FlutterFlowTheme.of(context).alternate.withOpacity(0.3),
                         borderRadius: BorderRadius.circular(8),
@@ -474,7 +473,7 @@ class _ChatHistoryWidgetState extends State<ChatHistoryWidget> {
                         mainAxisSize: MainAxisSize.min,
                         children: [
                           Icon(Icons.insert_drive_file_rounded, size: 20, color: FlutterFlowTheme.of(context).primaryText),
-                          SizedBox(width: 6),
+                          const SizedBox(width: 6),
                           Text('File: ${message.content}', style: FlutterFlowTheme.of(context).bodyMedium),
                         ],
                       ),

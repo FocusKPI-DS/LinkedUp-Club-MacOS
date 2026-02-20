@@ -44,7 +44,7 @@ import 'package:branchio_dynamic_linking_akp5u6/flutter_flow/custom_functions.da
 import '/custom_code/actions/index.dart' as actions;
 
 class DesktopChatWidget extends StatefulWidget {
-  const DesktopChatWidget({Key? key}) : super(key: key);
+  const DesktopChatWidget({super.key});
 
   @override
   _DesktopChatWidgetState createState() => _DesktopChatWidgetState();
@@ -59,7 +59,7 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
   final animationsMap = <String, AnimationInfo>{};
 
   // Track previous friends count for notifications
-  int _previousFriendsCount = 0;
+  final int _previousFriendsCount = 0;
   StreamSubscription<DocumentSnapshot>? _userSubscription;
 
   // Subscription to chatController.selectedChat for syncing with model
@@ -129,7 +129,7 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
 
     // Initialize presence system after a delay to ensure user is loaded
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      Future.delayed(Duration(milliseconds: 500), () {
+      Future.delayed(const Duration(milliseconds: 500), () {
         _initializePresence();
       });
     });
@@ -253,7 +253,7 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
         : _model.sidebarWidth;
 
     return AnimatedContainer(
-      duration: Duration(milliseconds: 200),
+      duration: const Duration(milliseconds: 200),
       curve: Curves.easeOutCubic,
       width: currentWidth,
       height: double.infinity,
@@ -264,7 +264,7 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
             Container(
               width: double.infinity,
               height: double.infinity,
-              decoration: BoxDecoration(
+              decoration: const BoxDecoration(
                 color: Color.fromRGBO(250, 252, 255, 1),
                 border: Border(
                   right: BorderSide(
@@ -308,7 +308,7 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
                         width: 3,
                         height: 40,
                         decoration: BoxDecoration(
-                          color: Color(0xFFD1D5DB),
+                          color: const Color(0xFFD1D5DB),
                           borderRadius: BorderRadius.circular(2),
                         ),
                       ),
@@ -336,16 +336,16 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
                     decoration: BoxDecoration(
                       color: Colors.white,
                       borderRadius: BorderRadius.circular(6),
-                      border: Border.all(color: Color(0xFFE5E7EB), width: 1),
+                      border: Border.all(color: const Color(0xFFE5E7EB), width: 1),
                       boxShadow: [
                         BoxShadow(
                           color: Colors.black.withOpacity(0.05),
                           blurRadius: 4,
-                          offset: Offset(0, 1),
+                          offset: const Offset(0, 1),
                         ),
                       ],
                     ),
-                    child: Icon(
+                    child: const Icon(
                       Icons.chevron_left_rounded,
                       color: Color(0xFF64748B),
                       size: 18,
@@ -362,7 +362,7 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
               bottom: 0,
               child: Container(
                 width: 24,
-                decoration: BoxDecoration(
+                decoration: const BoxDecoration(
                   color: Color.fromRGBO(250, 252, 255, 1),
                   border: Border(
                     right: BorderSide(
@@ -387,9 +387,9 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
                           color: Colors.white,
                           borderRadius: BorderRadius.circular(4),
                           border:
-                              Border.all(color: Color(0xFFE5E7EB), width: 1),
+                              Border.all(color: const Color(0xFFE5E7EB), width: 1),
                         ),
-                        child: Icon(
+                        child: const Icon(
                           Icons.chevron_right_rounded,
                           color: Color(0xFF64748B),
                           size: 16,
@@ -409,17 +409,17 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
     return Container(
       width: double.infinity,
       height: 80,
-      decoration: BoxDecoration(
+      decoration: const BoxDecoration(
         color: Color.fromRGBO(
             250, 252, 255, 1), // Very light cyan tint, close to white
       ),
       child: Padding(
-        padding: EdgeInsetsDirectional.fromSTEB(16, 20, 16, 20),
+        padding: const EdgeInsetsDirectional.fromSTEB(16, 20, 16, 20),
         child: Row(
           mainAxisSize: MainAxisSize.max,
           children: [
             // App Name
-            Expanded(
+            const Expanded(
               child: Text(
                 'Chat',
                 style: TextStyle(
@@ -433,7 +433,7 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
                 overflow: TextOverflow.ellipsis,
               ),
             ),
-            SizedBox(width: 8),
+            const SizedBox(width: 8),
             // Action Icons - directly on background, no containers
             Row(
               mainAxisSize: MainAxisSize.min,
@@ -442,7 +442,7 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
                   offset: const Offset(0, 40),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(12),
-                    side: BorderSide(color: Color(0xFFE5E7EB), width: 1),
+                    side: const BorderSide(color: Color(0xFFE5E7EB), width: 1),
                   ),
                   color: Colors.white,
                   elevation: 8,
@@ -469,7 +469,7 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
                     });
                   },
                   itemBuilder: (context) => [
-                    PopupMenuItem<int>(
+                    const PopupMenuItem<int>(
                       value: 1,
                       child: Row(
                         children: [
@@ -488,8 +488,8 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
                         ],
                       ),
                     ),
-                    PopupMenuDivider(height: 1),
-                    PopupMenuItem<int>(
+                    const PopupMenuDivider(height: 1),
+                    const PopupMenuItem<int>(
                       value: 2,
                       child: Row(
                         children: [
@@ -509,8 +509,8 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
                       ),
                     ),
                   ],
-                  child: Padding(
-                    padding: const EdgeInsets.all(4.0),
+                  child: const Padding(
+                    padding: EdgeInsets.all(4.0),
                     child: Icon(
                       Icons.add_rounded,
                       color: Color(0xFF374151),
@@ -529,14 +529,14 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
   Widget _buildSearchBar() {
     return Container(
       width: double.infinity,
-      padding: EdgeInsetsDirectional.fromSTEB(16, 0, 16, 16),
+      padding: const EdgeInsetsDirectional.fromSTEB(16, 0, 16, 16),
       child: Container(
         height: 40,
         decoration: BoxDecoration(
           color: Colors.white, // White search bar on light background
           borderRadius: BorderRadius.circular(8),
           border: Border.all(
-            color: Color.fromRGBO(230, 235, 245, 1), // Light border
+            color: const Color.fromRGBO(230, 235, 245, 1), // Light border
             width: 1,
           ),
         ),
@@ -546,20 +546,20 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
           onChanged: (value) {
             EasyDebounce.debounce(
               'searchTextController',
-              Duration(milliseconds: 500),
+              const Duration(milliseconds: 500),
               () => chatController.updateSearchQuery(value),
             );
           },
           decoration: InputDecoration(
             hintText: 'Search chats...',
-            hintStyle: TextStyle(
+            hintStyle: const TextStyle(
               fontFamily: 'Inter',
               color: Color(0xFF9CA3AF),
               fontSize: 14,
             ),
             border: InputBorder.none,
-            contentPadding: EdgeInsetsDirectional.fromSTEB(16, 12, 16, 12),
-            prefixIcon: Icon(
+            contentPadding: const EdgeInsetsDirectional.fromSTEB(16, 12, 16, 12),
+            prefixIcon: const Icon(
               Icons.search,
               color: Color(0xFF6B7280), // Dark icon for light background
               size: 18,
@@ -571,17 +571,17 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
                         _model.searchTextController?.clear();
                         chatController.updateSearchQuery('');
                       },
-                      child: Icon(
+                      child: const Icon(
                         Icons.close,
                         color:
                             Color(0xFF6B7280), // Dark icon for light background
                         size: 18,
                       ),
                     )
-                  : SizedBox.shrink();
+                  : const SizedBox.shrink();
             }),
           ),
-          style: TextStyle(
+          style: const TextStyle(
             fontFamily: 'Inter',
             color: Color(0xFF111827), // Dark text for light background
             fontSize: 14,
@@ -595,19 +595,19 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
     return Container(
       width: double.infinity,
       height: 50,
-      decoration: BoxDecoration(
+      decoration: const BoxDecoration(
         color: Color.fromRGBO(
             250, 252, 255, 1), // Very light cyan tint, close to white
       ),
       child: Padding(
-        padding: EdgeInsetsDirectional.fromSTEB(16, 0, 16, 0),
+        padding: const EdgeInsetsDirectional.fromSTEB(16, 0, 16, 0),
         child: Row(
           mainAxisSize: MainAxisSize.max,
           children: [
             Expanded(child: _buildTab('All', 0)),
-            SizedBox(width: 8),
+            const SizedBox(width: 8),
             Expanded(child: _buildTab('DM', 1)),
-            SizedBox(width: 8),
+            const SizedBox(width: 8),
             Expanded(child: _buildTab('Groups', 2)),
           ],
         ),
@@ -622,7 +622,7 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
         _model.tabController?.animateTo(index);
       },
       child: Container(
-        padding: EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
         decoration: BoxDecoration(
           color: isSelected
               ? Colors.white
@@ -630,14 +630,14 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
           borderRadius: BorderRadius.circular(6),
           border: isSelected
               ? Border.all(
-                  color: Color.fromRGBO(
+                  color: const Color.fromRGBO(
                       230, 235, 245, 1), // Light border for selected
                   width: 1,
                 )
               : null,
           boxShadow: isSelected
               ? [
-                  BoxShadow(
+                  const BoxShadow(
                     color: Color.fromRGBO(0, 0, 0, 0.05), // Neutral gray shadow
                     blurRadius: 4,
                     offset: Offset(0, 1),
@@ -648,7 +648,7 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
         ),
         child: Text(
           text,
-          style: TextStyle(
+          style: const TextStyle(
             fontFamily: 'Inter',
             color: Color(0xFF374151), // Grey for both selected and unselected
             fontSize: 12,
@@ -667,7 +667,7 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
       child: Obx(() {
         switch (chatController.chatState.value) {
           case ChatState.loading:
-            return Center(
+            return const Center(
               child: CircularProgressIndicator(
                 color: Color.fromARGB(255, 16, 184, 239), // Cyan color
               ),
@@ -678,13 +678,13 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(
+                  const Icon(
                     Icons.error_outline,
                     color: Color(0xFFEF4444),
                     size: 48,
                   ),
-                  SizedBox(height: 16),
-                  Text(
+                  const SizedBox(height: 16),
+                  const Text(
                     'Error loading chats',
                     style: TextStyle(
                       fontFamily: 'Inter',
@@ -693,20 +693,20 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
                       fontWeight: FontWeight.w500,
                     ),
                   ),
-                  SizedBox(height: 8),
+                  const SizedBox(height: 8),
                   Text(
                     chatController.errorMessage.value,
-                    style: TextStyle(
+                    style: const TextStyle(
                       fontFamily: 'Inter',
                       color: Color(0xFF9CA3AF),
                       fontSize: 14,
                     ),
                     textAlign: TextAlign.center,
                   ),
-                  SizedBox(height: 16),
+                  const SizedBox(height: 16),
                   ElevatedButton(
                     onPressed: () => chatController.refreshChats(),
-                    child: Text('Retry'),
+                    child: const Text('Retry'),
                   ),
                 ],
               ),
@@ -717,7 +717,7 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
 
             if (filteredChats.isEmpty &&
                 chatController.searchQuery.value.isNotEmpty) {
-              return Center(
+              return const Center(
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
@@ -811,8 +811,8 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
         // Header for group creation
         Container(
           width: double.infinity,
-          padding: EdgeInsetsDirectional.fromSTEB(20, 16, 20, 16),
-          decoration: BoxDecoration(
+          padding: const EdgeInsetsDirectional.fromSTEB(20, 16, 20, 16),
+          decoration: const BoxDecoration(
             color: Color.fromRGBO(250, 252, 255, 1), // Match left sidebar color
             border: Border(
               bottom: BorderSide(
@@ -823,7 +823,7 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
           ),
           child: Row(
             children: [
-              Expanded(
+              const Expanded(
                 child: Text(
                   'Create New Group',
                   style: TextStyle(
@@ -847,16 +847,16 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
                   });
                 },
                 child: Container(
-                  padding: EdgeInsets.all(8),
+                  padding: const EdgeInsets.all(8),
                   decoration: BoxDecoration(
                     color: Colors.white,
                     borderRadius: BorderRadius.circular(8),
                     border: Border.all(
-                      color: Color(0xFFE5E7EB),
+                      color: const Color(0xFFE5E7EB),
                       width: 1,
                     ),
                   ),
-                  child: Icon(
+                  child: const Icon(
                     Icons.close,
                     color: Color(0xFF6B7280),
                     size: 20,
@@ -869,14 +869,14 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
         // Group creation form
         Expanded(
           child: SingleChildScrollView(
-            padding: EdgeInsets.all(32),
+            padding: const EdgeInsets.all(32),
             child: Container(
-              constraints: BoxConstraints(maxWidth: 600),
+              constraints: const BoxConstraints(maxWidth: 600),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   // Group name input
-                  Text(
+                  const Text(
                     'Group Name (Optional)',
                     style: TextStyle(
                       fontFamily: 'Inter',
@@ -885,13 +885,13 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
                       fontWeight: FontWeight.w600,
                     ),
                   ),
-                  SizedBox(height: 8),
+                  const SizedBox(height: 8),
                   Container(
                     decoration: BoxDecoration(
                       color: Colors.white,
                       borderRadius: BorderRadius.circular(8),
                       border: Border.all(
-                        color: Color(0xFFD1D5DB),
+                        color: const Color(0xFFD1D5DB),
                         width: 1,
                       ),
                     ),
@@ -902,7 +902,7 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
                           _model.groupName = value;
                         });
                       },
-                      decoration: InputDecoration(
+                      decoration: const InputDecoration(
                         hintText: 'Enter group name',
                         hintStyle: TextStyle(
                           fontFamily: 'Inter',
@@ -913,16 +913,16 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
                         contentPadding:
                             EdgeInsetsDirectional.fromSTEB(16, 12, 16, 12),
                       ),
-                      style: TextStyle(
+                      style: const TextStyle(
                         fontFamily: 'Inter',
                         color: Color(0xFF1F2937),
                         fontSize: 14,
                       ),
                     ),
                   ),
-                  SizedBox(height: 24),
+                  const SizedBox(height: 24),
                   // Group image upload
-                  Text(
+                  const Text(
                     'Group Image (Optional)',
                     style: TextStyle(
                       fontFamily: 'Inter',
@@ -931,7 +931,7 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
                       fontWeight: FontWeight.w600,
                     ),
                   ),
-                  SizedBox(height: 8),
+                  const SizedBox(height: 8),
                   Row(
                     children: [
                       // Image preview/placeholder
@@ -941,15 +941,15 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
                           width: 100,
                           height: 100,
                           decoration: BoxDecoration(
-                            color: Color(0xFFF9FAFB),
+                            color: const Color(0xFFF9FAFB),
                             borderRadius: BorderRadius.circular(12),
                             border: Border.all(
-                              color: Color(0xFFD1D5DB),
+                              color: const Color(0xFFD1D5DB),
                               width: 2,
                             ),
                           ),
                           child: _model.isUploadingImage
-                              ? Center(
+                              ? const Center(
                                   child: CircularProgressIndicator(
                                     color: Color(0xFF3B82F6),
                                     strokeWidth: 2,
@@ -967,8 +967,8 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
                                             Container(
                                           width: 100,
                                           height: 100,
-                                          color: Color(0xFFF9FAFB),
-                                          child: Icon(
+                                          color: const Color(0xFFF9FAFB),
+                                          child: const Icon(
                                             Icons.image,
                                             color: Color(0xFF9CA3AF),
                                             size: 32,
@@ -978,8 +978,8 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
                                             Container(
                                           width: 100,
                                           height: 100,
-                                          color: Color(0xFFF9FAFB),
-                                          child: Icon(
+                                          color: const Color(0xFFF9FAFB),
+                                          child: const Icon(
                                             Icons.image,
                                             color: Color(0xFF9CA3AF),
                                             size: 32,
@@ -987,7 +987,7 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
                                         ),
                                       ),
                                     )
-                                  : Column(
+                                  : const Column(
                                       mainAxisAlignment:
                                           MainAxisAlignment.center,
                                       children: [
@@ -1010,7 +1010,7 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
                                     ),
                         ),
                       ),
-                      SizedBox(width: 16),
+                      const SizedBox(width: 16),
                       // Image controls
                       Expanded(
                         child: Column(
@@ -1023,13 +1023,13 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
                               style: TextStyle(
                                 fontFamily: 'Inter',
                                 color: _model.groupImageUrl != null
-                                    ? Color(0xFF10B981)
-                                    : Color(0xFF6B7280),
+                                    ? const Color(0xFF10B981)
+                                    : const Color(0xFF6B7280),
                                 fontSize: 14,
                                 fontWeight: FontWeight.w500,
                               ),
                             ),
-                            SizedBox(height: 8),
+                            const SizedBox(height: 8),
                             Row(
                               children: [
                                 ElevatedButton.icon(
@@ -1046,7 +1046,7 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
                                     _model.groupImageUrl != null
                                         ? 'Change'
                                         : 'Select',
-                                    style: TextStyle(
+                                    style: const TextStyle(
                                       fontFamily: 'Inter',
                                       fontSize: 12,
                                       fontWeight: FontWeight.w500,
@@ -1054,10 +1054,10 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
                                   ),
                                   style: ElevatedButton.styleFrom(
                                     backgroundColor: _model.isUploadingImage
-                                        ? Color(0xFF9CA3AF)
-                                        : Color(0xFF3B82F6),
+                                        ? const Color(0xFF9CA3AF)
+                                        : const Color(0xFF3B82F6),
                                     foregroundColor: Colors.white,
-                                    padding: EdgeInsets.symmetric(
+                                    padding: const EdgeInsets.symmetric(
                                         horizontal: 12, vertical: 8),
                                     shape: RoundedRectangleBorder(
                                       borderRadius: BorderRadius.circular(6),
@@ -1065,7 +1065,7 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
                                   ),
                                 ),
                                 if (_model.groupImageUrl != null) ...[
-                                  SizedBox(width: 8),
+                                  const SizedBox(width: 8),
                                   ElevatedButton.icon(
                                     onPressed: () {
                                       setState(() {
@@ -1073,8 +1073,8 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
                                         _model.groupImageUrl = null;
                                       });
                                     },
-                                    icon: Icon(Icons.delete, size: 16),
-                                    label: Text(
+                                    icon: const Icon(Icons.delete, size: 16),
+                                    label: const Text(
                                       'Remove',
                                       style: TextStyle(
                                         fontFamily: 'Inter',
@@ -1083,9 +1083,9 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
                                       ),
                                     ),
                                     style: ElevatedButton.styleFrom(
-                                      backgroundColor: Color(0xFFEF4444),
+                                      backgroundColor: const Color(0xFFEF4444),
                                       foregroundColor: Colors.white,
-                                      padding: EdgeInsets.symmetric(
+                                      padding: const EdgeInsets.symmetric(
                                           horizontal: 12, vertical: 8),
                                       shape: RoundedRectangleBorder(
                                         borderRadius: BorderRadius.circular(6),
@@ -1100,20 +1100,20 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
                       ),
                     ],
                   ),
-                  SizedBox(height: 24),
+                  const SizedBox(height: 24),
                   // Selected members header with search
                   Row(
                     children: [
                       Text(
                         'Selected Members (${_model.selectedMembers.length})',
-                        style: TextStyle(
+                        style: const TextStyle(
                           fontFamily: 'Inter',
                           color: Color(0xFF374151),
                           fontSize: 14,
                           fontWeight: FontWeight.w600,
                         ),
                       ),
-                      Spacer(),
+                      const Spacer(),
                       Container(
                         width: 250,
                         height: 36,
@@ -1121,10 +1121,10 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
                           color: Colors.white,
                           borderRadius: BorderRadius.circular(20),
                           border: Border.all(
-                            color: Color(0xFFD9D9D9),
+                            color: const Color(0xFFD9D9D9),
                             width: 1,
                           ),
-                          boxShadow: [
+                          boxShadow: const [
                             BoxShadow(
                               color: Color(0x1A000000),
                               blurRadius: 4,
@@ -1138,13 +1138,13 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
                           onChanged: (_) => setState(() {}),
                           decoration: InputDecoration(
                             hintText: 'Search by name or email...',
-                            hintStyle: TextStyle(
+                            hintStyle: const TextStyle(
                               fontFamily: 'Inter',
                               color: Color(0xFF808080),
                               fontSize: 14,
                               fontWeight: FontWeight.w400,
                             ),
-                            prefixIcon: Icon(
+                            prefixIcon: const Icon(
                               Icons.search,
                               color: Color(0xFF4285F4),
                               size: 20,
@@ -1159,7 +1159,7 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
                                             ?.clear();
                                       });
                                     },
-                                    child: Icon(
+                                    child: const Icon(
                                       Icons.clear,
                                       color: Color(0xFF9CA3AF),
                                       size: 20,
@@ -1167,12 +1167,12 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
                                   )
                                 : null,
                             border: InputBorder.none,
-                            contentPadding: EdgeInsets.symmetric(
+                            contentPadding: const EdgeInsets.symmetric(
                               horizontal: 16,
                               vertical: 10,
                             ),
                           ),
-                          style: TextStyle(
+                          style: const TextStyle(
                             fontFamily: 'Inter',
                             color: Color(0xFF1F2937),
                             fontSize: 14,
@@ -1181,7 +1181,7 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
                       ),
                     ],
                   ),
-                  SizedBox(height: 8),
+                  const SizedBox(height: 8),
                   // Connections list for selection
                   Container(
                     height: 350,
@@ -1189,7 +1189,7 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
                       color: Colors.white,
                       borderRadius: BorderRadius.circular(12),
                       border: Border.all(
-                        color: Color(0xFFE5E7EB),
+                        color: const Color(0xFFE5E7EB),
                         width: 1,
                       ),
                     ),
@@ -1197,7 +1197,7 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
                       stream: UsersRecord.getDocument(currentUserReference!),
                       builder: (context, currentUserSnapshot) {
                         if (!currentUserSnapshot.hasData) {
-                          return Center(
+                          return const Center(
                             child: CircularProgressIndicator(
                               color: Color(0xFF3B82F6),
                             ),
@@ -1208,7 +1208,7 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
                         final connections = currentUser.friends;
 
                         if (connections.isEmpty) {
-                          return Center(
+                          return const Center(
                             child: Column(
                               mainAxisSize: MainAxisSize.min,
                               children: [
@@ -1247,7 +1247,7 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
                             '';
 
                         return ListView.builder(
-                          padding: EdgeInsets.all(12),
+                          padding: const EdgeInsets.all(12),
                           itemCount: connections.length,
                           itemBuilder: (context, index) {
                             final connectionRef = connections[index];
@@ -1256,7 +1256,7 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
                               stream: UsersRecord.getDocument(connectionRef),
                               builder: (context, userSnapshot) {
                                 if (!userSnapshot.hasData) {
-                                  return SizedBox.shrink();
+                                  return const SizedBox.shrink();
                                 }
 
                                 final user = userSnapshot.data!;
@@ -1266,7 +1266,7 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
                                     .contains(user.reference);
 
                                 if (isCurrentUser) {
-                                  return SizedBox.shrink();
+                                  return const SizedBox.shrink();
                                 }
 
                                 // Check if search query matches
@@ -1276,7 +1276,7 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
                                   final email = user.email.toLowerCase();
                                   if (!displayName.contains(searchQuery) &&
                                       !email.contains(searchQuery)) {
-                                    return SizedBox.shrink();
+                                    return const SizedBox.shrink();
                                   }
                                 }
 
@@ -1293,17 +1293,17 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
                                     });
                                   },
                                   child: Container(
-                                    margin: EdgeInsets.only(bottom: 8),
-                                    padding: EdgeInsets.all(12),
+                                    margin: const EdgeInsets.only(bottom: 8),
+                                    padding: const EdgeInsets.all(12),
                                     decoration: BoxDecoration(
                                       color: isSelected
-                                          ? Color(0xFFEBF5FF)
-                                          : Color(0xFFF9FAFB),
+                                          ? const Color(0xFFEBF5FF)
+                                          : const Color(0xFFF9FAFB),
                                       borderRadius: BorderRadius.circular(8),
                                       border: Border.all(
                                         color: isSelected
-                                            ? Color(0xFF3B82F6)
-                                            : Color(0xFFE5E7EB),
+                                            ? const Color(0xFF3B82F6)
+                                            : const Color(0xFFE5E7EB),
                                         width: isSelected ? 2 : 1,
                                       ),
                                     ),
@@ -1315,7 +1315,7 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
                                             Container(
                                               width: 40,
                                               height: 40,
-                                              decoration: BoxDecoration(
+                                              decoration: const BoxDecoration(
                                                 color: Color(0xFF3B82F6),
                                                 shape: BoxShape.circle,
                                               ),
@@ -1331,11 +1331,11 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
                                                       Container(
                                                     width: 40,
                                                     height: 40,
-                                                    decoration: BoxDecoration(
+                                                    decoration: const BoxDecoration(
                                                       color: Colors.white,
                                                       shape: BoxShape.circle,
                                                     ),
-                                                    child: Icon(
+                                                    child: const Icon(
                                                       Icons.person,
                                                       color: Color(0xFF6B7280),
                                                       size: 20,
@@ -1346,11 +1346,11 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
                                                           Container(
                                                     width: 40,
                                                     height: 40,
-                                                    decoration: BoxDecoration(
+                                                    decoration: const BoxDecoration(
                                                       color: Colors.white,
                                                       shape: BoxShape.circle,
                                                     ),
-                                                    child: Icon(
+                                                    child: const Icon(
                                                       Icons.person,
                                                       color: Color(0xFF6B7280),
                                                       size: 20,
@@ -1368,7 +1368,7 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
                                                   width: 12,
                                                   height: 12,
                                                   decoration: BoxDecoration(
-                                                    color: Color(
+                                                    color: const Color(
                                                         0xFF10B981), // Green color
                                                     shape: BoxShape.circle,
                                                     border: Border.all(
@@ -1380,7 +1380,7 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
                                               ),
                                           ],
                                         ),
-                                        SizedBox(width: 12),
+                                        const SizedBox(width: 12),
                                         Expanded(
                                           child: Column(
                                             crossAxisAlignment:
@@ -1388,7 +1388,7 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
                                             children: [
                                               Text(
                                                 user.displayName,
-                                                style: TextStyle(
+                                                style: const TextStyle(
                                                   fontFamily: 'Inter',
                                                   color: Color(0xFF1F2937),
                                                   fontSize: 14,
@@ -1397,10 +1397,10 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
                                                 maxLines: 1,
                                                 overflow: TextOverflow.ellipsis,
                                               ),
-                                              SizedBox(height: 2),
+                                              const SizedBox(height: 2),
                                               Text(
                                                 user.email,
-                                                style: TextStyle(
+                                                style: const TextStyle(
                                                   fontFamily: 'Inter',
                                                   color: Color(0xFF6B7280),
                                                   fontSize: 12,
@@ -1413,12 +1413,12 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
                                         ),
                                         if (isSelected)
                                           Container(
-                                            padding: EdgeInsets.all(4),
-                                            decoration: BoxDecoration(
+                                            padding: const EdgeInsets.all(4),
+                                            decoration: const BoxDecoration(
                                               color: Color(0xFF3B82F6),
                                               shape: BoxShape.circle,
                                             ),
-                                            child: Icon(
+                                            child: const Icon(
                                               Icons.check,
                                               color: Colors.white,
                                               size: 16,
@@ -1435,7 +1435,7 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
                       },
                     ),
                   ),
-                  SizedBox(height: 32),
+                  const SizedBox(height: 32),
                   // Create group button
                   SizedBox(
                     width: double.infinity,
@@ -1445,14 +1445,14 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
                           : null,
                       style: ElevatedButton.styleFrom(
                         backgroundColor: _model.selectedMembers.isNotEmpty
-                            ? Color(0xFF3B82F6)
-                            : Color(0xFF9CA3AF),
-                        padding: EdgeInsets.symmetric(vertical: 16),
+                            ? const Color(0xFF3B82F6)
+                            : const Color(0xFF9CA3AF),
+                        padding: const EdgeInsets.symmetric(vertical: 16),
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(8),
                         ),
                       ),
-                      child: Text(
+                      child: const Text(
                         'Create Group',
                         style: TextStyle(
                           fontFamily: 'Inter',
@@ -1492,7 +1492,7 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('Error starting chat: $e'),
-          backgroundColor: Color(0xFFEF4444),
+          backgroundColor: const Color(0xFFEF4444),
         ),
       );
     }
@@ -1521,7 +1521,7 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('Error picking image: $e'),
-          backgroundColor: Color(0xFFEF4444),
+          backgroundColor: const Color(0xFFEF4444),
         ),
       );
     }
@@ -1558,7 +1558,7 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
 
       // Show success message
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
+        const SnackBar(
           content: Text('Image uploaded successfully!'),
           backgroundColor: Color(0xFF10B981),
         ),
@@ -1578,7 +1578,7 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(errorMessage),
-          backgroundColor: Color(0xFFEF4444),
+          backgroundColor: const Color(0xFFEF4444),
         ),
       );
     }
@@ -1588,7 +1588,7 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
     try {
       if (_model.selectedMembers.isEmpty) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
+          const SnackBar(
             content: Text('Please select at least one member'),
             backgroundColor: Color(0xFFEF4444),
           ),
@@ -1697,7 +1697,7 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('Group "$groupName" created successfully!'),
-          backgroundColor: Color(0xFF10B981),
+          backgroundColor: const Color(0xFF10B981),
         ),
       );
     } catch (e) {
@@ -1705,7 +1705,7 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('Error creating group: $e'),
-          backgroundColor: Color(0xFFEF4444),
+          backgroundColor: const Color(0xFFEF4444),
         ),
       );
     }
@@ -1715,7 +1715,7 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
     return Container(
       width: double.infinity,
       height: double.infinity,
-      decoration: BoxDecoration(
+      decoration: const BoxDecoration(
         gradient: LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
@@ -1731,8 +1731,8 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
           // Header
           Container(
             width: double.infinity,
-            padding: EdgeInsetsDirectional.fromSTEB(32, 32, 32, 24),
-            decoration: BoxDecoration(
+            padding: const EdgeInsetsDirectional.fromSTEB(32, 32, 32, 24),
+            decoration: const BoxDecoration(
               gradient: LinearGradient(
                 begin: Alignment.topLeft,
                 end: Alignment.topRight,
@@ -1762,37 +1762,37 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
                         });
                       },
                       child: Container(
-                        padding: EdgeInsets.all(8),
+                        padding: const EdgeInsets.all(8),
                         decoration: BoxDecoration(
                           color: Colors.white,
                           borderRadius: BorderRadius.circular(8),
                           border: Border.all(
-                            color: Color(0xFFE5E7EB),
+                            color: const Color(0xFFE5E7EB),
                             width: 1,
                           ),
                         ),
-                        child: Icon(
+                        child: const Icon(
                           Icons.close,
                           color: Color(0xFF6B7280),
                           size: 20,
                         ),
                       ),
                     ),
-                    SizedBox(width: 12),
+                    const SizedBox(width: 12),
                     Container(
-                      padding: EdgeInsets.all(6),
+                      padding: const EdgeInsets.all(6),
                       decoration: BoxDecoration(
-                        color: Color(0xFF3B82F6).withOpacity(0.1),
+                        color: const Color(0xFF3B82F6).withOpacity(0.1),
                         borderRadius: BorderRadius.circular(10),
                       ),
-                      child: Icon(
+                      child: const Icon(
                         Icons.chat_bubble_outline,
                         color: Color(0xFF3B82F6),
                         size: 20,
                       ),
                     ),
-                    SizedBox(width: 12),
-                    Expanded(
+                    const SizedBox(width: 12),
+                    const Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
@@ -1827,8 +1827,8 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
           // Search bar
           Container(
             width: double.infinity,
-            padding: EdgeInsetsDirectional.fromSTEB(32, 20, 32, 16),
-            decoration: BoxDecoration(
+            padding: const EdgeInsetsDirectional.fromSTEB(32, 20, 32, 16),
+            decoration: const BoxDecoration(
               color: Colors.transparent,
             ),
             child: Container(
@@ -1837,14 +1837,14 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
                 color: Colors.white,
                 borderRadius: BorderRadius.circular(12),
                 border: Border.all(
-                  color: Color(0xFFE2E8F0),
+                  color: const Color(0xFFE2E8F0),
                   width: 1.5,
                 ),
                 boxShadow: [
                   BoxShadow(
-                    color: Color(0xFF3B82F6).withOpacity(0.08),
+                    color: const Color(0xFF3B82F6).withOpacity(0.08),
                     blurRadius: 12,
-                    offset: Offset(0, 4),
+                    offset: const Offset(0, 4),
                   ),
                 ],
               ),
@@ -1853,7 +1853,7 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
                 onChanged: (value) {
                   setState(() {});
                 },
-                decoration: InputDecoration(
+                decoration: const InputDecoration(
                   hintText: 'Search by name or email',
                   hintStyle: TextStyle(
                     fontFamily: 'Inter',
@@ -1873,7 +1873,7 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
                     ),
                   ),
                 ),
-                style: TextStyle(
+                style: const TextStyle(
                   fontFamily: 'Inter',
                   color: Color(0xFF1A1F36),
                   fontSize: 14,
@@ -1885,12 +1885,12 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
           // Invite friends buttons
           Container(
             width: double.infinity,
-            padding: EdgeInsetsDirectional.fromSTEB(32, 12, 32, 12),
+            padding: const EdgeInsetsDirectional.fromSTEB(32, 12, 32, 12),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                InviteFriendsButtonWidget(),
-                SizedBox(width: 16),
+                const InviteFriendsButtonWidget(),
+                const SizedBox(width: 16),
                 _buildEmailInviteButton(),
               ],
             ),
@@ -1899,24 +1899,24 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
           Expanded(
             child: Container(
               width: double.infinity,
-              padding: EdgeInsetsDirectional.fromSTEB(32, 8, 32, 32),
+              padding: const EdgeInsetsDirectional.fromSTEB(32, 8, 32, 32),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Padding(
-                    padding: EdgeInsetsDirectional.only(start: 4, bottom: 12),
+                    padding: const EdgeInsetsDirectional.only(start: 4, bottom: 12),
                     child: Row(
                       children: [
                         Container(
                           width: 3,
                           height: 14,
                           decoration: BoxDecoration(
-                            color: Color(0xFF3B82F6),
+                            color: const Color(0xFF3B82F6),
                             borderRadius: BorderRadius.circular(2),
                           ),
                         ),
-                        SizedBox(width: 8),
-                        Text(
+                        const SizedBox(width: 8),
+                        const Text(
                           'SUGGESTED',
                           style: TextStyle(
                             fontFamily: 'Inter',
@@ -1934,7 +1934,7 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
                       stream: UsersRecord.getDocument(currentUserReference!),
                       builder: (context, currentUserSnapshot) {
                         if (!currentUserSnapshot.hasData) {
-                          return Center(
+                          return const Center(
                             child: CircularProgressIndicator(
                               color: Color.fromARGB(255, 16, 184, 239),
                             ),
@@ -1953,17 +1953,17 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
                                   width: 80,
                                   height: 80,
                                   decoration: BoxDecoration(
-                                    color: Color(0xFF3B82F6).withOpacity(0.1),
+                                    color: const Color(0xFF3B82F6).withOpacity(0.1),
                                     shape: BoxShape.circle,
                                   ),
-                                  child: Icon(
+                                  child: const Icon(
                                     Icons.people_outline_rounded,
                                     color: Color(0xFF3B82F6),
                                     size: 40,
                                   ),
                                 ),
-                                SizedBox(height: 24),
-                                Text(
+                                const SizedBox(height: 24),
+                                const Text(
                                   'No connections',
                                   style: TextStyle(
                                     fontFamily: 'Inter',
@@ -1973,8 +1973,8 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
                                     letterSpacing: -0.3,
                                   ),
                                 ),
-                                SizedBox(height: 8),
-                                Text(
+                                const SizedBox(height: 8),
+                                const Text(
                                   'Add connections to start chatting',
                                   style: TextStyle(
                                     fontFamily: 'Inter',
@@ -2002,7 +2002,7 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
                               stream: UsersRecord.getDocument(connectionRef),
                               builder: (context, userSnapshot) {
                                 if (!userSnapshot.hasData) {
-                                  return SizedBox.shrink();
+                                  return const SizedBox.shrink();
                                 }
 
                                 final user = userSnapshot.data!;
@@ -2010,7 +2010,7 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
                                     user.reference == currentUserReference;
 
                                 if (isCurrentUser) {
-                                  return SizedBox.shrink();
+                                  return const SizedBox.shrink();
                                 }
 
                                 // Filter by search query
@@ -2020,20 +2020,20 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
                                   final email = user.email.toLowerCase();
                                   if (!displayName.contains(searchQuery) &&
                                       !email.contains(searchQuery)) {
-                                    return SizedBox.shrink();
+                                    return const SizedBox.shrink();
                                   }
                                 }
 
                                 return Container(
-                                  margin: EdgeInsets.only(bottom: 8),
+                                  margin: const EdgeInsets.only(bottom: 8),
                                   decoration: BoxDecoration(
                                     color: Colors.white,
                                     borderRadius: BorderRadius.circular(8),
                                     border: Border.all(
-                                      color: Color(0xFFE2E8F0),
+                                      color: const Color(0xFFE2E8F0),
                                       width: 1,
                                     ),
-                                    boxShadow: [
+                                    boxShadow: const [
                                       BoxShadow(
                                         color: Color(0x0A000000),
                                         blurRadius: 8,
@@ -2052,7 +2052,7 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
                                       },
                                       borderRadius: BorderRadius.circular(8),
                                       child: Container(
-                                        padding: EdgeInsetsDirectional.fromSTEB(
+                                        padding: const EdgeInsetsDirectional.fromSTEB(
                                             16, 12, 16, 12),
                                         child: Row(
                                           children: [
@@ -2062,7 +2062,7 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
                                               height: 48,
                                               decoration: BoxDecoration(
                                                 shape: BoxShape.circle,
-                                                gradient: LinearGradient(
+                                                gradient: const LinearGradient(
                                                   colors: [
                                                     Color(0xFF3B82F6),
                                                     Color(0xFF60A5FA),
@@ -2070,16 +2070,16 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
                                                 ),
                                                 boxShadow: [
                                                   BoxShadow(
-                                                    color: Color(0xFF3B82F6)
+                                                    color: const Color(0xFF3B82F6)
                                                         .withOpacity(0.3),
                                                     blurRadius: 8,
-                                                    offset: Offset(0, 2),
+                                                    offset: const Offset(0, 2),
                                                   ),
                                                 ],
                                               ),
-                                              padding: EdgeInsets.all(2),
+                                              padding: const EdgeInsets.all(2),
                                               child: Container(
-                                                decoration: BoxDecoration(
+                                                decoration: const BoxDecoration(
                                                   shape: BoxShape.circle,
                                                   color: Colors.white,
                                                 ),
@@ -2096,12 +2096,12 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
                                                             Container(
                                                       width: 44,
                                                       height: 44,
-                                                      decoration: BoxDecoration(
+                                                      decoration: const BoxDecoration(
                                                         color:
                                                             Color(0xFFF1F5F9),
                                                         shape: BoxShape.circle,
                                                       ),
-                                                      child: Icon(
+                                                      child: const Icon(
                                                         Icons.person_rounded,
                                                         color:
                                                             Color(0xFF64748B),
@@ -2113,12 +2113,12 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
                                                             Container(
                                                       width: 44,
                                                       height: 44,
-                                                      decoration: BoxDecoration(
+                                                      decoration: const BoxDecoration(
                                                         color:
                                                             Color(0xFFF1F5F9),
                                                         shape: BoxShape.circle,
                                                       ),
-                                                      child: Icon(
+                                                      child: const Icon(
                                                         Icons.person_rounded,
                                                         color:
                                                             Color(0xFF64748B),
@@ -2129,7 +2129,7 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
                                                 ),
                                               ),
                                             ),
-                                            SizedBox(width: 12),
+                                            const SizedBox(width: 12),
                                             // User info
                                             Expanded(
                                               child: Column(
@@ -2138,7 +2138,7 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
                                                 children: [
                                                   Text(
                                                     user.displayName,
-                                                    style: TextStyle(
+                                                    style: const TextStyle(
                                                       fontFamily: 'Inter',
                                                       color: Color(0xFF111827),
                                                       fontSize: 14,
@@ -2146,10 +2146,10 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
                                                           FontWeight.w500,
                                                     ),
                                                   ),
-                                                  SizedBox(height: 2),
+                                                  const SizedBox(height: 2),
                                                   Text(
                                                     user.email,
-                                                    style: TextStyle(
+                                                    style: const TextStyle(
                                                       fontFamily: 'Inter',
                                                       color: Color(0xFF6B7280),
                                                       fontSize: 12,
@@ -2165,12 +2165,12 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
                                               width: 36,
                                               height: 36,
                                               decoration: BoxDecoration(
-                                                color: Color(0xFF3B82F6)
+                                                color: const Color(0xFF3B82F6)
                                                     .withOpacity(0.1),
                                                 borderRadius:
                                                     BorderRadius.circular(8),
                                               ),
-                                              child: Icon(
+                                              child: const Icon(
                                                 Icons.arrow_forward_rounded,
                                                 color: Color(0xFF3B82F6),
                                                 size: 18,
@@ -2210,7 +2210,7 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
       child: Container(
         width: double.infinity,
         height: double.infinity,
-        decoration: BoxDecoration(
+        decoration: const BoxDecoration(
           color: Color.fromRGBO(250, 252, 255, 1), // Match left sidebar color
         ),
         child: Stack(
@@ -2355,7 +2355,7 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
                             bottom: 0,
                             child: Container(
                               width: MediaQuery.of(context).size.width * 0.4,
-                              constraints: BoxConstraints(
+                              constraints: const BoxConstraints(
                                 minWidth: 300,
                                 maxWidth: 500,
                               ),
@@ -2366,7 +2366,7 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
                                   BoxShadow(
                                     color: Colors.black.withOpacity(0.2),
                                     blurRadius: 10,
-                                    offset: Offset(-2, 0),
+                                    offset: const Offset(-2, 0),
                                   ),
                                 ],
                               ),
@@ -2381,7 +2381,7 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
                             ).animate().slideX(
                                   begin: 1.0,
                                   end: 0.0,
-                                  duration: Duration(milliseconds: 300),
+                                  duration: const Duration(milliseconds: 300),
                                   curve: Curves.easeOut,
                                 ),
                           ),
@@ -2393,7 +2393,7 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
               ),
             ],
           )
-        : Center(
+        : const Center(
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
@@ -2435,7 +2435,7 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
             BoxShadow(
               color: Colors.black.withOpacity(0.2),
               blurRadius: 10,
-              offset: Offset(-2, 0),
+              offset: const Offset(-2, 0),
             ),
           ],
         ),
@@ -2443,7 +2443,7 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
       ).animate().slideX(
             begin: 1.0,
             end: 0.0,
-            duration: Duration(milliseconds: 300),
+            duration: const Duration(milliseconds: 300),
             curve: Curves.easeOut,
           ),
     );
@@ -2454,8 +2454,8 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
 
     return Container(
       width: double.infinity,
-      padding: EdgeInsetsDirectional.fromSTEB(20, 16, 20, 16),
-      decoration: BoxDecoration(
+      padding: const EdgeInsetsDirectional.fromSTEB(20, 16, 20, 16),
+      decoration: const BoxDecoration(
         color: Color.fromRGBO(250, 252, 255, 1), // Match left sidebar color
         border: Border(
           bottom: BorderSide(
@@ -2468,7 +2468,7 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
         children: [
           // User avatar
           _buildHeaderAvatar(chat),
-          SizedBox(width: 12),
+          const SizedBox(width: 12),
           // User info
           Expanded(
             child: _buildHeaderName(chat),
@@ -2479,7 +2479,7 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
             child: InkWell(
               onTap: () async {
                 // Open Google Meet
-                final meetUrl = 'https://meet.google.com/new';
+                const meetUrl = 'https://meet.google.com/new';
                 final uri = Uri.parse(meetUrl);
                 if (await canLaunchUrl(uri)) {
                   await launchUrl(uri, mode: LaunchMode.externalApplication);
@@ -2487,7 +2487,7 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
               },
               borderRadius: BorderRadius.circular(8),
               child: Padding(
-                padding: EdgeInsetsDirectional.fromSTEB(0, 0, 12, 0),
+                padding: const EdgeInsetsDirectional.fromSTEB(0, 0, 12, 0),
                 child: Image.asset(
                   'assets/images/gmeet.png',
                   width: 28,
@@ -2518,12 +2518,12 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
               },
               borderRadius: BorderRadius.circular(8),
               child: Padding(
-                padding: EdgeInsetsDirectional.fromSTEB(0, 0, 12, 0),
+                padding: const EdgeInsetsDirectional.fromSTEB(0, 0, 12, 0),
                 child: Icon(
                   Icons.search_rounded,
                   color: _model.showChatHistoryPanel
                       ? FlutterFlowTheme.of(context).primary
-                      : Color(0xFF6B7280),
+                      : const Color(0xFF6B7280),
                   size: 24,
                 ),
               ),
@@ -2547,7 +2547,7 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
                   itemBuilder: (BuildContext context) {
                     // Group chat options
                     return <PopupMenuEntry<String>>[
-                      PopupMenuItem<String>(
+                      const PopupMenuItem<String>(
                         value: 'add_members',
                         child: Row(
                           children: [
@@ -2569,7 +2569,7 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
                           ],
                         ),
                       ),
-                      PopupMenuItem<String>(
+                      const PopupMenuItem<String>(
                         value: 'media',
                         child: Row(
                           children: [
@@ -2591,7 +2591,7 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
                           ],
                         ),
                       ),
-                      PopupMenuItem<String>(
+                      const PopupMenuItem<String>(
                         value: 'tasks',
                         child: Row(
                           children: [
@@ -2613,7 +2613,7 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
                           ],
                         ),
                       ),
-                      PopupMenuItem<String>(
+                      const PopupMenuItem<String>(
                         value: 'group_info',
                         child: Row(
                           children: [
@@ -2637,7 +2637,7 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
                       ),
                     ];
                   },
-                  icon: Icon(
+                  icon: const Icon(
                     Icons.more_vert,
                     color: Color(0xFF9CA3AF),
                     size: 20,
@@ -2667,7 +2667,7 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
                     );
 
                     return <PopupMenuEntry<String>>[
-                      PopupMenuItem<String>(
+                      const PopupMenuItem<String>(
                         value: 'profile',
                         child: Row(
                           children: [
@@ -2697,15 +2697,15 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
                             children: [
                               Icon(
                                 isBlockedNow ? Icons.check_circle : Icons.block,
-                                color: isBlockedNow ? Color(0xFF10B981) : Color(0xFFDC2626),
+                                color: isBlockedNow ? const Color(0xFF10B981) : const Color(0xFFDC2626),
                                 size: 18,
                               ),
-                              SizedBox(width: 12),
+                              const SizedBox(width: 12),
                               Text(
                                 isBlockedNow ? 'Unblock User' : 'Block User',
                                 style: TextStyle(
                                   fontFamily: 'Inter',
-                                  color: isBlockedNow ? Color(0xFF10B981) : Color(0xFFDC2626),
+                                  color: isBlockedNow ? const Color(0xFF10B981) : const Color(0xFFDC2626),
                                   fontSize: 14,
                                   fontWeight: FontWeight.w500,
                                 ),
@@ -2716,7 +2716,7 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
                       ),
                     ];
                   },
-                  icon: Icon(
+                  icon: const Icon(
                     Icons.more_vert,
                     color: Color(0xFF9CA3AF),
                     size: 20,
@@ -2741,7 +2741,7 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
       ),
       builder: (context, snapshot) {
         if (!snapshot.hasData) {
-          return SizedBox.shrink();
+          return const SizedBox.shrink();
         }
 
         final allActionItems = snapshot.data ?? [];
@@ -2772,12 +2772,12 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
             .length;
 
         if (pendingItems.isEmpty) {
-          return SizedBox.shrink();
+          return const SizedBox.shrink();
         }
 
         return Container(
-          padding: EdgeInsetsDirectional.fromSTEB(20, 12, 20, 12),
-          decoration: BoxDecoration(
+          padding: const EdgeInsetsDirectional.fromSTEB(20, 12, 20, 12),
+          decoration: const BoxDecoration(
             color: Colors.white,
             border: Border(
               bottom: BorderSide(
@@ -2795,7 +2795,7 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
                   Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Text(
+                      const Text(
                         'Action Items',
                         style: TextStyle(
                           fontFamily: 'Inter',
@@ -2804,7 +2804,7 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
                           fontWeight: FontWeight.w600,
                         ),
                       ),
-                      SizedBox(width: 8),
+                      const SizedBox(width: 8),
                       InkWell(
                         onTap: () {
                           setState(() {
@@ -2817,14 +2817,14 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
                               ? Icons.expand_less
                               : Icons.expand_more,
                           size: 20,
-                          color: Color(0xFF6B7280),
+                          color: const Color(0xFF6B7280),
                         ),
                       ),
                     ],
                   ),
                   Text(
                     '${pendingItems.length} pending',
-                    style: TextStyle(
+                    style: const TextStyle(
                       fontFamily: 'Inter',
                       color: Color(0xFF6B7280),
                       fontSize: 13,
@@ -2834,14 +2834,14 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
                 ],
               ),
               if (_model.isActionItemsExpanded) ...[
-                SizedBox(height: 12),
+                const SizedBox(height: 12),
                 Wrap(
                   spacing: 10,
                   runSpacing: 8,
                   children: [
                     if (highPriority > 0)
                       Container(
-                        padding: EdgeInsetsDirectional.fromSTEB(10, 6, 10, 6),
+                        padding: const EdgeInsetsDirectional.fromSTEB(10, 6, 10, 6),
                         decoration: BoxDecoration(
                           color: const Color(0xFFFEE2E2),
                           borderRadius: BorderRadius.circular(6),
@@ -2849,19 +2849,19 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
                         child: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            Icon(
+                            const Icon(
                               Icons.flag,
                               size: 13,
-                              color: const Color(0xFFDC2626),
+                              color: Color(0xFFDC2626),
                             ),
-                            SizedBox(width: 5),
+                            const SizedBox(width: 5),
                             Text(
                               '$highPriority High',
-                              style: TextStyle(
+                              style: const TextStyle(
                                 fontFamily: 'Inter',
                                 fontSize: 12,
                                 fontWeight: FontWeight.w500,
-                                color: const Color(0xFFDC2626),
+                                color: Color(0xFFDC2626),
                               ),
                             ),
                           ],
@@ -2869,7 +2869,7 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
                       ),
                     if (moderatePriority > 0)
                       Container(
-                        padding: EdgeInsetsDirectional.fromSTEB(10, 6, 10, 6),
+                        padding: const EdgeInsetsDirectional.fromSTEB(10, 6, 10, 6),
                         decoration: BoxDecoration(
                           color: const Color(0xFFFEF3C7),
                           borderRadius: BorderRadius.circular(6),
@@ -2877,19 +2877,19 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
                         child: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            Icon(
+                            const Icon(
                               Icons.flag,
                               size: 13,
-                              color: const Color(0xFFD97706),
+                              color: Color(0xFFD97706),
                             ),
-                            SizedBox(width: 5),
+                            const SizedBox(width: 5),
                             Text(
                               '$moderatePriority Moderate',
-                              style: TextStyle(
+                              style: const TextStyle(
                                 fontFamily: 'Inter',
                                 fontSize: 12,
                                 fontWeight: FontWeight.w500,
-                                color: const Color(0xFFD97706),
+                                color: Color(0xFFD97706),
                               ),
                             ),
                           ],
@@ -2897,7 +2897,7 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
                       ),
                     if (lowPriority > 0)
                       Container(
-                        padding: EdgeInsetsDirectional.fromSTEB(10, 6, 10, 6),
+                        padding: const EdgeInsetsDirectional.fromSTEB(10, 6, 10, 6),
                         decoration: BoxDecoration(
                           color: const Color(0xFFE0E7FF),
                           borderRadius: BorderRadius.circular(6),
@@ -2905,19 +2905,19 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
                         child: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            Icon(
+                            const Icon(
                               Icons.flag,
                               size: 13,
-                              color: const Color(0xFF4F46E5),
+                              color: Color(0xFF4F46E5),
                             ),
-                            SizedBox(width: 5),
+                            const SizedBox(width: 5),
                             Text(
                               '$lowPriority Low',
-                              style: TextStyle(
+                              style: const TextStyle(
                                 fontFamily: 'Inter',
                                 fontSize: 12,
                                 fontWeight: FontWeight.w500,
-                                color: const Color(0xFF4F46E5),
+                                color: Color(0xFF4F46E5),
                               ),
                             ),
                           ],
@@ -2939,7 +2939,7 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
       return Container(
         width: 40,
         height: 40,
-        decoration: BoxDecoration(
+        decoration: const BoxDecoration(
           color: Colors.white,
           shape: BoxShape.circle,
         ),
@@ -2958,11 +2958,11 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
             placeholder: (context, url) => Container(
               width: 40,
               height: 40,
-              decoration: BoxDecoration(
+              decoration: const BoxDecoration(
                 color: Colors.white,
                 shape: BoxShape.circle,
               ),
-              child: Icon(
+              child: const Icon(
                 Icons.group,
                 color: Color(0xFF6B7280),
                 size: 18,
@@ -2971,11 +2971,11 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
             errorWidget: (context, url, error) => Container(
               width: 40,
               height: 40,
-              decoration: BoxDecoration(
+              decoration: const BoxDecoration(
                 color: Colors.white,
                 shape: BoxShape.circle,
               ),
-              child: Icon(
+              child: const Icon(
                 Icons.group,
                 color: Color(0xFF6B7280),
                 size: 18,
@@ -3028,7 +3028,7 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
                 Container(
                   width: 40,
                   height: 40,
-                  decoration: BoxDecoration(
+                  decoration: const BoxDecoration(
                     color: Color(0xFF3B82F6),
                     shape: BoxShape.circle,
                   ),
@@ -3047,11 +3047,11 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
                       placeholder: (context, url) => Container(
                         width: 40,
                         height: 40,
-                        decoration: BoxDecoration(
+                        decoration: const BoxDecoration(
                           color: Colors.white,
                           shape: BoxShape.circle,
                         ),
-                        child: Icon(
+                        child: const Icon(
                           Icons.person,
                           color: Color(0xFF6B7280),
                           size: 18,
@@ -3060,11 +3060,11 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
                       errorWidget: (context, url, error) => Container(
                         width: 40,
                         height: 40,
-                        decoration: BoxDecoration(
+                        decoration: const BoxDecoration(
                           color: Colors.white,
                           shape: BoxShape.circle,
                         ),
-                        child: Icon(
+                        child: const Icon(
                           Icons.person,
                           color: Color(0xFF6B7280),
                           size: 18,
@@ -3083,7 +3083,7 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
                       width: 14,
                       height: 14,
                       decoration: BoxDecoration(
-                        color: Color(0xFF10B981), // Green color
+                        color: const Color(0xFF10B981), // Green color
                         shape: BoxShape.circle,
                         border: Border.all(
                           color: Colors.white,
@@ -3091,7 +3091,7 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
                         ),
                         boxShadow: [
                           BoxShadow(
-                            color: Color(0xFF10B981).withOpacity(0.3),
+                            color: const Color(0xFF10B981).withOpacity(0.3),
                             blurRadius: 4,
                             spreadRadius: 1,
                           ),
@@ -3111,7 +3111,7 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
     if (chat.isGroup) {
       return Text(
         chat.title.isNotEmpty ? chat.title : 'Group Chat',
-        style: TextStyle(
+        style: const TextStyle(
           fontFamily: 'Inter',
           color: Color(0xFF1F2937),
           fontSize: 16,
@@ -3146,7 +3146,7 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
 
           return Text(
             displayName,
-            style: TextStyle(
+            style: const TextStyle(
               fontFamily: 'Inter',
               color: Color(0xFF1F2937),
               fontSize: 16,
@@ -3177,7 +3177,7 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
+          const SnackBar(
             content: Row(
               children: [
                 Icon(Icons.check_circle, color: Colors.white, size: 20),
@@ -3220,12 +3220,12 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
           SnackBar(
             content: Row(
               children: [
-                Icon(Icons.error_outline, color: Colors.white, size: 20),
-                SizedBox(width: 12),
+                const Icon(Icons.error_outline, color: Colors.white, size: 20),
+                const SizedBox(width: 12),
                 Expanded(
                   child: Text(
                     errorMessage,
-                    style: TextStyle(
+                    style: const TextStyle(
                       fontFamily: 'Inter',
                       color: Colors.white,
                       fontSize: 14,
@@ -3235,8 +3235,8 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
                 ),
               ],
             ),
-            backgroundColor: Color(0xFFEF4444),
-            duration: Duration(seconds: 4),
+            backgroundColor: const Color(0xFFEF4444),
+            duration: const Duration(seconds: 4),
           ),
         );
       }
@@ -3253,7 +3253,7 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
     if (chat.isGroup) {
       // For group chats, show group info instead
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
+        const SnackBar(
           content: Text('Group chat - no user profile to view'),
           backgroundColor: Color(0xFF6B7280),
         ),
@@ -3278,7 +3278,7 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
       }
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
+        const SnackBar(
           content: Text('Error loading user profile'),
           backgroundColor: Color(0xFFEF4444),
         ),
@@ -3289,7 +3289,7 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
   void _toggleBlockUser(ChatsRecord chat) async {
     if (chat.isGroup) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
+        const SnackBar(
           content: Text('Cannot block group chats'),
           backgroundColor: Color(0xFF6B7280),
         ),
@@ -3313,23 +3313,23 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
           context: context,
           builder: (BuildContext context) {
             return AlertDialog(
-              backgroundColor: Color(0xFF2D3142),
-              title: Text(
+              backgroundColor: const Color(0xFF2D3142),
+              title: const Text(
                 'Unblock User',
                 style: TextStyle(fontFamily: 'Inter', color: Colors.white, fontSize: 18, fontWeight: FontWeight.w600),
               ),
               content: Text(
                 'Are you sure you want to unblock ${user.displayName}? You will be able to see their messages again.',
-                style: TextStyle(fontFamily: 'Inter', color: Color(0xFF9CA3AF), fontSize: 14),
+                style: const TextStyle(fontFamily: 'Inter', color: Color(0xFF9CA3AF), fontSize: 14),
               ),
               actions: [
                 TextButton(
                   onPressed: () => Navigator.of(context).pop(false),
-                  child: Text('Cancel', style: TextStyle(fontFamily: 'Inter', color: Color(0xFF9CA3AF))),
+                  child: const Text('Cancel', style: TextStyle(fontFamily: 'Inter', color: Color(0xFF9CA3AF))),
                 ),
                 TextButton(
                   onPressed: () => Navigator.of(context).pop(true),
-                  child: Text('Unblock', style: TextStyle(fontFamily: 'Inter', color: Color(0xFF10B981), fontWeight: FontWeight.w600)),
+                  child: const Text('Unblock', style: TextStyle(fontFamily: 'Inter', color: Color(0xFF10B981), fontWeight: FontWeight.w600)),
                 ),
               ],
             );
@@ -3347,7 +3347,7 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
           }
 
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('User has been unblocked'), backgroundColor: Color(0xFF10B981)),
+            const SnackBar(content: Text('User has been unblocked'), backgroundColor: Color(0xFF10B981)),
           );
         }
       } else {
@@ -3356,23 +3356,23 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
           context: context,
           builder: (BuildContext context) {
             return AlertDialog(
-              backgroundColor: Color(0xFF2D3142),
-              title: Text(
+              backgroundColor: const Color(0xFF2D3142),
+              title: const Text(
                 'Block User',
                 style: TextStyle(fontFamily: 'Inter', color: Colors.white, fontSize: 18, fontWeight: FontWeight.w600),
               ),
               content: Text(
                 'Are you sure you want to block ${user.displayName}? You will no longer see their messages.',
-                style: TextStyle(fontFamily: 'Inter', color: Color(0xFF9CA3AF), fontSize: 14),
+                style: const TextStyle(fontFamily: 'Inter', color: Color(0xFF9CA3AF), fontSize: 14),
               ),
               actions: [
                 TextButton(
                   onPressed: () => Navigator.of(context).pop(false),
-                  child: Text('Cancel', style: TextStyle(fontFamily: 'Inter', color: Color(0xFF9CA3AF))),
+                  child: const Text('Cancel', style: TextStyle(fontFamily: 'Inter', color: Color(0xFF9CA3AF))),
                 ),
                 TextButton(
                   onPressed: () => Navigator.of(context).pop(true),
-                  child: Text('Block', style: TextStyle(fontFamily: 'Inter', color: Color(0xFFEF4444), fontWeight: FontWeight.w600)),
+                  child: const Text('Block', style: TextStyle(fontFamily: 'Inter', color: Color(0xFFEF4444), fontWeight: FontWeight.w600)),
                 ),
               ],
             );
@@ -3389,13 +3389,13 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
           });
 
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('User has been blocked'), backgroundColor: Color(0xFF10B981)),
+            const SnackBar(content: Text('User has been blocked'), backgroundColor: Color(0xFF10B981)),
           );
         }
       }
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error updating block status: $e'), backgroundColor: Color(0xFFEF4444)),
+        SnackBar(content: Text('Error updating block status: $e'), backgroundColor: const Color(0xFFEF4444)),
       );
     }
   }
@@ -3403,7 +3403,7 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
   void _viewGroupChat(ChatsRecord chat) async {
     if (!chat.isGroup) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
+        const SnackBar(
           content: Text('This is not a group chat'),
           backgroundColor: Color(0xFF6B7280),
         ),
@@ -3418,7 +3418,7 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
       });
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
+        const SnackBar(
           content: Text('Error opening group chat details'),
           backgroundColor: Color(0xFFEF4444),
         ),
@@ -3462,7 +3462,7 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('Error pinning chat: $e'),
-          backgroundColor: Color(0xFFEF4444),
+          backgroundColor: const Color(0xFFEF4444),
         ),
       );
     }
@@ -3478,8 +3478,8 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
       context: context,
       builder: (BuildContext context) {
         return AlertDialog(
-          backgroundColor: Color(0xFF2D3142),
-          title: Text(
+          backgroundColor: const Color(0xFF2D3142),
+          title: const Text(
             'Delete Chat',
             style: TextStyle(
               fontFamily: 'Inter',
@@ -3490,7 +3490,7 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
           ),
           content: Text(
             'Are you sure you want to delete $chatName? This action cannot be undone.',
-            style: TextStyle(
+            style: const TextStyle(
               fontFamily: 'Inter',
               color: Color(0xFF9CA3AF),
               fontSize: 14,
@@ -3499,7 +3499,7 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
           actions: [
             TextButton(
               onPressed: () => Navigator.of(context).pop(false),
-              child: Text(
+              child: const Text(
                 'Cancel',
                 style: TextStyle(
                   fontFamily: 'Inter',
@@ -3509,7 +3509,7 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
             ),
             TextButton(
               onPressed: () => Navigator.of(context).pop(true),
-              child: Text(
+              child: const Text(
                 'Delete',
                 style: TextStyle(
                   fontFamily: 'Inter',
@@ -3532,7 +3532,7 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
         chatController.selectedChat.value = null;
 
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
+          const SnackBar(
             content: Text('Chat deleted successfully'),
             backgroundColor: Color(0xFF10B981),
           ),
@@ -3541,7 +3541,7 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Error deleting chat: $e'),
-            backgroundColor: Color(0xFFEF4444),
+            backgroundColor: const Color(0xFFEF4444),
           ),
         );
       }
@@ -3551,7 +3551,7 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
   void _handleMuteNotifications(ChatsRecord chat) {
     // TODO: Implement mute notifications functionality
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
+      const SnackBar(
         content: Text('Mute notifications feature coming soon!'),
         backgroundColor: Color(0xFF3B82F6),
       ),
@@ -3586,7 +3586,7 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
                   ),
                 ],
               ),
-              child: Icon(
+              child: const Icon(
                 CupertinoIcons.mail_solid,
                 color: CupertinoColors.systemBlue,
                 size: 20.0,
@@ -3604,7 +3604,7 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
     showCupertinoDialog(
       context: context,
       builder: (dialogContext) => CupertinoAlertDialog(
-        title: Text('Invite via Email'),
+        title: const Text('Invite via Email'),
         content: Padding(
           padding: const EdgeInsets.only(top: 10.0),
           child: CupertinoTextField(
@@ -3615,11 +3615,11 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
         ),
         actions: [
           CupertinoDialogAction(
-            child: Text('Cancel'),
+            child: const Text('Cancel'),
             onPressed: () => Navigator.pop(dialogContext),
           ),
           CupertinoDialogAction(
-            child: Text('Send Invite'),
+            child: const Text('Send Invite'),
             onPressed: () async {
               final email = emailController.text.trim();
               if (email.isEmpty || !email.contains('@')) {
@@ -3664,26 +3664,26 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
         child: Center(
           child: TweenAnimationBuilder<double>(
             tween: Tween(begin: 0.0, end: 1.0),
-            duration: Duration(milliseconds: 300),
+            duration: const Duration(milliseconds: 300),
             builder: (context, value, child) {
               return Opacity(
                 opacity: value,
                 child: Transform.scale(
                   scale: value,
                   child: Container(
-                    padding: EdgeInsets.all(16),
+                    padding: const EdgeInsets.all(16),
                     decoration: BoxDecoration(
-                      color: Color(0xFF10B981),
+                      color: const Color(0xFF10B981),
                       shape: BoxShape.circle,
                       boxShadow: [
                         BoxShadow(
-                          color: Color(0xFF10B981).withOpacity(0.3),
+                          color: const Color(0xFF10B981).withOpacity(0.3),
                           blurRadius: 20,
                           spreadRadius: 5,
                         ),
                       ],
                     ),
-                    child: Icon(
+                    child: const Icon(
                       Icons.check,
                       color: Colors.white,
                       size: 32,
@@ -3700,7 +3700,7 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
     overlay.insert(entry);
 
     // Remove after 1.5 seconds
-    Future.delayed(Duration(milliseconds: 1500), () {
+    Future.delayed(const Duration(milliseconds: 1500), () {
       entry.remove();
     });
   }
@@ -3718,7 +3718,7 @@ class _ChatListItem extends StatefulWidget {
   final Function(ChatsRecord) onMute;
 
   const _ChatListItem({
-    Key? key,
+    super.key,
     required this.chat,
     required this.isSelected,
     required this.onTap,
@@ -3727,7 +3727,7 @@ class _ChatListItem extends StatefulWidget {
     required this.onPin,
     required this.onDelete,
     required this.onMute,
-  }) : super(key: key);
+  });
 
   @override
   _ChatListItemState createState() => _ChatListItemState();
@@ -3746,7 +3746,7 @@ class _ChatListItemState extends State<_ChatListItem>
       onTap: widget.onTap,
       child: Container(
         width: double.infinity,
-        padding: EdgeInsetsDirectional.fromSTEB(16, 12, 16, 12),
+        padding: const EdgeInsetsDirectional.fromSTEB(16, 12, 16, 12),
         decoration: BoxDecoration(
           color: widget.isSelected
               ? Colors.white
@@ -3754,11 +3754,11 @@ class _ChatListItemState extends State<_ChatListItem>
           borderRadius: BorderRadius.circular(8),
           border: widget.isSelected
               ? Border.all(
-                  color: Color.fromRGBO(
+                  color: const Color.fromRGBO(
                       230, 235, 245, 1), // Light border for selected
                   width: 1,
                 )
-              : Border(
+              : const Border(
                   bottom: BorderSide(
                     color: Color.fromRGBO(230, 235, 245, 1), // Light border
                     width: 1,
@@ -3766,7 +3766,7 @@ class _ChatListItemState extends State<_ChatListItem>
                 ),
           boxShadow: widget.isSelected
               ? [
-                  BoxShadow(
+                  const BoxShadow(
                     color: Color.fromRGBO(0, 0, 0, 0.05), // Neutral gray shadow
                     blurRadius: 8,
                     offset: Offset(0, 2),
@@ -3780,7 +3780,7 @@ class _ChatListItemState extends State<_ChatListItem>
           children: [
             // Avatar
             _buildChatAvatar(widget.chat),
-            SizedBox(width: 12),
+            const SizedBox(width: 12),
             // Chat Info
             Expanded(
               child: Column(
@@ -3791,12 +3791,12 @@ class _ChatListItemState extends State<_ChatListItem>
                     children: [
                       // Pin icon if chat is pinned
                       if (widget.chat.isPin) ...[
-                        Icon(
+                        const Icon(
                           Icons.push_pin,
                           color: Color(0xFF000000), // Black
                           size: 16,
                         ),
-                        SizedBox(width: 4),
+                        const SizedBox(width: 4),
                       ],
                       Expanded(
                         child: _getChatDisplayName(widget.chat,
@@ -3804,7 +3804,7 @@ class _ChatListItemState extends State<_ChatListItem>
                       ),
                     ],
                   ),
-                  SizedBox(height: 2),
+                  const SizedBox(height: 2),
                   _getLastMessagePreview(widget.chat,
                       isSelected: widget.isSelected),
                 ],
@@ -3824,8 +3824,8 @@ class _ChatListItemState extends State<_ChatListItem>
                       Container(
                         width: 10,
                         height: 10,
-                        margin: EdgeInsets.only(right: 8),
-                        decoration: BoxDecoration(
+                        margin: const EdgeInsets.only(right: 8),
+                        decoration: const BoxDecoration(
                           color: Color(0xFF3B82F6),
                           shape: BoxShape.circle,
                           boxShadow: [
@@ -3858,14 +3858,14 @@ class _ChatListItemState extends State<_ChatListItem>
                       style: TextStyle(
                         fontFamily: 'Inter',
                         color: widget.isSelected
-                            ? Color(0xFF6B7280)
-                            : Color(0xFF9CA3AF),
+                            ? const Color(0xFF6B7280)
+                            : const Color(0xFF9CA3AF),
                         fontSize: 11,
                       ),
                     ),
                   ],
                 ),
-                SizedBox(height: 4),
+                const SizedBox(height: 4),
                 // Settings button (3-dot menu)
                 PopupMenuButton<String>(
                   onSelected: (String value) {
@@ -3887,13 +3887,13 @@ class _ChatListItemState extends State<_ChatListItem>
                               widget.chat.isPin
                                   ? Icons.push_pin_outlined
                                   : Icons.push_pin,
-                              color: Color(0xFF374151),
+                              color: const Color(0xFF374151),
                               size: 18,
                             ),
-                            SizedBox(width: 12),
+                            const SizedBox(width: 12),
                             Text(
                               widget.chat.isPin ? 'Unpin' : 'Pin',
-                              style: TextStyle(
+                              style: const TextStyle(
                                 fontFamily: 'Inter',
                                 color: Color(0xFF111827),
                                 fontSize: 14,
@@ -3903,7 +3903,7 @@ class _ChatListItemState extends State<_ChatListItem>
                           ],
                         ),
                       ),
-                      PopupMenuItem<String>(
+                      const PopupMenuItem<String>(
                         value: 'delete',
                         child: Row(
                           children: [
@@ -3925,7 +3925,7 @@ class _ChatListItemState extends State<_ChatListItem>
                           ],
                         ),
                       ),
-                      PopupMenuItem<String>(
+                      const PopupMenuItem<String>(
                         value: 'mute',
                         child: Row(
                           children: [
@@ -3952,8 +3952,8 @@ class _ChatListItemState extends State<_ChatListItem>
                   icon: Icon(
                     Icons.more_vert,
                     color: widget.isSelected
-                        ? Color(0xFF6B7280)
-                        : Color(0xFF9CA3AF),
+                        ? const Color(0xFF6B7280)
+                        : const Color(0xFF9CA3AF),
                     size: 18,
                   ),
                   color: Colors.white,
@@ -3961,7 +3961,7 @@ class _ChatListItemState extends State<_ChatListItem>
                     borderRadius: BorderRadius.circular(8),
                   ),
                   padding: EdgeInsets.zero,
-                  constraints: BoxConstraints(),
+                  constraints: const BoxConstraints(),
                 ),
               ],
             ),
@@ -3976,7 +3976,7 @@ class _ChatListItemState extends State<_ChatListItem>
       return Container(
         width: 48,
         height: 48,
-        decoration: BoxDecoration(
+        decoration: const BoxDecoration(
           color: Colors.white,
           shape: BoxShape.circle,
         ),
@@ -3995,11 +3995,11 @@ class _ChatListItemState extends State<_ChatListItem>
             placeholder: (context, url) => Container(
               width: 48,
               height: 48,
-              decoration: BoxDecoration(
+              decoration: const BoxDecoration(
                 color: Colors.white,
                 shape: BoxShape.circle,
               ),
-              child: Icon(
+              child: const Icon(
                 Icons.group,
                 color: Color(0xFF6B7280),
                 size: 20,
@@ -4008,11 +4008,11 @@ class _ChatListItemState extends State<_ChatListItem>
             errorWidget: (context, url, error) => Container(
               width: 48,
               height: 48,
-              decoration: BoxDecoration(
+              decoration: const BoxDecoration(
                 color: Colors.white,
                 shape: BoxShape.circle,
               ),
-              child: Icon(
+              child: const Icon(
                 Icons.group,
                 color: Color(0xFF6B7280),
                 size: 20,
@@ -4053,7 +4053,7 @@ class _ChatListItemState extends State<_ChatListItem>
               Container(
                 width: 48,
                 height: 48,
-                decoration: BoxDecoration(
+                decoration: const BoxDecoration(
                   color: Color(0xFF3B82F6),
                   shape: BoxShape.circle,
                 ),
@@ -4072,11 +4072,11 @@ class _ChatListItemState extends State<_ChatListItem>
                     placeholder: (context, url) => Container(
                       width: 48,
                       height: 48,
-                      decoration: BoxDecoration(
+                      decoration: const BoxDecoration(
                         color: Colors.white,
                         shape: BoxShape.circle,
                       ),
-                      child: Icon(
+                      child: const Icon(
                         Icons.person,
                         color: Color(0xFF6B7280),
                         size: 20,
@@ -4085,11 +4085,11 @@ class _ChatListItemState extends State<_ChatListItem>
                     errorWidget: (context, url, error) => Container(
                       width: 48,
                       height: 48,
-                      decoration: BoxDecoration(
+                      decoration: const BoxDecoration(
                         color: Colors.white,
                         shape: BoxShape.circle,
                       ),
-                      child: Icon(
+                      child: const Icon(
                         Icons.person,
                         color: Color(0xFF6B7280),
                         size: 20,
@@ -4107,7 +4107,7 @@ class _ChatListItemState extends State<_ChatListItem>
                     width: 16,
                     height: 16,
                     decoration: BoxDecoration(
-                      color: Color(0xFF10B981), // Green color
+                      color: const Color(0xFF10B981), // Green color
                       shape: BoxShape.circle,
                       border: Border.all(
                         color: Colors.white,
@@ -4115,7 +4115,7 @@ class _ChatListItemState extends State<_ChatListItem>
                       ),
                       boxShadow: [
                         BoxShadow(
-                          color: Color(0xFF10B981).withOpacity(0.3),
+                          color: const Color(0xFF10B981).withOpacity(0.3),
                           blurRadius: 4,
                           spreadRadius: 1,
                         ),
@@ -4134,7 +4134,7 @@ class _ChatListItemState extends State<_ChatListItem>
     if (chat.isGroup) {
       return Text(
         chat.title.isNotEmpty ? chat.title : 'Group Chat',
-        style: TextStyle(
+        style: const TextStyle(
           fontFamily: 'Inter',
           color:
               Color(0xFF111827), // Dark text for both selected and unselected
@@ -4173,7 +4173,7 @@ class _ChatListItemState extends State<_ChatListItem>
 
           return Text(
             displayName,
-            style: TextStyle(
+            style: const TextStyle(
               fontFamily: 'Inter',
               color: Color(
                   0xFF111827), // Dark text for both selected and unselected
@@ -4235,7 +4235,7 @@ class _ChatListItemState extends State<_ChatListItem>
                       text: prefix,
                       style: TextStyle(
                         fontFamily: 'Inter',
-                        color: isSelected ? Color(0xFF6B7280) : Color(0xFF374151),
+                        color: isSelected ? const Color(0xFF6B7280) : const Color(0xFF374151),
                         fontSize: 12,
                         fontWeight: FontWeight.w600,
                       ),
@@ -4244,7 +4244,7 @@ class _ChatListItemState extends State<_ChatListItem>
                       text: previewText,
                       style: TextStyle(
                         fontFamily: 'Inter',
-                        color: isSelected ? Color(0xFF9CA3AF) : Color(0xFF6B7280),
+                        color: isSelected ? const Color(0xFF9CA3AF) : const Color(0xFF6B7280),
                         fontSize: 12,
                       ),
                     ),
@@ -4261,7 +4261,7 @@ class _ChatListItemState extends State<_ChatListItem>
           previewText,
           style: TextStyle(
             fontFamily: 'Inter',
-            color: isSelected ? Color(0xFF9CA3AF) : Color(0xFF6B7280),
+            color: isSelected ? const Color(0xFF9CA3AF) : const Color(0xFF6B7280),
             fontSize: 12,
           ),
           maxLines: 1,
@@ -4274,7 +4274,7 @@ class _ChatListItemState extends State<_ChatListItem>
         'No messages',
         style: TextStyle(
           fontFamily: 'Inter',
-          color: isSelected ? Color(0xFF9CA3AF) : Color(0xFF6B7280),
+          color: isSelected ? const Color(0xFF9CA3AF) : const Color(0xFF6B7280),
           fontSize: 12,
         ),
         maxLines: 1,
@@ -4306,7 +4306,7 @@ class _ChatListItemState extends State<_ChatListItem>
                   text: prefix,
                   style: TextStyle(
                     fontFamily: 'Inter',
-                    color: isSelected ? Color(0xFF6B7280) : Color(0xFF374151),
+                    color: isSelected ? const Color(0xFF6B7280) : const Color(0xFF374151),
                     fontSize: 12,
                     fontWeight: FontWeight.w600,
                   ),
@@ -4315,7 +4315,7 @@ class _ChatListItemState extends State<_ChatListItem>
                   text: chat.lastMessage,
                   style: TextStyle(
                     fontFamily: 'Inter',
-                    color: isSelected ? Color(0xFF9CA3AF) : Color(0xFF6B7280),
+                    color: isSelected ? const Color(0xFF9CA3AF) : const Color(0xFF6B7280),
                     fontSize: 12,
                   ),
                 ),
@@ -4333,7 +4333,7 @@ class _ChatListItemState extends State<_ChatListItem>
       chat.lastMessage,
       style: TextStyle(
         fontFamily: 'Inter',
-        color: isSelected ? Color(0xFF9CA3AF) : Color(0xFF6B7280),
+        color: isSelected ? const Color(0xFF9CA3AF) : const Color(0xFF6B7280),
         fontSize: 12,
       ),
       maxLines: 1,

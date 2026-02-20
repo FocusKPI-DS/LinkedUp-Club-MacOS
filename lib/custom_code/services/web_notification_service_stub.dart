@@ -9,7 +9,7 @@ class WebNotificationService {
 
   WebNotificationService._();
 
-  bool _isSupported = false;
+  final bool _isSupported = false;
   bool _isInitialized = false;
 
   // Track processed notifications to prevent duplicates

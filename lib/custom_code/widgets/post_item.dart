@@ -459,7 +459,7 @@ class _PostItemState extends State<PostItem> {
                         child: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            Icon(
+                            const Icon(
                               Icons.push_pin,
                               color: Colors.white,
                               size: 12.0,

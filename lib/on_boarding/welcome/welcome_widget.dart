@@ -53,11 +53,11 @@ class _WelcomeWidgetState extends State<WelcomeWidget>
           // Uri.base should work even with base href /app/
           final uri = Uri.base;
           final referrerUid = uri.queryParameters['referrer'];
-          
+
           print('[Web Referral] Current URL: ${uri.toString()}');
           print('[Web Referral] Query parameters: ${uri.queryParameters}');
           print('[Web Referral] Referrer UID: $referrerUid');
-          
+
           if (referrerUid != null && referrerUid.isNotEmpty) {
             // Store referral UID for web app signup
             final prefs = await SharedPreferences.getInstance();
@@ -70,7 +70,7 @@ class _WelcomeWidgetState extends State<WelcomeWidget>
           print('[Web Referral] ❌ Error storing referral UID: $e');
         }
       }
-      
+
       await branchio_dynamic_linking_akp5u6_actions.handleBranchDeeplink(
         (linkData) async {
           _model.dataLink = await actions.checkEventInvite(
@@ -356,27 +356,30 @@ class _WelcomeWidgetState extends State<WelcomeWidget>
                                           mainAxisAlignment:
                                               MainAxisAlignment.start,
                                           children: [
-                                            Container(
-                                              width: 400.0,
-                                              height: 400.0,
-                                              clipBehavior: Clip.antiAlias,
-                                              decoration: BoxDecoration(
-                                                borderRadius:
-                                                    BorderRadius.circular(16.0),
-                                                boxShadow: [
-                                                  BoxShadow(
-                                                    blurRadius: 20.0,
-                                                    color: FlutterFlowTheme.of(
-                                                            context)
-                                                        .alternate,
-                                                    offset:
-                                                        const Offset(0.0, 4.0),
-                                                  ),
-                                                ],
-                                              ),
-                                              child: Image.asset(
-                                                'assets/images/lona-workspace.png',
-                                                fit: BoxFit.contain,
+                                            Expanded(
+                                              child: Container(
+                                                width: double.infinity,
+                                                clipBehavior: Clip.antiAlias,
+                                                decoration: BoxDecoration(
+                                                  borderRadius:
+                                                      BorderRadius.circular(
+                                                          16.0),
+                                                  boxShadow: [
+                                                    BoxShadow(
+                                                      blurRadius: 20.0,
+                                                      color:
+                                                          FlutterFlowTheme.of(
+                                                                  context)
+                                                              .alternate,
+                                                      offset: const Offset(
+                                                          0.0, 4.0),
+                                                    ),
+                                                  ],
+                                                ),
+                                                child: Image.asset(
+                                                  'assets/images/lona-workspace.png',
+                                                  fit: BoxFit.contain,
+                                                ),
                                               ),
                                             ),
                                             Column(
@@ -474,27 +477,30 @@ class _WelcomeWidgetState extends State<WelcomeWidget>
                                           mainAxisAlignment:
                                               MainAxisAlignment.start,
                                           children: [
-                                            Container(
-                                              width: 400.0,
-                                              height: 400.0,
-                                              clipBehavior: Clip.antiAlias,
-                                              decoration: BoxDecoration(
-                                                borderRadius:
-                                                    BorderRadius.circular(16.0),
-                                                boxShadow: [
-                                                  BoxShadow(
-                                                    blurRadius: 20.0,
-                                                    color: FlutterFlowTheme.of(
-                                                            context)
-                                                        .alternate,
-                                                    offset:
-                                                        const Offset(0.0, 4.0),
-                                                  ),
-                                                ],
-                                              ),
-                                              child: Image.asset(
-                                                'assets/images/lona-workspace.png',
-                                                fit: BoxFit.contain,
+                                            Expanded(
+                                              child: Container(
+                                                width: double.infinity,
+                                                clipBehavior: Clip.antiAlias,
+                                                decoration: BoxDecoration(
+                                                  borderRadius:
+                                                      BorderRadius.circular(
+                                                          16.0),
+                                                  boxShadow: [
+                                                    BoxShadow(
+                                                      blurRadius: 20.0,
+                                                      color:
+                                                          FlutterFlowTheme.of(
+                                                                  context)
+                                                              .alternate,
+                                                      offset: const Offset(
+                                                          0.0, 4.0),
+                                                    ),
+                                                  ],
+                                                ),
+                                                child: Image.asset(
+                                                  'assets/images/lona-workspace.png',
+                                                  fit: BoxFit.contain,
+                                                ),
                                               ),
                                             ),
                                             Column(
@@ -592,27 +598,30 @@ class _WelcomeWidgetState extends State<WelcomeWidget>
                                           mainAxisAlignment:
                                               MainAxisAlignment.start,
                                           children: [
-                                            Container(
-                                              width: 400.0,
-                                              height: 400.0,
-                                              clipBehavior: Clip.antiAlias,
-                                              decoration: BoxDecoration(
-                                                borderRadius:
-                                                    BorderRadius.circular(16.0),
-                                                boxShadow: [
-                                                  BoxShadow(
-                                                    blurRadius: 20.0,
-                                                    color: FlutterFlowTheme.of(
-                                                            context)
-                                                        .alternate,
-                                                    offset:
-                                                        const Offset(0.0, 4.0),
-                                                  ),
-                                                ],
-                                              ),
-                                              child: Image.asset(
-                                                'assets/images/lona-workspace.png',
-                                                fit: BoxFit.contain,
+                                            Expanded(
+                                              child: Container(
+                                                width: double.infinity,
+                                                clipBehavior: Clip.antiAlias,
+                                                decoration: BoxDecoration(
+                                                  borderRadius:
+                                                      BorderRadius.circular(
+                                                          16.0),
+                                                  boxShadow: [
+                                                    BoxShadow(
+                                                      blurRadius: 20.0,
+                                                      color:
+                                                          FlutterFlowTheme.of(
+                                                                  context)
+                                                              .alternate,
+                                                      offset: const Offset(
+                                                          0.0, 4.0),
+                                                    ),
+                                                  ],
+                                                ),
+                                                child: Image.asset(
+                                                  'assets/images/lona-workspace.png',
+                                                  fit: BoxFit.contain,
+                                                ),
                                               ),
                                             ),
                                             Column(

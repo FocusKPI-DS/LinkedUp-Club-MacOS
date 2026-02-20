@@ -107,8 +107,8 @@ GoRouter createRouter(AppStateNotifier appStateNotifier) {
     navigatorKey: appNavigatorKey,
     errorBuilder: (context, state) => appStateNotifier.loggedIn
         ? (!kIsWeb && Platform.isIOS
-            ? NavBarPage(initialPage: 'MobileChat')
-            : NavBarPage())
+            ? const NavBarPage(initialPage: 'MobileChat')
+            : const NavBarPage())
         : const WelcomeWidget(),
     routes: [
       FFRoute(
@@ -161,7 +161,7 @@ GoRouter createRouter(AppStateNotifier appStateNotifier) {
         path: EventWidget.routePath,
         requireAuth: true,
         builder: (context, params) => params.isEmpty
-            ? NavBarPage(initialPage: 'Event')
+            ? const NavBarPage(initialPage: 'Event')
             : const EventWidget(),
       ),
       FFRoute(
@@ -215,7 +215,7 @@ GoRouter createRouter(AppStateNotifier appStateNotifier) {
         path: ProfileWidget.routePath,
         requireAuth: true,
         builder: (context, params) => params.isEmpty
-            ? NavBarPage(initialPage: 'Settings')
+            ? const NavBarPage(initialPage: 'Settings')
             : const ProfileWidget(),
       ),
       FFRoute(
@@ -226,12 +226,12 @@ GoRouter createRouter(AppStateNotifier appStateNotifier) {
           // Redirect macOS and web to desktop settings page
           if (kIsWeb || (!kIsWeb && Platform.isMacOS)) {
             return params.isEmpty
-                ? NavBarPage(initialPage: 'ProfileSettings')
+                ? const NavBarPage(initialPage: 'ProfileSettings')
                 : const ProfileSettingsWidget();
           }
           // iOS uses mobile settings
           return params.isEmpty
-              ? NavBarPage(initialPage: 'MobileSettings')
+              ? const NavBarPage(initialPage: 'MobileSettings')
               : MobileSettingsWidget(
                   initialSection: params.getParam('section', ParamType.String),
                 );
@@ -410,7 +410,7 @@ GoRouter createRouter(AppStateNotifier appStateNotifier) {
         path: ChatWidget.routePath,
         requireAuth: true,
         builder: (context, params) => params.isEmpty
-            ? NavBarPage(initialPage: 'Chat')
+            ? const NavBarPage(initialPage: 'Chat')
             : const ChatWidget(),
       ),
       FFRoute(
@@ -526,7 +526,7 @@ GoRouter createRouter(AppStateNotifier appStateNotifier) {
         path: FeedWidget.routePath,
         requireAuth: true,
         builder: (context, params) => params.isEmpty
-            ? NavBarPage(initialPage: 'Announcements')
+            ? const NavBarPage(initialPage: 'Announcements')
             : const FeedWidget(),
       ),
       FFRoute(

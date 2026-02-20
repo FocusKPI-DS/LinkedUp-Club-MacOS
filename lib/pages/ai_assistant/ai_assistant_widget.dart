@@ -5,7 +5,7 @@ import 'package:get/get.dart';
 import 'ai_assistant_controller.dart';
 
 class AIAssistantWidget extends StatefulWidget {
-  const AIAssistantWidget({Key? key}) : super(key: key);
+  const AIAssistantWidget({super.key});
 
   static String routeName = 'AIAssistant';
   static String routePath = '/aiAssistant';
@@ -43,7 +43,7 @@ class _AIAssistantWidgetState extends State<AIAssistantWidget> {
       if (_scrollController.hasClients) {
         _scrollController.animateTo(
           _scrollController.position.maxScrollExtent,
-          duration: Duration(milliseconds: 300),
+          duration: const Duration(milliseconds: 300),
           curve: Curves.easeOut,
         );
       }
@@ -73,7 +73,7 @@ class _AIAssistantWidgetState extends State<AIAssistantWidget> {
           backgroundColor: Colors.white,
           child: Container(
             width: 420,
-            padding: EdgeInsets.all(32),
+            padding: const EdgeInsets.all(32),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -82,14 +82,14 @@ class _AIAssistantWidgetState extends State<AIAssistantWidget> {
                   width: 56,
                   height: 56,
                   decoration: BoxDecoration(
-                    color: Color(0xFFFEE2E2),
+                    color: const Color(0xFFFEE2E2),
                     borderRadius: BorderRadius.circular(12),
                   ),
-                  child: Icon(Icons.warning_rounded,
+                  child: const Icon(Icons.warning_rounded,
                       color: Color(0xFFDC2626), size: 32),
                 ),
-                SizedBox(height: 24),
-                Text(
+                const SizedBox(height: 24),
+                const Text(
                   'Delete Conversation?',
                   style: TextStyle(
                     fontFamily: 'Inter',
@@ -99,8 +99,8 @@ class _AIAssistantWidgetState extends State<AIAssistantWidget> {
                     letterSpacing: -0.5,
                   ),
                 ),
-                SizedBox(height: 12),
-                Text(
+                const SizedBox(height: 12),
+                const Text(
                   'This will permanently delete this conversation and all its messages. This action cannot be undone.',
                   style: TextStyle(
                     fontFamily: 'Inter',
@@ -110,31 +110,31 @@ class _AIAssistantWidgetState extends State<AIAssistantWidget> {
                     height: 1.5,
                   ),
                 ),
-                SizedBox(height: 32),
+                const SizedBox(height: 32),
                 Row(
                   mainAxisAlignment: MainAxisAlignment.end,
                   children: [
                     TextButton(
                       onPressed: () => Navigator.of(context).pop(false),
-                      child: Text('Cancel',
+                      child: const Text('Cancel',
                           style: TextStyle(
                               fontFamily: 'Inter',
                               fontSize: 15,
                               fontWeight: FontWeight.w600,
                               color: Color(0xFF6B7280))),
                     ),
-                    SizedBox(width: 12),
+                    const SizedBox(width: 12),
                     ElevatedButton(
                       onPressed: () => Navigator.of(context).pop(true),
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: Color(0xFFDC2626),
+                        backgroundColor: const Color(0xFFDC2626),
                         padding:
-                            EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                            const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
                         elevation: 0,
                         shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(8)),
                       ),
-                      child: Text('Delete',
+                      child: const Text('Delete',
                           style: TextStyle(
                               fontFamily: 'Inter',
                               fontSize: 15,
@@ -154,7 +154,7 @@ class _AIAssistantWidgetState extends State<AIAssistantWidget> {
       await controller.deleteConversation(conversationId);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
+          const SnackBar(
               content: Text('Conversation deleted'),
               duration: Duration(seconds: 2)),
         );
@@ -178,10 +178,10 @@ class _AIAssistantWidgetState extends State<AIAssistantWidget> {
   Widget _buildHeader() {
     return Container(
       width: double.infinity,
-      padding: EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
       decoration: BoxDecoration(
-        color: Color(0xFF374151),
-        border: Border.all(color: Color(0xFF4B5563)),
+        color: const Color(0xFF374151),
+        border: Border.all(color: const Color(0xFF4B5563)),
       ),
       child: Row(
         children: [
@@ -194,8 +194,8 @@ class _AIAssistantWidgetState extends State<AIAssistantWidget> {
               fit: BoxFit.cover,
             ),
           ),
-          SizedBox(width: 16),
-          Expanded(
+          const SizedBox(width: 16),
+          const Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -234,29 +234,29 @@ class _AIAssistantWidgetState extends State<AIAssistantWidget> {
     return Container(
       width: 350,
       decoration: BoxDecoration(
-        color: Color(0xFF374151),
-        border: Border.all(color: Color(0xFF4B5563)),
+        color: const Color(0xFF374151),
+        border: Border.all(color: const Color(0xFF4B5563)),
       ),
       child: Column(
         children: [
           Padding(
-            padding: EdgeInsets.all(24),
+            padding: const EdgeInsets.all(24),
             child: Row(
               children: [
-                Text('Recent Conversations',
+                const Text('Recent Conversations',
                     style: TextStyle(
                         fontFamily: 'Inter',
                         fontSize: 18,
                         fontWeight: FontWeight.w600,
                         color: Colors.white)),
-                Spacer(),
+                const Spacer(),
                 GestureDetector(
                   onTap: () => controller.createNewConversation(),
                   child: Container(
                     width: 32,
                     height: 32,
-                    decoration: BoxDecoration(color: Color(0xFF3B82F6)),
-                    child: Icon(Icons.add, color: Colors.white, size: 18),
+                    decoration: const BoxDecoration(color: Color(0xFF3B82F6)),
+                    child: const Icon(Icons.add, color: Colors.white, size: 18),
                   ),
                 ),
               ],
@@ -269,7 +269,7 @@ class _AIAssistantWidgetState extends State<AIAssistantWidget> {
                   .value; // Track currentConversationId changes
 
               if (conversations.isEmpty) {
-                return Center(
+                return const Center(
                   child: Text('No conversations yet',
                       style: TextStyle(
                           fontFamily: 'Inter',
@@ -279,7 +279,7 @@ class _AIAssistantWidgetState extends State<AIAssistantWidget> {
               }
 
               return ListView.builder(
-                padding: EdgeInsets.symmetric(horizontal: 24),
+                padding: const EdgeInsets.symmetric(horizontal: 24),
                 itemCount: conversations.length,
                 itemBuilder: (context, index) {
                   final conversation = conversations[index];
@@ -311,17 +311,17 @@ class _AIAssistantWidgetState extends State<AIAssistantWidget> {
                   return GestureDetector(
                     onTap: () => controller.switchConversation(conversation.id),
                     child: Container(
-                      margin: EdgeInsets.only(bottom: 12),
-                      padding: EdgeInsets.all(16),
+                      margin: const EdgeInsets.only(bottom: 12),
+                      padding: const EdgeInsets.all(16),
                       decoration: BoxDecoration(
                         color: isCurrentConversation
-                            ? Color(0xFF3B82F6)
-                            : Color(0xFF4B5563),
+                            ? const Color(0xFF3B82F6)
+                            : const Color(0xFF4B5563),
                         borderRadius: BorderRadius.circular(8),
                         border: Border.all(
                             color: isCurrentConversation
-                                ? Color(0xFF2563EB)
-                                : Color(0xFF6B7280)),
+                                ? const Color(0xFF2563EB)
+                                : const Color(0xFF6B7280)),
                       ),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -331,15 +331,15 @@ class _AIAssistantWidgetState extends State<AIAssistantWidget> {
                               if (isPinned) ...[
                                 Icon(Icons.push_pin,
                                     color: isCurrentConversation
-                                        ? Color(0xFFBFDBFE)
-                                        : Color(0xFF9CA3AF),
+                                        ? const Color(0xFFBFDBFE)
+                                        : const Color(0xFF9CA3AF),
                                     size: 14),
-                                SizedBox(width: 8),
+                                const SizedBox(width: 8),
                               ],
                               Expanded(
                                 child: Text(
                                   conversationTitle,
-                                  style: TextStyle(
+                                  style: const TextStyle(
                                       fontFamily: 'Inter',
                                       fontSize: 14,
                                       fontWeight: FontWeight.w600,
@@ -370,11 +370,11 @@ class _AIAssistantWidgetState extends State<AIAssistantWidget> {
                                             isPinned
                                                 ? Icons.push_pin_outlined
                                                 : Icons.push_pin,
-                                            color: Color(0xFF374151),
+                                            color: const Color(0xFF374151),
                                             size: 18),
-                                        SizedBox(width: 12),
+                                        const SizedBox(width: 12),
                                         Text(isPinned ? 'Unpin' : 'Pin',
-                                            style: TextStyle(
+                                            style: const TextStyle(
                                                 fontFamily: 'Inter',
                                                 color: Color(0xFF111827),
                                                 fontSize: 14,
@@ -382,7 +382,7 @@ class _AIAssistantWidgetState extends State<AIAssistantWidget> {
                                       ],
                                     ),
                                   ),
-                                  PopupMenuItem(
+                                  const PopupMenuItem(
                                     value: 'archive',
                                     child: Row(
                                       children: [
@@ -398,7 +398,7 @@ class _AIAssistantWidgetState extends State<AIAssistantWidget> {
                                       ],
                                     ),
                                   ),
-                                  PopupMenuItem(
+                                  const PopupMenuItem(
                                     value: 'delete',
                                     child: Row(
                                       children: [
@@ -417,8 +417,8 @@ class _AIAssistantWidgetState extends State<AIAssistantWidget> {
                                 ],
                                 icon: Icon(Icons.more_vert,
                                     color: isCurrentConversation
-                                        ? Color(0xFFBFDBFE)
-                                        : Color(0xFF9CA3AF),
+                                        ? const Color(0xFFBFDBFE)
+                                        : const Color(0xFF9CA3AF),
                                     size: 18),
                                 color: Colors.white,
                                 shape: RoundedRectangleBorder(
@@ -426,7 +426,7 @@ class _AIAssistantWidgetState extends State<AIAssistantWidget> {
                               ),
                             ],
                           ),
-                          SizedBox(height: 4),
+                          const SizedBox(height: 4),
                           Text(
                             lastMessage.isNotEmpty
                                 ? (lastMessage.length > 50
@@ -437,18 +437,18 @@ class _AIAssistantWidgetState extends State<AIAssistantWidget> {
                                 fontFamily: 'Inter',
                                 fontSize: 12,
                                 color: isCurrentConversation
-                                    ? Color(0xFFE5E7EB)
-                                    : Color(0xFFD1D5DB)),
+                                    ? const Color(0xFFE5E7EB)
+                                    : const Color(0xFFD1D5DB)),
                           ),
-                          SizedBox(height: 8),
+                          const SizedBox(height: 8),
                           Text(
                             timeAgo,
                             style: TextStyle(
                                 fontFamily: 'Inter',
                                 fontSize: 10,
                                 color: isCurrentConversation
-                                    ? Color(0xFFBFDBFE)
-                                    : Color(0xFF9CA3AF)),
+                                    ? const Color(0xFFBFDBFE)
+                                    : const Color(0xFF9CA3AF)),
                           ),
                         ],
                       ),
@@ -467,7 +467,7 @@ class _AIAssistantWidgetState extends State<AIAssistantWidget> {
     return Container(
       decoration: BoxDecoration(
         color: Colors.white,
-        border: Border.all(color: Color(0xFFE5E7EB)),
+        border: Border.all(color: const Color(0xFFE5E7EB)),
       ),
       child: Column(
         children: [
@@ -493,7 +493,7 @@ class _AIAssistantWidgetState extends State<AIAssistantWidget> {
             child: ListView.builder(
               key: ValueKey('messages_${messages.length}'),
               controller: _scrollController,
-              padding: EdgeInsets.all(24),
+              padding: const EdgeInsets.all(24),
               itemCount: messages.length,
               itemBuilder: (context, index) {
                 final message = messages[index];
@@ -503,7 +503,7 @@ class _AIAssistantWidgetState extends State<AIAssistantWidget> {
 
                 return Padding(
                   key: ValueKey(message.id),
-                  padding: EdgeInsets.only(bottom: 16),
+                  padding: const EdgeInsets.only(bottom: 16),
                   child: senderType == 'user'
                       ? _buildUserMessage(content)
                       : _buildAIMessage(content),
@@ -513,7 +513,7 @@ class _AIAssistantWidgetState extends State<AIAssistantWidget> {
           ),
           if (isTyping)
             Padding(
-              padding: EdgeInsets.fromLTRB(24, 0, 24, 16),
+              padding: const EdgeInsets.fromLTRB(24, 0, 24, 16),
               child: _buildTypingIndicator(),
             ),
         ],
@@ -551,13 +551,13 @@ class _AIAssistantWidgetState extends State<AIAssistantWidget> {
 
     return Center(
       child: SingleChildScrollView(
-        padding: EdgeInsets.all(24),
+        padding: const EdgeInsets.all(24),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.chat_bubble_outline, size: 64, color: Color(0xFF9CA3AF)),
-            SizedBox(height: 16),
-            Text(
+            const Icon(Icons.chat_bubble_outline, size: 64, color: Color(0xFF9CA3AF)),
+            const SizedBox(height: 16),
+            const Text(
               'Start a conversation with LonaAI',
               style: TextStyle(
                   fontFamily: 'Inter',
@@ -565,13 +565,13 @@ class _AIAssistantWidgetState extends State<AIAssistantWidget> {
                   fontWeight: FontWeight.w600,
                   color: Color(0xFF1F2937)),
             ),
-            SizedBox(height: 8),
-            Text(
+            const SizedBox(height: 8),
+            const Text(
               'Ask me anything about your community',
               style: TextStyle(
                   fontFamily: 'Inter', fontSize: 14, color: Color(0xFF6B7280)),
             ),
-            SizedBox(height: 32),
+            const SizedBox(height: 32),
             Wrap(
               spacing: 16,
               runSpacing: 16,
@@ -584,12 +584,12 @@ class _AIAssistantWidgetState extends State<AIAssistantWidget> {
                   },
                   child: Container(
                     width: 200,
-                    padding: EdgeInsets.all(20),
+                    padding: const EdgeInsets.all(20),
                     decoration: BoxDecoration(
                       color: Colors.white,
                       borderRadius: BorderRadius.circular(16),
-                      border: Border.all(color: Color(0xFFE5E7EB), width: 2),
-                      boxShadow: [
+                      border: Border.all(color: const Color(0xFFE5E7EB), width: 2),
+                      boxShadow: const [
                         BoxShadow(
                           color: Color(0x0D000000),
                           blurRadius: 8,
@@ -604,30 +604,30 @@ class _AIAssistantWidgetState extends State<AIAssistantWidget> {
                           width: 48,
                           height: 48,
                           decoration: BoxDecoration(
-                            color: Color(0xFFEFF6FF),
+                            color: const Color(0xFFEFF6FF),
                             borderRadius: BorderRadius.circular(12),
                           ),
                           child: Icon(
                             suggestion['icon'] as IconData,
-                            color: Color(0xFF3B82F6),
+                            color: const Color(0xFF3B82F6),
                             size: 24,
                           ),
                         ),
-                        SizedBox(height: 12),
+                        const SizedBox(height: 12),
                         Text(
                           suggestion['title'] as String,
-                          style: TextStyle(
+                          style: const TextStyle(
                             fontFamily: 'Inter',
                             fontSize: 16,
                             fontWeight: FontWeight.w600,
                             color: Color(0xFF1F2937),
                           ),
                         ),
-                        SizedBox(height: 6),
+                        const SizedBox(height: 6),
                         Text(
                           suggestion['description'] as String,
                           textAlign: TextAlign.center,
-                          style: TextStyle(
+                          style: const TextStyle(
                             fontFamily: 'Inter',
                             fontSize: 12,
                             color: Color(0xFF6B7280),
@@ -651,14 +651,14 @@ class _AIAssistantWidgetState extends State<AIAssistantWidget> {
       children: [
         Flexible(
           child: Container(
-            constraints: BoxConstraints(maxWidth: 500),
-            padding: EdgeInsets.all(16),
+            constraints: const BoxConstraints(maxWidth: 500),
+            padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
-              color: Color(0xFF3B82F6),
+              color: const Color(0xFF3B82F6),
               borderRadius: BorderRadius.circular(16),
             ),
             child: Text(content,
-                style: TextStyle(
+                style: const TextStyle(
                     fontFamily: 'Inter', fontSize: 14, color: Colors.white)),
           ),
         ),
@@ -678,17 +678,17 @@ class _AIAssistantWidgetState extends State<AIAssistantWidget> {
               height: 32,
               fit: BoxFit.cover),
         ),
-        SizedBox(width: 12),
+        const SizedBox(width: 12),
         Flexible(
           child: Container(
-            constraints: BoxConstraints(maxWidth: 600),
-            padding: EdgeInsets.all(16),
+            constraints: const BoxConstraints(maxWidth: 600),
+            padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
-              color: Color(0xFFF3F4F6),
+              color: const Color(0xFFF3F4F6),
               borderRadius: BorderRadius.circular(16),
             ),
             child: Text(content,
-                style: TextStyle(
+                style: const TextStyle(
                     fontFamily: 'Inter',
                     fontSize: 14,
                     color: Color(0xFF1F2937))),
@@ -710,19 +710,19 @@ class _AIAssistantWidgetState extends State<AIAssistantWidget> {
               height: 32,
               fit: BoxFit.cover),
         ),
-        SizedBox(width: 12),
+        const SizedBox(width: 12),
         Container(
-          padding: EdgeInsets.all(16),
+          padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
-              color: Color(0xFFF3F4F6),
+              color: const Color(0xFFF3F4F6),
               borderRadius: BorderRadius.circular(16)),
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
               _buildTypingDot(0),
-              SizedBox(width: 4),
+              const SizedBox(width: 4),
               _buildTypingDot(1),
-              SizedBox(width: 4),
+              const SizedBox(width: 4),
               _buildTypingDot(2),
             ],
           ),
@@ -734,7 +734,7 @@ class _AIAssistantWidgetState extends State<AIAssistantWidget> {
   Widget _buildTypingDot(int index) {
     return TweenAnimationBuilder<double>(
       tween: Tween(begin: 0.0, end: 1.0),
-      duration: Duration(milliseconds: 600),
+      duration: const Duration(milliseconds: 600),
       builder: (context, value, child) {
         final delay = index * 0.2;
         final animValue = ((value + delay) % 1.0);
@@ -745,7 +745,7 @@ class _AIAssistantWidgetState extends State<AIAssistantWidget> {
           child: Container(
               width: 8,
               height: 8,
-              decoration: BoxDecoration(
+              decoration: const BoxDecoration(
                   color: Color(0xFF6B7280), shape: BoxShape.circle)),
         );
       },
@@ -757,8 +757,8 @@ class _AIAssistantWidgetState extends State<AIAssistantWidget> {
 
   Widget _buildChatInput() {
     return Container(
-      padding: EdgeInsets.all(24),
-      decoration: BoxDecoration(
+      padding: const EdgeInsets.all(24),
+      decoration: const BoxDecoration(
         color: Color(0xFFF9FAFB),
         border: Border(top: BorderSide(color: Color(0xFFE5E7EB))),
       ),
@@ -766,16 +766,16 @@ class _AIAssistantWidgetState extends State<AIAssistantWidget> {
         children: [
           Expanded(
             child: Container(
-              constraints: BoxConstraints(maxHeight: 150),
+              constraints: const BoxConstraints(maxHeight: 150),
               decoration: BoxDecoration(
                 color: Colors.white,
                 borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: Color(0xFFE5E7EB)),
+                border: Border.all(color: const Color(0xFFE5E7EB)),
               ),
               child: TextField(
                 controller: _messageController,
                 maxLines: null,
-                decoration: InputDecoration(
+                decoration: const InputDecoration(
                   hintText: 'Start typing here...',
                   hintStyle: TextStyle(
                       fontFamily: 'Inter',
@@ -785,7 +785,7 @@ class _AIAssistantWidgetState extends State<AIAssistantWidget> {
                   contentPadding:
                       EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                 ),
-                style: TextStyle(
+                style: const TextStyle(
                     fontFamily: 'Inter',
                     color: Color(0xFF1F2937),
                     fontSize: 14),
@@ -793,15 +793,15 @@ class _AIAssistantWidgetState extends State<AIAssistantWidget> {
               ),
             ),
           ),
-          SizedBox(width: 12),
+          const SizedBox(width: 12),
           GestureDetector(
             onTap: _sendMessage,
             child: Container(
               width: 40,
               height: 40,
-              decoration: BoxDecoration(
+              decoration: const BoxDecoration(
                   color: Color(0xFF3B82F6), shape: BoxShape.circle),
-              child: Icon(Icons.send_rounded, color: Colors.white, size: 20),
+              child: const Icon(Icons.send_rounded, color: Colors.white, size: 20),
             ),
           ),
         ],

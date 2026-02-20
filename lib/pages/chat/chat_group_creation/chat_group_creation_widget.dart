@@ -126,9 +126,9 @@ class _ChatGroupCreationWidgetState extends State<ChatGroupCreationWidget> {
           leading: FlutterFlowIconButton(
             borderRadius: 8.0,
             buttonSize: 40.0,
-            icon: Icon(
+            icon: const Icon(
               Icons.close,
-              color: const Color(0xFF6B7280),
+              color: Color(0xFF6B7280),
               size: 20.0,
             ),
             onPressed: () async {

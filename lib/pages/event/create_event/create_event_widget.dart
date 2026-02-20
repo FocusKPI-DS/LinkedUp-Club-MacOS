@@ -4619,7 +4619,7 @@ class _CreateEventWidgetState extends State<CreateEventWidget> {
                                         price: int.tryParse(
                                             _model.priceTextController.text),
                                         ticketDeadline: _model.deadlinePaying ??
-                                            widget!.event?.ticketDeadline,
+                                            widget.event?.ticketDeadline,
                                         ticketAmount: int.tryParse(
                                             _model.amountTextController.text),
                                         eventLink:

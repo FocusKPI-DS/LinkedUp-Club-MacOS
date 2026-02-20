@@ -71,7 +71,7 @@ class _GroupActionTasksWidgetState extends State<GroupActionTasksWidget> {
         // 35% width panel on the right
         Align(
           alignment: Alignment.centerRight,
-          child: Container(
+          child: SizedBox(
             width: MediaQuery.of(context).size.width * 0.35,
             height: MediaQuery.of(context).size.height,
             child: GestureDetector(
@@ -420,9 +420,9 @@ class _GroupActionTasksWidgetState extends State<GroupActionTasksWidget> {
                         tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                         foregroundColor: const Color(0xFF2563EB),
                       ),
-                      child: Row(
+                      child: const Row(
                         mainAxisSize: MainAxisSize.min,
-                        children: const [
+                        children: [
                           Text(
                             'Details',
                             style: TextStyle(
@@ -954,7 +954,7 @@ class _GroupActionTasksWidgetState extends State<GroupActionTasksWidget> {
                           borderRadius: BorderRadius.circular(8),
                         ),
                         child: DropdownButtonFormField<String>(
-                          value: selectedPriority,
+                          initialValue: selectedPriority,
                           decoration: const InputDecoration(
                             border: InputBorder.none,
                             contentPadding: EdgeInsets.symmetric(
@@ -1478,7 +1478,7 @@ class _GroupActionTasksWidgetState extends State<GroupActionTasksWidget> {
                           borderRadius: BorderRadius.circular(8),
                         ),
                         child: DropdownButtonFormField<String>(
-                          value: selectedPriority,
+                          initialValue: selectedPriority,
                           decoration: const InputDecoration(
                             border: InputBorder.none,
                             contentPadding: EdgeInsets.symmetric(

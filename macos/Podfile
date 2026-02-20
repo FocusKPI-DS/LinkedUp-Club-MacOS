@@ -59,17 +59,9 @@ post_install do |installer|
       config.build_settings['FRAMEWORK_SEARCH_PATHS'] ||= ['$(inherited)']
       config.build_settings['HEADER_SEARCH_PATHS'] ||= ['$(inherited)']
 
-      # FORCE INJECT SEARCH PATHS FOR RUNNER TARGET
-      # This is a workaround because xcconfig inheritance is failing for some reason
-      if target.name == 'Runner'
-        config.build_settings['FRAMEWORK_SEARCH_PATHS'] ||= ['$(inherited)']
-        config.build_settings['FRAMEWORK_SEARCH_PATHS'] << ' "${PODS_CONFIGURATION_BUILD_DIR}"'
-        config.build_settings['FRAMEWORK_SEARCH_PATHS'] << ' "${PODS_CONFIGURATION_BUILD_DIR}/FirebaseMessaging"'
-        config.build_settings['FRAMEWORK_SEARCH_PATHS'] << ' "${PODS_CONFIGURATION_BUILD_DIR}/FirebaseCore"'
-        config.build_settings['FRAMEWORK_SEARCH_PATHS'] << ' "${PODS_CONFIGURATION_BUILD_DIR}/GoogleSignIn"'
-        # Add a catch-all for other pods
-        config.build_settings['FRAMEWORK_SEARCH_PATHS'] << ' "$(PODS_ROOT)/../build/macos/Build/Products/$(CONFIGURATION)"'
-      end
+      # Specific fix for Firebase frameworks which might be header/framework search paths
+      config.build_settings['FRAMEWORK_SEARCH_PATHS'] ||= ['$(inherited)']
+      config.build_settings['HEADER_SEARCH_PATHS'] ||= ['$(inherited)']
       
       # Start of the permission_handler configuration
       config.build_settings['GCC_PREPROCESSOR_DEFINITIONS'] ||= [

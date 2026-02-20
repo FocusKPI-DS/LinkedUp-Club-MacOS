@@ -29,12 +29,12 @@ class IOSNativeSearchButton extends StatelessWidget {
               decoration: BoxDecoration(
                 // Liquid Glass effect with semi-transparent background
                 color: isActive
-                    ? CupertinoColors.systemBlue.withOpacity(0.7)
+                    ? CupertinoColors.systemBlue.withValues(alpha: 0.7)
                     : CupertinoColors.white.withOpacity(0.7),
                 borderRadius: BorderRadius.circular(20.0),
                 border: Border.all(
                   color: isActive
-                      ? CupertinoColors.systemBlue.withOpacity(0.8)
+                      ? CupertinoColors.systemBlue.withValues(alpha: 0.8)
                       : CupertinoColors.white.withOpacity(0.8),
                   width: 1.5,
                 ),

@@ -17,7 +17,7 @@ import 'package:firebase_storage/firebase_storage.dart';
 export 'mobile_new_group_chat_model.dart';
 
 class MobileNewGroupChatWidget extends StatefulWidget {
-  const MobileNewGroupChatWidget({Key? key}) : super(key: key);
+  const MobileNewGroupChatWidget({super.key});
 
   static String routeName = 'MobileNewGroupChat';
   static String routePath = '/mobile-new-group-chat';
@@ -78,7 +78,7 @@ class _MobileNewGroupChatWidgetState extends State<MobileNewGroupChatWidget> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('Error picking image: $e'),
-          backgroundColor: Color(0xFFFF3B30),
+          backgroundColor: const Color(0xFFFF3B30),
         ),
       );
     }
@@ -107,7 +107,7 @@ class _MobileNewGroupChatWidgetState extends State<MobileNewGroupChatWidget> {
 
       // Show success message
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
+        const SnackBar(
           content: Text('Image uploaded successfully!'),
           backgroundColor: Color(0xFF34C759),
         ),
@@ -127,7 +127,7 @@ class _MobileNewGroupChatWidgetState extends State<MobileNewGroupChatWidget> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(errorMessage),
-          backgroundColor: Color(0xFFFF3B30),
+          backgroundColor: const Color(0xFFFF3B30),
         ),
       );
     }
@@ -137,7 +137,7 @@ class _MobileNewGroupChatWidgetState extends State<MobileNewGroupChatWidget> {
     try {
       if (_model.selectedMembers.isEmpty) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
+          const SnackBar(
             content: Text('Please select at least one member'),
             backgroundColor: Color(0xFFFF3B30),
           ),
@@ -245,7 +245,7 @@ class _MobileNewGroupChatWidgetState extends State<MobileNewGroupChatWidget> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('Error creating group: $e'),
-          backgroundColor: Color(0xFFFF3B30),
+          backgroundColor: const Color(0xFFFF3B30),
         ),
       );
     }
@@ -262,7 +262,7 @@ class _MobileNewGroupChatWidgetState extends State<MobileNewGroupChatWidget> {
             // Custom header with iOS 26 native back button
             Container(
               height: 44,
-              padding: EdgeInsets.symmetric(horizontal: 8),
+              padding: const EdgeInsets.symmetric(horizontal: 8),
               child: Row(
                 children: [
                   // Floating back button - iOS 26+ style with liquid glass effects
@@ -275,18 +275,18 @@ class _MobileNewGroupChatWidgetState extends State<MobileNewGroupChatWidget> {
                       child: AdaptiveFloatingActionButton(
                         mini: true,
                         backgroundColor: Colors.white,
-                        foregroundColor: Color(0xFF007AFF),
+                        foregroundColor: const Color(0xFF007AFF),
                         onPressed: () => Navigator.of(context).pop(),
-                        child: Icon(
+                        child: const Icon(
                           CupertinoIcons.chevron_left,
                           size: 17,
                         ),
                       ),
                     ),
                   ),
-                  SizedBox(width: 8),
+                  const SizedBox(width: 8),
                   // Centered title
-                  Expanded(
+                  const Expanded(
                     child: Center(
                       child: Text(
                         'New Group Chat',
@@ -300,19 +300,19 @@ class _MobileNewGroupChatWidgetState extends State<MobileNewGroupChatWidget> {
                       ),
                     ),
                   ),
-                  SizedBox(width: 40), // Balance the back button width
+                  const SizedBox(width: 40), // Balance the back button width
                 ],
               ),
             ),
             // Group creation form
             Expanded(
               child: SingleChildScrollView(
-                padding: EdgeInsets.all(16),
+                padding: const EdgeInsets.all(16),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     // Group name input
-                    Text(
+                    const Text(
                       'Group Name (Optional)',
                       style: TextStyle(
                         fontFamily: 'SF Pro Text',
@@ -322,7 +322,7 @@ class _MobileNewGroupChatWidgetState extends State<MobileNewGroupChatWidget> {
                         letterSpacing: -0.41,
                       ),
                     ),
-                    SizedBox(height: 8),
+                    const SizedBox(height: 8),
                     Container(
                       decoration: BoxDecoration(
                         color: CupertinoColors.systemGrey6,
@@ -340,14 +340,14 @@ class _MobileNewGroupChatWidgetState extends State<MobileNewGroupChatWidget> {
                           });
                         },
                         placeholder: 'Enter group name',
-                        placeholderStyle: TextStyle(
+                        placeholderStyle: const TextStyle(
                           fontFamily: 'SF Pro Text',
                           color: CupertinoColors.systemGrey,
                           fontSize: 16,
                           fontWeight: FontWeight.w400,
                         ),
-                        padding: EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-                        style: TextStyle(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                        style: const TextStyle(
                           fontFamily: 'SF Pro Text',
                           color: CupertinoColors.label,
                           fontSize: 16,
@@ -359,9 +359,9 @@ class _MobileNewGroupChatWidgetState extends State<MobileNewGroupChatWidget> {
                         ),
                       ),
                     ),
-                    SizedBox(height: 20),
+                    const SizedBox(height: 20),
                     // Group image upload
-                    Text(
+                    const Text(
                       'Group Image (Optional)',
                       style: TextStyle(
                         fontFamily: 'SF Pro Text',
@@ -371,7 +371,7 @@ class _MobileNewGroupChatWidgetState extends State<MobileNewGroupChatWidget> {
                         letterSpacing: -0.41,
                       ),
                     ),
-                    SizedBox(height: 8),
+                    const SizedBox(height: 8),
                     Row(
                       children: [
                         // Image preview/placeholder
@@ -389,7 +389,7 @@ class _MobileNewGroupChatWidgetState extends State<MobileNewGroupChatWidget> {
                               ),
                             ),
                             child: _model.isUploadingImage
-                                ? Center(
+                                ? const Center(
                                     child: CupertinoActivityIndicator(
                                       color: CupertinoColors.systemBlue,
                                     ),
@@ -411,7 +411,7 @@ class _MobileNewGroupChatWidgetState extends State<MobileNewGroupChatWidget> {
                                             width: 80,
                                             height: 80,
                                             color: CupertinoColors.systemGrey6,
-                                            child: Icon(
+                                            child: const Icon(
                                               CupertinoIcons.photo,
                                               color: CupertinoColors.systemGrey,
                                               size: 24,
@@ -421,7 +421,7 @@ class _MobileNewGroupChatWidgetState extends State<MobileNewGroupChatWidget> {
                                             width: 80,
                                             height: 80,
                                             color: CupertinoColors.systemGrey6,
-                                            child: Icon(
+                                            child: const Icon(
                                               CupertinoIcons.photo,
                                               color: CupertinoColors.systemGrey,
                                               size: 24,
@@ -429,7 +429,7 @@ class _MobileNewGroupChatWidgetState extends State<MobileNewGroupChatWidget> {
                                           ),
                                         ),
                                       )
-                                    : Column(
+                                    : const Column(
                                         mainAxisAlignment: MainAxisAlignment.center,
                                         children: [
                                           Icon(
@@ -451,7 +451,7 @@ class _MobileNewGroupChatWidgetState extends State<MobileNewGroupChatWidget> {
                                       ),
                           ),
                         ),
-                        SizedBox(width: 12),
+                        const SizedBox(width: 12),
                         // Image controls
                         Expanded(
                           child: Column(
@@ -471,7 +471,7 @@ class _MobileNewGroupChatWidgetState extends State<MobileNewGroupChatWidget> {
                                   letterSpacing: -0.24,
                                 ),
                               ),
-                              SizedBox(height: 8),
+                              const SizedBox(height: 8),
                               Row(
                                 children: [
                                   CupertinoButton(
@@ -481,25 +481,24 @@ class _MobileNewGroupChatWidgetState extends State<MobileNewGroupChatWidget> {
                                     color: _model.isUploadingImage
                                         ? CupertinoColors.systemGrey
                                         : CupertinoColors.systemBlue,
-                                    padding: EdgeInsets.symmetric(
+                                    padding: const EdgeInsets.symmetric(
                                         horizontal: 12, vertical: 8),
                                     borderRadius: BorderRadius.circular(8),
-                                    minSize: 0,
                                     child: Text(
                                       _model.groupImageUrl != null
                                           ? 'Change'
                                           : 'Select',
-                                      style: TextStyle(
+                                      style: const TextStyle(
                                         fontFamily: 'SF Pro Text',
                                         color: CupertinoColors.white,
                                         fontSize: 14,
                                         fontWeight: FontWeight.w500,
                                         letterSpacing: -0.15,
                                       ),
-                                    ),
+                                    ), minimumSize: Size(0, 0),
                                   ),
                                   if (_model.groupImageUrl != null) ...[
-                                    SizedBox(width: 8),
+                                    const SizedBox(width: 8),
                                     CupertinoButton(
                                       onPressed: () {
                                         setState(() {
@@ -508,11 +507,10 @@ class _MobileNewGroupChatWidgetState extends State<MobileNewGroupChatWidget> {
                                         });
                                       },
                                       color: CupertinoColors.systemRed,
-                                      padding: EdgeInsets.symmetric(
+                                      padding: const EdgeInsets.symmetric(
                                           horizontal: 12, vertical: 8),
                                       borderRadius: BorderRadius.circular(8),
-                                      minSize: 0,
-                                      child: Text(
+                                      child: const Text(
                                         'Remove',
                                         style: TextStyle(
                                           fontFamily: 'SF Pro Text',
@@ -521,7 +519,7 @@ class _MobileNewGroupChatWidgetState extends State<MobileNewGroupChatWidget> {
                                           fontWeight: FontWeight.w500,
                                           letterSpacing: -0.15,
                                         ),
-                                      ),
+                                      ), minimumSize: Size(0, 0),
                                     ),
                                   ],
                                 ],
@@ -531,13 +529,13 @@ class _MobileNewGroupChatWidgetState extends State<MobileNewGroupChatWidget> {
                         ),
                       ],
                     ),
-                    SizedBox(height: 20),
+                    const SizedBox(height: 20),
                     // Selected members header with search
                     Row(
                       children: [
                         Text(
                           'Selected Members (${_model.selectedMembers.length})',
-                          style: TextStyle(
+                          style: const TextStyle(
                             fontFamily: 'SF Pro Text',
                             color: CupertinoColors.label,
                             fontSize: 17,
@@ -545,7 +543,7 @@ class _MobileNewGroupChatWidgetState extends State<MobileNewGroupChatWidget> {
                             letterSpacing: -0.41,
                           ),
                         ),
-                        Spacer(),
+                        const Spacer(),
                         Container(
                           width: 180,
                           height: 36,
@@ -561,15 +559,15 @@ class _MobileNewGroupChatWidgetState extends State<MobileNewGroupChatWidget> {
                             controller: _model.groupMemberSearchController,
                             onChanged: (_) => setState(() {}),
                             placeholder: 'Search...',
-                            placeholderStyle: TextStyle(
+                            placeholderStyle: const TextStyle(
                               fontFamily: 'SF Pro Text',
                               color: CupertinoColors.systemGrey,
                               fontSize: 14,
                               fontWeight: FontWeight.w400,
                             ),
                             padding:
-                                EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                            prefix: Padding(
+                                const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                            prefix: const Padding(
                               padding: EdgeInsets.only(left: 8, right: 4),
                               child: Icon(
                                 CupertinoIcons.search,
@@ -586,7 +584,7 @@ class _MobileNewGroupChatWidgetState extends State<MobileNewGroupChatWidget> {
                                         _model.groupMemberSearchController?.clear();
                                       });
                                     },
-                                    child: Padding(
+                                    child: const Padding(
                                       padding: EdgeInsets.only(right: 8),
                                       child: Icon(
                                         CupertinoIcons.xmark_circle_fill,
@@ -596,7 +594,7 @@ class _MobileNewGroupChatWidgetState extends State<MobileNewGroupChatWidget> {
                                     ),
                                   )
                                 : null,
-                            style: TextStyle(
+                            style: const TextStyle(
                               fontFamily: 'SF Pro Text',
                               color: CupertinoColors.label,
                               fontSize: 14,
@@ -610,7 +608,7 @@ class _MobileNewGroupChatWidgetState extends State<MobileNewGroupChatWidget> {
                         ),
                       ],
                     ),
-                    SizedBox(height: 8),
+                    const SizedBox(height: 8),
                     // Users list for selection (filtered by connections)
                     Container(
                       height: 300,
@@ -623,7 +621,7 @@ class _MobileNewGroupChatWidgetState extends State<MobileNewGroupChatWidget> {
                         ),
                       ),
                       child: currentUserReference == null
-                          ? Center(
+                          ? const Center(
                               child: CupertinoActivityIndicator(
                                 color: CupertinoColors.systemBlue,
                               ),
@@ -632,7 +630,7 @@ class _MobileNewGroupChatWidgetState extends State<MobileNewGroupChatWidget> {
                               stream: UsersRecord.getDocument(currentUserReference!),
                               builder: (context, currentUserSnapshot) {
                                 if (!currentUserSnapshot.hasData) {
-                                  return Center(
+                                  return const Center(
                                     child: CupertinoActivityIndicator(
                                       color: CupertinoColors.systemBlue,
                                     ),
@@ -643,7 +641,7 @@ class _MobileNewGroupChatWidgetState extends State<MobileNewGroupChatWidget> {
                                 final connections = currentUser.friends;
 
                                 if (connections.isEmpty) {
-                                  return Center(
+                                  return const Center(
                                     child: Column(
                                       mainAxisSize: MainAxisSize.min,
                                       children: [
@@ -684,7 +682,7 @@ class _MobileNewGroupChatWidgetState extends State<MobileNewGroupChatWidget> {
                                     '';
 
                                 return ListView.builder(
-                                  padding: EdgeInsets.all(8),
+                                  padding: const EdgeInsets.all(8),
                                   itemCount: connections.length,
                                   itemBuilder: (context, index) {
                                     final connectionRef = connections[index];
@@ -693,7 +691,7 @@ class _MobileNewGroupChatWidgetState extends State<MobileNewGroupChatWidget> {
                                       stream: UsersRecord.getDocument(connectionRef),
                                       builder: (context, userSnapshot) {
                                         if (!userSnapshot.hasData) {
-                                          return SizedBox.shrink();
+                                          return const SizedBox.shrink();
                                         }
 
                                         final user = userSnapshot.data!;
@@ -703,7 +701,7 @@ class _MobileNewGroupChatWidgetState extends State<MobileNewGroupChatWidget> {
                                             .contains(user.reference);
 
                                         if (isCurrentUser) {
-                                          return SizedBox.shrink();
+                                          return const SizedBox.shrink();
                                         }
 
                                         // Check if search query matches
@@ -713,7 +711,7 @@ class _MobileNewGroupChatWidgetState extends State<MobileNewGroupChatWidget> {
                                           final email = user.email.toLowerCase();
                                           if (!displayName.contains(searchQuery) &&
                                               !email.contains(searchQuery)) {
-                                            return SizedBox.shrink();
+                                            return const SizedBox.shrink();
                                           }
                                         }
 
@@ -730,11 +728,11 @@ class _MobileNewGroupChatWidgetState extends State<MobileNewGroupChatWidget> {
                                             });
                                           },
                                           child: Container(
-                                            margin: EdgeInsets.only(bottom: 4),
-                                            padding: EdgeInsets.all(12),
+                                            margin: const EdgeInsets.only(bottom: 4),
+                                            padding: const EdgeInsets.all(12),
                                             decoration: BoxDecoration(
                                               color: isSelected
-                                                  ? CupertinoColors.systemBlue.withOpacity(0.1)
+                                                  ? CupertinoColors.systemBlue.withValues(alpha: 0.1)
                                                   : CupertinoColors.systemBackground,
                                               borderRadius: BorderRadius.circular(8),
                                               border: Border.all(
@@ -752,7 +750,7 @@ class _MobileNewGroupChatWidgetState extends State<MobileNewGroupChatWidget> {
                                                     Container(
                                                       width: 40,
                                                       height: 40,
-                                                      decoration: BoxDecoration(
+                                                      decoration: const BoxDecoration(
                                                         color: CupertinoColors.systemGrey5,
                                                         shape: BoxShape.circle,
                                                       ),
@@ -771,11 +769,11 @@ class _MobileNewGroupChatWidgetState extends State<MobileNewGroupChatWidget> {
                                                           placeholder: (context, url) => Container(
                                                             width: 40,
                                                             height: 40,
-                                                            decoration: BoxDecoration(
+                                                            decoration: const BoxDecoration(
                                                               color: CupertinoColors.systemGrey5,
                                                               shape: BoxShape.circle,
                                                             ),
-                                                            child: Icon(
+                                                            child: const Icon(
                                                               CupertinoIcons.person_fill,
                                                               color: CupertinoColors.systemGrey,
                                                               size: 18,
@@ -784,11 +782,11 @@ class _MobileNewGroupChatWidgetState extends State<MobileNewGroupChatWidget> {
                                                           errorWidget: (context, url, error) => Container(
                                                             width: 40,
                                                             height: 40,
-                                                            decoration: BoxDecoration(
+                                                            decoration: const BoxDecoration(
                                                               color: CupertinoColors.systemGrey5,
                                                               shape: BoxShape.circle,
                                                             ),
-                                                            child: Icon(
+                                                            child: const Icon(
                                                               CupertinoIcons.person_fill,
                                                               color: CupertinoColors.systemGrey,
                                                               size: 18,
@@ -817,14 +815,14 @@ class _MobileNewGroupChatWidgetState extends State<MobileNewGroupChatWidget> {
                                                       ),
                                                   ],
                                                 ),
-                                                SizedBox(width: 12),
+                                                const SizedBox(width: 12),
                                                 Expanded(
                                                   child: Column(
                                                     crossAxisAlignment: CrossAxisAlignment.start,
                                                     children: [
                                                       Text(
                                                         user.displayName,
-                                                        style: TextStyle(
+                                                        style: const TextStyle(
                                                           fontFamily: 'SF Pro Text',
                                                           color: CupertinoColors.label,
                                                           fontSize: 15,
@@ -834,10 +832,10 @@ class _MobileNewGroupChatWidgetState extends State<MobileNewGroupChatWidget> {
                                                         maxLines: 1,
                                                         overflow: TextOverflow.ellipsis,
                                                       ),
-                                                      SizedBox(height: 2),
+                                                      const SizedBox(height: 2),
                                                       Text(
                                                         user.email,
-                                                        style: TextStyle(
+                                                        style: const TextStyle(
                                                           fontFamily: 'SF Pro Text',
                                                           color: CupertinoColors.systemGrey,
                                                           fontSize: 13,
@@ -851,12 +849,12 @@ class _MobileNewGroupChatWidgetState extends State<MobileNewGroupChatWidget> {
                                                 ),
                                                 if (isSelected)
                                                   Container(
-                                                    padding: EdgeInsets.all(4),
-                                                    decoration: BoxDecoration(
+                                                    padding: const EdgeInsets.all(4),
+                                                    decoration: const BoxDecoration(
                                                       color: CupertinoColors.white,
                                                       shape: BoxShape.circle,
                                                     ),
-                                                    child: Icon(
+                                                    child: const Icon(
                                                       CupertinoIcons.check_mark,
                                                       color: CupertinoColors.systemBlue,
                                                       size: 16,
@@ -872,7 +870,7 @@ class _MobileNewGroupChatWidgetState extends State<MobileNewGroupChatWidget> {
                                 );
                               }),
                     ),
-                    SizedBox(height: 20),
+                    const SizedBox(height: 20),
                     // Create group button
                     SizedBox(
                       width: double.infinity,
@@ -883,9 +881,9 @@ class _MobileNewGroupChatWidgetState extends State<MobileNewGroupChatWidget> {
                         color: _model.selectedMembers.isNotEmpty
                             ? CupertinoColors.systemBlue
                             : CupertinoColors.systemGrey,
-                        padding: EdgeInsets.symmetric(vertical: 16),
+                        padding: const EdgeInsets.symmetric(vertical: 16),
                         borderRadius: BorderRadius.circular(10),
-                        child: Text(
+                        child: const Text(
                           'Create Group',
                           style: TextStyle(
                             fontFamily: 'SF Pro Text',

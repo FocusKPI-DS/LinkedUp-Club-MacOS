@@ -178,7 +178,7 @@ Future<bool> gmailOAuthConnect([BuildContext? context]) async {
       throw Exception('User must be authenticated before connecting Gmail');
     }
 
-    print('🔵 Starting Gmail OAuth flow for user: ${currentUserUid}');
+    print('🔵 Starting Gmail OAuth flow for user: $currentUserUid');
 
     // Call a Cloud Function to handle the OAuth flow
     // This is more secure and works better with mobile apps

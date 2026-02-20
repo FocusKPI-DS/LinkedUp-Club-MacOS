@@ -1,15 +1,12 @@
 import 'dart:async';
-import 'dart:convert';
 
 import 'serialization_util.dart';
 import '/backend/backend.dart';
 import 'package:ff_theme/flutter_flow/flutter_flow_theme.dart';
 import '../../flutter_flow/flutter_flow_util.dart';
-import '../../flutter_flow/nav/nav.dart' show appNavigatorKey;
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
-import 'package:go_router/go_router.dart';
 
 final _handledMessageIds = <String?>{};
 

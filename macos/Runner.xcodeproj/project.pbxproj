@@ -437,9 +437,9 @@
 		};
 		338D0CEA231458BD00FA5F75 /* Profile */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = 1FEBD8C5CC8C709A2AF21F51 /* Pods-Runner.profile.xcconfig */;
+			baseConfigurationReference = 7AFA3C8E1D35360C0083082E /* Release.xcconfig */;
 			buildSettings = {
-				ARCHS = "$(ARCHS_STANDARD)";
+				ARCHS = arm64;
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CLANG_ENABLE_MODULES = YES;
 				CODE_SIGN_ENTITLEMENTS = Runner/RunnerProfile.entitlements;
@@ -466,7 +466,7 @@
 		338D0CEB231458BD00FA5F75 /* Profile */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				ARCHS = "$(ARCHS_STANDARD)";
+				ARCHS = arm64;
 				CODE_SIGN_STYLE = Automatic;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 			};
@@ -573,9 +573,9 @@
 		};
 		33CC10FC2044A3C60003C045 /* Debug */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = 143AA77A8E96FC0A03332100 /* Pods-Runner.debug.xcconfig */;
+			baseConfigurationReference = 9740EEB21CF90195004384FC /* Debug.xcconfig */;
 			buildSettings = {
-				ARCHS = "$(ARCHS_STANDARD)";
+				ARCHS = arm64;
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CLANG_ENABLE_MODULES = YES;
 				CODE_SIGN_ENTITLEMENTS = Runner/DebugProfile.entitlements;
@@ -584,47 +584,7 @@
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 28;
 				DEVELOPMENT_TEAM = 3GQ93ABMNG;
-				FRAMEWORK_SEARCH_PATHS = (
-					"$(inherited)",
-					"$(BUILD_DIR)/$(CONFIGURATION)/FirebaseMessaging",
-					"$(BUILD_DIR)/$(CONFIGURATION)/FirebaseCore",
-					"$(BUILD_DIR)/$(CONFIGURATION)/GoogleSignIn",
-					"$(BUILD_DIR)/$(CONFIGURATION)/app_badge_plus",
-					"$(BUILD_DIR)/$(CONFIGURATION)/app_links",
-					"$(BUILD_DIR)/$(CONFIGURATION)/assets_audio_player",
-					"$(BUILD_DIR)/$(CONFIGURATION)/audio_session",
-					"$(BUILD_DIR)/$(CONFIGURATION)/camera_macos",
-					"$(BUILD_DIR)/$(CONFIGURATION)/cloud_firestore",
-					"$(BUILD_DIR)/$(CONFIGURATION)/cloud_functions",
-					"$(BUILD_DIR)/$(CONFIGURATION)/desktop_drop",
-					"$(BUILD_DIR)/$(CONFIGURATION)/device_info_plus",
-					"$(BUILD_DIR)/$(CONFIGURATION)/emoji_picker_flutter",
-					"$(BUILD_DIR)/$(CONFIGURATION)/file_picker",
-					"$(BUILD_DIR)/$(CONFIGURATION)/file_selector_macos",
-					"$(BUILD_DIR)/$(CONFIGURATION)/firebase_auth",
-					"$(BUILD_DIR)/$(CONFIGURATION)/firebase_core",
-					"$(BUILD_DIR)/$(CONFIGURATION)/firebase_messaging",
-					"$(BUILD_DIR)/$(CONFIGURATION)/firebase_storage",
-					"$(BUILD_DIR)/$(CONFIGURATION)/flutter_inappwebview_macos",
-					"$(BUILD_DIR)/$(CONFIGURATION)/geolocator_apple",
-					"$(BUILD_DIR)/$(CONFIGURATION)/google_sign_in_ios",
-					"$(BUILD_DIR)/$(CONFIGURATION)/irondash_engine_context",
-					"$(BUILD_DIR)/$(CONFIGURATION)/just_audio",
-					"$(BUILD_DIR)/$(CONFIGURATION)/nanopb",
-					"$(BUILD_DIR)/$(CONFIGURATION)/package_info_plus",
-					"$(BUILD_DIR)/$(CONFIGURATION)/path_provider_foundation",
-					"$(BUILD_DIR)/$(CONFIGURATION)/record_macos",
-					"$(BUILD_DIR)/$(CONFIGURATION)/share_plus",
-					"$(BUILD_DIR)/$(CONFIGURATION)/shared_preferences_foundation",
-					"$(BUILD_DIR)/$(CONFIGURATION)/sign_in_with_apple",
-					"$(BUILD_DIR)/$(CONFIGURATION)/sqflite",
-					"$(BUILD_DIR)/$(CONFIGURATION)/super_native_extensions",
-					"$(BUILD_DIR)/$(CONFIGURATION)/url_launcher_macos",
-					"$(BUILD_DIR)/$(CONFIGURATION)/video_player_avfoundation",
-					"$(BUILD_DIR)/$(CONFIGURATION)/wakelock_plus",
-					"$(BUILD_DIR)/$(CONFIGURATION)/webview_flutter_wkwebview",
-					"$(BUILD_DIR)/$(CONFIGURATION)/zego_express_engine",
-				);
+				FRAMEWORK_SEARCH_PATHS = "$(inherited)";
 				INFOPLIST_FILE = Runner/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = Lona;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.social-networking";
@@ -643,9 +603,9 @@
 		};
 		33CC10FD2044A3C60003C045 /* Release */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = 12BAB442200EA43233CB5A50 /* Pods-Runner.release.xcconfig */;
+			baseConfigurationReference = 7AFA3C8E1D35360C0083082E /* Release.xcconfig */;
 			buildSettings = {
-				ARCHS = "$(ARCHS_STANDARD)";
+				ARCHS = arm64;
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CLANG_ENABLE_MODULES = YES;
 				CODE_SIGN_ENTITLEMENTS = Runner/Release.entitlements;
@@ -654,47 +614,7 @@
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 28;
 				DEVELOPMENT_TEAM = 3GQ93ABMNG;
-				FRAMEWORK_SEARCH_PATHS = (
-					"$(inherited)",
-					"$(BUILD_DIR)/$(CONFIGURATION)/FirebaseMessaging",
-					"$(BUILD_DIR)/$(CONFIGURATION)/FirebaseCore",
-					"$(BUILD_DIR)/$(CONFIGURATION)/GoogleSignIn",
-					"$(BUILD_DIR)/$(CONFIGURATION)/app_badge_plus",
-					"$(BUILD_DIR)/$(CONFIGURATION)/app_links",
-					"$(BUILD_DIR)/$(CONFIGURATION)/assets_audio_player",
-					"$(BUILD_DIR)/$(CONFIGURATION)/audio_session",
-					"$(BUILD_DIR)/$(CONFIGURATION)/camera_macos",
-					"$(BUILD_DIR)/$(CONFIGURATION)/cloud_firestore",
-					"$(BUILD_DIR)/$(CONFIGURATION)/cloud_functions",
-					"$(BUILD_DIR)/$(CONFIGURATION)/desktop_drop",
-					"$(BUILD_DIR)/$(CONFIGURATION)/device_info_plus",
-					"$(BUILD_DIR)/$(CONFIGURATION)/emoji_picker_flutter",
-					"$(BUILD_DIR)/$(CONFIGURATION)/file_picker",
-					"$(BUILD_DIR)/$(CONFIGURATION)/file_selector_macos",
-					"$(BUILD_DIR)/$(CONFIGURATION)/firebase_auth",
-					"$(BUILD_DIR)/$(CONFIGURATION)/firebase_core",
-					"$(BUILD_DIR)/$(CONFIGURATION)/firebase_messaging",
-					"$(BUILD_DIR)/$(CONFIGURATION)/firebase_storage",
-					"$(BUILD_DIR)/$(CONFIGURATION)/flutter_inappwebview_macos",
-					"$(BUILD_DIR)/$(CONFIGURATION)/geolocator_apple",
-					"$(BUILD_DIR)/$(CONFIGURATION)/google_sign_in_ios",
-					"$(BUILD_DIR)/$(CONFIGURATION)/irondash_engine_context",
-					"$(BUILD_DIR)/$(CONFIGURATION)/just_audio",
-					"$(BUILD_DIR)/$(CONFIGURATION)/nanopb",
-					"$(BUILD_DIR)/$(CONFIGURATION)/package_info_plus",
-					"$(BUILD_DIR)/$(CONFIGURATION)/path_provider_foundation",
-					"$(BUILD_DIR)/$(CONFIGURATION)/record_macos",
-					"$(BUILD_DIR)/$(CONFIGURATION)/share_plus",
-					"$(BUILD_DIR)/$(CONFIGURATION)/shared_preferences_foundation",
-					"$(BUILD_DIR)/$(CONFIGURATION)/sign_in_with_apple",
-					"$(BUILD_DIR)/$(CONFIGURATION)/sqflite",
-					"$(BUILD_DIR)/$(CONFIGURATION)/super_native_extensions",
-					"$(BUILD_DIR)/$(CONFIGURATION)/url_launcher_macos",
-					"$(BUILD_DIR)/$(CONFIGURATION)/video_player_avfoundation",
-					"$(BUILD_DIR)/$(CONFIGURATION)/wakelock_plus",
-					"$(BUILD_DIR)/$(CONFIGURATION)/webview_flutter_wkwebview",
-					"$(BUILD_DIR)/$(CONFIGURATION)/zego_express_engine",
-				);
+				FRAMEWORK_SEARCH_PATHS = "$(inherited)";
 				INFOPLIST_FILE = Runner/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = Lona;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.social-networking";
@@ -713,7 +633,7 @@
 		33CC111C2044C6BA0003C045 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				ARCHS = "$(ARCHS_STANDARD)";
+				ARCHS = arm64;
 				CODE_SIGN_STYLE = Automatic;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 			};
@@ -722,7 +642,7 @@
 		33CC111D2044C6BA0003C045 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				ARCHS = "$(ARCHS_STANDARD)";
+				ARCHS = arm64;
 				CODE_SIGN_STYLE = Automatic;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 			};

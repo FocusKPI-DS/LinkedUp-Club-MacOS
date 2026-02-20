@@ -26,11 +26,11 @@ class AIAnnouncementsSummary extends StatelessWidget {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(16.0),
-        boxShadow: [
+        boxShadow: const [
           BoxShadow(
             blurRadius: 8.0,
-            color: const Color(0x1A000000),
-            offset: const Offset(0.0, 2.0),
+            color: Color(0x1A000000),
+            offset: Offset(0.0, 2.0),
           ),
         ],
       ),
@@ -153,9 +153,9 @@ class AIAnnouncementsSummary extends StatelessWidget {
               // Key Insights
               Row(
                 children: [
-                  Icon(
+                  const Icon(
                     Icons.insights,
-                    color: const Color(0xFF3182CE),
+                    color: Color(0xFF3182CE),
                     size: 20.0,
                   ),
                   const SizedBox(width: 8.0),

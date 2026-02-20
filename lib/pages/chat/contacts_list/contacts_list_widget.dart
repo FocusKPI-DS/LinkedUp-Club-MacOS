@@ -90,13 +90,13 @@ class _ContactsListWidgetState extends State<ContactsListWidget>
   Color _getRoleColor(String role) {
     switch (role.toLowerCase()) {
       case 'owner':
-        return Color(0xFFDC2626); // Red
+        return const Color(0xFFDC2626); // Red
       case 'moderator':
-        return Color(0xFF059669); // Green
+        return const Color(0xFF059669); // Green
       case 'member':
-        return Color(0xFF6B7280); // Gray
+        return const Color(0xFF6B7280); // Gray
       default:
-        return Color(0xFF6B7280); // Default gray
+        return const Color(0xFF6B7280); // Default gray
     }
   }
 
@@ -119,7 +119,7 @@ class _ContactsListWidgetState extends State<ContactsListWidget>
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Error starting chat: $e'),
-            backgroundColor: Color(0xFFEF4444),
+            backgroundColor: const Color(0xFFEF4444),
           ),
         );
       }
@@ -920,7 +920,7 @@ class _ContactsListWidgetState extends State<ContactsListWidget>
                                             member.userRef!),
                                         builder: (context, userSnapshot) {
                                           if (!userSnapshot.hasData) {
-                                            return SizedBox.shrink();
+                                            return const SizedBox.shrink();
                                           }
 
                                           final user = userSnapshot.data!;
@@ -929,7 +929,7 @@ class _ContactsListWidgetState extends State<ContactsListWidget>
                                                   currentUserReference;
 
                                           if (isCurrentUser) {
-                                            return SizedBox.shrink();
+                                            return const SizedBox.shrink();
                                           }
 
                                           return InkWell(
@@ -943,8 +943,8 @@ class _ContactsListWidgetState extends State<ContactsListWidget>
                                             },
                                             child: Container(
                                               margin:
-                                                  EdgeInsets.only(bottom: 12),
-                                              padding: EdgeInsets.all(12),
+                                                  const EdgeInsets.only(bottom: 12),
+                                              padding: const EdgeInsets.all(12),
                                               decoration: BoxDecoration(
                                                 color:
                                                     FlutterFlowTheme.of(context)
@@ -975,7 +975,7 @@ class _ContactsListWidgetState extends State<ContactsListWidget>
                                                       fit: BoxFit.cover,
                                                     ),
                                                   ),
-                                                  SizedBox(width: 12),
+                                                  const SizedBox(width: 12),
                                                   Expanded(
                                                     child: Column(
                                                       mainAxisSize:
@@ -1006,7 +1006,7 @@ class _ContactsListWidgetState extends State<ContactsListWidget>
                                                               ),
                                                             ),
                                                             Container(
-                                                              padding: EdgeInsets
+                                                              padding: const EdgeInsets
                                                                   .symmetric(
                                                                       horizontal:
                                                                           8,
@@ -1026,7 +1026,7 @@ class _ContactsListWidgetState extends State<ContactsListWidget>
                                                                 member.role
                                                                     .toUpperCase(),
                                                                 style:
-                                                                    TextStyle(
+                                                                    const TextStyle(
                                                                   color: Colors
                                                                       .white,
                                                                   fontSize: 10,
@@ -1038,7 +1038,7 @@ class _ContactsListWidgetState extends State<ContactsListWidget>
                                                             ),
                                                           ],
                                                         ),
-                                                        SizedBox(height: 4),
+                                                        const SizedBox(height: 4),
                                                         Text(
                                                           user.email,
                                                           style: FlutterFlowTheme
@@ -1050,7 +1050,7 @@ class _ContactsListWidgetState extends State<ContactsListWidget>
                                                                 fontSize: 12.0,
                                                               ),
                                                         ),
-                                                        SizedBox(height: 4),
+                                                        const SizedBox(height: 4),
                                                         Text(
                                                           'Tap to start a chat',
                                                           style: FlutterFlowTheme

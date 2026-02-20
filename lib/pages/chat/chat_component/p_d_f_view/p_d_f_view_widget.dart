@@ -194,17 +194,17 @@ class _PDFViewWidgetState extends State<PDFViewWidget> {
        return Image.network(
           widget.url!,
           fit: BoxFit.contain,
-          errorBuilder: (context, error, stackTrace) => Center(child: Text('Failed to load image')),
+          errorBuilder: (context, error, stackTrace) => const Center(child: Text('Failed to load image')),
           loadingBuilder: (context, child, loadingProgress) {
             if (loadingProgress == null) return child;
-            return Center(child: CircularProgressIndicator());
+            return const Center(child: CircularProgressIndicator());
           },
        );
     } else if (type == 'text') {
-       if (_isLoading) return Center(child: CircularProgressIndicator());
+       if (_isLoading) return const Center(child: CircularProgressIndicator());
        if (_errorMessage != null) return Center(child: Text(_errorMessage!));
        return SingleChildScrollView(
-         padding: EdgeInsets.all(16),
+         padding: const EdgeInsets.all(16),
          child: SelectableText(
            _textContent ?? '',
            style: GoogleFonts.robotoMono(fontSize: 14),
@@ -217,14 +217,14 @@ class _PDFViewWidgetState extends State<PDFViewWidget> {
        
        return Stack(
          children: [
-           Center(
+           const Center(
              child: Column(
                mainAxisSize: MainAxisSize.min,
                children: [
                  CircularProgressIndicator(),
                  SizedBox(height: 16),
                  Padding(
-                   padding: const EdgeInsets.symmetric(horizontal: 24.0),
+                   padding: EdgeInsets.symmetric(horizontal: 24.0),
                    child: Text(
                      'Loading preview...\n\nIf the file does not appear, it might not be publicly accessible (e.g. requires login). In that case, please use the Download button below.',
                      textAlign: TextAlign.center,
@@ -248,7 +248,7 @@ class _PDFViewWidgetState extends State<PDFViewWidget> {
          ],
        );
     } else {
-       return Center(
+       return const Center(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [

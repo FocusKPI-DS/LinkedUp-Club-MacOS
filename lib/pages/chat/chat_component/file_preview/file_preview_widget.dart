@@ -9,11 +9,11 @@ import 'dart:ui';
 
 class FilePreviewWidget extends StatefulWidget {
   const FilePreviewWidget({
-    Key? key,
+    super.key,
     required this.mediaFile,
     required this.fileName,
     required this.onSend,
-  }) : super(key: key);
+  });
 
   final SelectedFile mediaFile;
   final String fileName;
@@ -203,7 +203,7 @@ class _FilePreviewWidgetState extends State<FilePreviewWidget> {
           const SizedBox(height: 24),
           Text(
             widget.fileName,
-            style: TextStyle(
+            style: const TextStyle(
               color: Colors.white,
               fontSize: 18,
               fontWeight: FontWeight.w600,

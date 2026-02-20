@@ -1289,7 +1289,7 @@ Future maybeCreateUser(User user) async {
   // Handle referral connection for new users (Google/Apple sign-in)
   try {
     final userUid = user.uid;
-    if (userUid != null && userUid.isNotEmpty) {
+    if (userUid.isNotEmpty) {
       await actions.handleReferralConnection(userUid);
     }
   } catch (e) {

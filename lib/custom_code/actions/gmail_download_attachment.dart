@@ -3,7 +3,6 @@
 // DO NOT REMOVE OR MODIFY THE CODE ABOVE!
 
 import 'package:cloud_functions/cloud_functions.dart';
-import 'dart:convert';
 
 Future<Map<String, dynamic>?> gmailDownloadAttachment(
   String messageId,

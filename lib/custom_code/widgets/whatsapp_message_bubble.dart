@@ -15,7 +15,7 @@ class WhatsAppMessageBubble extends StatelessWidget {
   final VoidCallback? onLongPress;
 
   const WhatsAppMessageBubble({
-    Key? key,
+    super.key,
     this.content,
     this.image,
     this.video,
@@ -24,7 +24,7 @@ class WhatsAppMessageBubble extends StatelessWidget {
     required this.isMe,
     this.onTap,
     this.onLongPress,
-  }) : super(key: key);
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -44,15 +44,15 @@ class WhatsAppMessageBubble extends StatelessWidget {
             if (image != null && image != '')
               Container(
                 width: double.infinity,
-                constraints: BoxConstraints(
+                constraints: const BoxConstraints(
                   maxHeight: 300.0,
                   minHeight: 200.0,
                 ),
                 decoration: BoxDecoration(
                   color: const Color(0xFFE5E7EB),
                   borderRadius: BorderRadius.only(
-                    topLeft: Radius.circular(16.0),
-                    topRight: Radius.circular(16.0),
+                    topLeft: const Radius.circular(16.0),
+                    topRight: const Radius.circular(16.0),
                     bottomLeft: Radius.circular(
                         content != null && content != '' ? 4.0 : 16.0),
                     bottomRight: Radius.circular(
@@ -61,8 +61,8 @@ class WhatsAppMessageBubble extends StatelessWidget {
                 ),
                 child: ClipRRect(
                   borderRadius: BorderRadius.only(
-                    topLeft: Radius.circular(16.0),
-                    topRight: Radius.circular(16.0),
+                    topLeft: const Radius.circular(16.0),
+                    topRight: const Radius.circular(16.0),
                     bottomLeft: Radius.circular(
                         content != null && content != '' ? 4.0 : 16.0),
                     bottomRight: Radius.circular(
@@ -85,8 +85,8 @@ class WhatsAppMessageBubble extends StatelessWidget {
                 decoration: BoxDecoration(
                   color: const Color(0xFFE5E7EB),
                   borderRadius: BorderRadius.only(
-                    topLeft: Radius.circular(16.0),
-                    topRight: Radius.circular(16.0),
+                    topLeft: const Radius.circular(16.0),
+                    topRight: const Radius.circular(16.0),
                     bottomLeft: Radius.circular(
                         content != null && content != '' ? 4.0 : 16.0),
                     bottomRight: Radius.circular(
@@ -95,8 +95,8 @@ class WhatsAppMessageBubble extends StatelessWidget {
                 ),
                 child: ClipRRect(
                   borderRadius: BorderRadius.only(
-                    topLeft: Radius.circular(16.0),
-                    topRight: Radius.circular(16.0),
+                    topLeft: const Radius.circular(16.0),
+                    topRight: const Radius.circular(16.0),
                     bottomLeft: Radius.circular(
                         content != null && content != '' ? 4.0 : 16.0),
                     bottomRight: Radius.circular(
@@ -104,7 +104,7 @@ class WhatsAppMessageBubble extends StatelessWidget {
                   ),
                   child: Container(
                     color: Colors.black,
-                    child: Center(
+                    child: const Center(
                       child: Icon(
                         Icons.play_circle_outline,
                         color: Colors.white,
@@ -123,8 +123,8 @@ class WhatsAppMessageBubble extends StatelessWidget {
                 decoration: BoxDecoration(
                   color: const Color(0xFFE5E7EB),
                   borderRadius: BorderRadius.only(
-                    topLeft: Radius.circular(16.0),
-                    topRight: Radius.circular(16.0),
+                    topLeft: const Radius.circular(16.0),
+                    topRight: const Radius.circular(16.0),
                     bottomLeft: Radius.circular(
                         content != null && content != '' ? 4.0 : 16.0),
                     bottomRight: Radius.circular(
@@ -133,15 +133,15 @@ class WhatsAppMessageBubble extends StatelessWidget {
                 ),
                 child: ClipRRect(
                   borderRadius: BorderRadius.only(
-                    topLeft: Radius.circular(16.0),
-                    topRight: Radius.circular(16.0),
+                    topLeft: const Radius.circular(16.0),
+                    topRight: const Radius.circular(16.0),
                     bottomLeft: Radius.circular(
                         content != null && content != '' ? 4.0 : 16.0),
                     bottomRight: Radius.circular(
                         content != null && content != '' ? 4.0 : 16.0),
                   ),
                   child: GridView.builder(
-                    gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                    gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
                       crossAxisCount: 2,
                       childAspectRatio: 1.0,
                     ),
@@ -169,15 +169,15 @@ class WhatsAppMessageBubble extends StatelessWidget {
                     }
                   },
                   styleSheet: MarkdownStyleSheet(
-                    p: TextStyle(
+                    p: const TextStyle(
                       fontFamily: 'Inter',
-                      color: const Color(0xFF1F2937),
+                      color: Color(0xFF1F2937),
                       fontSize: 14.0,
                       letterSpacing: 0.0,
                     ),
-                    a: TextStyle(
+                    a: const TextStyle(
                       fontFamily: 'Inter',
-                      color: const Color(0xFF2563EB),
+                      color: Color(0xFF2563EB),
                       fontSize: 14.0,
                       letterSpacing: 0.0,
                       decoration: TextDecoration.underline,

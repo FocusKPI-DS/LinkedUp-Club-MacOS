@@ -1,10 +1,5 @@
-import 'package:flutter/foundation.dart' show kIsWeb;
-import '/auth/firebase_auth/auth_util.dart';
-import '/backend/backend.dart';
 
 // Conditional import for web platform
-import 'web_notification_service_stub.dart'
-    if (dart.library.html) 'web_notification_service_web.dart';
 
 // Re-export the WebNotificationService class
 export 'web_notification_service_stub.dart'

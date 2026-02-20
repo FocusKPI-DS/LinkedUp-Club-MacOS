@@ -4232,7 +4232,7 @@ class _OnboardingProfileWidgetState extends State<OnboardingProfileWidget>
                                             ),
                                           ),
                                         )
-                                      : Text(
+                                      : const Text(
                                           'Connect',
                                           textAlign: TextAlign.center,
                                           style: TextStyle(

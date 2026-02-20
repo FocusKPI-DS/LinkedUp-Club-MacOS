@@ -42,10 +42,10 @@ import 'package:image_gallery_saver_plus/image_gallery_saver_plus.dart';
 
 class MobileChatWidget extends StatefulWidget {
   const MobileChatWidget({
-    Key? key,
+    super.key,
     this.onChatStateChanged,
     this.initialChat,
-  }) : super(key: key);
+  });
 
   static String routeName = 'MobileChat';
   static String routePath = '/mobile-chat';
@@ -174,7 +174,8 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
                     // Fixed header section with Chats title, action buttons, search bar, and filters
                     Container(
                       color: Colors
-                          .white, // Changed to white for consistent background
+                          .white,
+                      height: 180, // Changed to white for consistent background
                       child: Stack(
                         clipBehavior: Clip.none,
                         children: [
@@ -215,8 +216,7 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
                             child: const ChatFilterButtons(),
                           ),
                         ],
-                      ),
-                      height: 180, // Total height for header section
+                      ), // Total height for header section
                     ),
                     // Scrollable chat list
                     Expanded(
@@ -322,21 +322,21 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
       preferredSize: Size.fromHeight(
           MediaQuery.of(context).padding.top + 10), // Increased header height
       child: Container(
-        decoration: BoxDecoration(
+        decoration: const BoxDecoration(
           color: Color(0xFFF2F2F7), // Match chat screen background exactly
         ),
         child: SafeArea(
           bottom: false,
           child: Container(
             height: 44, // Native iOS toolbar height
-            padding: EdgeInsets.symmetric(horizontal: 8),
+            padding: const EdgeInsets.symmetric(horizontal: 8),
             child: Row(
               children: [
                 // Floating back button on the left - iOS 26+ style with liquid glass effects
                 AdaptiveFloatingActionButton(
                       mini: true,
                       backgroundColor: Colors.white, // Pure white background
-                      foregroundColor: Color(0xFF007AFF), // System blue icon
+                      foregroundColor: const Color(0xFF007AFF), // System blue icon
                       onPressed: () {
                         print('🔙 MobileChatWidget Back button pressed');
                         // If we came from another page (like Connections), pop to go back
@@ -351,18 +351,18 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
                           widget.onChatStateChanged?.call(false);
                         }
                       },
-                      child: Icon(
+                      child: const Icon(
                         CupertinoIcons.chevron_left,
                         size: 17,
                       ),
                     ),
-                SizedBox(width: 8),
+                const SizedBox(width: 8),
                 // Centered title in pill shape - native iOS 26 style
                 Expanded(
                   child: Center(
                     child: Container(
                       padding:
-                          EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                          const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                       decoration: BoxDecoration(
                         color: Colors.white, // Pure white like back button
                         borderRadius: BorderRadius.circular(16), // Pill shape
@@ -380,13 +380,13 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
                               child: _buildHeaderAvatar(chat),
                             ),
                           ),
-                          SizedBox(width: 8),
+                          const SizedBox(width: 8),
                           // Group name or user name text
                           Flexible(
                             child: chat.isGroup
                                 ? Text(
                                     _getChatDisplayName(chat),
-                                    style: TextStyle(
+                                    style: const TextStyle(
                                       fontFamily: 'System',
                                       fontSize: 18,
                                       fontWeight: FontWeight.w600,
@@ -427,7 +427,7 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
                                       }
                                       return Text(
                                         displayName,
-                                        style: TextStyle(
+                                        style: const TextStyle(
                                           fontFamily: 'System',
                                           fontSize: 19,
                                           fontWeight: FontWeight.w600,
@@ -444,17 +444,17 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
                     ),
                   ),
                 ),
-                SizedBox(width: 8),
+                const SizedBox(width: 8),
                 // Settings button on the right - iOS 26+ style with liquid glass effects
                 AdaptiveFloatingActionButton(
                       mini: true,
                       backgroundColor: Colors.white, // Pure white like back button
-                      foregroundColor: Color(0xFF007AFF), // System blue icon
+                      foregroundColor: const Color(0xFF007AFF), // System blue icon
                       onPressed: () {
                         print('⚙️ MobileChatWidget Settings button pressed');
                         _showChatOptions(chat);
                       },
-                      child: Icon(
+                      child: const Icon(
                         CupertinoIcons.ellipsis,
                         size: 17,
                       ),
@@ -511,13 +511,13 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
               return false;
             },
             child: AnimatedSwitcher(
-              duration: Duration(milliseconds: 300),
+              duration: const Duration(milliseconds: 300),
               transitionBuilder: (Widget child, Animation<double> animation) {
                 return FadeTransition(
                   opacity: animation,
                   child: SlideTransition(
                     position: Tween<Offset>(
-                      begin: Offset(0.05, 0),
+                      begin: const Offset(0.05, 0),
                       end: Offset.zero,
                     ).animate(CurvedAnimation(
                       parent: animation,
@@ -579,8 +579,8 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
     }
 
     // Add Download option for messages with images
-    if ((message.image != null && message.image!.isNotEmpty) ||
-        (message.images != null && message.images!.isNotEmpty)) {
+    if ((message.image.isNotEmpty) ||
+        (message.images.isNotEmpty)) {
       menuItems.add(
         AdaptivePopupMenuItem(
           label: 'Download',
@@ -694,7 +694,7 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
         barrierColor: Colors.black.withOpacity(0.3),
         barrierDismissible: true,
         barrierLabel: 'Dismiss menu',
-        transitionDuration: Duration(milliseconds: 200),
+        transitionDuration: const Duration(milliseconds: 200),
         pageBuilder: (context, animation, secondaryAnimation) {
           return _IOS26PopupMenu<T>(
             position: position,
@@ -719,7 +719,7 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
           final isDestructive = item.value.toString().contains('report') ||
               item.value.toString().contains('unsend');
           final textColor =
-              isDestructive ? Color(0xFFFF3B30) : CupertinoColors.label;
+              isDestructive ? const Color(0xFFFF3B30) : CupertinoColors.label;
 
           return PopupMenuItem<T>(
             value: item.value,
@@ -730,7 +730,7 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
                   size: 20,
                   color: textColor,
                 ),
-                SizedBox(width: 12),
+                const SizedBox(width: 12),
                 Text(
                   item.label,
                   style: TextStyle(
@@ -761,7 +761,7 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
       child: Container(
         decoration: BoxDecoration(
           color: Colors.white.withOpacity(0.8),
-          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
         ),
         child: SafeArea(
           top: false,
@@ -772,18 +772,18 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
               Container(
                 width: 36,
                 height: 5,
-                margin: EdgeInsets.symmetric(vertical: 12),
+                margin: const EdgeInsets.symmetric(vertical: 12),
                 decoration: BoxDecoration(
-                  color: Color(0xFFD1D1D6),
+                  color: const Color(0xFFD1D1D6),
                   borderRadius: BorderRadius.circular(2.5),
                 ),
               ),
               // Actions - extract and render properly
               ...actions.map((action) => _buildIOS26ActionButton(action)),
-              SizedBox(height: 8),
+              const SizedBox(height: 8),
               // Cancel button
               _buildIOS26CancelButton(),
-              SizedBox(height: 20),
+              const SizedBox(height: 20),
             ],
           ),
         ),
@@ -807,7 +807,7 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
           size: 20,
           color: color,
         ),
-        SizedBox(width: 8),
+        const SizedBox(width: 8),
         Text(
           label,
           style: TextStyle(
@@ -827,7 +827,7 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
         isDestructive ? CupertinoColors.destructiveRed : CupertinoColors.label;
 
     return CupertinoButton(
-      padding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       onPressed: action.onPressed,
       child: Container(
         width: double.infinity,
@@ -847,12 +847,12 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
 
   Widget _buildIOS26CancelButton() {
     return CupertinoButton(
-      padding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       onPressed: () => Navigator.pop(context),
       child: Container(
         width: double.infinity,
         alignment: Alignment.center,
-        child: Text(
+        child: const Text(
           'Cancel',
           style: TextStyle(
             fontFamily: 'SF Pro Display',
@@ -902,8 +902,8 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
     required VoidCallback onTap,
   }) {
     final isDestructive = item.value == 'report' || item.value == 'unsend';
-    final textColor = isDestructive ? Color(0xFFFF3B30) : Color(0xFF1D1D1F);
-    final iconColor = isDestructive ? Color(0xFFFF3B30) : Color(0xFF1D1D1F);
+    final textColor = isDestructive ? const Color(0xFFFF3B30) : const Color(0xFF1D1D1F);
+    final iconColor = isDestructive ? const Color(0xFFFF3B30) : const Color(0xFF1D1D1F);
 
     // Get the appropriate icon
     Widget iconWidget;
@@ -1019,16 +1019,16 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
                           ),
                         ],
                       ),
-                      child: Row(
+                      child: const Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          const Icon(
+                          Icon(
                             Icons.check_circle,
                             color: Colors.white,
                             size: 20,
                           ),
-                          const SizedBox(width: 8),
-                          const Text(
+                          SizedBox(width: 8),
+                          Text(
                             'Downloaded',
                             style: TextStyle(
                               color: Colors.white,
@@ -1088,7 +1088,7 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Error downloading image: $e'),
-            backgroundColor: Color(0xFFFF3B30),
+            backgroundColor: const Color(0xFFFF3B30),
           ),
         );
       }
@@ -1190,7 +1190,7 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               content: Text('Failed to save image: $errorMsg'),
-              backgroundColor: Color(0xFFFF3B30),
+              backgroundColor: const Color(0xFFFF3B30),
             ),
           );
         }
@@ -1201,7 +1201,7 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Error downloading image: $e'),
-            backgroundColor: Color(0xFFFF3B30),
+            backgroundColor: const Color(0xFFFF3B30),
           ),
         );
       }
@@ -1218,14 +1218,14 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
     return ListTile(
       leading: Icon(
         icon,
-        color: iconColor ?? Color(0xFF1D1D1F),
+        color: iconColor ?? const Color(0xFF1D1D1F),
         size: 24,
       ),
       title: Text(
         title,
         style: TextStyle(
           fontFamily: 'System',
-          color: titleColor ?? Color(0xFF1D1D1F),
+          color: titleColor ?? const Color(0xFF1D1D1F),
           fontSize: 17,
           fontWeight: FontWeight.w400,
         ),
@@ -1242,7 +1242,7 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
     if (!mounted) return;
 
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
+      const SnackBar(
         content: Text(
           'Copied to clipboard',
           style: TextStyle(
@@ -1406,7 +1406,7 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
       });
 
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
+        const SnackBar(
           content: Text('Reaction added'),
           duration: Duration(milliseconds: 1000),
           backgroundColor: Color(0xFF34C759),
@@ -1414,7 +1414,7 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
       );
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
+        const SnackBar(
           content: Text('Error adding reaction'),
           backgroundColor: Color(0xFFFF3B30),
         ),
@@ -1429,7 +1429,7 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
       builder: (BuildContext context) {
         return AlertDialog(
           backgroundColor: Colors.white,
-          title: Text(
+          title: const Text(
             'Report Message',
             style: TextStyle(
               fontFamily: 'System',
@@ -1438,7 +1438,7 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
               fontWeight: FontWeight.normal,
             ),
           ),
-          content: Text(
+          content: const Text(
             'Are you sure you want to report this message? This action cannot be undone.',
             style: TextStyle(
               fontFamily: 'System',
@@ -1449,7 +1449,7 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
           actions: [
             TextButton(
               onPressed: () => Navigator.of(context).pop(false),
-              child: Text(
+              child: const Text(
                 'Cancel',
                 style: TextStyle(
                   fontFamily: 'System',
@@ -1460,7 +1460,7 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
             ),
             TextButton(
               onPressed: () => Navigator.of(context).pop(true),
-              child: Text(
+              child: const Text(
                 'Report',
                 style: TextStyle(
                   fontFamily: 'System',
@@ -1492,8 +1492,8 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(isPinned ? 'Message unpinned' : 'Message pinned'),
-            duration: Duration(milliseconds: 2000),
-            backgroundColor: isPinned ? Color(0xFF1D1D1F) : Color(0xFF34C759),
+            duration: const Duration(milliseconds: 2000),
+            backgroundColor: isPinned ? const Color(0xFF1D1D1F) : const Color(0xFF34C759),
           ),
         );
       }
@@ -1502,7 +1502,7 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Error updating pin status: $e'),
-            backgroundColor: Color(0xFFFF3B30),
+            backgroundColor: const Color(0xFFFF3B30),
           ),
         );
       }
@@ -1523,7 +1523,7 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
       backgroundColor: Colors.transparent,
       isScrollControlled: true,
       builder: (context) => Container(
-        decoration: BoxDecoration(
+        decoration: const BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
         ),
@@ -1538,21 +1538,21 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
               Container(
                 width: 36,
                 height: 5,
-                margin: EdgeInsets.symmetric(vertical: 12),
+                margin: const EdgeInsets.symmetric(vertical: 12),
                 decoration: BoxDecoration(
-                  color: Color(0xFFD1D1D6),
+                  color: const Color(0xFFD1D1D6),
                   borderRadius: BorderRadius.circular(2.5),
                 ),
               ),
               // Reply preview
               Container(
                 width: double.infinity,
-                margin: EdgeInsets.symmetric(horizontal: 16),
-                padding: EdgeInsets.all(12),
+                margin: const EdgeInsets.symmetric(horizontal: 16),
+                padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: Color(0xFFF8F9FA),
+                  color: const Color(0xFFF8F9FA),
                   borderRadius: BorderRadius.circular(8),
-                  border: Border(
+                  border: const Border(
                     left: BorderSide(
                       color: Color(0xFF007AFF),
                       width: 4.0,
@@ -1564,17 +1564,17 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
                   children: [
                     Text(
                       'Replying to ${message.senderName}',
-                      style: TextStyle(
+                      style: const TextStyle(
                         fontFamily: 'System',
                         fontSize: 14,
                         fontWeight: FontWeight.w600,
                         color: Color(0xFF007AFF),
                       ),
                     ),
-                    SizedBox(height: 4),
+                    const SizedBox(height: 4),
                     Text(
                       message.content,
-                      style: TextStyle(
+                      style: const TextStyle(
                         fontFamily: 'System',
                         fontSize: 14,
                         color: Color(0xFF6B7280),
@@ -1585,27 +1585,27 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
                   ],
                 ),
               ),
-              SizedBox(height: 16),
+              const SizedBox(height: 16),
               // Message input
               Container(
-                margin: EdgeInsets.symmetric(horizontal: 16),
+                margin: const EdgeInsets.symmetric(horizontal: 16),
                 child: TextField(
                   controller: replyController,
                   decoration: InputDecoration(
                     hintText: 'Type your reply...',
-                    hintStyle: TextStyle(
+                    hintStyle: const TextStyle(
                       fontFamily: 'System',
                       color: Color(0xFF8E8E93),
                     ),
                     border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(12),
-                      borderSide: BorderSide(color: Color(0xFFE5E7EB)),
+                      borderSide: const BorderSide(color: Color(0xFFE5E7EB)),
                     ),
                     focusedBorder: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(12),
-                      borderSide: BorderSide(color: Color(0xFF007AFF)),
+                      borderSide: const BorderSide(color: Color(0xFF007AFF)),
                     ),
-                    contentPadding: EdgeInsets.symmetric(
+                    contentPadding: const EdgeInsets.symmetric(
                       horizontal: 16,
                       vertical: 12,
                     ),
@@ -1620,11 +1620,11 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
                   },
                 ),
               ),
-              SizedBox(height: 16),
+              const SizedBox(height: 16),
               // Send button
               Container(
                 width: double.infinity,
-                margin: EdgeInsets.symmetric(horizontal: 16),
+                margin: const EdgeInsets.symmetric(horizontal: 16),
                 child: ElevatedButton(
                   onPressed: () {
                     print('🔘 Send Reply button pressed');
@@ -1638,14 +1638,14 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
                     }
                   },
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: Color(0xFF007AFF),
+                    backgroundColor: const Color(0xFF007AFF),
                     foregroundColor: Colors.white,
-                    padding: EdgeInsets.symmetric(vertical: 12),
+                    padding: const EdgeInsets.symmetric(vertical: 12),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(12),
                     ),
                   ),
-                  child: Text(
+                  child: const Text(
                     'Send Reply',
                     style: TextStyle(
                       fontFamily: 'System',
@@ -1655,7 +1655,7 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
                   ),
                 ),
               ),
-              SizedBox(height: 20),
+              const SizedBox(height: 20),
             ],
           ),
         ),
@@ -1676,7 +1676,7 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
       if (selectedChat == null) {
         print('❌ Error: selectedChat is null');
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
+          const SnackBar(
             content: Text('Unable to send reply: chat not selected'),
             backgroundColor: Color(0xFFFF3B30),
           ),
@@ -1687,7 +1687,7 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
       if (userRef == null) {
         print('❌ Error: currentUserReference is null');
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
+          const SnackBar(
             content: Text('Unable to send reply: user not logged in'),
             backgroundColor: Color(0xFFFF3B30),
           ),
@@ -1725,7 +1725,7 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('Failed to send reply: $e'),
-          backgroundColor: Color(0xFFFF3B30),
+          backgroundColor: const Color(0xFFFF3B30),
         ),
       );
     }
@@ -1735,7 +1735,7 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
     // Check if the message was sent by the current user
     if (message.senderRef != currentUserReference) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
+        const SnackBar(
           content: Text(
             'You can only edit your own messages',
             style: TextStyle(
@@ -1764,7 +1764,7 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
       backgroundColor: Colors.transparent,
       isScrollControlled: true,
       builder: (context) => Container(
-        decoration: BoxDecoration(
+        decoration: const BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
         ),
@@ -1779,17 +1779,17 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
               Container(
                 width: 36,
                 height: 5,
-                margin: EdgeInsets.symmetric(vertical: 12),
+                margin: const EdgeInsets.symmetric(vertical: 12),
                 decoration: BoxDecoration(
-                  color: Color(0xFFD1D1D6),
+                  color: const Color(0xFFD1D1D6),
                   borderRadius: BorderRadius.circular(2.5),
                 ),
               ),
               // Edit header
               Container(
                 width: double.infinity,
-                margin: EdgeInsets.symmetric(horizontal: 16),
-                child: Text(
+                margin: const EdgeInsets.symmetric(horizontal: 16),
+                child: const Text(
                   'Edit Message',
                   style: TextStyle(
                     fontFamily: 'System',
@@ -1799,27 +1799,27 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
                   ),
                 ),
               ),
-              SizedBox(height: 16),
+              const SizedBox(height: 16),
               // Message input
               Container(
-                margin: EdgeInsets.symmetric(horizontal: 16),
+                margin: const EdgeInsets.symmetric(horizontal: 16),
                 child: TextField(
                   controller: editController,
                   decoration: InputDecoration(
                     hintText: 'Edit your message...',
-                    hintStyle: TextStyle(
+                    hintStyle: const TextStyle(
                       fontFamily: 'System',
                       color: Color(0xFF8E8E93),
                     ),
                     border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(12),
-                      borderSide: BorderSide(color: Color(0xFFE5E7EB)),
+                      borderSide: const BorderSide(color: Color(0xFFE5E7EB)),
                     ),
                     focusedBorder: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(12),
-                      borderSide: BorderSide(color: Color(0xFF007AFF)),
+                      borderSide: const BorderSide(color: Color(0xFF007AFF)),
                     ),
-                    contentPadding: EdgeInsets.symmetric(
+                    contentPadding: const EdgeInsets.symmetric(
                       horizontal: 16,
                       vertical: 12,
                     ),
@@ -1834,23 +1834,23 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
                   },
                 ),
               ),
-              SizedBox(height: 16),
+              const SizedBox(height: 16),
               // Action buttons
               Row(
                 children: [
                   Expanded(
                     child: Container(
-                      margin: EdgeInsets.only(left: 16, right: 8),
+                      margin: const EdgeInsets.only(left: 16, right: 8),
                       child: OutlinedButton(
                         onPressed: () => Navigator.pop(context),
                         style: OutlinedButton.styleFrom(
-                          side: BorderSide(color: Color(0xFFE5E7EB)),
-                          padding: EdgeInsets.symmetric(vertical: 12),
+                          side: const BorderSide(color: Color(0xFFE5E7EB)),
+                          padding: const EdgeInsets.symmetric(vertical: 12),
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(12),
                           ),
                         ),
-                        child: Text(
+                        child: const Text(
                           'Cancel',
                           style: TextStyle(
                             fontFamily: 'System',
@@ -1864,7 +1864,7 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
                   ),
                   Expanded(
                     child: Container(
-                      margin: EdgeInsets.only(left: 8, right: 16),
+                      margin: const EdgeInsets.only(left: 8, right: 16),
                       child: ElevatedButton(
                         onPressed: () {
                           if (editController.text.trim().isNotEmpty) {
@@ -1873,14 +1873,14 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
                           }
                         },
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: Color(0xFF007AFF),
+                          backgroundColor: const Color(0xFF007AFF),
                           foregroundColor: Colors.white,
-                          padding: EdgeInsets.symmetric(vertical: 12),
+                          padding: const EdgeInsets.symmetric(vertical: 12),
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(12),
                           ),
                         ),
-                        child: Text(
+                        child: const Text(
                           'Save',
                           style: TextStyle(
                             fontFamily: 'System',
@@ -1893,7 +1893,7 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
                   ),
                 ],
               ),
-              SizedBox(height: 20),
+              const SizedBox(height: 20),
             ],
           ),
         ),
@@ -1931,7 +1931,7 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
       }
 
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
+        const SnackBar(
           content: Text('Message updated'),
           duration: Duration(milliseconds: 1000),
           backgroundColor: Color(0xFF34C759),
@@ -1941,7 +1941,7 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('Failed to update message: $e'),
-          backgroundColor: Color(0xFFFF3B30),
+          backgroundColor: const Color(0xFFFF3B30),
         ),
       );
     }
@@ -1951,7 +1951,7 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
     // Check if the message was sent by the current user
     if (message.senderRef != currentUserReference) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
+        const SnackBar(
           content: Text(
             'You can only unsend your own messages',
             style: TextStyle(
@@ -1972,7 +1972,7 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
       context: context,
       builder: (context) => AlertDialog(
         backgroundColor: Colors.white,
-        title: Text(
+        title: const Text(
           'Unsend Message',
           style: TextStyle(
             fontFamily: 'System',
@@ -1981,7 +1981,7 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
             fontWeight: FontWeight.normal,
           ),
         ),
-        content: Text(
+        content: const Text(
           'Are you sure you want to unsend this message? This action cannot be undone.',
           style: TextStyle(
             fontFamily: 'System',
@@ -1992,7 +1992,7 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(false),
-            child: Text(
+            child: const Text(
               'Cancel',
               style: TextStyle(
                 fontFamily: 'System',
@@ -2003,7 +2003,7 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
           ),
           TextButton(
             onPressed: () => Navigator.of(context).pop(true),
-            child: Text(
+            child: const Text(
               'Unsend',
               style: TextStyle(
                 fontFamily: 'System',
@@ -2126,14 +2126,14 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
           SnackBar(
             content: Text(
               'Failed to unsend message: $e',
-              style: TextStyle(
+              style: const TextStyle(
                 fontFamily: 'System',
                 color: Colors.white,
                 fontWeight: FontWeight.w500,
               ),
             ),
-            duration: Duration(milliseconds: 2000),
-            backgroundColor: Color(0xFFFF3B30),
+            duration: const Duration(milliseconds: 2000),
+            backgroundColor: const Color(0xFFFF3B30),
           ),
         );
       }
@@ -2171,19 +2171,19 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
             onChanged: (value) {
               EasyDebounce.debounce(
                 'searchTextController',
-                Duration(milliseconds: 500),
+                const Duration(milliseconds: 500),
                 () => chatController.updateSearchQuery(value),
               );
             },
             placeholder: 'Search',
-            placeholderStyle: TextStyle(
+            placeholderStyle: const TextStyle(
               fontFamily: 'SF Pro Text',
               color: CupertinoColors.systemGrey,
               fontSize: 16,
               fontWeight: FontWeight.w400,
             ),
-            padding: EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-            prefix: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+            prefix: const Padding(
               padding: EdgeInsets.only(left: 16, right: 12),
               child: Icon(
                 CupertinoIcons.search,
@@ -2194,7 +2194,7 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
             suffix: Obx(() {
               return chatController.searchQuery.value.isNotEmpty
                   ? Padding(
-                      padding: EdgeInsets.only(right: 12),
+                      padding: const EdgeInsets.only(right: 12),
                       child: GestureDetector(
                         onTap: () {
                           _model.searchTextController?.clear();
@@ -2209,10 +2209,10 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
                               height: 28,
                               decoration: BoxDecoration(
                                 color:
-                                    CupertinoColors.systemGrey.withOpacity(0.2),
+                                    CupertinoColors.systemGrey.withValues(alpha: 0.2),
                                 shape: BoxShape.circle,
                               ),
-                              child: Icon(
+                              child: const Icon(
                                 CupertinoIcons.clear_circled_solid,
                                 color: CupertinoColors.systemGrey,
                                 size: 16,
@@ -2222,9 +2222,9 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
                         ),
                       ),
                     )
-                  : SizedBox.shrink();
+                  : const SizedBox.shrink();
             }),
-            style: TextStyle(
+            style: const TextStyle(
               fontFamily: 'SF Pro Text',
               color: CupertinoColors.label,
               fontSize: 16,
@@ -2265,7 +2265,7 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
                   color:
                       Colors.black.withOpacity(0.05), // Subtle shadow for depth
                   blurRadius: 8,
-                  offset: Offset(0, 2),
+                  offset: const Offset(0, 2),
                 ),
               ],
             ),
@@ -2301,13 +2301,13 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
             if (item.value == 'new_chat') {
               Navigator.of(context).push(
                 MaterialPageRoute(
-                  builder: (context) => MobileNewChatWidget(),
+                  builder: (context) => const MobileNewChatWidget(),
                 ),
               );
             } else if (item.value == 'new_group_chat') {
               Navigator.of(context).push(
                 MaterialPageRoute(
-                  builder: (context) => MobileNewGroupChatWidget(),
+                  builder: (context) => const MobileNewGroupChatWidget(),
                 ),
               );
             }
@@ -2344,7 +2344,7 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
                     width: 0.5,
                   ),
                 ),
-                child: Icon(
+                child: const Icon(
                   CupertinoIcons.plus,
                   size: 22,
                   color: CupertinoColors.systemBlue,
@@ -2373,7 +2373,7 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
     return Obx(() {
       switch (chatController.chatState.value) {
         case ChatState.loading:
-          return Center(
+          return const Center(
             child: CircularProgressIndicator(
               color: Color(0xFF007AFF),
             ),
@@ -2384,13 +2384,13 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Icon(
+                const Icon(
                   Icons.error_outline,
                   color: Color(0xFFFF3B30),
                   size: 48,
                 ),
-                SizedBox(height: 16),
-                Text(
+                const SizedBox(height: 16),
+                const Text(
                   'Error loading chats',
                   style: TextStyle(
                     fontFamily: 'System',
@@ -2399,26 +2399,26 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
                     fontWeight: FontWeight.normal,
                   ),
                 ),
-                SizedBox(height: 8),
+                const SizedBox(height: 8),
                 Text(
                   chatController.errorMessage.value,
-                  style: TextStyle(
+                  style: const TextStyle(
                     fontFamily: 'System',
                     color: Color(0xFF8E8E93),
                     fontSize: 15,
                   ),
                   textAlign: TextAlign.center,
                 ),
-                SizedBox(height: 16),
+                const SizedBox(height: 16),
                 ElevatedButton(
                   onPressed: () => chatController.refreshChats(),
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: Color(0xFF007AFF),
+                    backgroundColor: const Color(0xFF007AFF),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(8),
                     ),
                   ),
-                  child: Text(
+                  child: const Text(
                     'Retry',
                     style: TextStyle(
                       fontFamily: 'System',
@@ -2446,7 +2446,7 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
 
           if (filteredChats.isEmpty &&
               chatController.searchQuery.value.isNotEmpty) {
-            return Center(
+            return const Center(
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
@@ -2483,10 +2483,10 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
           if (filteredChats.isEmpty &&
               chatController.searchQuery.value.isEmpty) {
             return Transform.translate(
-              offset: Offset(0, -40),
+              offset: const Offset(0, -40),
               child: Center(
                 child: Padding(
-                  padding: EdgeInsets.symmetric(horizontal: 32.0),
+                  padding: const EdgeInsets.symmetric(horizontal: 32.0),
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
@@ -2495,18 +2495,18 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
                         width: 100,
                         height: 100,
                         decoration: BoxDecoration(
-                          color: CupertinoColors.systemBlue.withOpacity(0.1),
+                          color: CupertinoColors.systemBlue.withValues(alpha: 0.1),
                           shape: BoxShape.circle,
                         ),
-                        child: Icon(
+                        child: const Icon(
                           CupertinoIcons.person_2_fill,
                           color: CupertinoColors.systemBlue,
                           size: 48,
                         ),
                       ),
-                      SizedBox(height: 32),
+                      const SizedBox(height: 32),
                       // Header title
-                      Text(
+                      const Text(
                         'Connect with Like-minded People!',
                         style: TextStyle(
                           fontFamily: '.SF Pro Display',
@@ -2517,9 +2517,9 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
                         ),
                         textAlign: TextAlign.center,
                       ),
-                      SizedBox(height: 12),
+                      const SizedBox(height: 12),
                       // Subtitle message
-                      Text(
+                      const Text(
                         'Start meaningful conversations by connecting with real users in your network',
                         style: TextStyle(
                           fontFamily: '.SF Pro Text',
@@ -2541,9 +2541,9 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
           return ListView.builder(
             key: ValueKey(
                 'chat_list_items_${_model.tabController?.index ?? 0}_${filteredChats.length}_${chatController.searchQuery.value}'),
-            padding: EdgeInsets.only(top: 4, left: 0, right: 0, bottom: 100),
+            padding: const EdgeInsets.only(top: 4, left: 0, right: 0, bottom: 100),
             itemCount: filteredChats.length,
-            physics: ClampingScrollPhysics(),
+            physics: const ClampingScrollPhysics(),
             primary: false,
             keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
             itemBuilder: (context, index) {
@@ -2564,7 +2564,7 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
                           chatController.searchQuery.value.toLowerCase();
 
                       if (!displayName.contains(query)) {
-                        return SizedBox.shrink();
+                        return const SizedBox.shrink();
                       }
                     }
 
@@ -2637,8 +2637,8 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
         // Header for group creation
         Container(
           width: double.infinity,
-          padding: EdgeInsets.all(16),
-          decoration: BoxDecoration(
+          padding: const EdgeInsets.all(16),
+          decoration: const BoxDecoration(
             color: CupertinoColors.systemGrey6,
             border: Border(
               bottom: BorderSide(
@@ -2649,13 +2649,13 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
           ),
           child: Row(
             children: [
-              Icon(
+              const Icon(
                 CupertinoIcons.group_solid,
                 color: CupertinoColors.systemBlue,
                 size: 20,
               ),
-              SizedBox(width: 8),
-              Expanded(
+              const SizedBox(width: 8),
+              const Expanded(
                 child: Text(
                   'Create New Group',
                   style: TextStyle(
@@ -2680,7 +2680,7 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
                     _model.isUploadingImage = false;
                   });
                 },
-                child: Icon(
+                child: const Icon(
                   CupertinoIcons.xmark,
                   color: CupertinoColors.systemGrey,
                   size: 20,
@@ -2692,12 +2692,12 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
         // Group creation form
         Expanded(
           child: SingleChildScrollView(
-            padding: EdgeInsets.all(16),
+            padding: const EdgeInsets.all(16),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 // Group name input
-                Text(
+                const Text(
                   'Group Name (Optional)',
                   style: TextStyle(
                     fontFamily: 'SF Pro Text',
@@ -2707,7 +2707,7 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
                     letterSpacing: -0.41,
                   ),
                 ),
-                SizedBox(height: 8),
+                const SizedBox(height: 8),
                 Container(
                   decoration: BoxDecoration(
                     color: CupertinoColors.systemGrey6,
@@ -2725,14 +2725,14 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
                       });
                     },
                     placeholder: 'Enter group name',
-                    placeholderStyle: TextStyle(
+                    placeholderStyle: const TextStyle(
                       fontFamily: 'SF Pro Text',
                       color: CupertinoColors.systemGrey,
                       fontSize: 16,
                       fontWeight: FontWeight.w400,
                     ),
-                    padding: EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-                    style: TextStyle(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                    style: const TextStyle(
                       fontFamily: 'SF Pro Text',
                       color: CupertinoColors.label,
                       fontSize: 16,
@@ -2744,9 +2744,9 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
                     ),
                   ),
                 ),
-                SizedBox(height: 20),
+                const SizedBox(height: 20),
                 // Group image upload
-                Text(
+                const Text(
                   'Group Image (Optional)',
                   style: TextStyle(
                     fontFamily: 'SF Pro Text',
@@ -2756,7 +2756,7 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
                     letterSpacing: -0.41,
                   ),
                 ),
-                SizedBox(height: 8),
+                const SizedBox(height: 8),
                 Row(
                   children: [
                     // Image preview/placeholder
@@ -2774,7 +2774,7 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
                           ),
                         ),
                         child: _model.isUploadingImage
-                            ? Center(
+                            ? const Center(
                                 child: CupertinoActivityIndicator(
                                   color: CupertinoColors.systemBlue,
                                 ),
@@ -2796,7 +2796,7 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
                                         width: 80,
                                         height: 80,
                                         color: CupertinoColors.systemGrey6,
-                                        child: Icon(
+                                        child: const Icon(
                                           CupertinoIcons.photo,
                                           color: CupertinoColors.systemGrey,
                                           size: 24,
@@ -2807,7 +2807,7 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
                                         width: 80,
                                         height: 80,
                                         color: CupertinoColors.systemGrey6,
-                                        child: Icon(
+                                        child: const Icon(
                                           CupertinoIcons.photo,
                                           color: CupertinoColors.systemGrey,
                                           size: 24,
@@ -2815,7 +2815,7 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
                                       ),
                                     ),
                                   )
-                                : Column(
+                                : const Column(
                                     mainAxisAlignment: MainAxisAlignment.center,
                                     children: [
                                       Icon(
@@ -2837,7 +2837,7 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
                                   ),
                       ),
                     ),
-                    SizedBox(width: 12),
+                    const SizedBox(width: 12),
                     // Image controls
                     Expanded(
                       child: Column(
@@ -2857,7 +2857,7 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
                               letterSpacing: -0.24,
                             ),
                           ),
-                          SizedBox(height: 8),
+                          const SizedBox(height: 8),
                           CupertinoButton(
                             onPressed: _model.isUploadingImage
                                 ? null
@@ -2865,25 +2865,24 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
                             color: _model.isUploadingImage
                                 ? CupertinoColors.systemGrey
                                 : CupertinoColors.systemBlue,
-                            padding: EdgeInsets.symmetric(
+                            padding: const EdgeInsets.symmetric(
                                 horizontal: 12, vertical: 8),
                             borderRadius: BorderRadius.circular(8),
-                            minSize: 0,
                             child: Text(
                               _model.groupImageUrl != null
                                   ? 'Change'
                                   : 'Select',
-                              style: TextStyle(
+                              style: const TextStyle(
                                 fontFamily: 'SF Pro Text',
                                 color: CupertinoColors.white,
                                 fontSize: 14,
                                 fontWeight: FontWeight.w500,
                                 letterSpacing: -0.15,
                               ),
-                            ),
+                            ), minimumSize: Size(0, 0),
                           ),
                           if (_model.groupImageUrl != null) ...[
-                            SizedBox(width: 8),
+                            const SizedBox(width: 8),
                             CupertinoButton(
                               onPressed: () {
                                 setState(() {
@@ -2892,11 +2891,10 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
                                 });
                               },
                               color: CupertinoColors.systemRed,
-                              padding: EdgeInsets.symmetric(
+                              padding: const EdgeInsets.symmetric(
                                   horizontal: 12, vertical: 8),
                               borderRadius: BorderRadius.circular(8),
-                              minSize: 0,
-                              child: Text(
+                              child: const Text(
                                 'Remove',
                                 style: TextStyle(
                                   fontFamily: 'SF Pro Text',
@@ -2905,7 +2903,7 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
                                   fontWeight: FontWeight.w500,
                                   letterSpacing: -0.15,
                                 ),
-                              ),
+                              ), minimumSize: Size(0, 0),
                             ),
                           ],
                         ],
@@ -2913,13 +2911,13 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
                     ),
                   ],
                 ),
-                SizedBox(height: 20),
+                const SizedBox(height: 20),
                 // Selected members header with search
                 Row(
                   children: [
                     Text(
                       'Selected Members (${_model.selectedMembers.length})',
-                      style: TextStyle(
+                      style: const TextStyle(
                         fontFamily: 'SF Pro Text',
                         color: CupertinoColors.label,
                         fontSize: 17,
@@ -2927,7 +2925,7 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
                         letterSpacing: -0.41,
                       ),
                     ),
-                    Spacer(),
+                    const Spacer(),
                     Container(
                       width: 180,
                       height: 36,
@@ -2943,15 +2941,15 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
                         controller: _model.groupMemberSearchController,
                         onChanged: (_) => setState(() {}),
                         placeholder: 'Search...',
-                        placeholderStyle: TextStyle(
+                        placeholderStyle: const TextStyle(
                           fontFamily: 'SF Pro Text',
                           color: CupertinoColors.systemGrey,
                           fontSize: 14,
                           fontWeight: FontWeight.w400,
                         ),
                         padding:
-                            EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                        prefix: Padding(
+                            const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                        prefix: const Padding(
                           padding: EdgeInsets.only(left: 8, right: 4),
                           child: Icon(
                             CupertinoIcons.search,
@@ -2968,7 +2966,7 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
                                     _model.groupMemberSearchController?.clear();
                                   });
                                 },
-                                child: Padding(
+                                child: const Padding(
                                   padding: EdgeInsets.only(right: 8),
                                   child: Icon(
                                     CupertinoIcons.xmark_circle_fill,
@@ -2978,7 +2976,7 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
                                 ),
                               )
                             : null,
-                        style: TextStyle(
+                        style: const TextStyle(
                           fontFamily: 'SF Pro Text',
                           color: CupertinoColors.label,
                           fontSize: 14,
@@ -2992,7 +2990,7 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
                     ),
                   ],
                 ),
-                SizedBox(height: 8),
+                const SizedBox(height: 8),
                 // Users list for selection (filtered by connections)
                 Container(
                   height: 300,
@@ -3005,7 +3003,7 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
                     ),
                   ),
                   child: currentUserReference == null
-                      ? Center(
+                      ? const Center(
                           child: CupertinoActivityIndicator(
                             color: CupertinoColors.systemBlue,
                           ),
@@ -3015,7 +3013,7 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
                               UsersRecord.getDocument(currentUserReference!),
                           builder: (context, currentUserSnapshot) {
                             if (!currentUserSnapshot.hasData) {
-                              return Center(
+                              return const Center(
                                 child: CupertinoActivityIndicator(
                                   color: CupertinoColors.systemBlue,
                                 ),
@@ -3026,7 +3024,7 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
                             final connections = currentUser.friends;
 
                             if (connections.isEmpty) {
-                              return Center(
+                              return const Center(
                                 child: Column(
                                   mainAxisSize: MainAxisSize.min,
                                   children: [
@@ -3067,7 +3065,7 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
                                 '';
 
                             return ListView.builder(
-                              padding: EdgeInsets.all(8),
+                              padding: const EdgeInsets.all(8),
                               itemCount: connections.length,
                               itemBuilder: (context, index) {
                                 final connectionRef = connections[index];
@@ -3077,7 +3075,7 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
                                       UsersRecord.getDocument(connectionRef),
                                   builder: (context, userSnapshot) {
                                     if (!userSnapshot.hasData) {
-                                      return SizedBox.shrink();
+                                      return const SizedBox.shrink();
                                     }
 
                                     final user = userSnapshot.data!;
@@ -3087,7 +3085,7 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
                                         .contains(user.reference);
 
                                     if (isCurrentUser) {
-                                      return SizedBox.shrink();
+                                      return const SizedBox.shrink();
                                     }
 
                                     // Check if search query matches
@@ -3097,7 +3095,7 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
                                       final email = user.email.toLowerCase();
                                       if (!displayName.contains(searchQuery) &&
                                           !email.contains(searchQuery)) {
-                                        return SizedBox.shrink();
+                                        return const SizedBox.shrink();
                                       }
                                     }
 
@@ -3114,8 +3112,8 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
                                         });
                                       },
                                       child: Container(
-                                        margin: EdgeInsets.only(bottom: 4),
-                                        padding: EdgeInsets.all(12),
+                                        margin: const EdgeInsets.only(bottom: 4),
+                                        padding: const EdgeInsets.all(12),
                                         decoration: BoxDecoration(
                                           color: isSelected
                                               ? CupertinoColors.systemBlue
@@ -3138,7 +3136,7 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
                                                 Container(
                                                   width: 40,
                                                   height: 40,
-                                                  decoration: BoxDecoration(
+                                                  decoration: const BoxDecoration(
                                                     color: CupertinoColors
                                                         .systemGrey5,
                                                     shape: BoxShape.circle,
@@ -3164,13 +3162,13 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
                                                         width: 40,
                                                         height: 40,
                                                         decoration:
-                                                            BoxDecoration(
+                                                            const BoxDecoration(
                                                           color: CupertinoColors
                                                               .systemGrey5,
                                                           shape:
                                                               BoxShape.circle,
                                                         ),
-                                                        child: Icon(
+                                                        child: const Icon(
                                                           CupertinoIcons
                                                               .person_fill,
                                                           color: CupertinoColors
@@ -3184,13 +3182,13 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
                                                         width: 40,
                                                         height: 40,
                                                         decoration:
-                                                            BoxDecoration(
+                                                            const BoxDecoration(
                                                           color: CupertinoColors
                                                               .systemGrey5,
                                                           shape:
                                                               BoxShape.circle,
                                                         ),
-                                                        child: Icon(
+                                                        child: const Icon(
                                                           CupertinoIcons
                                                               .person_fill,
                                                           color: CupertinoColors
@@ -3223,7 +3221,7 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
                                                   ),
                                               ],
                                             ),
-                                            SizedBox(width: 12),
+                                            const SizedBox(width: 12),
                                             Expanded(
                                               child: Column(
                                                 crossAxisAlignment:
@@ -3247,7 +3245,7 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
                                                     overflow:
                                                         TextOverflow.ellipsis,
                                                   ),
-                                                  SizedBox(height: 2),
+                                                  const SizedBox(height: 2),
                                                   Text(
                                                     user.email,
                                                     style: TextStyle(
@@ -3271,12 +3269,12 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
                                             ),
                                             if (isSelected)
                                               Container(
-                                                padding: EdgeInsets.all(4),
-                                                decoration: BoxDecoration(
+                                                padding: const EdgeInsets.all(4),
+                                                decoration: const BoxDecoration(
                                                   color: CupertinoColors.white,
                                                   shape: BoxShape.circle,
                                                 ),
-                                                child: Icon(
+                                                child: const Icon(
                                                   CupertinoIcons.check_mark,
                                                   color: CupertinoColors
                                                       .systemBlue,
@@ -3293,7 +3291,7 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
                             );
                           }),
                 ),
-                SizedBox(height: 20),
+                const SizedBox(height: 20),
                 // Create group button
                 SizedBox(
                   width: double.infinity,
@@ -3304,9 +3302,9 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
                     color: _model.selectedMembers.isNotEmpty
                         ? CupertinoColors.systemBlue
                         : CupertinoColors.systemGrey,
-                    padding: EdgeInsets.symmetric(vertical: 16),
+                    padding: const EdgeInsets.symmetric(vertical: 16),
                     borderRadius: BorderRadius.circular(10),
-                    child: Text(
+                    child: const Text(
                       'Create Group',
                       style: TextStyle(
                         fontFamily: 'SF Pro Text',
@@ -3349,7 +3347,7 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('Error picking image: $e'),
-          backgroundColor: Color(0xFFFF3B30),
+          backgroundColor: const Color(0xFFFF3B30),
         ),
       );
     }
@@ -3378,7 +3376,7 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
 
       // Show success message
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
+        const SnackBar(
           content: Text('Image uploaded successfully!'),
           backgroundColor: Color(0xFF34C759),
         ),
@@ -3398,7 +3396,7 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(errorMessage),
-          backgroundColor: Color(0xFFFF3B30),
+          backgroundColor: const Color(0xFFFF3B30),
         ),
       );
     }
@@ -3408,7 +3406,7 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
     try {
       if (_model.selectedMembers.isEmpty) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
+          const SnackBar(
             content: Text('Please select at least one member'),
             backgroundColor: Color(0xFFFF3B30),
           ),
@@ -3521,7 +3519,7 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('Error creating group: $e'),
-          backgroundColor: Color(0xFFFF3B30),
+          backgroundColor: const Color(0xFFFF3B30),
         ),
       );
     }
@@ -3533,8 +3531,8 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
         // Header for new message
         Container(
           width: double.infinity,
-          padding: EdgeInsets.all(16),
-          decoration: BoxDecoration(
+          padding: const EdgeInsets.all(16),
+          decoration: const BoxDecoration(
             color: CupertinoColors.systemGrey6,
             border: Border(
               bottom: BorderSide(
@@ -3545,13 +3543,13 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
           ),
           child: Row(
             children: [
-              Icon(
+              const Icon(
                 CupertinoIcons.chat_bubble,
                 color: CupertinoColors.systemBlue,
                 size: 20,
               ),
-              SizedBox(width: 8),
-              Expanded(
+              const SizedBox(width: 8),
+              const Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -3585,7 +3583,7 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
                     _model.newChatSearchController?.clear();
                   });
                 },
-                child: Icon(
+                child: const Icon(
                   CupertinoIcons.xmark,
                   color: CupertinoColors.systemGrey,
                   size: 20,
@@ -3597,8 +3595,8 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
         // Search bar
         Container(
           width: double.infinity,
-          padding: EdgeInsets.all(16),
-          decoration: BoxDecoration(
+          padding: const EdgeInsets.all(16),
+          decoration: const BoxDecoration(
             color: CupertinoColors.systemBackground,
           ),
           child: Container(
@@ -3617,14 +3615,14 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
                 setState(() {});
               },
               placeholder: 'Search by name or email',
-              placeholderStyle: TextStyle(
+              placeholderStyle: const TextStyle(
                 fontFamily: 'SF Pro Text',
                 color: CupertinoColors.systemGrey,
                 fontSize: 14,
                 fontWeight: FontWeight.w400,
               ),
-              padding: EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-              prefix: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+              prefix: const Padding(
                 padding: EdgeInsets.only(left: 12, right: 8),
                 child: Icon(
                   CupertinoIcons.search,
@@ -3639,7 +3637,7 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
                           _model.newChatSearchController?.clear();
                         });
                       },
-                      child: Padding(
+                      child: const Padding(
                         padding: EdgeInsets.only(right: 12),
                         child: Icon(
                           CupertinoIcons.xmark_circle_fill,
@@ -3649,7 +3647,7 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
                       ),
                     )
                   : null,
-              style: TextStyle(
+              style: const TextStyle(
                 fontFamily: 'SF Pro Text',
                 color: CupertinoColors.label,
                 fontSize: 14,
@@ -3666,12 +3664,12 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
         Expanded(
           child: Container(
             width: double.infinity,
-            padding: EdgeInsets.symmetric(horizontal: 16),
+            padding: const EdgeInsets.symmetric(horizontal: 16),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Padding(
-                  padding: EdgeInsets.only(left: 4, bottom: 12, top: 8),
+                  padding: const EdgeInsets.only(left: 4, bottom: 12, top: 8),
                   child: Row(
                     children: [
                       Container(
@@ -3682,8 +3680,8 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
                           borderRadius: BorderRadius.circular(2),
                         ),
                       ),
-                      SizedBox(width: 8),
-                      Text(
+                      const SizedBox(width: 8),
+                      const Text(
                         'SUGGESTED',
                         style: TextStyle(
                           fontFamily: 'SF Pro Text',
@@ -3698,7 +3696,7 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
                 ),
                 Expanded(
                   child: currentUserReference == null
-                      ? Center(
+                      ? const Center(
                           child: CupertinoActivityIndicator(
                             color: CupertinoColors.systemBlue,
                           ),
@@ -3708,7 +3706,7 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
                               UsersRecord.getDocument(currentUserReference!),
                           builder: (context, currentUserSnapshot) {
                             if (!currentUserSnapshot.hasData) {
-                              return Center(
+                              return const Center(
                                 child: CupertinoActivityIndicator(
                                   color: CupertinoColors.systemBlue,
                                 ),
@@ -3728,17 +3726,17 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
                                       height: 64,
                                       decoration: BoxDecoration(
                                         color: CupertinoColors.systemBlue
-                                            .withOpacity(0.1),
+                                            .withValues(alpha: 0.1),
                                         shape: BoxShape.circle,
                                       ),
-                                      child: Icon(
+                                      child: const Icon(
                                         CupertinoIcons.person_2,
                                         color: CupertinoColors.systemBlue,
                                         size: 32,
                                       ),
                                     ),
-                                    SizedBox(height: 16),
-                                    Text(
+                                    const SizedBox(height: 16),
+                                    const Text(
                                       'No connections',
                                       style: TextStyle(
                                         fontFamily: 'SF Pro Text',
@@ -3748,8 +3746,8 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
                                         letterSpacing: -0.41,
                                       ),
                                     ),
-                                    SizedBox(height: 8),
-                                    Text(
+                                    const SizedBox(height: 8),
+                                    const Text(
                                       'Add connections to start chatting',
                                       style: TextStyle(
                                         fontFamily: 'SF Pro Text',
@@ -3778,7 +3776,7 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
                                       UsersRecord.getDocument(connectionRef),
                                   builder: (context, userSnapshot) {
                                     if (!userSnapshot.hasData) {
-                                      return SizedBox.shrink();
+                                      return const SizedBox.shrink();
                                     }
 
                                     final user = userSnapshot.data!;
@@ -3786,7 +3784,7 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
                                         user.reference == currentUserReference;
 
                                     if (isCurrentUser) {
-                                      return SizedBox.shrink();
+                                      return const SizedBox.shrink();
                                     }
 
                                     // Filter by search query
@@ -3796,7 +3794,7 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
                                       final email = user.email.toLowerCase();
                                       if (!displayName.contains(searchQuery) &&
                                           !email.contains(searchQuery)) {
-                                        return SizedBox.shrink();
+                                        return const SizedBox.shrink();
                                       }
                                     }
 
@@ -3808,8 +3806,8 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
                                         });
                                       },
                                       child: Container(
-                                        margin: EdgeInsets.only(bottom: 8),
-                                        padding: EdgeInsets.all(12),
+                                        margin: const EdgeInsets.only(bottom: 8),
+                                        padding: const EdgeInsets.all(12),
                                         decoration: BoxDecoration(
                                           color:
                                               CupertinoColors.systemBackground,
@@ -3829,7 +3827,7 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
                                                 Container(
                                                   width: 48,
                                                   height: 48,
-                                                  decoration: BoxDecoration(
+                                                  decoration: const BoxDecoration(
                                                     color: CupertinoColors
                                                         .systemGrey5,
                                                     shape: BoxShape.circle,
@@ -3855,13 +3853,13 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
                                                         width: 48,
                                                         height: 48,
                                                         decoration:
-                                                            BoxDecoration(
+                                                            const BoxDecoration(
                                                           color: CupertinoColors
                                                               .systemGrey5,
                                                           shape:
                                                               BoxShape.circle,
                                                         ),
-                                                        child: Icon(
+                                                        child: const Icon(
                                                           CupertinoIcons
                                                               .person_fill,
                                                           color: CupertinoColors
@@ -3875,13 +3873,13 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
                                                         width: 48,
                                                         height: 48,
                                                         decoration:
-                                                            BoxDecoration(
+                                                            const BoxDecoration(
                                                           color: CupertinoColors
                                                               .systemGrey5,
                                                           shape:
                                                               BoxShape.circle,
                                                         ),
-                                                        child: Icon(
+                                                        child: const Icon(
                                                           CupertinoIcons
                                                               .person_fill,
                                                           color: CupertinoColors
@@ -3914,7 +3912,7 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
                                                   ),
                                               ],
                                             ),
-                                            SizedBox(width: 12),
+                                            const SizedBox(width: 12),
                                             // User info
                                             Expanded(
                                               child: Column(
@@ -3923,7 +3921,7 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
                                                 children: [
                                                   Text(
                                                     user.displayName,
-                                                    style: TextStyle(
+                                                    style: const TextStyle(
                                                       fontFamily: 'SF Pro Text',
                                                       color:
                                                           CupertinoColors.label,
@@ -3936,10 +3934,10 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
                                                     overflow:
                                                         TextOverflow.ellipsis,
                                                   ),
-                                                  SizedBox(height: 2),
+                                                  const SizedBox(height: 2),
                                                   Text(
                                                     user.email,
-                                                    style: TextStyle(
+                                                    style: const TextStyle(
                                                       fontFamily: 'SF Pro Text',
                                                       color: CupertinoColors
                                                           .systemGrey,
@@ -3961,11 +3959,11 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
                                               decoration: BoxDecoration(
                                                 color: CupertinoColors
                                                     .systemBlue
-                                                    .withOpacity(0.1),
+                                                    .withValues(alpha: 0.1),
                                                 borderRadius:
                                                     BorderRadius.circular(8),
                                               ),
-                                              child: Icon(
+                                              child: const Icon(
                                                 CupertinoIcons.arrow_right,
                                                 color:
                                                     CupertinoColors.systemBlue,
@@ -4006,7 +4004,7 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('Error starting chat: $e'),
-          backgroundColor: Color(0xFFEF4444),
+          backgroundColor: const Color(0xFFEF4444),
         ),
       );
     }
@@ -4017,7 +4015,7 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
       return Container(
         width: 36,
         height: 36,
-        decoration: BoxDecoration(
+        decoration: const BoxDecoration(
           color: Colors.white,
           shape: BoxShape.circle,
         ),
@@ -4036,11 +4034,11 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
             placeholder: (context, url) => Container(
               width: 36,
               height: 36,
-              decoration: BoxDecoration(
+              decoration: const BoxDecoration(
                 color: Colors.white,
                 shape: BoxShape.circle,
               ),
-              child: Icon(
+              child: const Icon(
                 Icons.group,
                 color: Color(0xFF8E8E93),
                 size: 18,
@@ -4049,11 +4047,11 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
             errorWidget: (context, url, error) => Container(
               width: 36,
               height: 36,
-              decoration: BoxDecoration(
+              decoration: const BoxDecoration(
                 color: Colors.white,
                 shape: BoxShape.circle,
               ),
-              child: Icon(
+              child: const Icon(
                 Icons.group,
                 color: Color(0xFF8E8E93),
                 size: 18,
@@ -4086,7 +4084,7 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
           return Container(
             width: 40,
             height: 40,
-            decoration: BoxDecoration(
+            decoration: const BoxDecoration(
               color: Color(0xFF007AFF),
               shape: BoxShape.circle,
             ),
@@ -4105,11 +4103,11 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
                 placeholder: (context, url) => Container(
                   width: 40,
                   height: 40,
-                  decoration: BoxDecoration(
+                  decoration: const BoxDecoration(
                     color: Colors.white,
                     shape: BoxShape.circle,
                   ),
-                  child: Icon(
+                  child: const Icon(
                     Icons.person,
                     color: Color(0xFF8E8E93),
                     size: 18,
@@ -4118,11 +4116,11 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
                 errorWidget: (context, url, error) => Container(
                   width: 40,
                   height: 40,
-                  decoration: BoxDecoration(
+                  decoration: const BoxDecoration(
                     color: Colors.white,
                     shape: BoxShape.circle,
                   ),
-                  child: Icon(
+                  child: const Icon(
                     Icons.person,
                     color: Color(0xFF8E8E93),
                     size: 18,
@@ -4141,7 +4139,7 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
       context: context,
       backgroundColor: Colors.transparent,
       builder: (context) => Container(
-        decoration: BoxDecoration(
+        decoration: const BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
         ),
@@ -4152,9 +4150,9 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
             Container(
               width: 36,
               height: 5,
-              margin: EdgeInsets.symmetric(vertical: 12),
+              margin: const EdgeInsets.symmetric(vertical: 12),
               decoration: BoxDecoration(
-                color: Color(0xFFD1D1D6),
+                color: const Color(0xFFD1D1D6),
                 borderRadius: BorderRadius.circular(2.5),
               ),
             ),
@@ -4179,15 +4177,15 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
               _buildOptionTile(
                 icon: Icons.block,
                 title: 'Block User',
-                titleColor: Color(0xFFFF3B30),
-                iconColor: Color(0xFFFF3B30),
+                titleColor: const Color(0xFFFF3B30),
+                iconColor: const Color(0xFFFF3B30),
                 onTap: () {
                   Navigator.pop(context);
                   _blockUser(chat);
                 },
               ),
             ],
-            SizedBox(height: 20),
+            const SizedBox(height: 20),
           ],
         ),
       ),
@@ -4204,14 +4202,14 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
     return ListTile(
       leading: Icon(
         icon,
-        color: iconColor ?? Color(0xFF1D1D1F),
+        color: iconColor ?? const Color(0xFF1D1D1F),
         size: 24,
       ),
       title: Text(
         title,
         style: TextStyle(
           fontFamily: 'System',
-          color: titleColor ?? Color(0xFF1D1D1F),
+          color: titleColor ?? const Color(0xFF1D1D1F),
           fontSize: 17,
           fontWeight: FontWeight.w400,
         ),
@@ -4223,7 +4221,7 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
   void _viewUserProfile(ChatsRecord chat) async {
     if (chat.isGroup) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
+        const SnackBar(
           content: Text('Group chat - no user profile to view'),
           backgroundColor: Color(0xFF8E8E93),
         ),
@@ -4254,7 +4252,7 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
       }
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
+        const SnackBar(
           content: Text('Error loading user profile'),
           backgroundColor: Color(0xFFFF3B30),
         ),
@@ -4265,7 +4263,7 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
   void _blockUser(ChatsRecord chat) async {
     if (chat.isGroup) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
+        const SnackBar(
           content: Text('Cannot block group chats'),
           backgroundColor: Color(0xFF8E8E93),
         ),
@@ -4288,7 +4286,7 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
         builder: (BuildContext context) {
           return AlertDialog(
             backgroundColor: Colors.white,
-            title: Text(
+            title: const Text(
               'Block User',
               style: TextStyle(
                 fontFamily: 'System',
@@ -4299,7 +4297,7 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
             ),
             content: Text(
               'Are you sure you want to block ${user.displayName}? You will no longer see their messages or be able to contact them.',
-              style: TextStyle(
+              style: const TextStyle(
                 fontFamily: 'System',
                 color: Color(0xFF8E8E93),
                 fontSize: 15,
@@ -4308,7 +4306,7 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
             actions: [
               TextButton(
                 onPressed: () => Navigator.of(context).pop(false),
-                child: Text(
+                child: const Text(
                   'Cancel',
                   style: TextStyle(
                     fontFamily: 'System',
@@ -4319,7 +4317,7 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
               ),
               TextButton(
                 onPressed: () => Navigator.of(context).pop(true),
-                child: Text(
+                child: const Text(
                   'Block',
                   style: TextStyle(
                     fontFamily: 'System',
@@ -4346,7 +4344,7 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
 
         // Show success message
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
+          const SnackBar(
             content: Text('User has been blocked'),
             backgroundColor: Color(0xFF34C759),
           ),
@@ -4354,7 +4352,7 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
       }
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
+        const SnackBar(
           content: Text('Error blocking user'),
           backgroundColor: Color(0xFFFF3B30),
         ),
@@ -4365,7 +4363,7 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
   void _viewGroupChat(ChatsRecord chat) async {
     if (!chat.isGroup) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
+        const SnackBar(
           content: Text('This is not a group chat'),
           backgroundColor: Color(0xFF8E8E93),
         ),
@@ -4383,7 +4381,7 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
       );
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
+        const SnackBar(
           content: Text('Error opening group chat details'),
           backgroundColor: Color(0xFFFF3B30),
         ),
@@ -4400,12 +4398,12 @@ class _MobileChatListItem extends StatefulWidget {
   final bool hasUnreadMessages;
 
   const _MobileChatListItem({
-    Key? key,
+    super.key,
     required this.chat,
     required this.isSelected,
     required this.onTap,
     required this.hasUnreadMessages,
-  }) : super(key: key);
+  });
 
   @override
   _MobileChatListItemState createState() => _MobileChatListItemState();
@@ -4440,7 +4438,7 @@ class _MobileChatListItemState extends State<_MobileChatListItem>
       context: context,
       backgroundColor: Colors.transparent,
       builder: (context) => Container(
-        decoration: BoxDecoration(
+        decoration: const BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
         ),
@@ -4451,9 +4449,9 @@ class _MobileChatListItemState extends State<_MobileChatListItem>
             Container(
               width: 36,
               height: 5,
-              margin: EdgeInsets.symmetric(vertical: 12),
+              margin: const EdgeInsets.symmetric(vertical: 12),
               decoration: BoxDecoration(
-                color: Color(0xFFD1D1D6),
+                color: const Color(0xFFD1D1D6),
                 borderRadius: BorderRadius.circular(2.5),
               ),
             ),
@@ -4477,7 +4475,7 @@ class _MobileChatListItemState extends State<_MobileChatListItem>
               iconColor: Colors.red,
             ),
             // Bottom spacing
-            SizedBox(height: 20),
+            const SizedBox(height: 20),
           ],
         ),
       ),
@@ -4491,12 +4489,12 @@ class _MobileChatListItemState extends State<_MobileChatListItem>
     Color? textColor,
     Color? iconColor,
   }) {
-    final defaultColor = Color(0xFF1D1D1F);
+    const defaultColor = Color(0xFF1D1D1F);
     return GestureDetector(
       onTap: onTap,
       child: Container(
         width: double.infinity,
-        padding: EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
         child: Row(
           children: [
             Icon(
@@ -4504,7 +4502,7 @@ class _MobileChatListItemState extends State<_MobileChatListItem>
               color: iconColor ?? defaultColor,
               size: 20,
             ),
-            SizedBox(width: 16),
+            const SizedBox(width: 16),
             Text(
               title,
               style: TextStyle(
@@ -4529,12 +4527,12 @@ class _MobileChatListItemState extends State<_MobileChatListItem>
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(chat.isPin ? 'Chat unpinned' : 'Chat pinned'),
-          backgroundColor: Color(0xFF34C759),
+          backgroundColor: const Color(0xFF34C759),
         ),
       );
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
+        const SnackBar(
           content: Text('Error updating chat'),
           backgroundColor: Color(0xFFFF3B30),
         ),
@@ -4546,20 +4544,20 @@ class _MobileChatListItemState extends State<_MobileChatListItem>
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: Text('Delete Chat'),
-        content: Text(
+        title: const Text('Delete Chat'),
+        content: const Text(
             'Are you sure you want to delete this chat? This action cannot be undone.'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: Text('Cancel'),
+            child: const Text('Cancel'),
           ),
           TextButton(
             onPressed: () {
               Navigator.pop(context);
               _deleteChat(chat);
             },
-            child: Text(
+            child: const Text(
               'Delete',
               style: TextStyle(color: Color(0xFFFF3B30)),
             ),
@@ -4574,14 +4572,14 @@ class _MobileChatListItemState extends State<_MobileChatListItem>
       await chat.reference.delete();
 
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
+        const SnackBar(
           content: Text('Chat deleted'),
           backgroundColor: Color(0xFF34C759),
         ),
       );
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
+        const SnackBar(
           content: Text('Error deleting chat'),
           backgroundColor: Color(0xFFFF3B30),
         ),
@@ -4607,8 +4605,8 @@ class _MobileChatListItemState extends State<_MobileChatListItem>
             : null, // Disable highlight on iOS
         child: Container(
           width: double.infinity,
-          padding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-          margin: EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
           decoration: BoxDecoration(
             color: Colors.white,
             borderRadius: BorderRadius.circular(16),
@@ -4616,7 +4614,7 @@ class _MobileChatListItemState extends State<_MobileChatListItem>
               BoxShadow(
                 color: Colors.black.withOpacity(0.03),
                 blurRadius: 10,
-                offset: Offset(0, 2),
+                offset: const Offset(0, 2),
               ),
             ],
           ),
@@ -4627,7 +4625,7 @@ class _MobileChatListItemState extends State<_MobileChatListItem>
                 children: [
                   // Avatar
                   _buildChatAvatar(widget.chat),
-                  SizedBox(width: 12),
+                  const SizedBox(width: 12),
                   // Chat Info
                   Expanded(
                     child: Column(
@@ -4635,7 +4633,7 @@ class _MobileChatListItemState extends State<_MobileChatListItem>
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         _getChatDisplayName(widget.chat),
-                        SizedBox(height: 4),
+                        const SizedBox(height: 4),
                         _getLastMessagePreview(widget.chat),
                       ],
                     ),
@@ -4650,7 +4648,7 @@ class _MobileChatListItemState extends State<_MobileChatListItem>
                         // Timestamp at top
                         Text(
                           _formatTimestamp(widget.chat.lastMessageAt),
-                          style: TextStyle(
+                          style: const TextStyle(
                             fontFamily: 'SF Pro Text',
                             color: Color(0xFF8E8E93),
                             fontSize: 13,
@@ -4658,13 +4656,13 @@ class _MobileChatListItemState extends State<_MobileChatListItem>
                         ),
                         // Pin icon at bottom
                         if (widget.chat.isPin)
-                          Icon(
+                          const Icon(
                             Icons.push_pin,
                             size: 12,
                             color: Color(0xFF8E8E93),
                           )
                         else
-                          SizedBox(height: 12), // Reserve space if no pin
+                          const SizedBox(height: 12), // Reserve space if no pin
                       ],
                     ),
                   ),
@@ -4680,7 +4678,7 @@ class _MobileChatListItemState extends State<_MobileChatListItem>
                     child: Container(
                       width: 8,
                       height: 8,
-                      decoration: BoxDecoration(
+                      decoration: const BoxDecoration(
                         color: Color(0xFF007AFF),
                         shape: BoxShape.circle,
                       ),
@@ -4699,7 +4697,7 @@ class _MobileChatListItemState extends State<_MobileChatListItem>
       return Container(
         width: 50,
         height: 50,
-        decoration: BoxDecoration(
+        decoration: const BoxDecoration(
           color: Colors.white,
           shape: BoxShape.circle,
         ),
@@ -4718,11 +4716,11 @@ class _MobileChatListItemState extends State<_MobileChatListItem>
             placeholder: (context, url) => Container(
               width: 50,
               height: 50,
-              decoration: BoxDecoration(
+              decoration: const BoxDecoration(
                 color: Colors.white,
                 shape: BoxShape.circle,
               ),
-              child: Icon(
+              child: const Icon(
                 Icons.group,
                 color: Color(0xFF8E8E93),
                 size: 24,
@@ -4731,11 +4729,11 @@ class _MobileChatListItemState extends State<_MobileChatListItem>
             errorWidget: (context, url, error) => Container(
               width: 50,
               height: 50,
-              decoration: BoxDecoration(
+              decoration: const BoxDecoration(
                 color: Colors.white,
                 shape: BoxShape.circle,
               ),
-              child: Icon(
+              child: const Icon(
                 Icons.group,
                 color: Color(0xFF8E8E93),
                 size: 24,
@@ -4762,7 +4760,7 @@ class _MobileChatListItemState extends State<_MobileChatListItem>
           return Container(
             width: 50,
             height: 50,
-            decoration: BoxDecoration(
+            decoration: const BoxDecoration(
               color: Color(0xFF007AFF),
               shape: BoxShape.circle,
             ),
@@ -4781,11 +4779,11 @@ class _MobileChatListItemState extends State<_MobileChatListItem>
                 placeholder: (context, url) => Container(
                   width: 50,
                   height: 50,
-                  decoration: BoxDecoration(
+                  decoration: const BoxDecoration(
                     color: Colors.white,
                     shape: BoxShape.circle,
                   ),
-                  child: Icon(
+                  child: const Icon(
                     Icons.person,
                     color: Color(0xFF8E8E93),
                     size: 24,
@@ -4794,11 +4792,11 @@ class _MobileChatListItemState extends State<_MobileChatListItem>
                 errorWidget: (context, url, error) => Container(
                   width: 50,
                   height: 50,
-                  decoration: BoxDecoration(
+                  decoration: const BoxDecoration(
                     color: Colors.white,
                     shape: BoxShape.circle,
                   ),
-                  child: Icon(
+                  child: const Icon(
                     Icons.person,
                     color: Color(0xFF8E8E93),
                     size: 24,
@@ -4816,7 +4814,7 @@ class _MobileChatListItemState extends State<_MobileChatListItem>
     if (chat.isGroup) {
       return Text(
         chat.title.isNotEmpty ? chat.title : 'Group Chat',
-        style: TextStyle(
+        style: const TextStyle(
           fontFamily: 'SF Pro Text',
           color: Color(0xFF1D1D1F),
           fontSize: 16,
@@ -4851,7 +4849,7 @@ class _MobileChatListItemState extends State<_MobileChatListItem>
 
           return Text(
             displayName,
-            style: TextStyle(
+            style: const TextStyle(
               fontFamily: 'SF Pro Text',
               color: Color(0xFF1D1D1F),
               fontSize: 17,
@@ -4870,7 +4868,7 @@ class _MobileChatListItemState extends State<_MobileChatListItem>
     if (chat.lastMessage.isEmpty) {
       // Special handling for service chats
       if (chat.isServiceChat == true) {
-        return Text(
+        return const Text(
           'Service messages',
           style: TextStyle(
             fontFamily: 'SF Pro Text',
@@ -4882,7 +4880,7 @@ class _MobileChatListItemState extends State<_MobileChatListItem>
         );
       }
 
-      return Text(
+      return const Text(
         'No messages',
         style: TextStyle(
           fontFamily: 'SF Pro Text',
@@ -4917,7 +4915,7 @@ class _MobileChatListItemState extends State<_MobileChatListItem>
             // Show message without prefix while loading
             return Text(
               chat.lastMessage,
-              style: TextStyle(
+              style: const TextStyle(
                 fontFamily: 'SF Pro Text',
                 color: Color(0xFF8E8E93),
                 fontSize: 15,
@@ -4932,7 +4930,7 @@ class _MobileChatListItemState extends State<_MobileChatListItem>
               children: [
                 TextSpan(
                   text: prefix,
-                  style: TextStyle(
+                  style: const TextStyle(
                     fontFamily: 'SF Pro Text',
                     color: Color(0xFF8E8E93),
                     fontSize: 15,
@@ -4941,7 +4939,7 @@ class _MobileChatListItemState extends State<_MobileChatListItem>
                 ),
                 TextSpan(
                   text: chat.lastMessage,
-                  style: TextStyle(
+                  style: const TextStyle(
                     fontFamily: 'SF Pro Text',
                     color: Color(0xFF8E8E93),
                     fontSize: 15,
@@ -4960,7 +4958,7 @@ class _MobileChatListItemState extends State<_MobileChatListItem>
     // For non-iOS or when lastMessageSent is not available, show message only
     return Text(
       chat.lastMessage,
-      style: TextStyle(
+      style: const TextStyle(
         fontFamily: 'SF Pro Text',
         color: Color(0xFF8E8E93),
         fontSize: 15,
@@ -4980,12 +4978,12 @@ class _FullScreenChatPage extends StatefulWidget {
   final VoidCallback? onPop;
 
   const _FullScreenChatPage({
-    Key? key,
+    super.key,
     required this.chat,
     this.onMessageLongPress,
     this.shouldPopTwice = false,
     this.onPop,
-  }) : super(key: key);
+  });
 
   @override
   State<_FullScreenChatPage> createState() => _FullScreenChatPageState();
@@ -4997,15 +4995,15 @@ class _FullScreenChatPageState extends State<_FullScreenChatPage> {
   Widget build(BuildContext context) {
     // Ensure we have a valid context
     if (!mounted) {
-      return Scaffold(body: Center(child: CircularProgressIndicator()));
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
     return Scaffold(
       appBar: _buildAppBar(),
-      backgroundColor: Color(0xFFF2F2F7),
+      backgroundColor: const Color(0xFFF2F2F7),
       body: SafeArea(
         bottom: false,
         child: Container(
-          color: Color(0xFFF2F2F7),
+          color: const Color(0xFFF2F2F7),
           child: ChatThreadComponentWidget(
             chatReference: widget.chat,
             onMessageLongPress: widget.onMessageLongPress,
@@ -5023,11 +5021,11 @@ class _FullScreenChatPageState extends State<_FullScreenChatPage> {
 
     return PreferredSize(
       preferredSize:
-          Size.fromHeight(bubbleHeight + 50), // Account for the offset
+          const Size.fromHeight(bubbleHeight + 50), // Account for the offset
       child: Stack(
         children: [
           // Spacer to push content down
-          SizedBox(height: bubbleHeight + 50),
+          const SizedBox(height: bubbleHeight + 50),
           // Positioned header
           Positioned(
             top: 50, // Shift downward
@@ -5040,7 +5038,7 @@ class _FullScreenChatPageState extends State<_FullScreenChatPage> {
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
-                  SizedBox(width: 8),
+                  const SizedBox(width: 8),
                   // Back button - using AdaptiveFloatingActionButton with liquid glass effects
                   AdaptiveFloatingActionButton(
                         onPressed: () {
@@ -5087,12 +5085,12 @@ class _FullScreenChatPageState extends State<_FullScreenChatPage> {
                         mini: true,
                         backgroundColor: Colors.white,
                         foregroundColor: CupertinoColors.systemBlue,
-                        child: Icon(
+                        child: const Icon(
                           CupertinoIcons.chevron_left,
                           size: 22,
                         ),
                       ),
-                  SizedBox(width: 4),
+                  const SizedBox(width: 4),
                   // Centered title - tappable to view profile
                   Expanded(
                     child: Center(
@@ -5100,7 +5098,7 @@ class _FullScreenChatPageState extends State<_FullScreenChatPage> {
                         onTap: () => _navigateToProfile(chat),
                         child: Container(
                           padding:
-                              EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                              const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                           decoration: BoxDecoration(
                             color: Colors.white,
                             borderRadius: BorderRadius.circular(16),
@@ -5110,7 +5108,7 @@ class _FullScreenChatPageState extends State<_FullScreenChatPage> {
                             children: [
                               // Avatar
                               _buildAvatar(chat),
-                              SizedBox(width: 6),
+                              const SizedBox(width: 6),
                               // Name - show other user's name for DMs
                               Flexible(
                                 child: chat.isGroup
@@ -5118,7 +5116,7 @@ class _FullScreenChatPageState extends State<_FullScreenChatPage> {
                                         chat.title.isNotEmpty
                                             ? chat.title
                                             : 'Group Chat',
-                                        style: TextStyle(
+                                        style: const TextStyle(
                                           fontFamily: 'SF Pro Display',
                                           fontSize: 17,
                                           fontWeight: FontWeight.w600,
@@ -5139,7 +5137,7 @@ class _FullScreenChatPageState extends State<_FullScreenChatPage> {
                                           }
                                           return Text(
                                             displayName,
-                                            style: TextStyle(
+                                            style: const TextStyle(
                                               fontFamily: 'SF Pro Display',
                                               fontSize: 17,
                                               fontWeight: FontWeight.w600,
@@ -5156,7 +5154,7 @@ class _FullScreenChatPageState extends State<_FullScreenChatPage> {
                       ),
                     ),
                   ),
-                  SizedBox(width: 4),
+                  const SizedBox(width: 4),
                   // More options button - iOS native adaptive popup menu
                   AdaptivePopupMenuButton.widget<String>(
                     items: chat.isGroup
@@ -5230,18 +5228,18 @@ class _FullScreenChatPageState extends State<_FullScreenChatPage> {
                     child: Container(
                           width: 40,
                           height: 40,
-                          decoration: BoxDecoration(
+                          decoration: const BoxDecoration(
                             color: Colors.white,
                             shape: BoxShape.circle,
                           ),
-                          child: Icon(
+                          child: const Icon(
                             CupertinoIcons.ellipsis,
                             size: 22,
                             color: CupertinoColors.systemBlue,
                           ),
                         ),
                   ),
-                  SizedBox(width: 8),
+                  const SizedBox(width: 8),
                 ],
               ),
             ),
@@ -5266,10 +5264,10 @@ class _FullScreenChatPageState extends State<_FullScreenChatPage> {
               width: 28,
               height: 28,
               decoration: BoxDecoration(
-                color: Color(0xFFE5E5EA),
+                color: const Color(0xFFE5E5EA),
                 borderRadius: BorderRadius.circular(14),
               ),
-              child: Icon(
+              child: const Icon(
                 CupertinoIcons.person_2_fill,
                 size: 14,
                 color: Color(0xFF8E8E93),
@@ -5279,10 +5277,10 @@ class _FullScreenChatPageState extends State<_FullScreenChatPage> {
               width: 28,
               height: 28,
               decoration: BoxDecoration(
-                color: Color(0xFFE5E5EA),
+                color: const Color(0xFFE5E5EA),
                 borderRadius: BorderRadius.circular(14),
               ),
-              child: Icon(
+              child: const Icon(
                 CupertinoIcons.person_2_fill,
                 size: 14,
                 color: Color(0xFF8E8E93),
@@ -5295,10 +5293,10 @@ class _FullScreenChatPageState extends State<_FullScreenChatPage> {
           width: 28,
           height: 28,
           decoration: BoxDecoration(
-            color: Color(0xFFE5E5EA),
+            color: const Color(0xFFE5E5EA),
             borderRadius: BorderRadius.circular(14),
           ),
-          child: Icon(
+          child: const Icon(
             CupertinoIcons.person_2_fill,
             size: 14,
             color: Color(0xFF8E8E93),
@@ -5322,10 +5320,10 @@ class _FullScreenChatPageState extends State<_FullScreenChatPage> {
                   width: 28,
                   height: 28,
                   decoration: BoxDecoration(
-                    color: Color(0xFFE5E5EA),
+                    color: const Color(0xFFE5E5EA),
                     borderRadius: BorderRadius.circular(14),
                   ),
-                  child: Icon(
+                  child: const Icon(
                     CupertinoIcons.person_fill,
                     size: 14,
                     color: Color(0xFF8E8E93),
@@ -5335,10 +5333,10 @@ class _FullScreenChatPageState extends State<_FullScreenChatPage> {
                   width: 28,
                   height: 28,
                   decoration: BoxDecoration(
-                    color: Color(0xFFE5E5EA),
+                    color: const Color(0xFFE5E5EA),
                     borderRadius: BorderRadius.circular(14),
                   ),
-                  child: Icon(
+                  child: const Icon(
                     CupertinoIcons.person_fill,
                     size: 14,
                     color: Color(0xFF8E8E93),
@@ -5351,10 +5349,10 @@ class _FullScreenChatPageState extends State<_FullScreenChatPage> {
             width: 28,
             height: 28,
             decoration: BoxDecoration(
-              color: Color(0xFFE5E5EA),
+              color: const Color(0xFFE5E5EA),
               borderRadius: BorderRadius.circular(14),
             ),
-            child: Icon(
+            child: const Icon(
               CupertinoIcons.person_fill,
               size: 14,
               color: Color(0xFF8E8E93),
@@ -5401,7 +5399,7 @@ class _FullScreenChatPageState extends State<_FullScreenChatPage> {
         }
       } catch (e) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
+          const SnackBar(
             content: Text('Error loading user profile'),
             backgroundColor: Color(0xFFFF3B30),
           ),
@@ -5413,7 +5411,7 @@ class _FullScreenChatPageState extends State<_FullScreenChatPage> {
   void _blockUserFromChat(ChatsRecord chat) async {
     if (chat.isGroup) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
+        const SnackBar(
           content: Text('Cannot block group chats'),
           backgroundColor: Color(0xFF8E8E93),
         ),
@@ -5436,7 +5434,7 @@ class _FullScreenChatPageState extends State<_FullScreenChatPage> {
         builder: (BuildContext context) {
           return AlertDialog(
             backgroundColor: Colors.white,
-            title: Text(
+            title: const Text(
               'Block User',
               style: TextStyle(
                 fontFamily: 'System',
@@ -5447,7 +5445,7 @@ class _FullScreenChatPageState extends State<_FullScreenChatPage> {
             ),
             content: Text(
               'Are you sure you want to block ${user.displayName}? You will no longer see their messages or be able to contact them.',
-              style: TextStyle(
+              style: const TextStyle(
                 fontFamily: 'System',
                 color: Color(0xFF8E8E93),
                 fontSize: 15,
@@ -5456,7 +5454,7 @@ class _FullScreenChatPageState extends State<_FullScreenChatPage> {
             actions: [
               TextButton(
                 onPressed: () => Navigator.of(context).pop(false),
-                child: Text(
+                child: const Text(
                   'Cancel',
                   style: TextStyle(
                     fontFamily: 'System',
@@ -5467,7 +5465,7 @@ class _FullScreenChatPageState extends State<_FullScreenChatPage> {
               ),
               TextButton(
                 onPressed: () => Navigator.of(context).pop(true),
-                child: Text(
+                child: const Text(
                   'Block',
                   style: TextStyle(
                     fontFamily: 'System',
@@ -5494,7 +5492,7 @@ class _FullScreenChatPageState extends State<_FullScreenChatPage> {
 
         // Show success message
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
+          const SnackBar(
             content: Text('User has been blocked'),
             backgroundColor: Color(0xFF34C759),
           ),
@@ -5505,7 +5503,7 @@ class _FullScreenChatPageState extends State<_FullScreenChatPage> {
       }
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
+        const SnackBar(
           content: Text('Error blocking user'),
           backgroundColor: Color(0xFFFF3B30),
         ),
@@ -5561,7 +5559,7 @@ class _IOS26PopupMenu<T> extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final screenSize = MediaQuery.of(context).size;
-    final menuWidth = 200.0;
+    const menuWidth = 200.0;
     final menuHeight = items.length * 50.0 + 16.0; // 50 per item + padding
 
     // Calculate position (slightly above center, more natural for message menus)
@@ -5596,7 +5594,7 @@ class _IOS26PopupMenu<T> extends StatelessWidget {
                     BoxShadow(
                       color: Colors.black.withOpacity(0.1),
                       blurRadius: 20,
-                      offset: Offset(0, 8),
+                      offset: const Offset(0, 8),
                     ),
                   ],
                 ),
@@ -5609,7 +5607,7 @@ class _IOS26PopupMenu<T> extends StatelessWidget {
                         item.value.toString().contains('report') ||
                             item.value.toString().contains('unsend');
                     final textColor = isDestructive
-                        ? Color(0xFFFF3B30)
+                        ? const Color(0xFFFF3B30)
                         : CupertinoColors.label;
                     final isLast = index == items.length - 1;
 
@@ -5620,11 +5618,11 @@ class _IOS26PopupMenu<T> extends StatelessWidget {
                           onSelected(index, item);
                         },
                         borderRadius: BorderRadius.vertical(
-                          top: index == 0 ? Radius.circular(16) : Radius.zero,
-                          bottom: isLast ? Radius.circular(16) : Radius.zero,
+                          top: index == 0 ? const Radius.circular(16) : Radius.zero,
+                          bottom: isLast ? const Radius.circular(16) : Radius.zero,
                         ),
                         child: Container(
-                          padding: EdgeInsets.symmetric(
+                          padding: const EdgeInsets.symmetric(
                               horizontal: 16, vertical: 14),
                           child: Row(
                             children: [
@@ -5641,7 +5639,7 @@ class _IOS26PopupMenu<T> extends StatelessWidget {
                                   size: 20,
                                   color: textColor,
                                 ),
-                              SizedBox(width: 12),
+                              const SizedBox(width: 12),
                               // Label
                               Expanded(
                                 child: Text(

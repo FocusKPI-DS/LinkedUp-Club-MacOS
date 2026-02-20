@@ -1,5 +1,3 @@
-import 'dart:convert';
-import 'package:flutter_quill/flutter_quill.dart';
 import 'package:flutter_quill/quill_delta.dart';
 
 /// Converts a Quill [Delta] to a Markdown string.

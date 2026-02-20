@@ -47,7 +47,7 @@ class _MobileSettingsWidgetState extends State<MobileSettingsWidget>
 
   // State variables
   String _selectedSetting = '';
-  String _searchQuery = '';
+  final String _searchQuery = '';
   bool _openInEditMode = false;
 
   // Notification settings state - synced with system
@@ -217,7 +217,7 @@ class _MobileSettingsWidgetState extends State<MobileSettingsWidget>
     showCupertinoModalPopup(
       context: context,
       builder: (context) => CupertinoActionSheet(
-        title: Text(
+        title: const Text(
           'Invite Friend',
           style: TextStyle(
             fontFamily: '.SF Pro Text',
@@ -232,7 +232,7 @@ class _MobileSettingsWidgetState extends State<MobileSettingsWidget>
               Navigator.pop(context);
               _showEmailInviteDialog();
             },
-            child: Row(
+            child: const Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 Icon(
@@ -258,7 +258,7 @@ class _MobileSettingsWidgetState extends State<MobileSettingsWidget>
               Navigator.pop(context);
               _showInviteDialog();
             },
-            child: Row(
+            child: const Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 Icon(
@@ -283,7 +283,7 @@ class _MobileSettingsWidgetState extends State<MobileSettingsWidget>
         cancelButton: CupertinoActionSheetAction(
           isDefaultAction: true,
           onPressed: () => Navigator.pop(context),
-          child: Text(
+          child: const Text(
             'Cancel',
             style: TextStyle(
               fontFamily: '.SF Pro Text',
@@ -303,7 +303,7 @@ class _MobileSettingsWidgetState extends State<MobileSettingsWidget>
     showCupertinoDialog(
       context: context,
       builder: (dialogContext) => CupertinoAlertDialog(
-        title: Text('Invite via Email'),
+        title: const Text('Invite via Email'),
         content: Padding(
           padding: const EdgeInsets.only(top: 10.0),
           child: CupertinoTextField(
@@ -315,19 +315,19 @@ class _MobileSettingsWidgetState extends State<MobileSettingsWidget>
         ),
         actions: [
           CupertinoDialogAction(
-            child: Text('Cancel'),
+            child: const Text('Cancel'),
             onPressed: () => Navigator.pop(dialogContext),
           ),
           CupertinoDialogAction(
             isDefaultAction: true,
-            child: Text('Send Invite'),
+            child: const Text('Send Invite'),
             onPressed: () async {
               final email = emailController.text.trim();
               if (email.isEmpty || !email.contains('@')) {
                 Navigator.pop(dialogContext);
                 if (mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
+                    const SnackBar(
                       content: Text('Please enter a valid email address'),
                       backgroundColor: Colors.red,
                     ),
@@ -352,7 +352,7 @@ class _MobileSettingsWidgetState extends State<MobileSettingsWidget>
                 // Show success feedback
                 if (mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
+                    const SnackBar(
                       content: Text('✅ Invite sent successfully!'),
                       backgroundColor: Color(0xFF34C759),
                       duration: Duration(seconds: 2),
@@ -362,7 +362,7 @@ class _MobileSettingsWidgetState extends State<MobileSettingsWidget>
               } catch (e) {
                 if (mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
+                    const SnackBar(
                       content: Text('Failed to send invite. Please try again.'),
                       backgroundColor: Colors.red,
                     ),
@@ -418,7 +418,7 @@ class _MobileSettingsWidgetState extends State<MobileSettingsWidget>
 
   Widget _buildIOSHeader() {
     return Padding(
-      padding: EdgeInsets.fromLTRB(16, 16, 16, 0),
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
@@ -473,7 +473,7 @@ class _MobileSettingsWidgetState extends State<MobileSettingsWidget>
           // Profile Header Section
           _buildProfileHeader(),
           Transform.translate(
-            offset: Offset(0, -50), // Move settings list up
+            offset: const Offset(0, -50), // Move settings list up
             child: _buildSettingsList(),
           ),
         ],
@@ -493,7 +493,7 @@ class _MobileSettingsWidgetState extends State<MobileSettingsWidget>
               children: [
                 CupertinoButton(
                   padding: EdgeInsets.zero,
-                  child: Row(
+                  child: const Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       Icon(CupertinoIcons.chevron_back, size: 24),
@@ -520,7 +520,7 @@ class _MobileSettingsWidgetState extends State<MobileSettingsWidget>
           // Language Section
           _buildSectionHeader('TARGET LANGUAGE'),
           Container(
-            margin: EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+            margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
             decoration: BoxDecoration(
               color: Colors.white,
               borderRadius: BorderRadius.circular(10),
@@ -559,7 +559,7 @@ class _MobileSettingsWidgetState extends State<MobileSettingsWidget>
           // Auto-Translate Section
           _buildSectionHeader('PREFERENCES'),
           Container(
-            margin: EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+            margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
             decoration: BoxDecoration(
               color: Colors.white,
               borderRadius: BorderRadius.circular(10),
@@ -575,8 +575,8 @@ class _MobileSettingsWidgetState extends State<MobileSettingsWidget>
             ),
           ),
           
-          Padding(
-             padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+          const Padding(
+             padding: EdgeInsets.symmetric(horizontal: 20, vertical: 8),
              child: Text(
                'When enabled, incoming messages in other languages will be automatically translated to your target language.',
                style: TextStyle(
@@ -595,7 +595,7 @@ class _MobileSettingsWidgetState extends State<MobileSettingsWidget>
       padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
       child: Text(
         title,
-        style: TextStyle(
+        style: const TextStyle(
           color: Color(0xFF8E8E93),
           fontSize: 13,
           fontWeight: FontWeight.w600,
@@ -605,7 +605,7 @@ class _MobileSettingsWidgetState extends State<MobileSettingsWidget>
   }
 
   Widget _buildDivider() {
-    return Divider(height: 1, color: Color(0xFFE5E5EA), indent: 16);
+    return const Divider(height: 1, color: Color(0xFFE5E5EA), indent: 16);
   }
 
   Widget _buildLanguageItem(String name, String code) {
@@ -618,19 +618,19 @@ class _MobileSettingsWidgetState extends State<MobileSettingsWidget>
       },
       child: Container(
         color: Colors.transparent, // For proper touch detection
-        padding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
         child: Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
             Text(
               name,
-              style: TextStyle(
+              style: const TextStyle(
                 fontSize: 17,
                 color: Colors.black,
               ),
             ),
             if (isSelected)
-              Icon(CupertinoIcons.checkmark, color: CupertinoColors.activeBlue, size: 20),
+              const Icon(CupertinoIcons.checkmark, color: CupertinoColors.activeBlue, size: 20),
           ],
         ),
       ),
@@ -639,13 +639,13 @@ class _MobileSettingsWidgetState extends State<MobileSettingsWidget>
 
   Widget _buildSwitchItem(String title, bool value, Function(bool) onChanged) {
     return Padding(
-      padding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
           Text(
             title,
-            style: TextStyle(
+            style: const TextStyle(
               fontSize: 17,
               color: Colors.black,
             ),
@@ -653,7 +653,7 @@ class _MobileSettingsWidgetState extends State<MobileSettingsWidget>
           CupertinoSwitch(
             value: value,
             onChanged: onChanged,
-            activeColor: CupertinoColors.activeBlue,
+            activeTrackColor: CupertinoColors.activeBlue,
           ),
         ],
       ),
@@ -682,7 +682,7 @@ class _MobileSettingsWidgetState extends State<MobileSettingsWidget>
 
   Widget _buildDefaultGradient() {
     return Container(
-      decoration: BoxDecoration(
+      decoration: const BoxDecoration(
         gradient: LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
@@ -704,7 +704,7 @@ class _MobileSettingsWidgetState extends State<MobileSettingsWidget>
         final user = snapshot.data;
         final coverPhotoUrl = _getCoverPhotoUrl(user);
 
-        return Container(
+        return SizedBox(
           height: 200,
           width: double.infinity,
           child: _buildCoverPhoto(coverPhotoUrl),
@@ -715,19 +715,19 @@ class _MobileSettingsWidgetState extends State<MobileSettingsWidget>
 
   Widget _buildProfileHeader() {
     return Container(
-      padding: EdgeInsets.fromLTRB(20, 0, 20, 20),
+      padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
       child: Column(
         children: [
           // Profile Picture - Overlapping the cover photo
           Transform.translate(
-            offset: Offset(0, -55), // Overlap with cover photo
+            offset: const Offset(0, -55), // Overlap with cover photo
             child: Center(
               child: Stack(
                 clipBehavior: Clip.none,
                 children: [
                   CircleAvatar(
                     radius: 65,
-                    backgroundColor: Color(0xFFF2F2F7),
+                    backgroundColor: const Color(0xFFF2F2F7),
                     child: currentUserPhoto.isNotEmpty
                         ? ClipOval(
                             child: CachedNetworkImage(
@@ -757,18 +757,18 @@ class _MobileSettingsWidgetState extends State<MobileSettingsWidget>
                           color: Colors.white,
                           shape: BoxShape.circle,
                           border: Border.all(
-                            color: Color(0xFFE5E7EB),
+                            color: const Color(0xFFE5E7EB),
                             width: 2,
                           ),
                           boxShadow: [
                             BoxShadow(
                               color: Colors.black.withOpacity(0.1),
                               blurRadius: 4,
-                              offset: Offset(0, 2),
+                              offset: const Offset(0, 2),
                             ),
                           ],
                         ),
-                        child: Icon(
+                        child: const Icon(
                           CupertinoIcons.pencil,
                           size: 16,
                           color: CupertinoColors.systemBlue,
@@ -781,7 +781,7 @@ class _MobileSettingsWidgetState extends State<MobileSettingsWidget>
             ),
           ),
           Transform.translate(
-            offset: Offset(0, -50), // Move name and email up
+            offset: const Offset(0, -50), // Move name and email up
             child: Column(
               children: [
                 // User Name
@@ -789,18 +789,18 @@ class _MobileSettingsWidgetState extends State<MobileSettingsWidget>
                   currentUserDisplayName.isNotEmpty
                       ? currentUserDisplayName
                       : 'User',
-                  style: TextStyle(
+                  style: const TextStyle(
                     fontFamily: 'System',
                     fontSize: 24,
                     fontWeight: FontWeight.w600,
                     color: Color(0xFF1D1D1F),
                   ),
                 ),
-                SizedBox(height: 4),
+                const SizedBox(height: 4),
                 // User Role/Email
                 Text(
                   currentUserEmail.isNotEmpty ? currentUserEmail : 'Member',
-                  style: TextStyle(
+                  style: const TextStyle(
                     fontFamily: 'System',
                     fontSize: 16,
                     color: Color(0xFF8E8E93),
@@ -810,21 +810,21 @@ class _MobileSettingsWidgetState extends State<MobileSettingsWidget>
             ),
           ),
           Transform.translate(
-            offset: Offset(0, -60), // Move Invite Friend button and settings up
+            offset: const Offset(0, -60), // Move Invite Friend button and settings up
             child: Column(
               children: [
-                SizedBox(height: 24),
+                const SizedBox(height: 24),
                 // Invite Friend Button with Dropdown
                 SizedBox(
                   width: double.infinity,
                   child: CupertinoButton(
-                    padding: EdgeInsets.symmetric(vertical: 16),
-                    color: Color(0xFF007AFF),
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    color: const Color(0xFF007AFF),
                     borderRadius: BorderRadius.circular(12),
                     onPressed: () {
                       _showInviteOptions();
                     },
-                    child: Text(
+                    child: const Text(
                       'Invite Friend',
                       style: TextStyle(
                         fontFamily: '.SF Pro Text',
@@ -849,13 +849,13 @@ class _MobileSettingsWidgetState extends State<MobileSettingsWidget>
         'icon': Icons.translate_rounded,
         'label': 'Translation',
         'page': 'Translation',
-        'color': Color(0xFF8E8E93),
+        'color': const Color(0xFF8E8E93),
       },
       {
         'icon': Icons.notifications_outlined,
         'label': 'Notifications',
         'page': 'Notifications',
-        'color': Color(0xFF8E8E93),
+        'color': const Color(0xFF8E8E93),
         'hasBadge': true,
         'badgeCount': 2,
       },
@@ -863,35 +863,35 @@ class _MobileSettingsWidgetState extends State<MobileSettingsWidget>
         'icon': Icons.security_outlined,
         'label': 'Privacy & Security',
         'page': 'Privacy & Security',
-        'color': Color(0xFF8E8E93),
+        'color': const Color(0xFF8E8E93),
       },
       {
         'icon': Icons.support_agent_outlined,
         'label': 'Contact Support',
         'page': 'Contact Support',
-        'color': Color(0xFF8E8E93),
+        'color': const Color(0xFF8E8E93),
       },
       {
         'icon': Icons.help_outline_rounded,
         'label': 'FAQs',
         'page': 'FAQs',
-        'color': Color(0xFF8E8E93),
+        'color': const Color(0xFF8E8E93),
       },
       {
         'icon': Icons.logout,
         'label': 'Log Out',
         'page': 'LogOut',
-        'color': Color(0xFFFF3B30),
+        'color': const Color(0xFFFF3B30),
         'isLogout': true,
       },
     ];
 
     return Padding(
-      padding: EdgeInsets.symmetric(horizontal: 20),
+      padding: const EdgeInsets.symmetric(horizontal: 20),
       child: Column(
         children: settingsItems.map((item) {
           return Container(
-            margin: EdgeInsets.only(bottom: 8),
+            margin: const EdgeInsets.only(bottom: 8),
             child: GestureDetector(
               onTap: () {
                 if (item['page'] == 'LogOut') {
@@ -903,11 +903,11 @@ class _MobileSettingsWidgetState extends State<MobileSettingsWidget>
                 }
               },
               child: Container(
-                padding: EdgeInsets.all(16),
+                padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
                   color: Colors.white,
                   borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: Color(0xFFE5E7EB)),
+                  border: Border.all(color: const Color(0xFFE5E7EB)),
                 ),
                 child: Row(
                   children: [
@@ -916,7 +916,7 @@ class _MobileSettingsWidgetState extends State<MobileSettingsWidget>
                       color: item['color'] as Color,
                       size: 20,
                     ),
-                    SizedBox(width: 12),
+                    const SizedBox(width: 12),
                     Expanded(
                       child: Text(
                         item['label'] as String,
@@ -925,23 +925,23 @@ class _MobileSettingsWidgetState extends State<MobileSettingsWidget>
                           fontSize: 16,
                           fontWeight: FontWeight.w500,
                           color: item['isLogout'] == true
-                              ? Color(0xFFFF3B30)
-                              : Color(0xFF1D1D1F),
+                              ? const Color(0xFFFF3B30)
+                              : const Color(0xFF1D1D1F),
                         ),
                       ),
                     ),
                     if (item['hasBadge'] == true)
                       Container(
-                        margin: EdgeInsets.only(right: 8),
+                        margin: const EdgeInsets.only(right: 8),
                         padding:
-                            EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                            const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                         decoration: BoxDecoration(
-                          color: Color(0xFFFF3B30),
+                          color: const Color(0xFFFF3B30),
                           borderRadius: BorderRadius.circular(10),
                         ),
                         child: Text(
                           '${item['badgeCount']}',
-                          style: TextStyle(
+                          style: const TextStyle(
                             fontFamily: 'System',
                             fontSize: 12,
                             fontWeight: FontWeight.w600,
@@ -949,7 +949,7 @@ class _MobileSettingsWidgetState extends State<MobileSettingsWidget>
                           ),
                         ),
                       ),
-                    Icon(
+                    const Icon(
                       Icons.chevron_right,
                       color: Color(0xFF8E8E93),
                       size: 20,
@@ -969,7 +969,7 @@ class _MobileSettingsWidgetState extends State<MobileSettingsWidget>
       context: context,
       builder: (BuildContext context) {
         return AlertDialog(
-          title: Text(
+          title: const Text(
             'Log Out',
             style: TextStyle(
               fontFamily: 'System',
@@ -978,7 +978,7 @@ class _MobileSettingsWidgetState extends State<MobileSettingsWidget>
               color: Color(0xFF1D1D1F),
             ),
           ),
-          content: Text(
+          content: const Text(
             'Are you sure you want to log out?',
             style: TextStyle(
               fontFamily: 'System',
@@ -989,7 +989,7 @@ class _MobileSettingsWidgetState extends State<MobileSettingsWidget>
           actions: [
             TextButton(
               onPressed: () => Navigator.of(context).pop(),
-              child: Text(
+              child: const Text(
                 'Cancel',
                 style: TextStyle(
                   fontFamily: 'System',
@@ -1019,7 +1019,7 @@ class _MobileSettingsWidgetState extends State<MobileSettingsWidget>
                   }
                 }
               },
-              child: Text(
+              child: const Text(
                 'Log Out',
                 style: TextStyle(
                   fontFamily: 'System',
@@ -1044,7 +1044,7 @@ class _MobileSettingsWidgetState extends State<MobileSettingsWidget>
         right: 16,
         bottom: 12,
       ),
-      decoration: BoxDecoration(
+      decoration: const BoxDecoration(
         color: Colors.white,
         border: Border(
           bottom: BorderSide(color: Color(0xFFE5E7EB), width: 0.5),
@@ -1062,21 +1062,21 @@ class _MobileSettingsWidgetState extends State<MobileSettingsWidget>
               width: 40,
               height: 40,
               decoration: BoxDecoration(
-                color: Color(0xFFF2F2F7),
+                color: const Color(0xFFF2F2F7),
                 borderRadius: BorderRadius.circular(20),
               ),
-              child: Icon(
+              child: const Icon(
                 Icons.arrow_back_ios_new,
                 color: Color(0xFF1D1D1F),
                 size: 18,
               ),
             ),
           ),
-          SizedBox(width: 12),
+          const SizedBox(width: 12),
           Expanded(
             child: Text(
               title,
-              style: TextStyle(
+              style: const TextStyle(
                 fontFamily: 'System',
                 fontSize: 20,
                 fontWeight: FontWeight.w600,
@@ -1101,7 +1101,7 @@ class _MobileSettingsWidgetState extends State<MobileSettingsWidget>
             right: 16,
             bottom: 12,
           ),
-          decoration: BoxDecoration(
+          decoration: const BoxDecoration(
             color: Colors.white,
             border: Border(
               bottom: BorderSide(color: Color(0xFFE5E7EB), width: 0.5),
@@ -1121,18 +1121,18 @@ class _MobileSettingsWidgetState extends State<MobileSettingsWidget>
                   width: 40,
                   height: 40,
                   decoration: BoxDecoration(
-                    color: Color(0xFFF2F2F7),
+                    color: const Color(0xFFF2F2F7),
                     borderRadius: BorderRadius.circular(20),
                   ),
-                  child: Icon(
+                  child: const Icon(
                     Icons.arrow_back_ios_new,
                     color: Color(0xFF1D1D1F),
                     size: 18,
                   ),
                 ),
               ),
-              SizedBox(width: 12),
-              Expanded(
+              const SizedBox(width: 12),
+              const Expanded(
                 child: Text(
                   'Personal Information',
                   style: TextStyle(
@@ -1168,7 +1168,7 @@ class _MobileSettingsWidgetState extends State<MobileSettingsWidget>
                     );
                   },
                 )
-              : Center(
+              : const Center(
                   child: Text('Please log in to view your profile'),
                 ),
         ),
@@ -1181,11 +1181,11 @@ class _MobileSettingsWidgetState extends State<MobileSettingsWidget>
       context: context,
       builder: (BuildContext context) {
         return Container(
-          padding: EdgeInsets.all(20),
+          padding: const EdgeInsets.all(20),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Text(
+              const Text(
                 'Profile Photo',
                 style: TextStyle(
                   fontFamily: 'System',
@@ -1194,7 +1194,7 @@ class _MobileSettingsWidgetState extends State<MobileSettingsWidget>
                   color: Color(0xFF1D1D1F),
                 ),
               ),
-              SizedBox(height: 20),
+              const SizedBox(height: 20),
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                 children: [
@@ -1226,7 +1226,7 @@ class _MobileSettingsWidgetState extends State<MobileSettingsWidget>
                     ),
                 ],
               ),
-              SizedBox(height: 20),
+              const SizedBox(height: 20),
             ],
           ),
         );
@@ -1243,14 +1243,14 @@ class _MobileSettingsWidgetState extends State<MobileSettingsWidget>
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        padding: EdgeInsets.all(16),
+        padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
           color: isDestructive
-              ? Color(0xFFFF3B30).withOpacity(0.1)
-              : Color(0xFF007AFF).withOpacity(0.1),
+              ? const Color(0xFFFF3B30).withOpacity(0.1)
+              : const Color(0xFF007AFF).withOpacity(0.1),
           borderRadius: BorderRadius.circular(12),
           border: Border.all(
-            color: isDestructive ? Color(0xFFFF3B30) : Color(0xFF007AFF),
+            color: isDestructive ? const Color(0xFFFF3B30) : const Color(0xFF007AFF),
             width: 1,
           ),
         ),
@@ -1258,17 +1258,17 @@ class _MobileSettingsWidgetState extends State<MobileSettingsWidget>
           children: [
             Icon(
               icon,
-              color: isDestructive ? Color(0xFFFF3B30) : Color(0xFF007AFF),
+              color: isDestructive ? const Color(0xFFFF3B30) : const Color(0xFF007AFF),
               size: 24,
             ),
-            SizedBox(height: 8),
+            const SizedBox(height: 8),
             Text(
               label,
               style: TextStyle(
                 fontFamily: 'System',
                 fontSize: 12,
                 fontWeight: FontWeight.w500,
-                color: isDestructive ? Color(0xFFFF3B30) : Color(0xFF007AFF),
+                color: isDestructive ? const Color(0xFFFF3B30) : const Color(0xFF007AFF),
               ),
             ),
           ],
@@ -1306,7 +1306,7 @@ class _MobileSettingsWidgetState extends State<MobileSettingsWidget>
       showDialog(
         context: context,
         barrierDismissible: false,
-        builder: (context) => Center(
+        builder: (context) => const Center(
           child: CircularProgressIndicator(),
         ),
       );
@@ -1327,7 +1327,7 @@ class _MobileSettingsWidgetState extends State<MobileSettingsWidget>
       Navigator.pop(context); // Close loading dialog
 
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
+        const SnackBar(
           content: Text('Profile photo updated successfully'),
           backgroundColor: Color(0xFF34C759),
         ),
@@ -1350,7 +1350,7 @@ class _MobileSettingsWidgetState extends State<MobileSettingsWidget>
         context: context,
         builder: (BuildContext context) {
           return AlertDialog(
-            title: Text(
+            title: const Text(
               'Remove Profile Photo',
               style: TextStyle(
                 fontFamily: 'System',
@@ -1359,7 +1359,7 @@ class _MobileSettingsWidgetState extends State<MobileSettingsWidget>
                 color: Color(0xFF1D1D1F),
               ),
             ),
-            content: Text(
+            content: const Text(
               'Are you sure you want to remove your profile photo?',
               style: TextStyle(
                 fontFamily: 'System',
@@ -1370,7 +1370,7 @@ class _MobileSettingsWidgetState extends State<MobileSettingsWidget>
             actions: [
               TextButton(
                 onPressed: () => Navigator.pop(context, false),
-                child: Text(
+                child: const Text(
                   'Cancel',
                   style: TextStyle(
                     fontFamily: 'System',
@@ -1381,7 +1381,7 @@ class _MobileSettingsWidgetState extends State<MobileSettingsWidget>
               ),
               TextButton(
                 onPressed: () => Navigator.pop(context, true),
-                child: Text(
+                child: const Text(
                   'Remove',
                   style: TextStyle(
                     fontFamily: 'System',
@@ -1403,7 +1403,7 @@ class _MobileSettingsWidgetState extends State<MobileSettingsWidget>
         });
 
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
+          const SnackBar(
             content: Text('Profile photo removed successfully'),
             backgroundColor: Color(0xFF34C759),
           ),
@@ -1424,7 +1424,7 @@ class _MobileSettingsWidgetState extends State<MobileSettingsWidget>
       backgroundColor: CupertinoColors.systemBackground,
       navigationBar: CupertinoNavigationBar(
         backgroundColor: CupertinoColors.systemBackground,
-        border: Border(
+        border: const Border(
           bottom: BorderSide(
             color: CupertinoColors.separator,
             width: 0.5,
@@ -1437,13 +1437,13 @@ class _MobileSettingsWidgetState extends State<MobileSettingsWidget>
               _selectedSetting = '';
             });
           },
-          child: Icon(
+          child: const Icon(
             CupertinoIcons.chevron_left,
             color: CupertinoColors.activeBlue,
             size: 28,
           ),
         ),
-        middle: Text(
+        middle: const Text(
           'Notifications',
           style: TextStyle(
             fontFamily: '.SF Pro Text',
@@ -1457,10 +1457,10 @@ class _MobileSettingsWidgetState extends State<MobileSettingsWidget>
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            SizedBox(height: 24),
+            const SizedBox(height: 24),
             // Single Notification Option
             Padding(
-              padding: EdgeInsets.symmetric(horizontal: 16),
+              padding: const EdgeInsets.symmetric(horizontal: 16),
               child: _buildIOSSection(
                 header: 'NOTIFICATIONS',
                 footer:
@@ -1468,9 +1468,9 @@ class _MobileSettingsWidgetState extends State<MobileSettingsWidget>
                 children: [
                   _isLoadingNotificationStatus
                       ? Container(
-                          padding: EdgeInsets.symmetric(
+                          padding: const EdgeInsets.symmetric(
                               horizontal: 16, vertical: 12),
-                          child: Center(
+                          child: const Center(
                             child: CupertinoActivityIndicator(
                               radius: 12,
                             ),
@@ -1505,7 +1505,7 @@ class _MobileSettingsWidgetState extends State<MobileSettingsWidget>
       padding: EdgeInsets.zero,
       onPressed: () => onChanged(!value),
       child: Container(
-        padding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
         child: Row(
           children: [
             Expanded(
@@ -1514,7 +1514,7 @@ class _MobileSettingsWidgetState extends State<MobileSettingsWidget>
                 children: [
                   Text(
                     title,
-                    style: TextStyle(
+                    style: const TextStyle(
                       fontFamily: '.SF Pro Text',
                       fontSize: 17,
                       fontWeight: FontWeight.w400,
@@ -1522,10 +1522,10 @@ class _MobileSettingsWidgetState extends State<MobileSettingsWidget>
                       letterSpacing: -0.41,
                     ),
                   ),
-                  SizedBox(height: 2),
+                  const SizedBox(height: 2),
                   Text(
                     subtitle,
-                    style: TextStyle(
+                    style: const TextStyle(
                       fontFamily: '.SF Pro Text',
                       fontSize: 15,
                       fontWeight: FontWeight.w400,
@@ -1536,7 +1536,7 @@ class _MobileSettingsWidgetState extends State<MobileSettingsWidget>
                 ],
               ),
             ),
-            SizedBox(width: 12),
+            const SizedBox(width: 12),
             PlatformInfo.isIOS26OrHigher()
                 ? AdaptiveSwitch(
                     value: value,
@@ -1545,7 +1545,7 @@ class _MobileSettingsWidgetState extends State<MobileSettingsWidget>
                 : CupertinoSwitch(
                     value: value,
                     onChanged: onChanged,
-                    activeColor: CupertinoColors.activeBlue,
+                    activeTrackColor: CupertinoColors.activeBlue,
                   ),
           ],
         ),
@@ -1599,13 +1599,13 @@ class _MobileSettingsWidgetState extends State<MobileSettingsWidget>
               showCupertinoDialog(
                 context: context,
                 builder: (context) => CupertinoAlertDialog(
-                  title: Text('Enable Notifications'),
-                  content: Text(
+                  title: const Text('Enable Notifications'),
+                  content: const Text(
                     'Please enable notifications in System Settings > Notifications > Lona Club.',
                   ),
                   actions: [
                     CupertinoDialogAction(
-                      child: Text('OK'),
+                      child: const Text('OK'),
                       onPressed: () => Navigator.pop(context),
                     ),
                   ],
@@ -1672,18 +1672,18 @@ class _MobileSettingsWidgetState extends State<MobileSettingsWidget>
         showCupertinoDialog(
           context: context,
           builder: (context) => CupertinoAlertDialog(
-            title: Text('Disable Notifications'),
-            content: Text(
+            title: const Text('Disable Notifications'),
+            content: const Text(
               'To disable notifications, please go to System Settings > Notifications > Lona Club and turn off notifications.',
             ),
             actions: [
               CupertinoDialogAction(
-                child: Text('Cancel'),
+                child: const Text('Cancel'),
                 onPressed: () => Navigator.pop(context),
               ),
               CupertinoDialogAction(
                 isDefaultAction: true,
-                child: Text('Open Settings'),
+                child: const Text('Open Settings'),
                 onPressed: () {
                   Navigator.pop(context);
                   openAppSettings();
@@ -1695,7 +1695,7 @@ class _MobileSettingsWidgetState extends State<MobileSettingsWidget>
       }
 
       // Refresh status after user potentially changes settings
-      Future.delayed(Duration(seconds: 1), () {
+      Future.delayed(const Duration(seconds: 1), () {
         if (mounted) {
           _loadNotificationSettings();
         }
@@ -1708,7 +1708,7 @@ class _MobileSettingsWidgetState extends State<MobileSettingsWidget>
       backgroundColor: CupertinoColors.systemBackground,
       navigationBar: CupertinoNavigationBar(
         backgroundColor: CupertinoColors.systemBackground,
-        border: Border(
+        border: const Border(
           bottom: BorderSide(
             color: CupertinoColors.separator,
             width: 0.5,
@@ -1721,13 +1721,13 @@ class _MobileSettingsWidgetState extends State<MobileSettingsWidget>
               _selectedSetting = '';
             });
           },
-          child: Icon(
+          child: const Icon(
             CupertinoIcons.chevron_left,
             color: CupertinoColors.activeBlue,
             size: 28,
           ),
         ),
-        middle: Text(
+        middle: const Text(
           'Privacy & Security',
           style: TextStyle(
             fontFamily: '.SF Pro Text',
@@ -1741,7 +1741,7 @@ class _MobileSettingsWidgetState extends State<MobileSettingsWidget>
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            SizedBox(height: 8),
+            const SizedBox(height: 8),
             // Legal & Policies Section
             _buildIOSSection(
               header: 'LEGAL & POLICIES',
@@ -1750,7 +1750,7 @@ class _MobileSettingsWidgetState extends State<MobileSettingsWidget>
               children: [
                 _buildIOSListTile(
                   icon: CupertinoIcons.lock_shield_fill,
-                  iconColor: Color(0xFF007AFF),
+                  iconColor: const Color(0xFF007AFF),
                   title: 'Privacy Policy',
                   onTap: () {
                     context.pushNamed(
@@ -1763,7 +1763,7 @@ class _MobileSettingsWidgetState extends State<MobileSettingsWidget>
                 ),
                 _buildIOSListTile(
                   icon: CupertinoIcons.doc_text_fill,
-                  iconColor: Color(0xFF34C759),
+                  iconColor: const Color(0xFF34C759),
                   title: 'Terms of Service',
                   onTap: () {
                     context.pushNamed(
@@ -1776,7 +1776,7 @@ class _MobileSettingsWidgetState extends State<MobileSettingsWidget>
                 ),
               ],
             ),
-            SizedBox(height: 32),
+            const SizedBox(height: 32),
             // Danger Zone Section
             _buildIOSSection(
               header: 'DANGER ZONE',
@@ -1786,31 +1786,31 @@ class _MobileSettingsWidgetState extends State<MobileSettingsWidget>
               children: [
                 _buildIOSListTile(
                   icon: CupertinoIcons.trash_fill,
-                  iconColor: Color(0xFFFF3B30),
+                  iconColor: const Color(0xFFFF3B30),
                   title: 'Delete Account',
-                  titleColor: Color(0xFFFF3B30),
+                  titleColor: const Color(0xFFFF3B30),
                   onTap: () {
                     showCupertinoDialog(
                       context: context,
                       builder: (context) => CupertinoAlertDialog(
-                        title: Text('Delete Account'),
-                        content: Text(
+                        title: const Text('Delete Account'),
+                        content: const Text(
                           'Are you sure you want to delete your account? This action cannot be undone.',
                         ),
                         actions: [
                           CupertinoDialogAction(
                             isDefaultAction: true,
-                            child: Text('Cancel'),
+                            child: const Text('Cancel'),
                             onPressed: () => Navigator.pop(context),
                           ),
                           CupertinoDialogAction(
                             isDestructiveAction: true,
-                            child: Text('Delete'),
+                            child: const Text('Delete'),
                             onPressed: () {
                               Navigator.pop(context);
                               showDialog(
                                 context: context,
-                                builder: (context) => DeleteAccountWidget(),
+                                builder: (context) => const DeleteAccountWidget(),
                               );
                             },
                           ),
@@ -1835,13 +1835,13 @@ class _MobileSettingsWidgetState extends State<MobileSettingsWidget>
     bool isDanger = false,
   }) {
     return Padding(
-      padding: EdgeInsets.symmetric(horizontal: 16),
+      padding: const EdgeInsets.symmetric(horizontal: 16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           // Header
           Padding(
-            padding: EdgeInsets.only(left: 16, bottom: 8),
+            padding: const EdgeInsets.only(left: 16, bottom: 8),
             child: Text(
               header,
               style: TextStyle(
@@ -1849,7 +1849,7 @@ class _MobileSettingsWidgetState extends State<MobileSettingsWidget>
                 fontSize: 13,
                 fontWeight: FontWeight.w400,
                 color: isDanger
-                    ? Color(0xFFFF3B30)
+                    ? const Color(0xFFFF3B30)
                     : CupertinoColors.secondaryLabel,
                 letterSpacing: -0.08,
               ),
@@ -1865,7 +1865,7 @@ class _MobileSettingsWidgetState extends State<MobileSettingsWidget>
               children: List.generate(children.length * 2 - 1, (index) {
                 if (index.isOdd) {
                   return Padding(
-                    padding: EdgeInsets.only(left: 52),
+                    padding: const EdgeInsets.only(left: 52),
                     child: Container(
                       height: 0.5,
                       color: CupertinoColors.separator,
@@ -1879,7 +1879,7 @@ class _MobileSettingsWidgetState extends State<MobileSettingsWidget>
           // Footer
           if (footer != null)
             Padding(
-              padding: EdgeInsets.only(left: 16, top: 8, right: 16),
+              padding: const EdgeInsets.only(left: 16, top: 8, right: 16),
               child: Text(
                 footer,
                 style: TextStyle(
@@ -1887,7 +1887,7 @@ class _MobileSettingsWidgetState extends State<MobileSettingsWidget>
                   fontSize: 13,
                   fontWeight: FontWeight.w400,
                   color: isDanger
-                      ? Color(0xFFFF3B30).withOpacity(0.8)
+                      ? const Color(0xFFFF3B30).withOpacity(0.8)
                       : CupertinoColors.secondaryLabel,
                   letterSpacing: -0.08,
                   height: 1.4,
@@ -1910,7 +1910,7 @@ class _MobileSettingsWidgetState extends State<MobileSettingsWidget>
       padding: EdgeInsets.zero,
       onPressed: onTap,
       child: Container(
-        padding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
         child: Row(
           children: [
             Container(
@@ -1926,7 +1926,7 @@ class _MobileSettingsWidgetState extends State<MobileSettingsWidget>
                 size: 16,
               ),
             ),
-            SizedBox(width: 12),
+            const SizedBox(width: 12),
             Expanded(
               child: Text(
                 title,
@@ -1939,7 +1939,7 @@ class _MobileSettingsWidgetState extends State<MobileSettingsWidget>
                 ),
               ),
             ),
-            Icon(
+            const Icon(
               CupertinoIcons.chevron_right,
               color: CupertinoColors.tertiaryLabel,
               size: 20,
@@ -1955,7 +1955,7 @@ class _MobileSettingsWidgetState extends State<MobileSettingsWidget>
       backgroundColor: CupertinoColors.systemGroupedBackground,
       navigationBar: CupertinoNavigationBar(
         backgroundColor: Colors.white,
-        border: Border(
+        border: const Border(
           bottom: BorderSide(
             color: Color(0xFFE5E7EB),
             width: 0.5,
@@ -1968,13 +1968,13 @@ class _MobileSettingsWidgetState extends State<MobileSettingsWidget>
               _selectedSetting = '';
             });
           },
-          child: Icon(
+          child: const Icon(
             Icons.arrow_back_outlined,
             color: Color(0xFF1D1D1F),
             size: 24.0,
           ),
         ),
-        middle: Text(
+        middle: const Text(
           'FAQs',
           style: TextStyle(
             fontFamily: 'System',
@@ -1990,7 +1990,7 @@ class _MobileSettingsWidgetState extends State<MobileSettingsWidget>
             children: [
               // Content
               Padding(
-                padding: EdgeInsets.all(16),
+                padding: const EdgeInsets.all(16),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -1999,91 +1999,91 @@ class _MobileSettingsWidgetState extends State<MobileSettingsWidget>
                       'What is SummerAI?',
                       'SummerAI is your AI personal project manager that automatically analyzes group chat conversations, detects tasks, prioritizes action items, and generates comprehensive daily summaries. It helps you stay on top of discussions, track important topics, and never miss critical information.',
                     ),
-                    SizedBox(height: 16),
+                    const SizedBox(height: 16),
                     _buildFAQItem(
                       'How does SummerAI generate summaries?',
                       'SummerAI analyzes all messages from the past 24 hours in your group chats. It identifies key topics, extracts action items, notes who was involved in discussions, and provides insightful observations. The summaries are automatically generated daily at 9 AM EST, or you can manually trigger them anytime.',
                     ),
-                    SizedBox(height: 16),
+                    const SizedBox(height: 16),
                     _buildFAQItem(
                       'What information does SummerAI include in summaries?',
                       'Each summary includes: topic names with priority levels (High/Medium/Low), details of what was discussed, action items and follow-ups, names of actively involved participants, SummerAI\'s personal insights and observations, and useful links from web searches related to the topics.',
                     ),
-                    SizedBox(height: 16),
+                    const SizedBox(height: 16),
                     _buildFAQItem(
                       'How do I trigger a SummerAI summary manually?',
                       'In any group chat, you can manually request a summary by tapping the summary button or mentioning SummerAI. The AI will analyze the last 24 hours of conversation and generate a comprehensive summary on demand.',
                     ),
-                    SizedBox(height: 16),
+                    const SizedBox(height: 16),
                     _buildFAQItem(
                       'Does SummerAI analyze all messages?',
                       'SummerAI only analyzes real user messages and automatically filters out AI-generated messages. This ensures summaries focus on actual human conversations and provide accurate insights into your team\'s discussions.',
                     ),
-                    SizedBox(height: 16),
+                    const SizedBox(height: 16),
                     _buildFAQItem(
                       'How does SummerAI prioritize topics?',
                       'SummerAI automatically assigns priority levels based on topic type: Technical and Business/Professional topics get High or Medium priority, while Casual/Social topics receive Low priority. This helps you quickly identify what needs immediate attention.',
                     ),
-                    SizedBox(height: 16),
+                    const SizedBox(height: 16),
                     _buildFAQItem(
                       'Can SummerAI detect tasks and action items?',
                       'Yes! SummerAI automatically identifies tasks, decisions, and follow-ups mentioned in conversations. It extracts action items and presents them clearly in summaries, helping you track what needs to be done without manually reviewing all messages.',
                     ),
-                    SizedBox(height: 16),
+                    const SizedBox(height: 16),
                     // Chat FAQs
                     _buildFAQItem(
                       'How do I create a group chat?',
                       'In the Chat page, tap the "+" button in the top right corner, select "New Group", enter a group name and select members. Group chats support text, images, videos, voice messages, and file attachments.',
                     ),
-                    SizedBox(height: 16),
+                    const SizedBox(height: 16),
                     _buildFAQItem(
                       'How do I send different types of messages?',
                       'In any chat, you can send text messages, photos from your gallery, take photos, record voice messages, and attach files. Use the attachment button next to the message input to access all media options.',
                     ),
-                    SizedBox(height: 16),
+                    const SizedBox(height: 16),
                     // Connections FAQs
                     _buildFAQItem(
                       'How do I connect with other users?',
                       'In the "Connections" page, you can search and browse other users. Tap the "Connect" button on a user\'s card to send a connection request. Once accepted, you can message each other.',
                     ),
-                    SizedBox(height: 16),
+                    const SizedBox(height: 16),
                     _buildFAQItem(
                       'How do I manage connection requests?',
                       'In the "Connections" page, you can view incoming connection requests. Tap "Accept" or "Decline" to handle requests. Accepted connections will appear in your connections list.',
                     ),
-                    SizedBox(height: 16),
+                    const SizedBox(height: 16),
                     // Gmail FAQs
                     _buildFAQItem(
                       'How do I connect my Gmail account?',
                       'In the Gmail page, tap "Connect Gmail" and follow the prompts to authorize your Google account. Once connected, you can view and send emails directly within the app without switching applications.',
                     ),
-                    SizedBox(height: 16),
+                    const SizedBox(height: 16),
                     _buildFAQItem(
                       'What features does Gmail integration support?',
                       'After connecting Gmail, you can view inbox emails, send new emails, reply to messages, and manage email attachments. All operations are completed within the Lona app, keeping your workflow centralized.',
                     ),
-                    SizedBox(height: 16),
+                    const SizedBox(height: 16),
                     // General FAQs
                     _buildFAQItem(
                       'How do I manage notification settings?',
                       'In Settings, go to "Notifications" to enable or disable push notifications, email notifications, chat message notifications, and other notification types. Customize your preferences based on your needs.',
                     ),
-                    SizedBox(height: 16),
+                    const SizedBox(height: 16),
                     _buildFAQItem(
                       'How do I update my profile information?',
                       'In Settings, tap your profile picture or go to "Personal Information" to edit your name, email, profile photo, and cover photo. This information will be displayed on your profile.',
                     ),
-                    SizedBox(height: 16),
+                    const SizedBox(height: 16),
                     _buildFAQItem(
                       'How do I invite friends to use Lona?',
                       'In Settings, tap the "Invite Friend" button to share an invite link through your device\'s sharing options. Inviting friends helps grow your network and makes collaboration smoother.',
                     ),
-                    SizedBox(height: 16),
+                    const SizedBox(height: 16),
                     _buildFAQItem(
                       'How do I delete my account?',
                       'In Settings, go to "Privacy & Security" and find the "Delete Account" option. Please note that deleting your account is irreversible and will permanently remove all your data.',
                     ),
-                    SizedBox(height: 16),
+                    const SizedBox(height: 16),
                     _buildFAQItem(
                       'Is my data secure and private?',
                       'Yes, Lona uses industry-standard encryption and security practices. Your messages, files, and personal information are protected. You can review our Privacy Policy in Settings under "Privacy & Security" for more details.',
@@ -2100,28 +2100,28 @@ class _MobileSettingsWidgetState extends State<MobileSettingsWidget>
 
   Widget _buildFAQItem(String question, String answer) {
     return Container(
-      padding: EdgeInsets.all(16),
+      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Color(0xFFE5E7EB)),
+        border: Border.all(color: const Color(0xFFE5E7EB)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
             question,
-            style: TextStyle(
+            style: const TextStyle(
               fontFamily: 'System',
               fontSize: 16,
               fontWeight: FontWeight.w600,
               color: Color(0xFF1D1D1F),
             ),
           ),
-          SizedBox(height: 8),
+          const SizedBox(height: 8),
           Text(
             answer,
-            style: TextStyle(
+            style: const TextStyle(
               fontFamily: 'System',
               fontSize: 14,
               color: Color(0xFF8E8E93),
@@ -2137,7 +2137,7 @@ class _MobileSettingsWidgetState extends State<MobileSettingsWidget>
       backgroundColor: CupertinoColors.systemGroupedBackground,
       navigationBar: CupertinoNavigationBar(
         backgroundColor: Colors.white,
-        border: Border(
+        border: const Border(
           bottom: BorderSide(
             color: Color(0xFFE5E7EB),
             width: 0.5,
@@ -2150,13 +2150,13 @@ class _MobileSettingsWidgetState extends State<MobileSettingsWidget>
               _selectedSetting = '';
             });
           },
-          child: Icon(
+          child: const Icon(
             Icons.arrow_back_outlined,
             color: Color(0xFF1D1D1F),
             size: 24.0,
           ),
         ),
-        middle: Text(
+        middle: const Text(
           'Contact Support',
           style: TextStyle(
             fontFamily: 'System',
@@ -2169,29 +2169,29 @@ class _MobileSettingsWidgetState extends State<MobileSettingsWidget>
       child: SafeArea(
         child: SingleChildScrollView(
           child: Padding(
-            padding: EdgeInsets.all(24.0),
+            padding: const EdgeInsets.all(24.0),
             child: Column(
               mainAxisAlignment: MainAxisAlignment.start,
               crossAxisAlignment: CrossAxisAlignment.center,
               children: [
-                SizedBox(height: 40),
+                const SizedBox(height: 40),
                 // Support Icon
                 Container(
                   width: 120.0,
                   height: 120.0,
                   decoration: BoxDecoration(
-                    color: Color(0xFF007AFF).withOpacity(0.1),
+                    color: const Color(0xFF007AFF).withOpacity(0.1),
                     shape: BoxShape.circle,
                   ),
-                  child: Icon(
+                  child: const Icon(
                     Icons.support_agent,
                     color: Color(0xFF007AFF),
                     size: 60.0,
                   ),
                 ),
-                SizedBox(height: 24),
+                const SizedBox(height: 24),
                 // Company Name
-                Text(
+                const Text(
                   'TechFlow Solutions',
                   textAlign: TextAlign.center,
                   style: TextStyle(
@@ -2201,9 +2201,9 @@ class _MobileSettingsWidgetState extends State<MobileSettingsWidget>
                     color: Color(0xFF1D1D1F),
                   ),
                 ),
-                SizedBox(height: 16),
+                const SizedBox(height: 16),
                 // Description
-                Text(
+                const Text(
                   'We\'re here to help you with any questions or issues you may have. Our support team is dedicated to providing you with the best assistance possible.',
                   textAlign: TextAlign.center,
                   style: TextStyle(
@@ -2213,7 +2213,7 @@ class _MobileSettingsWidgetState extends State<MobileSettingsWidget>
                     height: 1.5,
                   ),
                 ),
-                SizedBox(height: 32),
+                const SizedBox(height: 32),
                 // Email Support Card
                 Container(
                   width: double.infinity,
@@ -2221,33 +2221,33 @@ class _MobileSettingsWidgetState extends State<MobileSettingsWidget>
                     color: Colors.white,
                     borderRadius: BorderRadius.circular(12.0),
                     border: Border.all(
-                      color: Color(0xFFE5E7EB),
+                      color: const Color(0xFFE5E7EB),
                       width: 1.0,
                     ),
                   ),
                   child: Padding(
-                    padding: EdgeInsets.all(20.0),
+                    padding: const EdgeInsets.all(20.0),
                     child: Row(
                       children: [
                         Container(
                           width: 50.0,
                           height: 50.0,
                           decoration: BoxDecoration(
-                            color: Color(0xFF007AFF).withOpacity(0.1),
+                            color: const Color(0xFF007AFF).withOpacity(0.1),
                             shape: BoxShape.circle,
                           ),
-                          child: Icon(
+                          child: const Icon(
                             Icons.email_outlined,
                             color: Color(0xFF007AFF),
                             size: 24.0,
                           ),
                         ),
-                        SizedBox(width: 16),
+                        const SizedBox(width: 16),
                         Expanded(
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Text(
+                              const Text(
                                 'Email Support',
                                 style: TextStyle(
                                   fontFamily: 'System',
@@ -2256,7 +2256,7 @@ class _MobileSettingsWidgetState extends State<MobileSettingsWidget>
                                   color: Color(0xFF1D1D1F),
                                 ),
                               ),
-                              SizedBox(height: 4),
+                              const SizedBox(height: 4),
                               GestureDetector(
                                 onTap: () async {
                                   final Uri emailUri = Uri(
@@ -2275,14 +2275,14 @@ class _MobileSettingsWidgetState extends State<MobileSettingsWidget>
                                     await launchUrl(emailUri);
                                   } else {
                                     ScaffoldMessenger.of(context).showSnackBar(
-                                      SnackBar(
+                                      const SnackBar(
                                         content: Text('Unable to open email'),
                                         backgroundColor: Colors.red,
                                       ),
                                     );
                                   }
                                 },
-                                child: Text(
+                                child: const Text(
                                   'support@linkedup.club',
                                   style: TextStyle(
                                     fontFamily: 'System',
@@ -2292,8 +2292,8 @@ class _MobileSettingsWidgetState extends State<MobileSettingsWidget>
                                   ),
                                 ),
                               ),
-                              SizedBox(height: 4),
-                              Text(
+                              const SizedBox(height: 4),
+                              const Text(
                                 'We typically respond within 24 hours',
                                 style: TextStyle(
                                   fontFamily: 'System',
@@ -2308,7 +2308,7 @@ class _MobileSettingsWidgetState extends State<MobileSettingsWidget>
                     ),
                   ),
                 ),
-                SizedBox(height: 24),
+                const SizedBox(height: 24),
                 // Phone Support Card
                 Container(
                   width: double.infinity,
@@ -2316,33 +2316,33 @@ class _MobileSettingsWidgetState extends State<MobileSettingsWidget>
                     color: Colors.white,
                     borderRadius: BorderRadius.circular(12.0),
                     border: Border.all(
-                      color: Color(0xFFE5E7EB),
+                      color: const Color(0xFFE5E7EB),
                       width: 1.0,
                     ),
                   ),
                   child: Padding(
-                    padding: EdgeInsets.all(20.0),
+                    padding: const EdgeInsets.all(20.0),
                     child: Row(
                       children: [
                         Container(
                           width: 50.0,
                           height: 50.0,
                           decoration: BoxDecoration(
-                            color: Color(0xFF007AFF).withOpacity(0.1),
+                            color: const Color(0xFF007AFF).withOpacity(0.1),
                             shape: BoxShape.circle,
                           ),
-                          child: Icon(
+                          child: const Icon(
                             Icons.phone_outlined,
                             color: Color(0xFF007AFF),
                             size: 24.0,
                           ),
                         ),
-                        SizedBox(width: 16),
+                        const SizedBox(width: 16),
                         Expanded(
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Text(
+                              const Text(
                                 'Phone Support',
                                 style: TextStyle(
                                   fontFamily: 'System',
@@ -2351,7 +2351,7 @@ class _MobileSettingsWidgetState extends State<MobileSettingsWidget>
                                   color: Color(0xFF1D1D1F),
                                 ),
                               ),
-                              SizedBox(height: 4),
+                              const SizedBox(height: 4),
                               GestureDetector(
                                 onTap: () async {
                                   final Uri phoneUri = Uri(
@@ -2362,7 +2362,7 @@ class _MobileSettingsWidgetState extends State<MobileSettingsWidget>
                                     await launchUrl(phoneUri);
                                   } else {
                                     ScaffoldMessenger.of(context).showSnackBar(
-                                      SnackBar(
+                                      const SnackBar(
                                         content:
                                             Text('Unable to make phone call'),
                                         backgroundColor: Colors.red,
@@ -2370,7 +2370,7 @@ class _MobileSettingsWidgetState extends State<MobileSettingsWidget>
                                     );
                                   }
                                 },
-                                child: Text(
+                                child: const Text(
                                   '(516) 912-2147',
                                   style: TextStyle(
                                     fontFamily: 'System',
@@ -2380,8 +2380,8 @@ class _MobileSettingsWidgetState extends State<MobileSettingsWidget>
                                   ),
                                 ),
                               ),
-                              SizedBox(height: 4),
-                              Text(
+                              const SizedBox(height: 4),
+                              const Text(
                                 'Monday - Friday, 9 AM - 6 PM EST',
                                 style: TextStyle(
                                   fontFamily: 'System',

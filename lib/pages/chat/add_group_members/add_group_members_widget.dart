@@ -96,7 +96,7 @@ class _AddGroupMembersWidgetState extends State<AddGroupMembersWidget> {
       if (mounted) {
         // Show success and pop back
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
+          const SnackBar(
             content: Text('Members added successfully'),
             backgroundColor: Color(0xFF34C759),
           ),
@@ -106,7 +106,7 @@ class _AddGroupMembersWidgetState extends State<AddGroupMembersWidget> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
+          const SnackBar(
             content: Text('Failed to add members'),
             backgroundColor: Color(0xFFFF3B30),
           ),
@@ -141,8 +141,8 @@ class _AddGroupMembersWidgetState extends State<AddGroupMembersWidget> {
 
   Widget _buildHeader() {
     return Container(
-      padding: EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-      decoration: BoxDecoration(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+      decoration: const BoxDecoration(
         color: Colors.white,
         border: Border(
           bottom: BorderSide(
@@ -170,16 +170,16 @@ class _AddGroupMembersWidgetState extends State<AddGroupMembersWidget> {
                 mini: true,
                 backgroundColor: Colors.white,
                 foregroundColor: CupertinoColors.systemBlue,
-                child: Icon(
+                child: const Icon(
                   CupertinoIcons.chevron_left,
                   size: 22,
                 ),
               ),
             ),
           ),
-          SizedBox(width: 12),
+          const SizedBox(width: 12),
           // Title
-          Expanded(
+          const Expanded(
             child: Text(
               'Add Members',
               style: TextStyle(
@@ -198,11 +198,11 @@ class _AddGroupMembersWidgetState extends State<AddGroupMembersWidget> {
 
   Widget _buildSearchBar() {
     return Container(
-      padding: EdgeInsets.all(16),
+      padding: const EdgeInsets.all(16),
       color: Colors.white,
       child: Container(
         decoration: BoxDecoration(
-          color: Color(0xFFF2F2F7),
+          color: const Color(0xFFF2F2F7),
           borderRadius: BorderRadius.circular(10),
         ),
         child: TextField(
@@ -212,12 +212,12 @@ class _AddGroupMembersWidgetState extends State<AddGroupMembersWidget> {
               _searchQuery = value.toLowerCase();
             });
           },
-          style: TextStyle(
+          style: const TextStyle(
             fontFamily: 'SF Pro Text',
             fontSize: 16,
             color: Color(0xFF1C1C1E),
           ),
-          decoration: InputDecoration(
+          decoration: const InputDecoration(
             hintText: 'Search connections',
             hintStyle: TextStyle(
               fontFamily: 'SF Pro Text',
@@ -245,7 +245,7 @@ class _AddGroupMembersWidgetState extends State<AddGroupMembersWidget> {
           stream: UsersRecord.getDocument(currentUserReference!),
           builder: (context, currentUserSnapshot) {
             if (!currentUserSnapshot.hasData) {
-              return Center(
+              return const Center(
                 child: CupertinoActivityIndicator(),
               );
             }
@@ -262,7 +262,7 @@ class _AddGroupMembersWidgetState extends State<AddGroupMembersWidget> {
             }).toList();
 
             if (candidateUserRefs.isEmpty) {
-              return Center(
+              return const Center(
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
@@ -297,7 +297,7 @@ class _AddGroupMembersWidgetState extends State<AddGroupMembersWidget> {
             return Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Padding(
+                const Padding(
                   padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                   child: Text(
                     'Your Connections',
@@ -312,7 +312,7 @@ class _AddGroupMembersWidgetState extends State<AddGroupMembersWidget> {
                 ),
                 Expanded(
                   child: ListView.builder(
-                    padding: EdgeInsets.symmetric(horizontal: 16),
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
                     itemCount: candidateUserRefs.length,
                     itemBuilder: (context, index) {
                       final userRef = candidateUserRefs[index];
@@ -320,7 +320,7 @@ class _AddGroupMembersWidgetState extends State<AddGroupMembersWidget> {
                         stream: UsersRecord.getDocument(userRef),
                         builder: (context, snapshot) {
                           if (!snapshot.hasData) {
-                            return SizedBox(height: 72);
+                            return const SizedBox(height: 72);
                           }
 
                           final user = snapshot.data!;
@@ -330,7 +330,7 @@ class _AddGroupMembersWidgetState extends State<AddGroupMembersWidget> {
                             final name = user.displayName.toLowerCase();
                             final email = user.email.toLowerCase();
                             if (!name.contains(_searchQuery) && !email.contains(_searchQuery)) {
-                              return SizedBox.shrink();
+                              return const SizedBox.shrink();
                             }
                           }
 
@@ -354,13 +354,13 @@ class _AddGroupMembersWidgetState extends State<AddGroupMembersWidget> {
     return GestureDetector(
       onTap: () => _toggleMember(userRef),
       child: Container(
-        margin: EdgeInsets.only(bottom: 8),
-        padding: EdgeInsets.all(12),
+        margin: const EdgeInsets.only(bottom: 8),
+        padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(12),
           border: Border.all(
-            color: isSelected ? Color(0xFF007AFF) : Color(0xFFE5E5EA),
+            color: isSelected ? const Color(0xFF007AFF) : const Color(0xFFE5E5EA),
             width: isSelected ? 2 : 1,
           ),
         ),
@@ -371,22 +371,22 @@ class _AddGroupMembersWidgetState extends State<AddGroupMembersWidget> {
               width: 24,
               height: 24,
               decoration: BoxDecoration(
-                color: isSelected ? Color(0xFF007AFF) : Colors.white,
+                color: isSelected ? const Color(0xFF007AFF) : Colors.white,
                 borderRadius: BorderRadius.circular(6),
                 border: Border.all(
-                  color: isSelected ? Color(0xFF007AFF) : Color(0xFFD1D1D6),
+                  color: isSelected ? const Color(0xFF007AFF) : const Color(0xFFD1D1D6),
                   width: 2,
                 ),
               ),
               child: isSelected
-                  ? Icon(
+                  ? const Icon(
                       CupertinoIcons.checkmark,
                       size: 16,
                       color: Colors.white,
                     )
                   : null,
             ),
-            SizedBox(width: 12),
+            const SizedBox(width: 12),
             // Avatar
             ClipRRect(
               borderRadius: BorderRadius.circular(22),
@@ -401,10 +401,10 @@ class _AddGroupMembersWidgetState extends State<AddGroupMembersWidget> {
                   width: 44,
                   height: 44,
                   decoration: BoxDecoration(
-                    color: Color(0xFFF2F2F7),
+                    color: const Color(0xFFF2F2F7),
                     borderRadius: BorderRadius.circular(22),
                   ),
-                  child: Icon(
+                  child: const Icon(
                     CupertinoIcons.person_fill,
                     size: 22,
                     color: Color(0xFF8E8E93),
@@ -414,10 +414,10 @@ class _AddGroupMembersWidgetState extends State<AddGroupMembersWidget> {
                   width: 44,
                   height: 44,
                   decoration: BoxDecoration(
-                    color: Color(0xFFF2F2F7),
+                    color: const Color(0xFFF2F2F7),
                     borderRadius: BorderRadius.circular(22),
                   ),
-                  child: Icon(
+                  child: const Icon(
                     CupertinoIcons.person_fill,
                     size: 22,
                     color: Color(0xFF8E8E93),
@@ -425,7 +425,7 @@ class _AddGroupMembersWidgetState extends State<AddGroupMembersWidget> {
                 ),
               ),
             ),
-            SizedBox(width: 12),
+            const SizedBox(width: 12),
             // User info
             Expanded(
               child: Column(
@@ -433,17 +433,17 @@ class _AddGroupMembersWidgetState extends State<AddGroupMembersWidget> {
                 children: [
                   Text(
                     user.displayName.isNotEmpty ? user.displayName : 'Unknown',
-                    style: TextStyle(
+                    style: const TextStyle(
                       fontFamily: 'SF Pro Text',
                       fontSize: 16,
                       fontWeight: FontWeight.w600,
                       color: Color(0xFF1C1C1E),
                     ),
                   ),
-                  SizedBox(height: 2),
+                  const SizedBox(height: 2),
                   Text(
                     user.email,
-                    style: TextStyle(
+                    style: const TextStyle(
                       fontFamily: 'SF Pro Text',
                       fontSize: 14,
                       color: Color(0xFF8E8E93),
@@ -464,8 +464,8 @@ class _AddGroupMembersWidgetState extends State<AddGroupMembersWidget> {
     final canAdd = _addedCount > 0;
 
     return Container(
-      padding: EdgeInsets.all(16),
-      decoration: BoxDecoration(
+      padding: const EdgeInsets.all(16),
+      decoration: const BoxDecoration(
         color: Colors.white,
         border: Border(
           top: BorderSide(
@@ -486,23 +486,23 @@ class _AddGroupMembersWidgetState extends State<AddGroupMembersWidget> {
                 }
               : null,
           child: AnimatedContainer(
-            duration: Duration(milliseconds: 200),
+            duration: const Duration(milliseconds: 200),
             width: double.infinity,
             height: 50,
             decoration: BoxDecoration(
-              color: canAdd ? Color(0xFF007AFF) : Color(0xFFE5E5EA),
+              color: canAdd ? const Color(0xFF007AFF) : const Color(0xFFE5E5EA),
               borderRadius: BorderRadius.circular(12),
             ),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 if (canAdd)
-                  Icon(
+                  const Icon(
                     CupertinoIcons.checkmark,
                     size: 18,
                     color: Colors.white,
                   ),
-                if (canAdd) SizedBox(width: 8),
+                if (canAdd) const SizedBox(width: 8),
                 Text(
                   canAdd
                       ? 'Add $_addedCount ${_addedCount == 1 ? 'member' : 'members'}'
@@ -511,7 +511,7 @@ class _AddGroupMembersWidgetState extends State<AddGroupMembersWidget> {
                     fontFamily: 'SF Pro Text',
                     fontSize: 17,
                     fontWeight: FontWeight.w600,
-                    color: canAdd ? Colors.white : Color(0xFF8E8E93),
+                    color: canAdd ? Colors.white : const Color(0xFF8E8E93),
                   ),
                 ),
               ],

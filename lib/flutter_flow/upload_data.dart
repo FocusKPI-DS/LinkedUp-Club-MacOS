@@ -480,7 +480,7 @@ Future<MediaDimensions> _getImageDimensions(Uint8List mediaBytes) async {
 Future<MediaDimensions> _getVideoDimensions(String path) async {
   // On web, skip video dimensions as VideoPlayerController.asset doesn't work
   if (kIsWeb) {
-    return MediaDimensions(width: 0, height: 0);
+    return const MediaDimensions(width: 0, height: 0);
   }
 
   final VideoPlayerController videoPlayerController =

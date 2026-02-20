@@ -2,7 +2,6 @@ import '/backend/backend.dart';
 import '/backend/schema/structs/index.dart';
 import '/flutter_flow/flutter_flow_util.dart';
 import '/pages/event/event_component/event_component_widget.dart';
-import '/index.dart';
 import 'discover_widget.dart' show DiscoverWidget;
 import 'package:flutter/material.dart';
 

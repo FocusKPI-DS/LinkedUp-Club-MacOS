@@ -8,7 +8,7 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
 class ContactsSidePanel extends StatefulWidget {
-  const ContactsSidePanel({Key? key}) : super(key: key);
+  const ContactsSidePanel({super.key});
 
   @override
   _ContactsSidePanelState createState() => _ContactsSidePanelState();
@@ -20,7 +20,7 @@ class _ContactsSidePanelState extends State<ContactsSidePanel> {
     return Container(
       width: 300,
       height: double.infinity,
-      decoration: BoxDecoration(
+      decoration: const BoxDecoration(
         color: Color(0xFF374151),
         border: Border(
           right: BorderSide(
@@ -45,8 +45,8 @@ class _ContactsSidePanelState extends State<ContactsSidePanel> {
   Widget _buildHeader() {
     return Container(
       width: double.infinity,
-      padding: EdgeInsets.all(16),
-      decoration: BoxDecoration(
+      padding: const EdgeInsets.all(16),
+      decoration: const BoxDecoration(
         color: Color(0xFF374151),
         border: Border(
           bottom: BorderSide(
@@ -55,7 +55,7 @@ class _ContactsSidePanelState extends State<ContactsSidePanel> {
           ),
         ),
       ),
-      child: Row(
+      child: const Row(
         children: [
           Icon(
             Icons.contacts,
@@ -82,14 +82,14 @@ class _ContactsSidePanelState extends State<ContactsSidePanel> {
   Widget _buildSearchBar() {
     return Container(
       width: double.infinity,
-      padding: EdgeInsets.all(16),
+      padding: const EdgeInsets.all(16),
       child: Container(
         height: 40,
         decoration: BoxDecoration(
-          color: Color(0xFF4B5563),
+          color: const Color(0xFF4B5563),
           borderRadius: BorderRadius.circular(8),
         ),
-        child: TextField(
+        child: const TextField(
           decoration: InputDecoration(
             hintText: 'Search contacts...',
             hintStyle: TextStyle(
@@ -124,7 +124,7 @@ class _ContactsSidePanelState extends State<ContactsSidePanel> {
       ),
       builder: (context, membersSnapshot) {
         if (!membersSnapshot.hasData) {
-          return Center(
+          return const Center(
             child: CircularProgressIndicator(
               color: Colors.white,
             ),
@@ -146,14 +146,14 @@ class _ContactsSidePanelState extends State<ContactsSidePanel> {
                       .doc('placeholder')),
               builder: (context, userSnapshot) {
                 if (!userSnapshot.hasData) {
-                  return SizedBox.shrink();
+                  return const SizedBox.shrink();
                 }
 
                 final user = userSnapshot.data!;
                 final isCurrentUser = user.reference == currentUserReference;
 
                 if (isCurrentUser) {
-                  return SizedBox.shrink();
+                  return const SizedBox.shrink();
                 }
 
                 return InkWell(
@@ -162,11 +162,11 @@ class _ContactsSidePanelState extends State<ContactsSidePanel> {
                   },
                   child: Container(
                     width: double.infinity,
-                    padding: EdgeInsetsDirectional.fromSTEB(16, 12, 16, 12),
+                    padding: const EdgeInsetsDirectional.fromSTEB(16, 12, 16, 12),
                     decoration: BoxDecoration(
                       color: Colors.transparent,
                       borderRadius: BorderRadius.circular(8),
-                      border: Border(
+                      border: const Border(
                         bottom: BorderSide(
                           color: Color(0xFF374151),
                           width: 1,
@@ -180,7 +180,7 @@ class _ContactsSidePanelState extends State<ContactsSidePanel> {
                         Container(
                           width: 40,
                           height: 40,
-                          decoration: BoxDecoration(
+                          decoration: const BoxDecoration(
                             color: Color(0xFF3B82F6),
                             shape: BoxShape.circle,
                           ),
@@ -194,11 +194,11 @@ class _ContactsSidePanelState extends State<ContactsSidePanel> {
                               placeholder: (context, url) => Container(
                                 width: 40,
                                 height: 40,
-                                decoration: BoxDecoration(
+                                decoration: const BoxDecoration(
                                   color: Colors.white,
                                   shape: BoxShape.circle,
                                 ),
-                                child: Icon(
+                                child: const Icon(
                                   Icons.person,
                                   color: Color(0xFF6B7280),
                                   size: 18,
@@ -207,11 +207,11 @@ class _ContactsSidePanelState extends State<ContactsSidePanel> {
                               errorWidget: (context, url, error) => Container(
                                 width: 40,
                                 height: 40,
-                                decoration: BoxDecoration(
+                                decoration: const BoxDecoration(
                                   color: Colors.white,
                                   shape: BoxShape.circle,
                                 ),
-                                child: Icon(
+                                child: const Icon(
                                   Icons.person,
                                   color: Color(0xFF6B7280),
                                   size: 18,
@@ -220,7 +220,7 @@ class _ContactsSidePanelState extends State<ContactsSidePanel> {
                             ),
                           ),
                         ),
-                        SizedBox(width: 12),
+                        const SizedBox(width: 12),
                         // User Info
                         Expanded(
                           child: Column(
@@ -232,7 +232,7 @@ class _ContactsSidePanelState extends State<ContactsSidePanel> {
                                   Expanded(
                                     child: Text(
                                       user.displayName,
-                                      style: TextStyle(
+                                      style: const TextStyle(
                                         fontFamily: 'Inter',
                                         color: Colors.white,
                                         fontSize: 14,
@@ -243,7 +243,7 @@ class _ContactsSidePanelState extends State<ContactsSidePanel> {
                                     ),
                                   ),
                                   Container(
-                                    padding: EdgeInsets.symmetric(
+                                    padding: const EdgeInsets.symmetric(
                                         horizontal: 6, vertical: 2),
                                     decoration: BoxDecoration(
                                       color: _getRoleColor(member.role),
@@ -251,7 +251,7 @@ class _ContactsSidePanelState extends State<ContactsSidePanel> {
                                     ),
                                     child: Text(
                                       member.role.toUpperCase(),
-                                      style: TextStyle(
+                                      style: const TextStyle(
                                         color: Colors.white,
                                         fontSize: 8,
                                         fontWeight: FontWeight.w600,
@@ -260,10 +260,10 @@ class _ContactsSidePanelState extends State<ContactsSidePanel> {
                                   ),
                                 ],
                               ),
-                              SizedBox(height: 2),
+                              const SizedBox(height: 2),
                               Text(
                                 user.email,
-                                style: TextStyle(
+                                style: const TextStyle(
                                   fontFamily: 'Inter',
                                   color: Color(0xFF9CA3AF),
                                   fontSize: 12,
@@ -271,8 +271,8 @@ class _ContactsSidePanelState extends State<ContactsSidePanel> {
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
                               ),
-                              SizedBox(height: 2),
-                              Text(
+                              const SizedBox(height: 2),
+                              const Text(
                                 'Tap to start messaging',
                                 style: TextStyle(
                                   fontFamily: 'Inter',
@@ -285,7 +285,7 @@ class _ContactsSidePanelState extends State<ContactsSidePanel> {
                           ),
                         ),
                         // Chat icon
-                        Icon(
+                        const Icon(
                           Icons.chat_bubble_outline,
                           color: Color(0xFF3B82F6),
                           size: 18,
@@ -305,13 +305,13 @@ class _ContactsSidePanelState extends State<ContactsSidePanel> {
   Color _getRoleColor(String role) {
     switch (role.toLowerCase()) {
       case 'owner':
-        return Color(0xFFDC2626); // Red
+        return const Color(0xFFDC2626); // Red
       case 'moderator':
-        return Color(0xFF059669); // Green
+        return const Color(0xFF059669); // Green
       case 'member':
-        return Color(0xFF6B7280); // Gray
+        return const Color(0xFF6B7280); // Gray
       default:
-        return Color(0xFF6B7280); // Default gray
+        return const Color(0xFF6B7280); // Default gray
     }
   }
 
@@ -325,7 +325,7 @@ class _ContactsSidePanelState extends State<ContactsSidePanel> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('Error accessing chat: $e'),
-          backgroundColor: Color(0xFFEF4444),
+          backgroundColor: const Color(0xFFEF4444),
         ),
       );
     }

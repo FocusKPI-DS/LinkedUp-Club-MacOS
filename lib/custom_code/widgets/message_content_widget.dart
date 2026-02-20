@@ -75,7 +75,7 @@ class MessageContentWidget extends StatelessWidget {
     );
 
     // Style for hyperlinks - Blue (not bold, but clickable)
-    final linkStyle = TextStyle(
+    const linkStyle = TextStyle(
       fontSize: 17.0,
       fontFamily: 'SF Pro Text',
       color: const Color(0xFF007AFF), // iOS system blue

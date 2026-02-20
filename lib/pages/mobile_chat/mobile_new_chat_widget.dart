@@ -15,7 +15,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 export 'mobile_new_chat_model.dart';
 
 class MobileNewChatWidget extends StatefulWidget {
-  const MobileNewChatWidget({Key? key}) : super(key: key);
+  const MobileNewChatWidget({super.key});
 
   static String routeName = 'MobileNewChat';
   static String routePath = '/mobile-new-chat';
@@ -75,7 +75,7 @@ class _MobileNewChatWidgetState extends State<MobileNewChatWidget> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Error starting chat: $e'),
-            backgroundColor: Color(0xFFFF3B30),
+            backgroundColor: const Color(0xFFFF3B30),
           ),
         );
       }
@@ -93,7 +93,7 @@ class _MobileNewChatWidgetState extends State<MobileNewChatWidget> {
             // Custom header with iOS 26 native back button
             Container(
               height: 44,
-              padding: EdgeInsets.symmetric(horizontal: 8),
+              padding: const EdgeInsets.symmetric(horizontal: 8),
               child: Row(
                 children: [
                   // Floating back button - iOS 26+ style with liquid glass effects
@@ -106,18 +106,18 @@ class _MobileNewChatWidgetState extends State<MobileNewChatWidget> {
                       child: AdaptiveFloatingActionButton(
                         mini: true,
                         backgroundColor: Colors.white,
-                        foregroundColor: Color(0xFF007AFF),
+                        foregroundColor: const Color(0xFF007AFF),
                         onPressed: () => Navigator.of(context).pop(),
-                        child: Icon(
+                        child: const Icon(
                           CupertinoIcons.chevron_left,
                           size: 17,
                         ),
                       ),
                     ),
                   ),
-                  SizedBox(width: 8),
+                  const SizedBox(width: 8),
                   // Centered title
-                  Expanded(
+                  const Expanded(
                     child: Center(
                       child: Text(
                         'New Chat',
@@ -131,15 +131,15 @@ class _MobileNewChatWidgetState extends State<MobileNewChatWidget> {
                       ),
                     ),
                   ),
-                  SizedBox(width: 40), // Balance the back button width
+                  const SizedBox(width: 40), // Balance the back button width
                 ],
               ),
             ),
             // Search bar
             Container(
               width: double.infinity,
-              padding: EdgeInsets.all(16),
-              decoration: BoxDecoration(
+              padding: const EdgeInsets.all(16),
+              decoration: const BoxDecoration(
                 color: CupertinoColors.systemBackground,
               ),
               child: Container(
@@ -158,14 +158,14 @@ class _MobileNewChatWidgetState extends State<MobileNewChatWidget> {
                     setState(() {});
                   },
                   placeholder: 'Search by name or email',
-                  placeholderStyle: TextStyle(
+                  placeholderStyle: const TextStyle(
                     fontFamily: 'SF Pro Text',
                     color: CupertinoColors.systemGrey,
                     fontSize: 14,
                     fontWeight: FontWeight.w400,
                   ),
-                  padding: EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-                  prefix: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                  prefix: const Padding(
                     padding: EdgeInsets.only(left: 12, right: 8),
                     child: Icon(
                       CupertinoIcons.search,
@@ -180,7 +180,7 @@ class _MobileNewChatWidgetState extends State<MobileNewChatWidget> {
                               _model.newChatSearchController?.clear();
                             });
                           },
-                          child: Padding(
+                          child: const Padding(
                             padding: EdgeInsets.only(right: 12),
                             child: Icon(
                               CupertinoIcons.xmark_circle_fill,
@@ -190,7 +190,7 @@ class _MobileNewChatWidgetState extends State<MobileNewChatWidget> {
                           ),
                         )
                       : null,
-                  style: TextStyle(
+                  style: const TextStyle(
                     fontFamily: 'SF Pro Text',
                     color: CupertinoColors.label,
                     fontSize: 14,
@@ -207,12 +207,12 @@ class _MobileNewChatWidgetState extends State<MobileNewChatWidget> {
             Expanded(
               child: Container(
                 width: double.infinity,
-                padding: EdgeInsets.symmetric(horizontal: 16),
+                padding: const EdgeInsets.symmetric(horizontal: 16),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Padding(
-                      padding: EdgeInsets.only(left: 4, bottom: 12, top: 8),
+                      padding: const EdgeInsets.only(left: 4, bottom: 12, top: 8),
                       child: Row(
                         children: [
                           Container(
@@ -223,8 +223,8 @@ class _MobileNewChatWidgetState extends State<MobileNewChatWidget> {
                               borderRadius: BorderRadius.circular(2),
                             ),
                           ),
-                          SizedBox(width: 8),
-                          Text(
+                          const SizedBox(width: 8),
+                          const Text(
                             'SUGGESTED',
                             style: TextStyle(
                               fontFamily: 'SF Pro Text',
@@ -239,7 +239,7 @@ class _MobileNewChatWidgetState extends State<MobileNewChatWidget> {
                     ),
                     Expanded(
                       child: currentUserReference == null
-                          ? Center(
+                          ? const Center(
                               child: CupertinoActivityIndicator(
                                 color: CupertinoColors.systemBlue,
                               ),
@@ -248,7 +248,7 @@ class _MobileNewChatWidgetState extends State<MobileNewChatWidget> {
                               stream: UsersRecord.getDocument(currentUserReference!),
                               builder: (context, currentUserSnapshot) {
                                 if (!currentUserSnapshot.hasData) {
-                                  return Center(
+                                  return const Center(
                                     child: CupertinoActivityIndicator(
                                       color: CupertinoColors.systemBlue,
                                     ),
@@ -268,17 +268,17 @@ class _MobileNewChatWidgetState extends State<MobileNewChatWidget> {
                                           height: 64,
                                           decoration: BoxDecoration(
                                             color: CupertinoColors.systemBlue
-                                                .withOpacity(0.1),
+                                                .withValues(alpha: 0.1),
                                             shape: BoxShape.circle,
                                           ),
-                                          child: Icon(
+                                          child: const Icon(
                                             CupertinoIcons.person_2,
                                             color: CupertinoColors.systemBlue,
                                             size: 32,
                                           ),
                                         ),
-                                        SizedBox(height: 16),
-                                        Text(
+                                        const SizedBox(height: 16),
+                                        const Text(
                                           'No connections',
                                           style: TextStyle(
                                             fontFamily: 'SF Pro Text',
@@ -288,8 +288,8 @@ class _MobileNewChatWidgetState extends State<MobileNewChatWidget> {
                                             letterSpacing: -0.41,
                                           ),
                                         ),
-                                        SizedBox(height: 8),
-                                        Text(
+                                        const SizedBox(height: 8),
+                                        const Text(
                                           'Add connections to start chatting',
                                           style: TextStyle(
                                             fontFamily: 'SF Pro Text',
@@ -317,7 +317,7 @@ class _MobileNewChatWidgetState extends State<MobileNewChatWidget> {
                                       stream: UsersRecord.getDocument(connectionRef),
                                       builder: (context, userSnapshot) {
                                         if (!userSnapshot.hasData) {
-                                          return SizedBox.shrink();
+                                          return const SizedBox.shrink();
                                         }
 
                                         final user = userSnapshot.data!;
@@ -325,7 +325,7 @@ class _MobileNewChatWidgetState extends State<MobileNewChatWidget> {
                                             user.reference == currentUserReference;
 
                                         if (isCurrentUser) {
-                                          return SizedBox.shrink();
+                                          return const SizedBox.shrink();
                                         }
 
                                         // Filter by search query
@@ -335,7 +335,7 @@ class _MobileNewChatWidgetState extends State<MobileNewChatWidget> {
                                           final email = user.email.toLowerCase();
                                           if (!displayName.contains(searchQuery) &&
                                               !email.contains(searchQuery)) {
-                                            return SizedBox.shrink();
+                                            return const SizedBox.shrink();
                                           }
                                         }
 
@@ -348,8 +348,8 @@ class _MobileNewChatWidgetState extends State<MobileNewChatWidget> {
                                             },
                                             borderRadius: BorderRadius.circular(10),
                                             child: Container(
-                                            margin: EdgeInsets.only(bottom: 8),
-                                            padding: EdgeInsets.all(12),
+                                            margin: const EdgeInsets.only(bottom: 8),
+                                            padding: const EdgeInsets.all(12),
                                             decoration: BoxDecoration(
                                               color: CupertinoColors.systemBackground,
                                               borderRadius: BorderRadius.circular(10),
@@ -367,7 +367,7 @@ class _MobileNewChatWidgetState extends State<MobileNewChatWidget> {
                                                     Container(
                                                       width: 48,
                                                       height: 48,
-                                                      decoration: BoxDecoration(
+                                                      decoration: const BoxDecoration(
                                                         color: CupertinoColors.systemGrey5,
                                                         shape: BoxShape.circle,
                                                       ),
@@ -386,11 +386,11 @@ class _MobileNewChatWidgetState extends State<MobileNewChatWidget> {
                                                           placeholder: (context, url) => Container(
                                                             width: 48,
                                                             height: 48,
-                                                            decoration: BoxDecoration(
+                                                            decoration: const BoxDecoration(
                                                               color: CupertinoColors.systemGrey5,
                                                               shape: BoxShape.circle,
                                                             ),
-                                                            child: Icon(
+                                                            child: const Icon(
                                                               CupertinoIcons.person_fill,
                                                               color: CupertinoColors.systemGrey,
                                                               size: 24,
@@ -399,11 +399,11 @@ class _MobileNewChatWidgetState extends State<MobileNewChatWidget> {
                                                           errorWidget: (context, url, error) => Container(
                                                             width: 48,
                                                             height: 48,
-                                                            decoration: BoxDecoration(
+                                                            decoration: const BoxDecoration(
                                                               color: CupertinoColors.systemGrey5,
                                                               shape: BoxShape.circle,
                                                             ),
-                                                            child: Icon(
+                                                            child: const Icon(
                                                               CupertinoIcons.person_fill,
                                                               color: CupertinoColors.systemGrey,
                                                               size: 24,
@@ -432,7 +432,7 @@ class _MobileNewChatWidgetState extends State<MobileNewChatWidget> {
                                                       ),
                                                   ],
                                                 ),
-                                                SizedBox(width: 12),
+                                                const SizedBox(width: 12),
                                                 // User info
                                                 Expanded(
                                                   child: Column(
@@ -440,7 +440,7 @@ class _MobileNewChatWidgetState extends State<MobileNewChatWidget> {
                                                     children: [
                                                       Text(
                                                         user.displayName,
-                                                        style: TextStyle(
+                                                        style: const TextStyle(
                                                           fontFamily: 'SF Pro Text',
                                                           color: CupertinoColors.label,
                                                           fontSize: 15,
@@ -450,10 +450,10 @@ class _MobileNewChatWidgetState extends State<MobileNewChatWidget> {
                                                         maxLines: 1,
                                                         overflow: TextOverflow.ellipsis,
                                                       ),
-                                                      SizedBox(height: 2),
+                                                      const SizedBox(height: 2),
                                                       Text(
                                                         user.email,
-                                                        style: TextStyle(
+                                                        style: const TextStyle(
                                                           fontFamily: 'SF Pro Text',
                                                           color: CupertinoColors.systemGrey,
                                                           fontSize: 13,
@@ -471,10 +471,10 @@ class _MobileNewChatWidgetState extends State<MobileNewChatWidget> {
                                                   height: 32,
                                                   decoration: BoxDecoration(
                                                     color: CupertinoColors.systemBlue
-                                                        .withOpacity(0.1),
+                                                        .withValues(alpha: 0.1),
                                                     borderRadius: BorderRadius.circular(8),
                                                   ),
-                                                  child: Icon(
+                                                  child: const Icon(
                                                     CupertinoIcons.arrow_right,
                                                     color: CupertinoColors.systemBlue,
                                                     size: 16,

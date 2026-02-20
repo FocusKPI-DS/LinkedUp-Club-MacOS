@@ -13,10 +13,10 @@ class MacOSCameraCaptureWidget extends StatefulWidget {
   final Function(SelectedFile) onCapture;
 
   const MacOSCameraCaptureWidget({
-    Key? key,
+    super.key,
     required this.isVideo,
     required this.onCapture,
-  }) : super(key: key);
+  });
 
   @override
   State<MacOSCameraCaptureWidget> createState() =>
@@ -388,7 +388,7 @@ class _MacOSCameraCaptureWidgetState extends State<MacOSCameraCaptureWidget> {
               Center(
                 child: CameraMacOSView(
                   key: ValueKey(
-                      'camera_${_isVideoMode}_${_cameraKeyValue}'), // EXTREMELY unique key forces complete recreation
+                      'camera_${_isVideoMode}_$_cameraKeyValue'), // EXTREMELY unique key forces complete recreation
                   fit: BoxFit.contain,
                   cameraMode: _isVideoMode
                       ? CameraMacOSMode.video
@@ -434,7 +434,7 @@ class _MacOSCameraCaptureWidgetState extends State<MacOSCameraCaptureWidget> {
                         Container(
                           width: 8,
                           height: 8,
-                          decoration: BoxDecoration(
+                          decoration: const BoxDecoration(
                             color: Colors.red,
                             shape: BoxShape.circle,
                           ),
@@ -727,7 +727,7 @@ class _MacOSCameraCaptureWidgetState extends State<MacOSCameraCaptureWidget> {
             bool fileExists = await file.exists();
             int retries = 0;
             while (!fileExists && retries < 5) {
-              await Future.delayed(Duration(milliseconds: 200));
+              await Future.delayed(const Duration(milliseconds: 200));
               fileExists = await file.exists();
               retries++;
             }

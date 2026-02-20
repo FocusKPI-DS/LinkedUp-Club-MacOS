@@ -65,7 +65,6 @@ class ScreenCaptureWeb {
 
       // Convert canvas to PNG blob
       final blob = await canvas.toBlob('image/png');
-      if (blob == null) return null;
 
       // Read blob as bytes
       final reader = html.FileReader();

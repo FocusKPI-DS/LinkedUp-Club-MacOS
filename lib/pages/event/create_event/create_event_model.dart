@@ -1,41 +1,10 @@
-import '/auth/firebase_auth/auth_util.dart';
 import '/backend/backend.dart';
-import '/backend/firebase_storage/storage.dart';
-import '/backend/schema/enums/enums.dart';
-import '/backend/schema/structs/index.dart';
-import '/component/edit/edit_widget.dart';
-import '/components/alert_widget.dart';
-import '/flutter_flow/flutter_flow_choice_chips.dart';
-import '/flutter_flow/flutter_flow_place_picker.dart';
 import '/flutter_flow/flutter_flow_util.dart';
-import '/flutter_flow/flutter_flow_widgets.dart';
 import '/flutter_flow/form_field_controller.dart';
-import '/flutter_flow/upload_data.dart';
-import '/pages/event/add_profile/add_profile_widget.dart';
-import '/pages/event/schedule_date/schedule_date_widget.dart';
-import 'dart:io';
-import 'dart:ui';
-import '/custom_code/actions/index.dart' as actions;
-import '/custom_code/widgets/index.dart' as custom_widgets;
 import '/index.dart';
 import 'create_event_widget.dart' show CreateEventWidget;
-import 'package:branchio_dynamic_linking_akp5u6/custom_code/actions/index.dart'
-    as branchio_dynamic_linking_akp5u6_actions;
-import 'package:branchio_dynamic_linking_akp5u6/flutter_flow/custom_functions.dart'
-    as branchio_dynamic_linking_akp5u6_functions;
-import 'package:aligned_dialog/aligned_dialog.dart';
-import 'package:auto_size_text/auto_size_text.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:easy_debounce/easy_debounce.dart';
-import 'package:ff_commons/flutter_flow/place.dart';
-import 'package:ff_theme/flutter_flow/flutter_flow_theme.dart';
 import 'package:flutter/cupertino.dart';
-import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/scheduler.dart';
-import 'package:font_awesome_flutter/font_awesome_flutter.dart';
-import 'package:google_fonts/google_fonts.dart';
-import 'package:provider/provider.dart';
 
 class CreateEventModel extends FlutterFlowModel<CreateEventWidget> {
   ///  Local state fields for this page.

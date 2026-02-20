@@ -83,7 +83,7 @@ class _ConnectionsWidgetState extends State<ConnectionsWidget> {
               // Header with title and Add new button
               Container(
                 color: Colors.white,
-                padding: EdgeInsets.fromLTRB(16, 16, 16, 0),
+                padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
                 child: Row(
                   children: [
                     Expanded(
@@ -107,23 +107,23 @@ class _ConnectionsWidgetState extends State<ConnectionsWidget> {
                         borderRadius: BorderRadius.circular(12),
                         child: Container(
                           padding:
-                              EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                              const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                           decoration: BoxDecoration(
                             color: Colors.white,
                             borderRadius: BorderRadius.circular(12),
                             border: Border.all(
-                              color: Color(0xFFE5E7EB),
+                              color: const Color(0xFFE5E7EB),
                               width: 1,
                             ),
                             boxShadow: [
                               BoxShadow(
                                 color: Colors.black.withOpacity(0.05),
                                 blurRadius: 4,
-                                offset: Offset(0, 2),
+                                offset: const Offset(0, 2),
                               ),
                             ],
                           ),
-                          child: Row(
+                          child: const Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
                               Icon(
@@ -150,7 +150,7 @@ class _ConnectionsWidgetState extends State<ConnectionsWidget> {
                   ],
                 ),
               ),
-              SizedBox(height: 20),
+              const SizedBox(height: 20),
 
               // Filter Segmented Control
               if (currentUserReference != null)
@@ -166,11 +166,11 @@ class _ConnectionsWidgetState extends State<ConnectionsWidget> {
 
                     return Padding(
                       padding:
-                          EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                      child: Container(
+                          const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                      child: SizedBox(
                         width: double.infinity,
                         child: CupertinoSlidingSegmentedControl<int>(
-                          backgroundColor: Color(0xFFF1F5F9),
+                          backgroundColor: const Color(0xFFF1F5F9),
                           thumbColor: Colors.white,
                           groupValue: _selectedTabIndex,
                           children: {
@@ -194,11 +194,11 @@ class _ConnectionsWidgetState extends State<ConnectionsWidget> {
                 )
               else
                 Padding(
-                  padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                  child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  child: SizedBox(
                     width: double.infinity,
                     child: CupertinoSlidingSegmentedControl<int>(
-                      backgroundColor: Color(0xFFF1F5F9),
+                      backgroundColor: const Color(0xFFF1F5F9),
                       thumbColor: Colors.white,
                       groupValue: _selectedTabIndex,
                       children: {
@@ -216,12 +216,12 @@ class _ConnectionsWidgetState extends State<ConnectionsWidget> {
                     ),
                   ),
                 ),
-              SizedBox(height: 16),
+              const SizedBox(height: 16),
 
               // Search bar
               Container(
                 width: double.infinity,
-                padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                 color: Colors.white,
                 child: Container(
                   height: 44,
@@ -241,15 +241,15 @@ class _ConnectionsWidgetState extends State<ConnectionsWidget> {
                       });
                     },
                     placeholder: 'Search connections',
-                    placeholderStyle: TextStyle(
+                    placeholderStyle: const TextStyle(
                       fontFamily: 'SF Pro Text',
                       color: CupertinoColors.systemGrey,
                       fontSize: 14,
                       fontWeight: FontWeight.w400,
                       decoration: TextDecoration.none,
                     ),
-                    padding: EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-                    prefix: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                    prefix: const Padding(
                       padding: EdgeInsets.only(left: 12, right: 8),
                       child: Icon(
                         CupertinoIcons.search,
@@ -265,7 +265,7 @@ class _ConnectionsWidgetState extends State<ConnectionsWidget> {
                                 _searchQuery = '';
                               });
                             },
-                            child: Padding(
+                            child: const Padding(
                               padding: EdgeInsets.only(right: 12),
                               child: Icon(
                                 CupertinoIcons.xmark_circle_fill,
@@ -275,7 +275,7 @@ class _ConnectionsWidgetState extends State<ConnectionsWidget> {
                             ),
                           )
                         : null,
-                    style: TextStyle(
+                    style: const TextStyle(
                       fontFamily: 'SF Pro Text',
                       color: CupertinoColors.label,
                       fontSize: 14,
@@ -289,7 +289,7 @@ class _ConnectionsWidgetState extends State<ConnectionsWidget> {
                   ),
                 ),
               ),
-              SizedBox(height: 8),
+              const SizedBox(height: 8),
 
               // Content area
               Expanded(
@@ -304,7 +304,7 @@ class _ConnectionsWidgetState extends State<ConnectionsWidget> {
 
   Widget _buildTabContent() {
     if (currentUserReference == null) {
-      return Center(
+      return const Center(
         child: CupertinoActivityIndicator(),
       );
     }
@@ -313,7 +313,7 @@ class _ConnectionsWidgetState extends State<ConnectionsWidget> {
       stream: UsersRecord.getDocument(currentUserReference!),
       builder: (context, currentUserSnapshot) {
         if (!currentUserSnapshot.hasData) {
-          return Center(
+          return const Center(
             child: CupertinoActivityIndicator(),
           );
         }
@@ -350,8 +350,8 @@ class _ConnectionsWidgetState extends State<ConnectionsWidget> {
       children: [
         // Connection count and sort by row - Enhanced styling
         Container(
-          padding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-          decoration: BoxDecoration(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          decoration: const BoxDecoration(
             color: Colors.white,
             border: Border(
               bottom: BorderSide(
@@ -366,7 +366,7 @@ class _ConnectionsWidgetState extends State<ConnectionsWidget> {
             children: [
               Text(
                 '${connections.length}',
-                style: TextStyle(
+                style: const TextStyle(
                   fontFamily: 'SF Pro Display',
                   fontSize: 17,
                   fontWeight: FontWeight.w600,
@@ -374,10 +374,10 @@ class _ConnectionsWidgetState extends State<ConnectionsWidget> {
                   letterSpacing: -0.2,
                 ),
               ),
-              SizedBox(width: 6),
+              const SizedBox(width: 6),
               Text(
                 'connection${connections.length == 1 ? '' : 's'}',
-                style: TextStyle(
+                style: const TextStyle(
                   fontFamily: 'SF Pro Display',
                   fontSize: 15,
                   fontWeight: FontWeight.w400,
@@ -397,14 +397,14 @@ class _ConnectionsWidgetState extends State<ConnectionsWidget> {
               controller: _connectionsScrollController,
               padding: EdgeInsets.zero,
               itemCount: connections.length,
-              separatorBuilder: (context, index) => SizedBox.shrink(),
+              separatorBuilder: (context, index) => const SizedBox.shrink(),
               itemBuilder: (context, index) {
                 final connectionRef = connections[index];
                 return StreamBuilder<UsersRecord>(
                   stream: UsersRecord.getDocument(connectionRef),
                   builder: (context, userSnapshot) {
                     if (!userSnapshot.hasData) {
-                      return SizedBox.shrink();
+                      return const SizedBox.shrink();
                     }
                     final user = userSnapshot.data!;
 
@@ -416,7 +416,7 @@ class _ConnectionsWidgetState extends State<ConnectionsWidget> {
                       if (!displayName.contains(_searchQuery) &&
                           !email.contains(_searchQuery) &&
                           !bio.contains(_searchQuery)) {
-                        return SizedBox.shrink();
+                        return const SizedBox.shrink();
                       }
                     }
 
@@ -449,8 +449,8 @@ class _ConnectionsWidgetState extends State<ConnectionsWidget> {
       children: [
         // Request count and sort by row - Enhanced styling
         Container(
-          padding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-          decoration: BoxDecoration(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          decoration: const BoxDecoration(
             color: Colors.white,
             border: Border(
               bottom: BorderSide(
@@ -465,7 +465,7 @@ class _ConnectionsWidgetState extends State<ConnectionsWidget> {
             children: [
               Text(
                 '${requests.length}',
-                style: TextStyle(
+                style: const TextStyle(
                   fontFamily: 'SF Pro Display',
                   fontSize: 17,
                   fontWeight: FontWeight.w600,
@@ -473,10 +473,10 @@ class _ConnectionsWidgetState extends State<ConnectionsWidget> {
                   letterSpacing: -0.2,
                 ),
               ),
-              SizedBox(width: 6),
+              const SizedBox(width: 6),
               Text(
                 'request${requests.length == 1 ? '' : 's'}',
-                style: TextStyle(
+                style: const TextStyle(
                   fontFamily: 'SF Pro Display',
                   fontSize: 15,
                   fontWeight: FontWeight.w400,
@@ -496,14 +496,14 @@ class _ConnectionsWidgetState extends State<ConnectionsWidget> {
               controller: _requestsScrollController,
               padding: EdgeInsets.zero,
               itemCount: requests.length,
-              separatorBuilder: (context, index) => SizedBox.shrink(),
+              separatorBuilder: (context, index) => const SizedBox.shrink(),
               itemBuilder: (context, index) {
                 final requestRef = requests[index];
                 return StreamBuilder<UsersRecord>(
                   stream: UsersRecord.getDocument(requestRef),
                   builder: (context, userSnapshot) {
                     if (!userSnapshot.hasData) {
-                      return SizedBox.shrink();
+                      return const SizedBox.shrink();
                     }
                     final user = userSnapshot.data!;
 
@@ -515,7 +515,7 @@ class _ConnectionsWidgetState extends State<ConnectionsWidget> {
                       if (!displayName.contains(_searchQuery) &&
                           !email.contains(_searchQuery) &&
                           !bio.contains(_searchQuery)) {
-                        return SizedBox.shrink();
+                        return const SizedBox.shrink();
                       }
                     }
 
@@ -547,8 +547,8 @@ class _ConnectionsWidgetState extends State<ConnectionsWidget> {
       children: [
         // Sent request count and sort by row - Enhanced styling
         Container(
-          padding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-          decoration: BoxDecoration(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          decoration: const BoxDecoration(
             color: Colors.white,
             border: Border(
               bottom: BorderSide(
@@ -563,7 +563,7 @@ class _ConnectionsWidgetState extends State<ConnectionsWidget> {
             children: [
               Text(
                 '${sentRequests.length}',
-                style: TextStyle(
+                style: const TextStyle(
                   fontFamily: 'SF Pro Display',
                   fontSize: 17,
                   fontWeight: FontWeight.w600,
@@ -571,10 +571,10 @@ class _ConnectionsWidgetState extends State<ConnectionsWidget> {
                   letterSpacing: -0.2,
                 ),
               ),
-              SizedBox(width: 6),
+              const SizedBox(width: 6),
               Text(
                 'sent request${sentRequests.length == 1 ? '' : 's'}',
-                style: TextStyle(
+                style: const TextStyle(
                   fontFamily: 'SF Pro Display',
                   fontSize: 15,
                   fontWeight: FontWeight.w400,
@@ -594,20 +594,20 @@ class _ConnectionsWidgetState extends State<ConnectionsWidget> {
               controller: _sentRequestsScrollController,
               padding: EdgeInsets.zero,
               itemCount: sentRequests.length,
-              separatorBuilder: (context, index) => SizedBox.shrink(),
+              separatorBuilder: (context, index) => const SizedBox.shrink(),
               itemBuilder: (context, index) {
                 final requestRef = sentRequests[index];
                 return StreamBuilder<UsersRecord>(
                   stream: UsersRecord.getDocument(requestRef),
                   builder: (context, userSnapshot) {
                     if (!userSnapshot.hasData) {
-                      return SizedBox.shrink();
+                      return const SizedBox.shrink();
                     }
                     final user = userSnapshot.data!;
                     final isValidSentRequest =
                         _isValidSentRequest(user.reference, currentUser);
                     if (!isValidSentRequest) {
-                      return SizedBox.shrink();
+                      return const SizedBox.shrink();
                     }
 
                     // Filter by search query
@@ -618,7 +618,7 @@ class _ConnectionsWidgetState extends State<ConnectionsWidget> {
                       if (!displayName.contains(_searchQuery) &&
                           !email.contains(_searchQuery) &&
                           !bio.contains(_searchQuery)) {
-                        return SizedBox.shrink();
+                        return const SizedBox.shrink();
                       }
                     }
 
@@ -643,7 +643,7 @@ class _ConnectionsWidgetState extends State<ConnectionsWidget> {
         _viewUserProfile(user);
       },
       child: Container(
-        decoration: BoxDecoration(
+        decoration: const BoxDecoration(
           color: Colors.white,
           border: Border(
             bottom: BorderSide(
@@ -653,12 +653,12 @@ class _ConnectionsWidgetState extends State<ConnectionsWidget> {
           ),
         ),
         child: Padding(
-          padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               // User avatar
-              Container(
+              SizedBox(
                 width: 48,
                 height: 48,
                 child: ClipRRect(
@@ -672,11 +672,11 @@ class _ConnectionsWidgetState extends State<ConnectionsWidget> {
                           placeholder: (context, url) => Container(
                             width: 48,
                             height: 48,
-                            decoration: BoxDecoration(
+                            decoration: const BoxDecoration(
                               color: Color(0xFFF1F5F9),
                               shape: BoxShape.circle,
                             ),
-                            child: Icon(
+                            child: const Icon(
                               CupertinoIcons.person_fill,
                               color: Color(0xFF64748B),
                               size: 24,
@@ -688,7 +688,7 @@ class _ConnectionsWidgetState extends State<ConnectionsWidget> {
                       : _buildInitialsAvatar(user),
                 ),
               ),
-              SizedBox(width: 10),
+              const SizedBox(width: 10),
 
               // User info
               Expanded(
@@ -699,7 +699,7 @@ class _ConnectionsWidgetState extends State<ConnectionsWidget> {
                       user.displayName.isNotEmpty
                           ? user.displayName
                           : 'Unknown User',
-                      style: TextStyle(
+                      style: const TextStyle(
                         fontFamily: 'SF Pro Display',
                         color: Color(0xFF000000),
                         fontSize: 15,
@@ -708,13 +708,13 @@ class _ConnectionsWidgetState extends State<ConnectionsWidget> {
                         height: 1.2,
                       ),
                     ),
-                    SizedBox(height: 2),
+                    const SizedBox(height: 2),
 
                     // Bio or job title (can span multiple lines)
                     if (user.bio.isNotEmpty)
                       Text(
                         user.bio,
-                        style: TextStyle(
+                        style: const TextStyle(
                           fontFamily: 'SF Pro Display',
                           color: Color(0xFF666666),
                           fontSize: 13,
@@ -727,7 +727,7 @@ class _ConnectionsWidgetState extends State<ConnectionsWidget> {
                     else
                       Text(
                         user.email,
-                        style: TextStyle(
+                        style: const TextStyle(
                           fontFamily: 'SF Pro Display',
                           color: Color(0xFF666666),
                           fontSize: 13,
@@ -776,12 +776,12 @@ class _ConnectionsWidgetState extends State<ConnectionsWidget> {
             height: 36,
             decoration: BoxDecoration(
               border: Border.all(
-                color: Color(0xFFE5E7EB),
+                color: const Color(0xFFE5E7EB),
                 width: 1,
               ),
               shape: BoxShape.circle,
             ),
-            child: Icon(
+            child: const Icon(
               CupertinoIcons.ellipsis_vertical,
               size: 16,
               color: Color(0xFF666666),
@@ -800,18 +800,18 @@ class _ConnectionsWidgetState extends State<ConnectionsWidget> {
               onTap: isLoading ? null : () => _acceptConnectionRequest(user),
               borderRadius: BorderRadius.circular(4),
               child: Container(
-                padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                 decoration: BoxDecoration(
-                  color: Color(0xFF2563EB),
+                  color: const Color(0xFF2563EB),
                   borderRadius: BorderRadius.circular(4),
                 ),
                 child: isLoading
-                    ? SizedBox(
+                    ? const SizedBox(
                         width: 16,
                         height: 16,
                         child: CupertinoActivityIndicator(color: Colors.white),
                       )
-                    : Text(
+                    : const Text(
                         'Accept',
                         style: TextStyle(
                           fontFamily: 'SF Pro Display',
@@ -823,28 +823,28 @@ class _ConnectionsWidgetState extends State<ConnectionsWidget> {
               ),
             ),
           ),
-          SizedBox(width: 8),
+          const SizedBox(width: 8),
           Material(
             color: Colors.transparent,
             child: InkWell(
               onTap: isLoading ? null : () => _declineConnectionRequest(user),
               borderRadius: BorderRadius.circular(4),
               child: Container(
-                padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                 decoration: BoxDecoration(
                   border: Border.all(
-                    color: Color(0xFFE5E7EB),
+                    color: const Color(0xFFE5E7EB),
                     width: 1.5,
                   ),
                   borderRadius: BorderRadius.circular(4),
                 ),
                 child: isLoading
-                    ? SizedBox(
+                    ? const SizedBox(
                         width: 16,
                         height: 16,
                         child: CupertinoActivityIndicator(),
                       )
-                    : Text(
+                    : const Text(
                         'Decline',
                         style: TextStyle(
                           fontFamily: 'SF Pro Display',
@@ -867,18 +867,18 @@ class _ConnectionsWidgetState extends State<ConnectionsWidget> {
             onTap: isLoading ? null : () => _cancelConnectionRequest(user),
             borderRadius: BorderRadius.circular(4),
             child: Container(
-              padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
               decoration: BoxDecoration(
-                color: Color(0xFFDC2626),
+                color: const Color(0xFFDC2626),
                 borderRadius: BorderRadius.circular(4),
               ),
               child: isLoading
-                  ? SizedBox(
+                  ? const SizedBox(
                       width: 16,
                       height: 16,
                       child: CupertinoActivityIndicator(color: Colors.white),
                     )
-                  : Text(
+                  : const Text(
                       'Cancel',
                       style: TextStyle(
                         fontFamily: 'SF Pro Display',
@@ -893,12 +893,12 @@ class _ConnectionsWidgetState extends State<ConnectionsWidget> {
       } else {
         // Show pending state in other tabs
         return Container(
-          padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
           decoration: BoxDecoration(
-            color: Color(0xFFF1F5F9),
+            color: const Color(0xFFF1F5F9),
             borderRadius: BorderRadius.circular(4),
           ),
-          child: Text(
+          child: const Text(
             'Pending',
             style: TextStyle(
               fontFamily: 'SF Pro Display',
@@ -917,18 +917,18 @@ class _ConnectionsWidgetState extends State<ConnectionsWidget> {
           onTap: isLoading ? null : () => _sendConnectionRequest(user),
           borderRadius: BorderRadius.circular(4),
           child: Container(
-            padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
             decoration: BoxDecoration(
-              color: Color(0xFF2563EB),
+              color: const Color(0xFF2563EB),
               borderRadius: BorderRadius.circular(4),
             ),
             child: isLoading
-                ? SizedBox(
+                ? const SizedBox(
                     width: 16,
                     height: 16,
                     child: CupertinoActivityIndicator(color: Colors.white),
                   )
-                : Text(
+                : const Text(
                     'Connect',
                     style: TextStyle(
                       fontFamily: 'SF Pro Display',
@@ -954,7 +954,7 @@ class _ConnectionsWidgetState extends State<ConnectionsWidget> {
               Navigator.pop(context);
               _showRemoveConnectionConfirmation(user, currentUser);
             },
-            child: Text(
+            child: const Text(
               'Remove connection',
               style: TextStyle(color: Color(0xFFDC2626)),
             ),
@@ -962,7 +962,7 @@ class _ConnectionsWidgetState extends State<ConnectionsWidget> {
         ],
         cancelButton: CupertinoActionSheetAction(
           onPressed: () => Navigator.pop(context),
-          child: Text('Cancel'),
+          child: const Text('Cancel'),
         ),
       ),
     );
@@ -973,7 +973,7 @@ class _ConnectionsWidgetState extends State<ConnectionsWidget> {
     showCupertinoDialog(
       context: context,
       builder: (context) => CupertinoAlertDialog(
-        title: Text('Remove Connection'),
+        title: const Text('Remove Connection'),
         content: Text(
             'Are you sure you want to remove ${user.displayName} from your connections?'),
         actions: [
@@ -983,11 +983,11 @@ class _ConnectionsWidgetState extends State<ConnectionsWidget> {
               Navigator.pop(context);
               _removeConnection(user, currentUser);
             },
-            child: Text('Remove'),
+            child: const Text('Remove'),
           ),
           CupertinoDialogAction(
             onPressed: () => Navigator.pop(context),
-            child: Text('Cancel'),
+            child: const Text('Cancel'),
           ),
         ],
       ),
@@ -1061,9 +1061,9 @@ class _ConnectionsWidgetState extends State<ConnectionsWidget> {
         shape: BoxShape.circle,
         boxShadow: [
           BoxShadow(
-            color: CupertinoColors.systemGrey.withOpacity(0.2),
+            color: CupertinoColors.systemGrey.withValues(alpha: 0.2),
             blurRadius: 6,
-            offset: Offset(0, 2),
+            offset: const Offset(0, 2),
           ),
         ],
       ),
@@ -1074,7 +1074,7 @@ class _ConnectionsWidgetState extends State<ConnectionsWidget> {
                 fit: BoxFit.cover,
                 placeholder: (context, url) => Container(
                   color: CupertinoColors.systemGrey5,
-                  child: Icon(
+                  child: const Icon(
                     CupertinoIcons.person_fill,
                     color: CupertinoColors.systemGrey,
                     size: 28,
@@ -1100,7 +1100,7 @@ class _ConnectionsWidgetState extends State<ConnectionsWidget> {
       child: Center(
         child: Text(
           initials.toUpperCase(),
-          style: TextStyle(
+          style: const TextStyle(
             color: CupertinoColors.white,
             fontSize: 18,
             fontWeight: FontWeight.w600,
@@ -1117,7 +1117,7 @@ class _ConnectionsWidgetState extends State<ConnectionsWidget> {
   }) {
     return Center(
       child: Padding(
-        padding: EdgeInsets.all(32),
+        padding: const EdgeInsets.all(32),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
@@ -1126,7 +1126,7 @@ class _ConnectionsWidgetState extends State<ConnectionsWidget> {
               size: 80,
               color: CupertinoColors.systemGrey,
             ),
-            SizedBox(height: 24),
+            const SizedBox(height: 24),
             Text(
               title,
               style: CupertinoTheme.of(context)
@@ -1137,7 +1137,7 @@ class _ConnectionsWidgetState extends State<ConnectionsWidget> {
                     fontWeight: FontWeight.bold,
                   ),
             ),
-            SizedBox(height: 12),
+            const SizedBox(height: 12),
             Text(
               subtitle,
               textAlign: TextAlign.center,
@@ -1245,7 +1245,7 @@ class _ConnectionsWidgetState extends State<ConnectionsWidget> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Error starting chat: $e'),
-            backgroundColor: Color(0xFFFF3B30),
+            backgroundColor: const Color(0xFFFF3B30),
           ),
         );
       }
@@ -1472,7 +1472,7 @@ class _ConnectionsWidgetState extends State<ConnectionsWidget> {
 
   Widget _buildSegment(String label, int count, int index) {
     return Container(
-      padding: EdgeInsets.symmetric(vertical: 8, horizontal: 4),
+      padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         mainAxisAlignment: MainAxisAlignment.center,
@@ -1487,8 +1487,8 @@ class _ConnectionsWidgetState extends State<ConnectionsWidget> {
                     ? FontWeight.w600
                     : FontWeight.w500,
                 color: _selectedTabIndex == index
-                    ? Color(0xFF007AFF)
-                    : Color(0xFF64748B),
+                    ? const Color(0xFF007AFF)
+                    : const Color(0xFF64748B),
                 decoration: TextDecoration.none,
               ),
               overflow: TextOverflow.ellipsis,
@@ -1496,16 +1496,16 @@ class _ConnectionsWidgetState extends State<ConnectionsWidget> {
             ),
           ),
           if (count > 0) ...[
-            SizedBox(width: 4),
+            const SizedBox(width: 4),
             Container(
-              padding: EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+              padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
               decoration: BoxDecoration(
                 color: _selectedTabIndex == index
-                    ? Color(0xFF007AFF)
-                    : Color(0xFFE2E8F0),
+                    ? const Color(0xFF007AFF)
+                    : const Color(0xFFE2E8F0),
                 borderRadius: BorderRadius.circular(10),
               ),
-              constraints: BoxConstraints(
+              constraints: const BoxConstraints(
                 minWidth: 16,
                 minHeight: 16,
               ),
@@ -1518,7 +1518,7 @@ class _ConnectionsWidgetState extends State<ConnectionsWidget> {
                     fontWeight: FontWeight.bold,
                     color: _selectedTabIndex == index
                         ? Colors.white
-                        : Color(0xFF64748B),
+                        : const Color(0xFF64748B),
                     decoration: TextDecoration.none,
                   ),
                   textAlign: TextAlign.center,
@@ -1538,7 +1538,7 @@ class _ConnectionsWidgetState extends State<ConnectionsWidget> {
         content: Text(message),
         actions: [
           CupertinoDialogAction(
-            child: Text('OK'),
+            child: const Text('OK'),
             onPressed: () => Navigator.of(context).pop(),
           ),
         ],
@@ -1550,11 +1550,11 @@ class _ConnectionsWidgetState extends State<ConnectionsWidget> {
     showCupertinoDialog(
       context: context,
       builder: (context) => CupertinoAlertDialog(
-        title: Text('Error'),
+        title: const Text('Error'),
         content: Text(message),
         actions: [
           CupertinoDialogAction(
-            child: Text('OK'),
+            child: const Text('OK'),
             onPressed: () => Navigator.of(context).pop(),
           ),
         ],
@@ -1594,12 +1594,12 @@ class _ConnectionFilterButton extends StatelessWidget {
               decoration: BoxDecoration(
                 // Liquid Glass effect with semi-transparent background
                 color: isSelected
-                    ? CupertinoColors.systemBlue.withOpacity(0.96)
+                    ? CupertinoColors.systemBlue.withValues(alpha: 0.96)
                     : CupertinoColors.white.withOpacity(0.8),
                 borderRadius: BorderRadius.circular(20.0),
                 border: Border.all(
                   color: isSelected
-                      ? CupertinoColors.systemBlue.withOpacity(0.96)
+                      ? CupertinoColors.systemBlue.withValues(alpha: 0.96)
                       : CupertinoColors.white.withOpacity(0.8),
                   width: 1.5,
                 ),
@@ -1626,16 +1626,16 @@ class _ConnectionFilterButton extends StatelessWidget {
                     ),
                   ),
                   if (badgeCount > 0) ...[
-                    SizedBox(width: 6),
+                    const SizedBox(width: 6),
                     Container(
-                      padding: EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                       decoration: BoxDecoration(
                         color: isSelected
                             ? CupertinoColors.white
-                            : Color(0xFFDC2626),
+                            : const Color(0xFFDC2626),
                         borderRadius: BorderRadius.circular(10),
                       ),
-                      constraints: BoxConstraints(
+                      constraints: const BoxConstraints(
                         minWidth: 18,
                         minHeight: 18,
                       ),

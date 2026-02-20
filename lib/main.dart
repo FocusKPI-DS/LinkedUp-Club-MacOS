@@ -137,21 +137,21 @@ void main() async {
           create: (context) => appState,
         ),
       ],
-      child: MyApp(),
+      child: const MyApp(),
     ));
   } catch (e) {
     // Error during app initialization
     // Run app with minimal configuration if initialization fails
-    runApp(MaterialApp(
+    runApp(const MaterialApp(
       home: Scaffold(
         body: Center(
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              const Icon(Icons.error, size: 64, color: Colors.red),
-              const SizedBox(height: 16),
-              const Text('App initialization failed'),
-              const Text('Please restart the app'),
+              Icon(Icons.error, size: 64, color: Colors.red),
+              SizedBox(height: 16),
+              Text('App initialization failed'),
+              Text('Please restart the app'),
             ],
           ),
         ),
@@ -824,7 +824,7 @@ class _NavBarPageState extends State<NavBarPage> with WidgetsBindingObserver {
 
     // Initialize presence system after a delay to ensure user is loaded
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      Future.delayed(Duration(milliseconds: 500), () {
+      Future.delayed(const Duration(milliseconds: 500), () {
         _initializePresence();
       });
     });
@@ -927,7 +927,7 @@ class _NavBarPageState extends State<NavBarPage> with WidgetsBindingObserver {
       'Home': const HomeWidget(),
       // 'Chat': const ChatWidget(), // Commented out - using MobileChat (now called Chat) instead
       'MobileChat': _mobileChatWidget, // Use stored instance to preserve state
-      'DesktopChat': DesktopChatWidget(), // Desktop chat for macOS
+      'DesktopChat': const DesktopChatWidget(), // Desktop chat for macOS
       'Gmail': const GmailWidget(), // Gmail page for macOS
       'GmailMobile': const GmailMobileWidget(), // Gmail mobile page for iOS
       'AIAssistant': const AIAssistantWidget(),
@@ -985,15 +985,15 @@ class _NavBarPageState extends State<NavBarPage> with WidgetsBindingObserver {
 
           // Build items with dynamic label for Connections
           final items = <AdaptiveNavigationDestination>[
-            AdaptiveNavigationDestination(
+            const AdaptiveNavigationDestination(
               icon: 'house.fill',
               label: 'Home',
             ),
-            AdaptiveNavigationDestination(
+            const AdaptiveNavigationDestination(
               icon: 'message.fill',
               label: 'Chat',
             ),
-            AdaptiveNavigationDestination(
+            const AdaptiveNavigationDestination(
               icon: 'envelope.fill',
               label: 'Mail',
             ),
@@ -1004,7 +1004,7 @@ class _NavBarPageState extends State<NavBarPage> with WidgetsBindingObserver {
                   : 'Connections',
               addSpacerAfter: true,
             ),
-            AdaptiveNavigationDestination(
+            const AdaptiveNavigationDestination(
               icon: 'gearshape.fill',
               label: 'Settings',
             ),
@@ -1055,30 +1055,30 @@ class _NavBarPageState extends State<NavBarPage> with WidgetsBindingObserver {
       ),
       builder: (context, snapshot) {
         if (!snapshot.hasData) {
-          return SizedBox.shrink();
+          return const SizedBox.shrink();
         }
 
         final newsPosts = snapshot.data!;
         if (newsPosts.isEmpty) {
-          return SizedBox.shrink();
+          return const SizedBox.shrink();
         }
 
         final latestNews = newsPosts.first;
         final newsCreatedAt = latestNews.createdAt;
         if (newsCreatedAt == null) {
-          return SizedBox.shrink();
+          return const SizedBox.shrink();
         }
 
         // Check if there's new news within 48 hours
         final cutoff = DateTime.now().subtract(const Duration(hours: 48));
         if (newsCreatedAt.isBefore(cutoff)) {
-          return SizedBox.shrink();
+          return const SizedBox.shrink();
         }
 
         // Check if News page was opened after the latest news was posted
         final lastOpened = FFAppState().newsPageLastOpened;
         if (lastOpened != null && lastOpened.isAfter(newsCreatedAt)) {
-          return SizedBox.shrink();
+          return const SizedBox.shrink();
         }
 
         // Show red dot indicator
@@ -1104,7 +1104,7 @@ class _NavBarPageState extends State<NavBarPage> with WidgetsBindingObserver {
 
   Widget _buildChatUnreadIndicator() {
     if (currentUserReference == null) {
-      return SizedBox.shrink();
+      return const SizedBox.shrink();
     }
 
     // Use ChatController for consistent unread count logic
@@ -1123,13 +1123,13 @@ class _NavBarPageState extends State<NavBarPage> with WidgetsBindingObserver {
       builder: (context, snapshot) {
         // Show nothing while loading or if no data
         if (!snapshot.hasData || snapshot.data == null) {
-          return SizedBox.shrink();
+          return const SizedBox.shrink();
         }
 
         final unreadCount = snapshot.data!;
 
         if (unreadCount == 0) {
-          return SizedBox.shrink();
+          return const SizedBox.shrink();
         }
 
         // Show simple blue dot indicator (no number)
@@ -1140,7 +1140,7 @@ class _NavBarPageState extends State<NavBarPage> with WidgetsBindingObserver {
             width: 10,
             height: 10,
             decoration: BoxDecoration(
-              color: Color(0xFF3B82F6),
+              color: const Color(0xFF3B82F6),
               shape: BoxShape.circle,
               border: Border.all(
                 color: Colors.white,
@@ -1155,21 +1155,21 @@ class _NavBarPageState extends State<NavBarPage> with WidgetsBindingObserver {
 
   Widget _buildConnectionUnreadIndicator() {
     if (currentUserReference == null) {
-      return SizedBox.shrink();
+      return const SizedBox.shrink();
     }
 
     return StreamBuilder<UsersRecord>(
       stream: UsersRecord.getDocument(currentUserReference!),
       builder: (context, snapshot) {
         if (!snapshot.hasData) {
-          return SizedBox.shrink();
+          return const SizedBox.shrink();
         }
 
         final user = snapshot.data!;
         final requestCount = user.friendRequests.length;
 
         if (requestCount == 0) {
-          return SizedBox.shrink();
+          return const SizedBox.shrink();
         }
 
         // Show blue badge with count
@@ -1177,23 +1177,23 @@ class _NavBarPageState extends State<NavBarPage> with WidgetsBindingObserver {
           right: -6,
           top: -6,
           child: Container(
-            padding: EdgeInsets.all(3),
+            padding: const EdgeInsets.all(3),
             decoration: BoxDecoration(
-              color: Color(0xFF3B82F6),
+              color: const Color(0xFF3B82F6),
               shape: BoxShape.circle,
               border: Border.all(
                 color: Colors.white,
                 width: 1.5,
               ),
             ),
-            constraints: BoxConstraints(
+            constraints: const BoxConstraints(
               minWidth: 16,
               minHeight: 16,
             ),
             child: Center(
               child: Text(
                 requestCount > 99 ? '99+' : '$requestCount',
-                style: TextStyle(
+                style: const TextStyle(
                   color: Colors.white,
                   fontSize: 9,
                   fontWeight: FontWeight.w700,
@@ -1271,7 +1271,7 @@ class _NavBarPageState extends State<NavBarPage> with WidgetsBindingObserver {
     return Container(
       width: 72,
       height: double.infinity,
-      decoration: BoxDecoration(
+      decoration: const BoxDecoration(
         color: Color(0xFFF8F9FA), // Subtle gray background like Teams
         border: Border(
           right: BorderSide(
@@ -1285,7 +1285,7 @@ class _NavBarPageState extends State<NavBarPage> with WidgetsBindingObserver {
           // User Avatar at top - Microsoft Teams style
           if (currentUserReference != null)
             Container(
-              margin: EdgeInsets.only(top: 16, bottom: 20),
+              margin: const EdgeInsets.only(top: 16, bottom: 20),
               child: Material(
                 color: Colors.transparent,
                 child: InkWell(
@@ -1293,9 +1293,9 @@ class _NavBarPageState extends State<NavBarPage> with WidgetsBindingObserver {
                     context.pushNamed(MobileSettingsWidget.routeName);
                   },
                   borderRadius: BorderRadius.circular(12),
-                  hoverColor: Color(0xFFE8EBED).withOpacity(0.5),
+                  hoverColor: const Color(0xFFE8EBED).withOpacity(0.5),
                   child: Container(
-                    padding: EdgeInsets.all(2),
+                    padding: const EdgeInsets.all(2),
                     child: StreamBuilder<UsersRecord>(
                       stream: UsersRecord.getDocument(currentUserReference!),
                       builder: (context, userSnapshot) {
@@ -1319,7 +1319,7 @@ class _NavBarPageState extends State<NavBarPage> with WidgetsBindingObserver {
                                   BoxShadow(
                                     color: Colors.black.withOpacity(0.08),
                                     blurRadius: 8,
-                                    offset: Offset(0, 2),
+                                    offset: const Offset(0, 2),
                                   ),
                                 ],
                               ),
@@ -1334,11 +1334,11 @@ class _NavBarPageState extends State<NavBarPage> with WidgetsBindingObserver {
                                             Container(
                                           width: 48,
                                           height: 48,
-                                          decoration: BoxDecoration(
+                                          decoration: const BoxDecoration(
                                             shape: BoxShape.circle,
                                             color: Color(0xFFE8EBED),
                                           ),
-                                          child: Icon(
+                                          child: const Icon(
                                             Icons.person,
                                             color: Color(0xFF6B7280),
                                             size: 24,
@@ -1348,7 +1348,7 @@ class _NavBarPageState extends State<NavBarPage> with WidgetsBindingObserver {
                                             Container(
                                           width: 48,
                                           height: 48,
-                                          decoration: BoxDecoration(
+                                          decoration: const BoxDecoration(
                                             shape: BoxShape.circle,
                                             gradient: LinearGradient(
                                               colors: [
@@ -1365,7 +1365,7 @@ class _NavBarPageState extends State<NavBarPage> with WidgetsBindingObserver {
                                                   ? currentUserDisplayName[0]
                                                       .toUpperCase()
                                                   : 'U',
-                                              style: TextStyle(
+                                              style: const TextStyle(
                                                 color: Colors.white,
                                                 fontSize: 18,
                                                 fontWeight: FontWeight.w600,
@@ -1379,7 +1379,7 @@ class _NavBarPageState extends State<NavBarPage> with WidgetsBindingObserver {
                                   : Container(
                                       width: 48,
                                       height: 48,
-                                      decoration: BoxDecoration(
+                                      decoration: const BoxDecoration(
                                         shape: BoxShape.circle,
                                         gradient: LinearGradient(
                                           colors: [
@@ -1396,7 +1396,7 @@ class _NavBarPageState extends State<NavBarPage> with WidgetsBindingObserver {
                                               ? currentUserDisplayName[0]
                                                   .toUpperCase()
                                               : 'U',
-                                          style: TextStyle(
+                                          style: const TextStyle(
                                             color: Colors.white,
                                             fontSize: 18,
                                             fontWeight: FontWeight.w600,
@@ -1415,7 +1415,7 @@ class _NavBarPageState extends State<NavBarPage> with WidgetsBindingObserver {
                                   width: 14,
                                   height: 14,
                                   decoration: BoxDecoration(
-                                    color: Color(0xFF10B981),
+                                    color: const Color(0xFF10B981),
                                     shape: BoxShape.circle,
                                     border: Border.all(
                                       color: Colors.white,
@@ -1424,7 +1424,7 @@ class _NavBarPageState extends State<NavBarPage> with WidgetsBindingObserver {
                                     boxShadow: [
                                       BoxShadow(
                                         color:
-                                            Color(0xFF10B981).withOpacity(0.3),
+                                            const Color(0xFF10B981).withOpacity(0.3),
                                         blurRadius: 4,
                                         spreadRadius: 1,
                                       ),
@@ -1463,7 +1463,7 @@ class _NavBarPageState extends State<NavBarPage> with WidgetsBindingObserver {
           ),
           // Logout Button at bottom - Microsoft Teams style
           Container(
-            margin: EdgeInsets.only(bottom: 16),
+            margin: const EdgeInsets.only(bottom: 16),
             child: StatefulBuilder(
               builder: (context, setState) {
                 bool isHovered = false;
@@ -1489,14 +1489,14 @@ class _NavBarPageState extends State<NavBarPage> with WidgetsBindingObserver {
                               }
                             },
                             borderRadius: BorderRadius.circular(12),
-                            hoverColor: Color(0xFFFEE2E2).withOpacity(0.6),
+                            hoverColor: const Color(0xFFFEE2E2).withOpacity(0.6),
                             child: AnimatedContainer(
-                              duration: Duration(milliseconds: 150),
+                              duration: const Duration(milliseconds: 150),
                               width: 48,
                               height: 48,
                               decoration: BoxDecoration(
                                 color: isHovered
-                                    ? Color(0xFFFEE2E2).withOpacity(0.3)
+                                    ? const Color(0xFFFEE2E2).withOpacity(0.3)
                                     : Colors.transparent,
                                 borderRadius: BorderRadius.circular(12),
                               ),
@@ -1504,8 +1504,8 @@ class _NavBarPageState extends State<NavBarPage> with WidgetsBindingObserver {
                                 child: Icon(
                                   Icons.logout_rounded,
                                   color: isHovered
-                                      ? Color(0xFFDC2626)
-                                      : Color(0xFF6B7280),
+                                      ? const Color(0xFFDC2626)
+                                      : const Color(0xFF6B7280),
                                   size: 22,
                                 ),
                               ),
@@ -1573,7 +1573,7 @@ class _NavBarPageState extends State<NavBarPage> with WidgetsBindingObserver {
             ),
           ),
           // Bottom spacing
-          SizedBox(height: 20),
+          const SizedBox(height: 20),
         ],
       ),
     );
@@ -1581,7 +1581,7 @@ class _NavBarPageState extends State<NavBarPage> with WidgetsBindingObserver {
 
   Widget _buildUnderConstructionPage() {
     return AdaptiveScaffold(
-      appBar: AdaptiveAppBar(
+      appBar: const AdaptiveAppBar(
         useNativeToolbar:
             true, // Enable native iOS 26 UIToolbar with Liquid Glass effects
       ),
@@ -1590,7 +1590,7 @@ class _NavBarPageState extends State<NavBarPage> with WidgetsBindingObserver {
           clipBehavior: Clip.none,
           children: [
             // Home heading in top left
-            Positioned(
+            const Positioned(
               top: 16,
               left: 16,
               child: Text(
@@ -1603,9 +1603,9 @@ class _NavBarPageState extends State<NavBarPage> with WidgetsBindingObserver {
               ),
             ),
             // Main content centered
-            Center(
+            const Center(
               child: Padding(
-                padding: const EdgeInsets.all(32.0),
+                padding: EdgeInsets.all(32.0),
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
@@ -1614,7 +1614,7 @@ class _NavBarPageState extends State<NavBarPage> with WidgetsBindingObserver {
                       size: 80,
                       color: CupertinoColors.systemGrey,
                     ),
-                    const SizedBox(height: 24),
+                    SizedBox(height: 24),
                     Text(
                       'Under Construction',
                       style: TextStyle(
@@ -1623,7 +1623,7 @@ class _NavBarPageState extends State<NavBarPage> with WidgetsBindingObserver {
                         color: CupertinoColors.label,
                       ),
                     ),
-                    const SizedBox(height: 16),
+                    SizedBox(height: 16),
                     Text(
                       'This page is currently being built.\nPlease check back soon!',
                       textAlign: TextAlign.center,
@@ -1658,13 +1658,13 @@ class _NavBarPageState extends State<NavBarPage> with WidgetsBindingObserver {
                       BoxShadow(
                         color: Colors.black.withOpacity(0.1),
                         blurRadius: 8,
-                        offset: Offset(0, 2),
+                        offset: const Offset(0, 2),
                       ),
                     ],
                   ),
-                  child: Icon(
+                  child: const Icon(
                     Icons.person_add_rounded,
-                    color: const Color.fromARGB(255, 2, 156,
+                    color: Color.fromARGB(255, 2, 156,
                         252), // Blue icon matching selected tab bar color
                     size: 20,
                   ),
@@ -1741,25 +1741,25 @@ class _NavBarPageState extends State<NavBarPage> with WidgetsBindingObserver {
       useNativeBottomBar:
           true, // Enable native iOS 26 UITabBar with Liquid Glass effects
       items: [
-        AdaptiveNavigationDestination(
+        const AdaptiveNavigationDestination(
           icon: 'house.fill',
           label: 'Home',
         ),
-        AdaptiveNavigationDestination(
+        const AdaptiveNavigationDestination(
           icon: 'message.fill',
           label: 'Chat',
         ),
-        AdaptiveNavigationDestination(
+        const AdaptiveNavigationDestination(
           icon: 'envelope.fill',
           label: 'Mail',
         ),
-        AdaptiveNavigationDestination(
+        const AdaptiveNavigationDestination(
           icon: 'person.2.fill',
           label: 'Connections',
           addSpacerAfter:
               true, // Add spacing to separate Settings from other items
         ),
-        AdaptiveNavigationDestination(
+        const AdaptiveNavigationDestination(
           icon: 'gearshape.fill',
           label: 'Settings',
         ),
@@ -1797,15 +1797,15 @@ class _NavBarPageState extends State<NavBarPage> with WidgetsBindingObserver {
 
     // Build items - show count in label if there are requests
     final items = <AdaptiveNavigationDestination>[
-      AdaptiveNavigationDestination(
+      const AdaptiveNavigationDestination(
         icon: 'house.fill',
         label: 'Home',
       ),
-      AdaptiveNavigationDestination(
+      const AdaptiveNavigationDestination(
         icon: 'message.fill',
         label: 'Chat',
       ),
-      AdaptiveNavigationDestination(
+      const AdaptiveNavigationDestination(
         icon: 'envelope.fill',
         label: 'Mail',
       ),
@@ -1816,7 +1816,7 @@ class _NavBarPageState extends State<NavBarPage> with WidgetsBindingObserver {
             : 'Connections',
         addSpacerAfter: true,
       ),
-      AdaptiveNavigationDestination(
+      const AdaptiveNavigationDestination(
         icon: 'gearshape.fill',
         label: 'Settings',
       ),
@@ -1956,14 +1956,14 @@ class _NavItemWithTooltipState extends State<_NavItemWithTooltip> {
               child: Container(
                 width: 3,
                 decoration: BoxDecoration(
-                  color: Color(0xFF2563EB),
-                  borderRadius: BorderRadius.only(
+                  color: const Color(0xFF2563EB),
+                  borderRadius: const BorderRadius.only(
                     topRight: Radius.circular(2),
                     bottomRight: Radius.circular(2),
                   ),
                   boxShadow: [
                     BoxShadow(
-                      color: Color(0xFF2563EB).withOpacity(0.4),
+                      color: const Color(0xFF2563EB).withOpacity(0.4),
                       blurRadius: 4,
                       spreadRadius: 0.5,
                     ),
@@ -1974,21 +1974,21 @@ class _NavItemWithTooltipState extends State<_NavItemWithTooltip> {
           Container(
             width: 56,
             height: 48,
-            margin: EdgeInsets.symmetric(horizontal: 8),
+            margin: const EdgeInsets.symmetric(horizontal: 8),
             child: Material(
               color: Colors.transparent,
               child: InkWell(
                 onTap: widget.onTap,
                 borderRadius: BorderRadius.circular(12),
-                hoverColor: Color(0xFFE8EBED).withOpacity(0.6),
+                hoverColor: const Color(0xFFE8EBED).withOpacity(0.6),
                 child: AnimatedContainer(
-                  duration: Duration(milliseconds: 200),
+                  duration: const Duration(milliseconds: 200),
                   curve: Curves.easeOutCubic,
                   width: 56,
                   height: 48,
                   decoration: BoxDecoration(
                     color: widget.isSelected
-                        ? Color(0xFFE8EBED)
+                        ? const Color(0xFFE8EBED)
                             .withOpacity(0.5) // Subtle selected background
                         : Colors.transparent,
                     borderRadius: BorderRadius.circular(12),
@@ -2002,7 +2002,7 @@ class _NavItemWithTooltipState extends State<_NavItemWithTooltip> {
                         children: [
                           widget.item['icon'] is String
                               ? Center(
-                                  child: Container(
+                                  child: SizedBox(
                                     width: 24,
                                     height: 24,
                                     child: Image.asset(
@@ -2011,8 +2011,8 @@ class _NavItemWithTooltipState extends State<_NavItemWithTooltip> {
                                       height: 24,
                                       fit: BoxFit.contain,
                                       color: widget.isSelected
-                                          ? Color(0xFF2563EB)
-                                          : Color(0xFF6B7280),
+                                          ? const Color(0xFF2563EB)
+                                          : const Color(0xFF6B7280),
                                     ),
                                   ),
                                 )
@@ -2020,17 +2020,17 @@ class _NavItemWithTooltipState extends State<_NavItemWithTooltip> {
                                   ? Icon(
                                       widget.item['icon'] as IconData,
                                       color: widget.isSelected
-                                          ? Color(
+                                          ? const Color(
                                               0xFF2563EB) // Blue when selected
-                                          : Color(
+                                          : const Color(
                                               0xFF6B7280), // Darker gray when not
                                       size: 24,
                                     )
                                   : FaIcon(
                                       widget.item['icon'] as IconData,
                                       color: widget.isSelected
-                                          ? Color(0xFF2563EB)
-                                          : Color(0xFF6B7280),
+                                          ? const Color(0xFF2563EB)
+                                          : const Color(0xFF6B7280),
                                       size: 22,
                                     ),
                           // Red dot indicator for News button

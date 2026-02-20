@@ -144,7 +144,7 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
           SnackBar(
             content: Text('$errorMessage: $e'),
             backgroundColor: Colors.red,
-            duration: Duration(seconds: 5),
+            duration: const Duration(seconds: 5),
           ),
         );
       }
@@ -341,7 +341,7 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
         constraints: const BoxConstraints(
           maxWidth: 280.0,
         ),
-        padding: EdgeInsets.all(12.0),
+        padding: const EdgeInsets.all(12.0),
         decoration: BoxDecoration(
           color: FlutterFlowTheme.of(context).secondaryBackground,
           borderRadius: BorderRadius.circular(12.0),
@@ -366,7 +366,7 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
                 size: 28.0,
               ),
             ),
-            SizedBox(width: 12.0),
+            const SizedBox(width: 12.0),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -380,7 +380,7 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
                           fontWeight: FontWeight.w600,
                         ),
                   ),
-                  SizedBox(height: 4.0),
+                  const SizedBox(height: 4.0),
                   Text(
                     (fileInfo['fileSize'] as String).isNotEmpty
                         ? '${fileInfo['fileType']} • ${fileInfo['fileSize']}'
@@ -394,7 +394,7 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
                 ],
               ),
             ),
-            SizedBox(width: 8.0),
+            const SizedBox(width: 8.0),
             GestureDetector(
               onTap: () async {
                 final fileName = fileInfo['fileName'] as String;
@@ -472,7 +472,7 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
             !content.contains('/') && !content.contains('\\');
         final notStoragePath =
             !content.contains('users/') && !content.contains('uploads/');
-        final reasonableLength = content.length < 200 && content.length > 0;
+        final reasonableLength = content.length < 200 && content.isNotEmpty;
 
         // If there's an attachment, be more lenient - content is likely the filename
         // Allow spaces in filenames (e.g., "test data.csv", "test_data.csv")
@@ -576,7 +576,7 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
       // Try to get file size
       String fileSizeText = '';
       try {
-        final response = await http.head(uri).timeout(Duration(seconds: 3));
+        final response = await http.head(uri).timeout(const Duration(seconds: 3));
         final contentLength = response.headers['content-length'];
         if (contentLength != null) {
           final size = int.tryParse(contentLength) ?? 0;
@@ -661,7 +661,9 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
   Future<void> _openReportDialog() async {
     if (widget.message == null ||
         widget.chatRef == null ||
-        widget.userRef == null) return;
+        widget.userRef == null) {
+      return;
+    }
     await showAlignedDialog(
       context: context,
       isGlobal: false,
@@ -921,7 +923,7 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
             size: (!kIsWeb && Platform.isIOS) ? 16 : 12,
             color: (!kIsWeb && Platform.isIOS)
                 ? Colors.black54
-                : Color(0xFF4B5563),
+                : const Color(0xFF4B5563),
           ),
         ),
       ),
@@ -955,7 +957,7 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
             break;
           case _MsgAction.save:
             // Check if it's a video or image
-            if (widget.message?.video != null && widget.message!.video!.isNotEmpty) {
+            if (widget.message?.video != null && widget.message!.video.isNotEmpty) {
               await _saveVideo();
             } else {
               await _saveImage();
@@ -1044,7 +1046,7 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
             (widget.message?.images != null &&
                 widget.message!.images.isNotEmpty) ||
             (widget.message?.video != null &&
-                widget.message!.video!.isNotEmpty)) ...[
+                widget.message!.video.isNotEmpty)) ...[
           PopupMenuItem(
             value: _MsgAction.save,
             child: _MenuRow(
@@ -1380,7 +1382,7 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
                 future: _formatUsernames(uids),
                 builder: (context, snapshot) {
                   final message =
-                      '${emoji} reacted by: ' + (snapshot.data ?? '…');
+                      '${emoji} reacted by: ${snapshot.data ?? '…'}';
                   return Tooltip(
                     message: message,
                     waitDuration: const Duration(milliseconds: 250),
@@ -1573,7 +1575,7 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
                                               final hasVideo =
                                                   widget.message?.video !=
                                                           null &&
-                                                      widget.message!.video!
+                                                      widget.message!.video
                                                           .isNotEmpty;
                                               final hasMedia = hasImage || hasVideo;
                                               return _withMessageMenu(
@@ -1847,13 +1849,13 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
                                                                   MainAxisSize
                                                                       .min,
                                                               children: [
-                                                                Text(
+                                                                const Text(
                                                                   'edited',
                                                                   style:
                                                                       TextStyle(
                                                                     fontFamily:
                                                                         'SF Pro Text',
-                                                                    color: const Color(
+                                                                    color: Color(
                                                                         0xFF8E8E93),
                                                                     fontSize:
                                                                         11.0,
@@ -1866,10 +1868,10 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
                                                                         .message
                                                                         ?.editedAt !=
                                                                     null) ...[
-                                                                  Text(
+                                                                  const Text(
                                                                     ' • ',
                                                                     style:
-                                                                        const TextStyle(
+                                                                        TextStyle(
                                                                       fontFamily:
                                                                           'SF Pro Text',
                                                                       color: Color(
@@ -1926,7 +1928,7 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
                                                                   // Image bubble container (WhatsApp style: fixed width)
                                                                   Container(
                                                                     constraints:
-                                                                        BoxConstraints(
+                                                                        const BoxConstraints(
                                                                       maxWidth:
                                                                           280.0, // Fixed width like WhatsApp
                                                                       maxHeight:
@@ -1948,11 +1950,11 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
                                                                           BorderRadius
                                                                               .only(
                                                                         topLeft:
-                                                                            Radius.circular(8.0),
+                                                                            const Radius.circular(8.0),
                                                                         topRight:
-                                                                            Radius.circular(8.0),
+                                                                            const Radius.circular(8.0),
                                                                         bottomLeft:
-                                                                            Radius.circular(8.0),
+                                                                            const Radius.circular(8.0),
                                                                         bottomRight: Radius.circular((widget.message?.content != null &&
                                                                                 widget.message!.content.isNotEmpty &&
                                                                                 (widget.message?.attachmentUrl == null || widget.message?.attachmentUrl == ''))
@@ -2011,11 +2013,11 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
                                                                           borderRadius:
                                                                               BorderRadius.only(
                                                                             topLeft:
-                                                                                Radius.circular(8.0),
+                                                                                const Radius.circular(8.0),
                                                                             topRight:
-                                                                                Radius.circular(8.0),
+                                                                                const Radius.circular(8.0),
                                                                             bottomLeft:
-                                                                                Radius.circular(8.0),
+                                                                                const Radius.circular(8.0),
                                                                             bottomRight: Radius.circular((widget.message?.content != null && widget.message!.content.isNotEmpty && (widget.message?.attachmentUrl == null || widget.message?.attachmentUrl == ''))
                                                                                 ? 0.0
                                                                                 : 8.0),
@@ -2042,7 +2044,7 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
                                                                               width: double.infinity,
                                                                               height: 200.0,
                                                                               color: const Color(0xFFE5E7EB),
-                                                                              child: Icon(
+                                                                              child: const Icon(
                                                                                 Icons.broken_image,
                                                                                 color: Colors.grey,
                                                                               ),
@@ -2063,7 +2065,7 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
                                                                     ?.video !=
                                                                 '')
                                                           Container(
-                                                            constraints: BoxConstraints(
+                                                            constraints: const BoxConstraints(
                                                               maxWidth: 280.0,
                                                               maxHeight: 400.0,
                                                             ),
@@ -2074,9 +2076,9 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
                                                             decoration: BoxDecoration(
                                                               color: const Color(0xFFE5E7EB),
                                                               borderRadius: BorderRadius.only(
-                                                                topLeft: Radius.circular(8.0),
-                                                                topRight: Radius.circular(8.0),
-                                                                bottomLeft: Radius.circular(8.0),
+                                                                topLeft: const Radius.circular(8.0),
+                                                                topRight: const Radius.circular(8.0),
+                                                                bottomLeft: const Radius.circular(8.0),
                                                                 bottomRight: Radius.circular((widget.message?.content != null &&
                                                                         widget.message!.content.isNotEmpty &&
                                                                         (widget.message?.attachmentUrl == null || widget.message?.attachmentUrl == ''))
@@ -2086,9 +2088,9 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
                                                             ),
                                                             child: ClipRRect(
                                                               borderRadius: BorderRadius.only(
-                                                                topLeft: Radius.circular(8.0),
-                                                                topRight: Radius.circular(8.0),
-                                                                bottomLeft: Radius.circular(8.0),
+                                                                topLeft: const Radius.circular(8.0),
+                                                                topRight: const Radius.circular(8.0),
+                                                                bottomLeft: const Radius.circular(8.0),
                                                                 bottomRight: Radius.circular((widget.message?.content != null &&
                                                                         widget.message!.content.isNotEmpty &&
                                                                         (widget.message?.attachmentUrl == null || widget.message?.attachmentUrl == ''))
@@ -2354,11 +2356,11 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
                                                                     .min,
                                                             children: [
                                                               if (widget.message?.isPinned == true)
-                                                                Padding(
-                                                                  padding: const EdgeInsets.only(right: 4.0),
+                                                                const Padding(
+                                                                  padding: EdgeInsets.only(right: 4.0),
                                                                   child: Icon(
                                                                     Icons.star_rounded,
-                                                                    color: const Color(0xFFFFD700),
+                                                                    color: Color(0xFFFFD700),
                                                                     size: 14.0,
                                                                   ),
                                                                 ),
@@ -2577,7 +2579,7 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
                                               final hasVideo =
                                                   widget.message?.video !=
                                                           null &&
-                                                      widget.message!.video!
+                                                      widget.message!.video
                                                           .isNotEmpty;
                                               final hasMedia = hasImage || hasVideo;
                                               return _withMessageMenu(
@@ -2928,7 +2930,7 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
                                                                   // Image bubble container (WhatsApp style: fixed width)
                                                                   Container(
                                                                     constraints:
-                                                                        BoxConstraints(
+                                                                        const BoxConstraints(
                                                                       maxWidth:
                                                                           280.0, // Fixed width like WhatsApp
                                                                       maxHeight:
@@ -3038,7 +3040,7 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
                                                                     ?.video !=
                                                                 '')
                                                           Container(
-                                                            constraints: BoxConstraints(
+                                                            constraints: const BoxConstraints(
                                                               maxWidth: 280.0,
                                                               maxHeight: 400.0,
                                                             ),
@@ -3049,9 +3051,9 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
                                                             decoration: BoxDecoration(
                                                               color: const Color(0xFFE5E7EB),
                                                               borderRadius: BorderRadius.only(
-                                                                topLeft: Radius.circular(8.0),
-                                                                topRight: Radius.circular(8.0),
-                                                                bottomLeft: Radius.circular(8.0),
+                                                                topLeft: const Radius.circular(8.0),
+                                                                topRight: const Radius.circular(8.0),
+                                                                bottomLeft: const Radius.circular(8.0),
                                                                 bottomRight: Radius.circular((widget.message?.content != null &&
                                                                         widget.message!.content.isNotEmpty &&
                                                                         (widget.message?.attachmentUrl == null || widget.message?.attachmentUrl == ''))
@@ -3061,9 +3063,9 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
                                                             ),
                                                             child: ClipRRect(
                                                               borderRadius: BorderRadius.only(
-                                                                topLeft: Radius.circular(8.0),
-                                                                topRight: Radius.circular(8.0),
-                                                                bottomLeft: Radius.circular(8.0),
+                                                                topLeft: const Radius.circular(8.0),
+                                                                topRight: const Radius.circular(8.0),
+                                                                bottomLeft: const Radius.circular(8.0),
                                                                 bottomRight: Radius.circular((widget.message?.content != null &&
                                                                         widget.message!.content.isNotEmpty &&
                                                                         (widget.message?.attachmentUrl == null || widget.message?.attachmentUrl == ''))
@@ -3397,11 +3399,11 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
                                                                     ),
                                                               ),
                                                               if (widget.message?.isPinned == true)
-                                                                Padding(
-                                                                  padding: const EdgeInsets.only(left: 4.0),
+                                                                const Padding(
+                                                                  padding: EdgeInsets.only(left: 4.0),
                                                                   child: Icon(
                                                                     Icons.star_rounded,
-                                                                    color: const Color(0xFFFFD700),
+                                                                    color: Color(0xFFFFD700),
                                                                     size: 14.0,
                                                                   ),
                                                                 ),
@@ -3623,10 +3625,10 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
       debugPrint('Saving single image: $fileName');
       await _downloadFile(imageUrl, fileName);
     } else if (widget.message?.images != null &&
-        widget.message!.images!.isNotEmpty) {
+        widget.message!.images.isNotEmpty) {
       // Save all images in the multiple images array
-      debugPrint('Saving ${widget.message!.images!.length} images');
-      for (final imgUrl in widget.message!.images!) {
+      debugPrint('Saving ${widget.message!.images.length} images');
+      for (final imgUrl in widget.message!.images) {
         if (imgUrl.isNotEmpty) {
           final fileName = _getFileNameFromUrl(imgUrl);
           debugPrint('Saving image: $fileName');

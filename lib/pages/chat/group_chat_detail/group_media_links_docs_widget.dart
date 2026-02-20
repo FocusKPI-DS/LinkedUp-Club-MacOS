@@ -94,7 +94,7 @@ class _GroupMediaLinksDocsWidgetState
             links.add({
               'url': url,
               'preview': msg.content.length > 100
-                  ? msg.content.substring(0, 100) + '...'
+                  ? '${msg.content.substring(0, 100)}...'
                   : msg.content,
               'sender': msg.senderName.isNotEmpty ? msg.senderName : null,
             });

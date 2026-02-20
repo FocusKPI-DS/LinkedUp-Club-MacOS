@@ -687,7 +687,7 @@ class _CreatePostWidgetState extends State<CreatePostWidget> {
                                                   _model.textFieldFocusNode,
                                               autofocus: false,
                                               obscureText: false,
-                                              decoration: InputDecoration(
+                                              decoration: const InputDecoration(
                                                 isDense: false,
                                                 hintText:
                                                     'What\'s on your mind?*',
@@ -697,7 +697,7 @@ class _CreatePostWidgetState extends State<CreatePostWidget> {
                                                 focusedErrorBorder:
                                                     InputBorder.none,
                                                 contentPadding:
-                                                    const EdgeInsets.all(14.0),
+                                                    EdgeInsets.all(14.0),
                                               ),
                                               style:
                                                   FlutterFlowTheme.of(context)

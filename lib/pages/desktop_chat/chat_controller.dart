@@ -430,7 +430,7 @@ class ChatController extends GetxController {
       int totalCount = 0;
 
       // Process chats in batches for better performance
-      final batchSize = 10; // Process 10 chats at a time
+      const batchSize = 10; // Process 10 chats at a time
       for (int i = 0; i < chatsList.length; i += batchSize) {
         final batch = chatsList.skip(i).take(batchSize);
 

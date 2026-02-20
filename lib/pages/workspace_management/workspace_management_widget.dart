@@ -49,7 +49,7 @@ class _WorkspaceManagementWidgetState extends State<WorkspaceManagementWidget> {
           backgroundColor: FlutterFlowTheme.of(context).primary,
           automaticallyImplyLeading: false,
           leading: IconButton(
-            icon: Icon(
+            icon: const Icon(
               Icons.arrow_back_rounded,
               color: Colors.white,
               size: 24,
@@ -68,7 +68,7 @@ class _WorkspaceManagementWidgetState extends State<WorkspaceManagementWidget> {
                   fontWeight: FontWeight.w600,
                 ),
           ),
-          actions: [],
+          actions: const [],
           centerTitle: false,
           elevation: 2,
         ),
@@ -78,12 +78,12 @@ class _WorkspaceManagementWidgetState extends State<WorkspaceManagementWidget> {
             stream: UsersRecord.getDocument(currentUserReference!),
             builder: (context, snapshot) {
               if (!snapshot.hasData) {
-                return Center(child: CircularProgressIndicator());
+                return const Center(child: CircularProgressIndicator());
               }
 
               final currentUser = snapshot.data!;
               if (!currentUser.hasCurrentWorkspaceRef()) {
-                return Center(
+                return const Center(
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
@@ -107,7 +107,7 @@ class _WorkspaceManagementWidgetState extends State<WorkspaceManagementWidget> {
                     currentUser.currentWorkspaceRef!),
                 builder: (context, workspaceSnapshot) {
                   if (!workspaceSnapshot.hasData) {
-                    return Center(child: CircularProgressIndicator());
+                    return const Center(child: CircularProgressIndicator());
                   }
 
                   final workspace = workspaceSnapshot.data!;
@@ -120,7 +120,7 @@ class _WorkspaceManagementWidgetState extends State<WorkspaceManagementWidget> {
                     ),
                     builder: (context, membersSnapshot) {
                       if (!membersSnapshot.hasData) {
-                        return Center(child: CircularProgressIndicator());
+                        return const Center(child: CircularProgressIndicator());
                       }
 
                       final members = membersSnapshot.data!;
@@ -146,14 +146,14 @@ class _WorkspaceManagementWidgetState extends State<WorkspaceManagementWidget> {
                       });
 
                       return SingleChildScrollView(
-                        padding: EdgeInsets.all(16),
+                        padding: const EdgeInsets.all(16),
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             // Workspace Info Card
                             Container(
                               width: double.infinity,
-                              padding: EdgeInsets.all(20),
+                              padding: const EdgeInsets.all(20),
                               decoration: BoxDecoration(
                                 color: FlutterFlowTheme.of(context)
                                     .secondaryBackground,
@@ -193,7 +193,7 @@ class _WorkspaceManagementWidgetState extends State<WorkspaceManagementWidget> {
                                                             ? workspace.name[0]
                                                                 .toUpperCase()
                                                             : 'W',
-                                                        style: TextStyle(
+                                                        style: const TextStyle(
                                                           color: Colors.white,
                                                           fontSize: 24,
                                                           fontWeight:
@@ -210,7 +210,7 @@ class _WorkspaceManagementWidgetState extends State<WorkspaceManagementWidget> {
                                                       ? workspace.name[0]
                                                           .toUpperCase()
                                                       : 'W',
-                                                  style: TextStyle(
+                                                  style: const TextStyle(
                                                     color: Colors.white,
                                                     fontSize: 24,
                                                     fontWeight: FontWeight.bold,
@@ -218,7 +218,7 @@ class _WorkspaceManagementWidgetState extends State<WorkspaceManagementWidget> {
                                                 ),
                                               ),
                                       ),
-                                      SizedBox(width: 16),
+                                      const SizedBox(width: 16),
                                       Expanded(
                                         child: Column(
                                           crossAxisAlignment:
@@ -226,12 +226,12 @@ class _WorkspaceManagementWidgetState extends State<WorkspaceManagementWidget> {
                                           children: [
                                             Text(
                                               workspace.name,
-                                              style: TextStyle(
+                                              style: const TextStyle(
                                                 fontSize: 20,
                                                 fontWeight: FontWeight.bold,
                                               ),
                                             ),
-                                            SizedBox(height: 4),
+                                            const SizedBox(height: 4),
                                             Text(
                                               workspace.description.isNotEmpty
                                                   ? workspace.description
@@ -241,13 +241,13 @@ class _WorkspaceManagementWidgetState extends State<WorkspaceManagementWidget> {
                                                 fontSize: 14,
                                               ),
                                             ),
-                                            SizedBox(height: 8),
+                                            const SizedBox(height: 8),
                                             Row(
                                               children: [
                                                 Icon(Icons.people,
                                                     size: 16,
                                                     color: Colors.grey[600]),
-                                                SizedBox(width: 4),
+                                                const SizedBox(width: 4),
                                                 Text(
                                                   '${members.length} members',
                                                   style: TextStyle(
@@ -266,17 +266,17 @@ class _WorkspaceManagementWidgetState extends State<WorkspaceManagementWidget> {
                               ),
                             ),
 
-                            SizedBox(height: 24),
+                            const SizedBox(height: 24),
 
                             // Management Actions
-                            Text(
+                            const Text(
                               'Management Actions',
                               style: TextStyle(
                                 fontSize: 18,
                                 fontWeight: FontWeight.bold,
                               ),
                             ),
-                            SizedBox(height: 12),
+                            const SizedBox(height: 12),
 
                             Row(
                               children: [
@@ -286,11 +286,11 @@ class _WorkspaceManagementWidgetState extends State<WorkspaceManagementWidget> {
                                       _showInviteUserDialog(context, workspace);
                                     },
                                     text: 'Invite User',
-                                    icon: Icon(Icons.person_add, size: 20),
+                                    icon: const Icon(Icons.person_add, size: 20),
                                     options: FFButtonOptions(
                                       height: 50,
                                       color: Colors.green,
-                                      textStyle: TextStyle(
+                                      textStyle: const TextStyle(
                                         color: Colors.white,
                                         fontSize: 16,
                                         fontWeight: FontWeight.w600,
@@ -299,18 +299,18 @@ class _WorkspaceManagementWidgetState extends State<WorkspaceManagementWidget> {
                                     ),
                                   ),
                                 ),
-                                SizedBox(width: 12),
+                                const SizedBox(width: 12),
                                 Expanded(
                                   child: FFButtonWidget(
                                     onPressed: () {
                                       _showInviteCodeDialog(context, workspace);
                                     },
                                     text: 'Generate Invite Code',
-                                    icon: Icon(Icons.qr_code, size: 20),
+                                    icon: const Icon(Icons.qr_code, size: 20),
                                     options: FFButtonOptions(
                                       height: 50,
                                       color: Colors.blue,
-                                      textStyle: TextStyle(
+                                      textStyle: const TextStyle(
                                         color: Colors.white,
                                         fontSize: 16,
                                         fontWeight: FontWeight.w600,
@@ -322,22 +322,22 @@ class _WorkspaceManagementWidgetState extends State<WorkspaceManagementWidget> {
                               ],
                             ),
 
-                            SizedBox(height: 24),
+                            const SizedBox(height: 24),
 
                             // Members List
-                            Text(
+                            const Text(
                               'Workspace Members',
                               style: TextStyle(
                                 fontSize: 18,
                                 fontWeight: FontWeight.bold,
                               ),
                             ),
-                            SizedBox(height: 12),
+                            const SizedBox(height: 12),
 
                             ...members
                                 .map((member) => _buildMemberCard(
                                     member, currentUser, currentUserRole))
-                                .toList(),
+                                ,
                           ],
                         ),
                       );
@@ -358,7 +358,7 @@ class _WorkspaceManagementWidgetState extends State<WorkspaceManagementWidget> {
       stream: UsersRecord.getDocument(member.userRef!),
       builder: (context, userSnapshot) {
         if (!userSnapshot.hasData) {
-          return SizedBox.shrink();
+          return const SizedBox.shrink();
         }
 
         final user = userSnapshot.data!;
@@ -371,8 +371,8 @@ class _WorkspaceManagementWidgetState extends State<WorkspaceManagementWidget> {
             currentUserRole == 'owner' || currentUserRole == 'moderator';
 
         return Container(
-          margin: EdgeInsets.only(bottom: 12),
-          padding: EdgeInsets.all(16),
+          margin: const EdgeInsets.only(bottom: 12),
+          padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
             color: FlutterFlowTheme.of(context).secondaryBackground,
             borderRadius: BorderRadius.circular(12),
@@ -403,7 +403,7 @@ class _WorkspaceManagementWidgetState extends State<WorkspaceManagementWidget> {
                                 user.displayName.isNotEmpty
                                     ? user.displayName[0].toUpperCase()
                                     : 'U',
-                                style: TextStyle(
+                                style: const TextStyle(
                                   color: Colors.white,
                                   fontSize: 18,
                                   fontWeight: FontWeight.bold,
@@ -418,7 +418,7 @@ class _WorkspaceManagementWidgetState extends State<WorkspaceManagementWidget> {
                           user.displayName.isNotEmpty
                               ? user.displayName[0].toUpperCase()
                               : 'U',
-                          style: TextStyle(
+                          style: const TextStyle(
                             color: Colors.white,
                             fontSize: 18,
                             fontWeight: FontWeight.bold,
@@ -427,7 +427,7 @@ class _WorkspaceManagementWidgetState extends State<WorkspaceManagementWidget> {
                       ),
               ),
 
-              SizedBox(width: 16),
+              const SizedBox(width: 16),
 
               // User Info
               Expanded(
@@ -438,21 +438,21 @@ class _WorkspaceManagementWidgetState extends State<WorkspaceManagementWidget> {
                       children: [
                         Text(
                           user.displayName,
-                          style: TextStyle(
+                          style: const TextStyle(
                             fontSize: 16,
                             fontWeight: FontWeight.w600,
                           ),
                         ),
                         if (isCurrentUser) ...[
-                          SizedBox(width: 8),
+                          const SizedBox(width: 8),
                           Container(
-                            padding: EdgeInsets.symmetric(
+                            padding: const EdgeInsets.symmetric(
                                 horizontal: 8, vertical: 2),
                             decoration: BoxDecoration(
                               color: Colors.blue,
                               borderRadius: BorderRadius.circular(12),
                             ),
-                            child: Text(
+                            child: const Text(
                               'You',
                               style: TextStyle(
                                 color: Colors.white,
@@ -464,7 +464,7 @@ class _WorkspaceManagementWidgetState extends State<WorkspaceManagementWidget> {
                         ],
                       ],
                     ),
-                    SizedBox(height: 4),
+                    const SizedBox(height: 4),
                     Text(
                       user.email,
                       style: TextStyle(
@@ -472,12 +472,12 @@ class _WorkspaceManagementWidgetState extends State<WorkspaceManagementWidget> {
                         fontSize: 14,
                       ),
                     ),
-                    SizedBox(height: 8),
+                    const SizedBox(height: 8),
                     Row(
                       children: [
                         Container(
                           padding:
-                              EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                              const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                           decoration: BoxDecoration(
                             color: isOwner
                                 ? Colors.red
@@ -488,14 +488,14 @@ class _WorkspaceManagementWidgetState extends State<WorkspaceManagementWidget> {
                           ),
                           child: Text(
                             member.role.toUpperCase(),
-                            style: TextStyle(
+                            style: const TextStyle(
                               color: Colors.white,
                               fontSize: 12,
                               fontWeight: FontWeight.w600,
                             ),
                           ),
                         ),
-                        SizedBox(width: 8),
+                        const SizedBox(width: 8),
                         Text(
                           'Joined ${_formatDate(member.joinedAt)}',
                           style: TextStyle(
@@ -527,12 +527,12 @@ class _WorkspaceManagementWidgetState extends State<WorkspaceManagementWidget> {
                       child: IconButton(
                         onPressed: () =>
                             _showChangeRoleDialog(context, member, user),
-                        icon: Icon(Icons.admin_panel_settings,
+                        icon: const Icon(Icons.admin_panel_settings,
                             size: 20, color: Colors.blue),
                         tooltip: 'Change Role',
                       ),
                     ),
-                    SizedBox(width: 8),
+                    const SizedBox(width: 8),
 
                     // Upgrade User Button (only show if not already owner)
                     if (member.role != 'owner') ...[
@@ -548,12 +548,12 @@ class _WorkspaceManagementWidgetState extends State<WorkspaceManagementWidget> {
                         child: IconButton(
                           onPressed: () => _showUpgradeUserDialog(
                               context, member, user, currentUserRole),
-                          icon: Icon(Icons.arrow_upward,
+                          icon: const Icon(Icons.arrow_upward,
                               size: 20, color: Colors.green),
                           tooltip: 'Upgrade User',
                         ),
                       ),
-                      SizedBox(width: 8),
+                      const SizedBox(width: 8),
                     ],
 
                     // Remove User Button
@@ -568,7 +568,7 @@ class _WorkspaceManagementWidgetState extends State<WorkspaceManagementWidget> {
                       child: IconButton(
                         onPressed: () =>
                             _showRemoveUserDialog(context, member, user),
-                        icon: Icon(Icons.person_remove,
+                        icon: const Icon(Icons.person_remove,
                             size: 20, color: Colors.red),
                         tooltip: 'Remove User',
                       ),
@@ -605,7 +605,7 @@ class _WorkspaceManagementWidgetState extends State<WorkspaceManagementWidget> {
                 color: FlutterFlowTheme.of(context).primary,
                 size: 24,
               ),
-              SizedBox(width: 12),
+              const SizedBox(width: 12),
               Expanded(
                 child: Text(
                   'Invite User to Workspace',
@@ -633,7 +633,7 @@ class _WorkspaceManagementWidgetState extends State<WorkspaceManagementWidget> {
                         letterSpacing: 0,
                       ),
                 ),
-                SizedBox(height: 24),
+                const SizedBox(height: 24),
                 TextField(
                   controller: emailController,
                   decoration: InputDecoration(
@@ -666,7 +666,7 @@ class _WorkspaceManagementWidgetState extends State<WorkspaceManagementWidget> {
                     ),
                     filled: true,
                     fillColor: FlutterFlowTheme.of(context).secondaryBackground,
-                    contentPadding: EdgeInsets.symmetric(
+                    contentPadding: const EdgeInsets.symmetric(
                       horizontal: 16,
                       vertical: 16,
                     ),
@@ -685,9 +685,9 @@ class _WorkspaceManagementWidgetState extends State<WorkspaceManagementWidget> {
                       ),
                 ),
                 if (linkGenerated) ...[
-                  SizedBox(height: 24),
+                  const SizedBox(height: 24),
                   Container(
-                    padding: EdgeInsets.all(16),
+                    padding: const EdgeInsets.all(16),
                     decoration: BoxDecoration(
                       color:
                           FlutterFlowTheme.of(context).primary.withOpacity(0.1),
@@ -706,7 +706,7 @@ class _WorkspaceManagementWidgetState extends State<WorkspaceManagementWidget> {
                           color: FlutterFlowTheme.of(context).primary,
                           size: 20,
                         ),
-                        SizedBox(width: 12),
+                        const SizedBox(width: 12),
                         Expanded(
                           child: Text(
                             'Invitation link generated!',
@@ -724,7 +724,7 @@ class _WorkspaceManagementWidgetState extends State<WorkspaceManagementWidget> {
                       ],
                     ),
                   ),
-                  SizedBox(height: 16),
+                  const SizedBox(height: 16),
                   Text(
                     'Invitation Link:',
                     style: FlutterFlowTheme.of(context).bodyMedium.override(
@@ -735,9 +735,9 @@ class _WorkspaceManagementWidgetState extends State<WorkspaceManagementWidget> {
                           letterSpacing: 0,
                         ),
                   ),
-                  SizedBox(height: 8),
+                  const SizedBox(height: 8),
                   Container(
-                    padding: EdgeInsets.all(12),
+                    padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
                       color: FlutterFlowTheme.of(context).secondaryBackground,
                       borderRadius: BorderRadius.circular(8),
@@ -759,7 +759,7 @@ class _WorkspaceManagementWidgetState extends State<WorkspaceManagementWidget> {
                             maxLines: 2,
                           ),
                         ),
-                        SizedBox(width: 8),
+                        const SizedBox(width: 8),
                         IconButton(
                           icon: Icon(
                             Icons.copy,
@@ -773,8 +773,8 @@ class _WorkspaceManagementWidgetState extends State<WorkspaceManagementWidget> {
                               );
                               ScaffoldMessenger.of(context).showSnackBar(
                                 SnackBar(
-                                  content: Text('Link copied to clipboard!'),
-                                  duration: Duration(seconds: 2),
+                                  content: const Text('Link copied to clipboard!'),
+                                  duration: const Duration(seconds: 2),
                                   backgroundColor:
                                       FlutterFlowTheme.of(context).primary,
                                 ),
@@ -783,14 +783,14 @@ class _WorkspaceManagementWidgetState extends State<WorkspaceManagementWidget> {
                           },
                           tooltip: 'Copy link',
                           padding: EdgeInsets.zero,
-                          constraints: BoxConstraints(),
+                          constraints: const BoxConstraints(),
                         ),
                       ],
                     ),
                   ),
                 ],
                 if (isLoading) ...[
-                  SizedBox(height: 24),
+                  const SizedBox(height: 24),
                   Center(
                     child: Column(
                       children: [
@@ -799,7 +799,7 @@ class _WorkspaceManagementWidgetState extends State<WorkspaceManagementWidget> {
                             FlutterFlowTheme.of(context).primary,
                           ),
                         ),
-                        SizedBox(height: 16),
+                        const SizedBox(height: 16),
                         Text(
                           'Generating invitation link...',
                           style: FlutterFlowTheme.of(context)
@@ -838,7 +838,7 @@ class _WorkspaceManagementWidgetState extends State<WorkspaceManagementWidget> {
                       final email = emailController.text.trim();
                       if (email.isEmpty) {
                         ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
+                          const SnackBar(
                             content: Text('Please enter an email address'),
                             backgroundColor: Colors.red,
                           ),
@@ -852,7 +852,7 @@ class _WorkspaceManagementWidgetState extends State<WorkspaceManagementWidget> {
                       );
                       if (!emailRegex.hasMatch(email)) {
                         ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
+                          const SnackBar(
                             content: Text('Please enter a valid email address'),
                             backgroundColor: Colors.red,
                           ),
@@ -885,7 +885,7 @@ class _WorkspaceManagementWidgetState extends State<WorkspaceManagementWidget> {
                             isLoading = false;
                           });
                           ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(
+                            const SnackBar(
                               content: Text(
                                 'Failed to generate invitation link. Please try again.',
                               ),
@@ -905,12 +905,12 @@ class _WorkspaceManagementWidgetState extends State<WorkspaceManagementWidget> {
                         );
                       }
                     },
-              icon: Icon(Icons.link, size: 18),
-              label: Text('Generate Link'),
+              icon: const Icon(Icons.link, size: 18),
+              label: const Text('Generate Link'),
               style: ElevatedButton.styleFrom(
                 backgroundColor: FlutterFlowTheme.of(context).primary,
                 foregroundColor: Colors.white,
-                padding: EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(8),
                 ),
@@ -926,19 +926,19 @@ class _WorkspaceManagementWidgetState extends State<WorkspaceManagementWidget> {
                     );
                     ScaffoldMessenger.of(context).showSnackBar(
                       SnackBar(
-                        content: Text('Link copied to clipboard!'),
-                        duration: Duration(seconds: 2),
+                        content: const Text('Link copied to clipboard!'),
+                        duration: const Duration(seconds: 2),
                         backgroundColor: FlutterFlowTheme.of(context).primary,
                       ),
                     );
                   }
                 },
-                icon: Icon(Icons.copy, size: 18),
-                label: Text('Copy Link'),
+                icon: const Icon(Icons.copy, size: 18),
+                label: const Text('Copy Link'),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: FlutterFlowTheme.of(context).primary,
                   foregroundColor: Colors.white,
-                  padding: EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(8),
                   ),
@@ -957,12 +957,12 @@ class _WorkspaceManagementWidgetState extends State<WorkspaceManagementWidget> {
                     Navigator.pop(context);
                   }
                 },
-                icon: Icon(Icons.send, size: 18),
-                label: Text('Send via Email'),
+                icon: const Icon(Icons.send, size: 18),
+                label: const Text('Send via Email'),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: FlutterFlowTheme.of(context).primary,
                   foregroundColor: Colors.white,
-                  padding: EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(8),
                   ),
@@ -978,13 +978,13 @@ class _WorkspaceManagementWidgetState extends State<WorkspaceManagementWidget> {
                     );
                   }
                 },
-                icon: Icon(Icons.share, size: 18),
-                label: Text('Share'),
+                icon: const Icon(Icons.share, size: 18),
+                label: const Text('Share'),
                 style: ElevatedButton.styleFrom(
                   backgroundColor:
                       FlutterFlowTheme.of(context).secondaryBackground,
                   foregroundColor: FlutterFlowTheme.of(context).primaryText,
-                  padding: EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(8),
                     side: BorderSide(
@@ -1006,14 +1006,14 @@ class _WorkspaceManagementWidgetState extends State<WorkspaceManagementWidget> {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: Text('Invite Code'),
+        title: const Text('Invite Code'),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Text('Share this code with users to join your workspace:'),
-            SizedBox(height: 16),
+            const Text('Share this code with users to join your workspace:'),
+            const SizedBox(height: 16),
             Container(
-              padding: EdgeInsets.all(16),
+              padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
                 color: Colors.grey[100],
                 borderRadius: BorderRadius.circular(8),
@@ -1021,14 +1021,14 @@ class _WorkspaceManagementWidgetState extends State<WorkspaceManagementWidget> {
               ),
               child: SelectableText(
                 inviteCode,
-                style: TextStyle(
+                style: const TextStyle(
                   fontSize: 18,
                   fontWeight: FontWeight.bold,
                   fontFamily: 'monospace',
                 ),
               ),
             ),
-            SizedBox(height: 8),
+            const SizedBox(height: 8),
             Text(
               'This code expires in 7 days',
               style: TextStyle(
@@ -1041,7 +1041,7 @@ class _WorkspaceManagementWidgetState extends State<WorkspaceManagementWidget> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: Text('Close'),
+            child: const Text('Close'),
           ),
         ],
       ),
@@ -1053,12 +1053,12 @@ class _WorkspaceManagementWidgetState extends State<WorkspaceManagementWidget> {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: Text('Change Role'),
+        title: const Text('Change Role'),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             Text('Select new role for ${user.displayName}:'),
-            SizedBox(height: 16),
+            const SizedBox(height: 16),
             ...['owner', 'moderator', 'member']
                 .map(
                   (role) => RadioListTile<String>(
@@ -1071,19 +1071,19 @@ class _WorkspaceManagementWidgetState extends State<WorkspaceManagementWidget> {
                         await member.reference.update({'role': value});
                         Navigator.pop(context);
                         ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(content: Text('Role updated successfully')),
+                          const SnackBar(content: Text('Role updated successfully')),
                         );
                       }
                     },
                   ),
                 )
-                .toList(),
+                ,
           ],
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: Text('Cancel'),
+            child: const Text('Cancel'),
           ),
         ],
       ),
@@ -1095,24 +1095,24 @@ class _WorkspaceManagementWidgetState extends State<WorkspaceManagementWidget> {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: Text('Remove User'),
+        title: const Text('Remove User'),
         content: Text(
             'Are you sure you want to remove ${user.displayName} from this workspace?'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: Text('Cancel'),
+            child: const Text('Cancel'),
           ),
           ElevatedButton(
             onPressed: () async {
               await member.reference.delete();
               Navigator.pop(context);
               ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(content: Text('User removed successfully')),
+                const SnackBar(content: Text('User removed successfully')),
               );
             },
             style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-            child: Text('Remove', style: TextStyle(color: Colors.white)),
+            child: const Text('Remove', style: TextStyle(color: Colors.white)),
           ),
         ],
       ),
@@ -1132,7 +1132,7 @@ class _WorkspaceManagementWidgetState extends State<WorkspaceManagementWidget> {
         'Hi,\n\nYou\'ve been invited to join "${workspace.name}" workspace on LinkedUp!\n\n'
         'Click the link below to accept the invitation:\n$invitationLink\n\n'
         'Looking forward to having you on board!\n\n'
-        'Best regards,\n${currentUserDisplayName}',
+        'Best regards,\n$currentUserDisplayName',
       );
 
       final emailUri = Uri.parse('mailto:$email?subject=$subject&body=$body');
@@ -1155,7 +1155,7 @@ class _WorkspaceManagementWidgetState extends State<WorkspaceManagementWidget> {
           ),
         );
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
+          const SnackBar(
             content: Text(
               'Email client not available. Invitation details copied to clipboard.',
             ),
@@ -1214,12 +1214,12 @@ class _WorkspaceManagementWidgetState extends State<WorkspaceManagementWidget> {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: Text('Upgrade User'),
+        title: const Text('Upgrade User'),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             Text('Select new role for ${user.displayName}:'),
-            SizedBox(height: 16),
+            const SizedBox(height: 16),
             ...['moderator', 'owner']
                 .where((role) => role != member.role)
                 .where((role) => role == 'owner'
@@ -1236,19 +1236,19 @@ class _WorkspaceManagementWidgetState extends State<WorkspaceManagementWidget> {
                         await member.reference.update({'role': value});
                         Navigator.pop(context);
                         ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(content: Text('User upgraded successfully')),
+                          const SnackBar(content: Text('User upgraded successfully')),
                         );
                       }
                     },
                   ),
                 )
-                .toList(),
+                ,
           ],
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: Text('Cancel'),
+            child: const Text('Cancel'),
           ),
         ],
       ),
