@@ -1,0 +1,257 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Workspace collections - MVP rules
+    match /workspaces/{document} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null;
+    }
+    
+    match /workspace_members/{document} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null;
+    }
+
+    match /ff_user_push_notifications/{document} {
+      // Allow creation if the sender is the authenticated user
+      allow create: if request.auth != null && /databases/$(database)/documents/users/$(request.auth.uid) == request.resource.data.sender;
+      
+      // Allow read if user is authenticated and part of the notification (sender or recipient)
+      allow read: if request.auth != null && 
+        (resource.data.user_refs.matches('.*' + request.auth.uid + '.*') || 
+         resource.data.sender == /databases/$(database)/documents/users/$(request.auth.uid));
+         
+      // Allow updates/writes for authenticated users (e.g., to mark as read or update tokens)
+      allow write: if request.auth != null;
+      
+      allow delete: if false;
+    }
+
+    match /ff_push_notifications/{document} {
+      allow read: if request.auth != null && 
+        (resource.data.target_audience == 'All' || 
+         resource.data.target_audience == request.auth.uid);
+      allow write: if false;
+      allow delete: if false;
+    }
+
+    match /reports/{document} {
+      allow create: if true;
+      allow read: if true;
+      allow write: if false;
+      allow delete: if false;
+    }
+
+    match /user_memo/{document} {
+      allow create: if true;
+      allow read: if true;
+      allow write: if false;
+      // Allow users to delete their own memos
+      allow delete: if request.auth != null && 
+                    resource.data.owner_ref == /databases/$(database)/documents/users/$(request.auth.uid);
+    }
+
+    match /invitation_code/{document} {
+      allow create: if true;
+      allow read: if true;
+      allow write: if false;
+      allow delete: if false;
+    }
+
+    // Fireflies API keys – server-only (Cloud Functions use Admin SDK). No client access.
+    match /fireflies_api_keys/{document} {
+      allow read, write: if false;
+    }
+
+    // Fireflies transcripts – stored summary/action items per chat. Read if user is member of chat.
+    match /fireflies_transcripts/{document} {
+      allow read: if request.auth != null &&
+        get(/databases/$(database)/documents/chats/$(resource.data.chatId)).data.members.hasAny([/databases/$(database)/documents/users/$(request.auth.uid)]);
+      allow write: if false;
+    }
+
+    // Manual transcripts – OpenAI-processed pasted notes. Read if user is member of chat.
+    match /manualTranscripts/{document} {
+      allow read: if request.auth != null &&
+        get(/databases/$(database)/documents/chats/$(resource.data.chat_id)).data.members.hasAny([/databases/$(database)/documents/users/$(request.auth.uid)]);
+      allow write: if false;
+    }
+
+    match /chats/{document} {
+      allow create: if request.auth != null;
+      allow read: if request.auth != null;
+      allow update: if request.auth != null;
+      // Allow users to delete chats they're members of
+      allow delete: if request.auth != null && 
+                    resource.data.members.hasAny([/databases/$(database)/documents/users/$(request.auth.uid)]);
+    }
+
+    match /chats/{parent}/messages/{document} {
+      allow create: if request.auth != null;
+      allow read: if request.auth != null;
+      allow update: if request.auth != null;
+      allow delete: if request.auth != null;
+    }
+
+    match /{path=**}/messages/{document} {
+      allow read: if true;
+    }
+
+    match /users/{document} {
+      allow create: if request.auth.uid == document;
+      // Allow authenticated users to read any user document and query the collection
+      // Also allow public read access for invite links (to show referrer info)
+      allow read: if request.auth != null || true;
+      allow update: if request.auth.uid == document || 
+        // Allow connection-related updates from other authenticated users
+        (request.auth != null && 
+         isConnectionUpdate(request.resource.data, resource.data));
+      allow delete: if request.auth.uid == document;
+    }
+
+    // SIMPLIFIED: Allow any update that touches connection fields
+    // This allows connection requests to work for all users (new and old)
+    function isConnectionUpdate(newData, oldData) {
+      // Check if any connection field exists in the new data or is being changed
+      // This works for both adding (arrayUnion) and removing (arrayRemove) connections
+      // Check both newData and request.resource.data to catch FieldValue operations
+      return ('friend_requests' in newData) ||
+             ('sent_requests' in newData) ||
+             ('friends' in newData) ||
+             ('friend_requests' in request.resource.data) ||
+             ('sent_requests' in request.resource.data) ||
+             ('friends' in request.resource.data);
+    }
+
+    // Gmail cache - users can only access their own cache
+    match /users/{userId}/gmail_cache/{document} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+
+    // Gmail watch - users can only access their own watch settings
+    match /users/{userId}/gmail_watch/{document} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+
+    // FCM tokens - users can only access their own FCM tokens
+    match /users/{userId}/fcm_tokens/{document} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+
+    match /events/{document} {
+      allow create: if true;
+      allow read: if true;
+      allow write: if false;
+      allow delete: if false;
+    }
+
+    match /events/{parent}/participant/{document} {
+      allow create: if true;
+      allow read: if true;
+      allow write: if false;
+      allow delete: if false;
+    }
+
+    match /{path=**}/participant/{document} {
+      allow read: if true;
+    }
+
+    match /posts/{document} {
+      allow create: if true;
+      allow read: if true;
+      allow write: if false;
+      allow delete: if false;
+    }
+
+    match /posts/{parent}/comments/{document} {
+      allow create: if true;
+      allow read: if true;
+      allow write: if false;
+      allow delete: if false;
+    }
+
+    match /{path=**}/comments/{document} {
+      allow read: if true;
+    }
+
+    match /event_attendees/{document} {
+      allow create: if true;
+      allow read: if true;
+      allow write: if false;
+      allow delete: if false;
+    }
+
+    match /payment_history/{document} {
+      allow create: if true;
+      allow read: if true;
+      allow write: if false;
+      allow delete: if false;
+    }
+
+    // Action Items - users can read their own and create/update/delete
+    match /action_items/{document} {
+      allow create: if request.auth != null;
+      allow read: if request.auth != null;
+      allow update: if request.auth != null;
+      allow delete: if request.auth != null;
+    }
+
+    // Blocked Users - users can only block/unblock as themselves
+    match /blocked_users/{document} {
+      // Allow create if the authenticated user is the blocker_user
+      // Users can only create block records where they are the blocker
+      allow create: if request.auth != null && 
+                    request.resource.data.blocker_user == /databases/$(database)/documents/users/$(request.auth.uid);
+      
+      // Allow read if the authenticated user is the blocker_user
+      // This works for both individual document reads and queries
+      allow read: if request.auth != null && 
+                  resource.data.blocker_user == /databases/$(database)/documents/users/$(request.auth.uid);
+      
+      // Allow delete if the authenticated user is the blocker_user (to unblock)
+      allow delete: if request.auth != null && 
+                    resource.data.blocker_user == /databases/$(database)/documents/users/$(request.auth.uid);
+      
+      // No updates allowed (blocking is a one-time action)
+      allow update: if false;
+    }
+
+    // AI Assistant Conversations
+    match /ai_assistant_conversations/{conversationId} {
+      allow read, write: if request.auth != null 
+        && request.auth.uid == resource.data.user_ref.id;
+      
+      // Allow AI agent to write to any conversation
+      allow write: if request.auth != null 
+        && request.auth.uid == "ai_agent_linkai";
+    }
+
+    // AI Assistant Messages
+    match /ai_assistant_conversations/{conversationId}/messages/{messageId} {
+      allow read, write: if request.auth != null 
+        && request.auth.uid == get(/databases/$(database)/documents/ai_assistant_conversations/$(conversationId)).data.user_ref.id;
+      
+      // AI agent can write messages
+      allow write: if request.auth != null 
+        && request.auth.uid == "ai_agent_linkai";
+    }
+
+    match /{document=**} {
+      allow read, write: if request.auth.token.email.matches("firebase@flutterflow.io");
+    }
+
+    // This rule allows anyone with your Firestore database reference to view, edit,
+    // and delete all data in your Firestore database. It is useful for getting
+    // started, but it is configured to expire after 30 days because it
+    // leaves your app open to attackers. At that time, all client
+    // requests to your Firestore database will be denied.
+    //
+    // Make sure to write security rules for your app before that time, or else
+    // all client requests to your Firestore database will be denied until you Update
+    // your rules
+    match /{document=**} {
+      allow read, write: if request.time < timestamp.date(2025, 12, 10);
+    }
+  }
+}
