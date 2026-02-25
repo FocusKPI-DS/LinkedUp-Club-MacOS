@@ -63,6 +63,9 @@ class FFAppState extends ChangeNotifier {
           _translateLanguage = stored;
         }
       });
+      _safeInit(() {
+        _autoTranslate = prefs.getBool('ff_autoTranslate') ?? _autoTranslate;
+      });
     });
   }
 
@@ -425,6 +428,15 @@ class FFAppState extends ChangeNotifier {
   set translateLanguage(String value) {
     _translateLanguage = value;
     prefs.setString('ff_translateLanguage', value);
+    notifyListeners();
+  }
+
+  // Auto translate preference: when true, messages are translated to the selected target language automatically
+  bool _autoTranslate = false;
+  bool get autoTranslate => _autoTranslate;
+  set autoTranslate(bool value) {
+    _autoTranslate = value;
+    prefs.setBool('ff_autoTranslate', value);
     notifyListeners();
   }
 }

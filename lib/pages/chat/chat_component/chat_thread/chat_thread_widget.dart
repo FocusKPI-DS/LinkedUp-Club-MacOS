@@ -10,6 +10,7 @@ import '/flutter_flow/flutter_flow_util.dart';
 // import '/flutter_flow/flutter_flow_widgets.dart';
 import '/pages/chat/chat_component/p_d_f_view/p_d_f_view_widget.dart';
 import '/pages/chat/chat_component/report_component/report_component_widget.dart';
+import '/pages/chat/chat_component/task_reminder_digest_card.dart';
 import 'dart:ui';
 import 'dart:io';
 import 'package:flutter/foundation.dart' show kIsWeb;
@@ -153,7 +154,27 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
   void initState() {
     super.initState();
     _model = createModel(context, () => ChatThreadModel());
+    // Auto-translate if enabled
+    if (FFAppState().autoTranslate) {
+      _translateMessage();
+    }
     WidgetsBinding.instance.addPostFrameCallback((_) => safeSetState(() {}));
+  }
+
+  @override
+  void didUpdateWidget(ChatThreadWidget oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // When auto-translate is on, translate if content changed or not yet translated
+    if (FFAppState().autoTranslate) {
+      if (widget.message?.content != oldWidget.message?.content) {
+        _translatedContent = null;
+        _translateMessage();
+      } else if (_translatedContent == null &&
+          widget.message?.content != null &&
+          widget.message!.content.trim().isNotEmpty) {
+        _translateMessage();
+      }
+    }
   }
 
   @override
@@ -254,29 +275,41 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
 
   Widget _buildFileAttachmentCard(
       Map<String, dynamic> fileInfo, String attachmentUrl) {
-    final isPdf = fileInfo['isPdf'] == true;
+    final fileName = fileInfo['fileName'] as String? ?? 'document';
+    final ext = fileName.contains('.') ? fileName.split('.').last.toLowerCase() : '';
+    // Same as Vertin-Dev: preview PDF, images, text, and Office docs in one viewer
+    final isPreviewable = fileInfo['isPdf'] == true ||
+        [
+          'jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp',
+          'txt', 'md', 'json', 'xml', 'csv', 'log', 'dart', 'js', 'html', 'css',
+          'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx',
+        ].contains(ext);
 
     return GestureDetector(
       onTap: () async {
-        if (isPdf) {
-          await showDialog(
-            context: context,
-            builder: (dialogContext) {
-              return Dialog(
-                elevation: 0,
-                insetPadding: EdgeInsets.zero,
-                backgroundColor: Colors.transparent,
-                alignment: const AlignmentDirectional(0.0, 0.0)
-                    .resolve(Directionality.of(context)),
-                child: PDFViewWidget(
-                  url: attachmentUrl,
-                ),
-              );
-            },
-          );
+        if (isPreviewable) {
+          final url = attachmentUrl;
+          final name = fileName;
+          WidgetsBinding.instance.addPostFrameCallback((_) async {
+            if (!context.mounted) return;
+            await showDialog(
+              context: context,
+              builder: (dialogContext) {
+                return Dialog(
+                  elevation: 0,
+                  insetPadding: EdgeInsets.zero,
+                  backgroundColor: Colors.transparent,
+                  alignment: const AlignmentDirectional(0.0, 0.0)
+                      .resolve(Directionality.of(context)),
+                  child: PDFViewWidget(
+                    url: url,
+                    fileName: name,
+                  ),
+                );
+              },
+            );
+          });
         } else {
-          // Download file directly instead of opening in browser
-          final fileName = fileInfo['fileName'] as String;
           await _downloadFile(attachmentUrl, fileName);
         }
       },
@@ -468,8 +501,17 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
         }
       } // end else (no stored file_name)
 
-      final extension =
+      // Extension from fileName; fallback: detect from URL path (e.g. Firebase Storage encoded paths)
+      String extension =
           fileName.contains('.') ? fileName.split('.').last.toLowerCase() : '';
+      if (extension.isEmpty || extension.length > 5) {
+        final decodedPath = Uri.decodeComponent(fileUrl);
+        final urlExtMatch = RegExp(r'\.(pdf|docx?|pptx?|xlsx?|txt|csv)(?:\?|$)', caseSensitive: false).firstMatch(decodedPath);
+        if (urlExtMatch != null) {
+          extension = urlExtMatch.group(1)!.toLowerCase();
+          if (!fileName.contains('.')) fileName = fileName == 'file' ? 'file.$extension' : '$fileName.$extension';
+        }
+      }
 
       IconData fileIcon;
       String fileType;
@@ -518,7 +560,7 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
           iconColor = FlutterFlowTheme.of(context).primary;
       }
 
-      // Try to get file size
+      // Try to get file size and optional filename from Content-Disposition
       String fileSizeText = '';
       try {
         final response = await http.head(uri).timeout(Duration(seconds: 3));
@@ -535,6 +577,23 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
             }
           }
         }
+        // Use Content-Disposition filename when we still don't have a proper extension
+        if (extension.isEmpty || extension.length > 5) {
+          final disposition = response.headers['content-disposition'];
+          if (disposition != null) {
+            final filenameMatch = RegExp(r'filename\*?=(?:UTF-8'')?"?([^";\s]+)"?', caseSensitive: false).firstMatch(disposition);
+            if (filenameMatch != null) {
+              final suggestedName = Uri.decodeComponent(filenameMatch.group(1)!.trim());
+              if (suggestedName.contains('.')) {
+                final ext = suggestedName.split('.').last.toLowerCase();
+                if (['pdf', 'doc', 'docx', 'ppt', 'pptx', 'xls', 'xlsx', 'txt', 'csv'].contains(ext)) {
+                  extension = ext;
+                  if (fileName == 'file' || !fileName.contains('.')) fileName = suggestedName;
+                }
+              }
+            }
+          }
+        }
       } catch (e) {
         // If we can't get file size, just show file type
       }
@@ -546,6 +605,8 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
         'fileIcon': fileIcon,
         'iconColor': iconColor,
         'isPdf': extension == 'pdf',
+        'isDocx': extension == 'docx' || extension == 'doc',
+        'isPpt': extension == 'pptx' || extension == 'ppt',
       };
     } catch (e) {
       return {
@@ -555,6 +616,8 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
         'fileIcon': Icons.insert_drive_file,
         'iconColor': FlutterFlowTheme.of(context).primary,
         'isPdf': false,
+        'isDocx': false,
+        'isPpt': false,
       };
     }
   }
@@ -601,6 +664,121 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
         backgroundColor: FlutterFlowTheme.of(context).secondaryText,
       ),
     );
+  }
+
+  /// Normalize path to full "action_items/xyz" so update hits the right doc.
+  static String _normalizeActionItemPath(String path) {
+    if (path.isEmpty) return path;
+    if (path.contains('/')) return path;
+    return 'action_items/$path';
+  }
+
+  Future<void> _markActionItemDone(String actionItemRefPath) async {
+    final path = _normalizeActionItemPath(actionItemRefPath);
+    try {
+      final ref = FirebaseFirestore.instance.doc(path);
+      final snap = await ref.get();
+      if (!snap.exists) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Task already completed or removed',
+              style: GoogleFonts.inter(
+                color: FlutterFlowTheme.of(context).secondaryBackground,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+            duration: const Duration(milliseconds: 2000),
+            backgroundColor: FlutterFlowTheme.of(context).secondaryText,
+          ),
+        );
+        return;
+      }
+      await ref.update({
+        'status': 'completed',
+        'completed_time': FieldValue.serverTimestamp(),
+      });
+    } on FirebaseException catch (e) {
+      if (!mounted) return;
+      final isNotFound = e.code == 'not-found';
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            isNotFound
+                ? 'Task already completed or removed'
+                : 'Failed to update: ${e.message}',
+          ),
+          backgroundColor: isNotFound ? FlutterFlowTheme.of(context).secondaryText : Colors.red,
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Failed to update: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
+  Future<void> _remindAgain(String actionItemRefPath) async {
+    final path = _normalizeActionItemPath(actionItemRefPath);
+    try {
+      final ref = FirebaseFirestore.instance.doc(path);
+      final snap = await ref.get();
+      if (!snap.exists) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Task no longer found',
+              style: GoogleFonts.inter(
+                color: FlutterFlowTheme.of(context).secondaryBackground,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+            backgroundColor: FlutterFlowTheme.of(context).secondaryText,
+          ),
+        );
+        return;
+      }
+      await ref.update({'last_reminder_at': FieldValue.delete()});
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Reminder will be sent again on the next run',
+            style: GoogleFonts.inter(
+              color: FlutterFlowTheme.of(context).secondaryBackground,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+          duration: const Duration(milliseconds: 2000),
+          backgroundColor: FlutterFlowTheme.of(context).secondaryText,
+        ),
+      );
+    } on FirebaseException catch (e) {
+      if (!mounted) return;
+      final isNotFound = e.code == 'not-found';
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            isNotFound ? 'Task no longer found' : 'Failed to reset reminder: ${e.message}',
+          ),
+          backgroundColor: isNotFound ? FlutterFlowTheme.of(context).secondaryText : Colors.red,
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Failed to reset reminder: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
   }
 
   Future<void> _openReportDialog() async {
@@ -1392,7 +1570,8 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
     if (dateString == null || dateString.isEmpty) return null;
     try {
       final dt = DateTime.parse(dateString);
-      return '${_monthShort(dt.month)} ${dt.day}, ${dt.year} · ${dt.hour > 12 ? dt.hour - 12 : dt.hour}:${dt.minute.toString().padLeft(2, '0')} ${dt.hour >= 12 ? 'PM' : 'AM'}';
+      final local = dt.toLocal();
+      return '${_monthShort(local.month)} ${local.day}, ${local.year} · ${local.hour > 12 ? local.hour - 12 : (local.hour == 0 ? 12 : local.hour)}:${local.minute.toString().padLeft(2, '0')} ${local.hour >= 12 ? 'PM' : 'AM'}';
     } catch (_) {
       return dateString;
     }
@@ -1818,25 +1997,22 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
                                                                             .center,
                                                                     decoration:
                                                                         BoxDecoration(
-                                                                      color: const Color(
-                                                                              0xFF1A73E8)
-                                                                          .withOpacity(
-                                                                              0.12),
+                                                                      color: color
+                                                                          .withOpacity(0.2),
                                                                       shape: BoxShape
                                                                           .circle,
                                                                     ),
                                                                     child: Text(
                                                                       '$index',
                                                                       style:
-                                                                          const TextStyle(
+                                                                          TextStyle(
                                                                         fontFamily:
                                                                             'Inter',
                                                                         fontSize:
                                                                             11,
                                                                         fontWeight:
                                                                             FontWeight.w600,
-                                                                        color: Color(
-                                                                            0xFF1A73E8),
+                                                                        color: color,
                                                                       ),
                                                                     ),
                                                                   ),
@@ -1964,7 +2140,8 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
                                                 .titleSmall
                                                 .override(
                                                   fontFamily: 'Inter',
-                                                  color: const Color(0xFF202124),
+                                                  color:
+                                                      const Color(0xFF202124),
                                                   fontSize: 15,
                                                   fontWeight: FontWeight.w600,
                                                   letterSpacing: 0.1,
@@ -2023,8 +2200,7 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
                                                     fontFamily: 'Inter',
                                                     color: Color(0xFF202124),
                                                     fontSize: 13,
-                                                    fontWeight:
-                                                        FontWeight.w700,
+                                                    fontWeight: FontWeight.w700,
                                                   ),
                                                 ),
                                                 shrinkWrap: true,
@@ -2049,6 +2225,175 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
           ),
         );
       },
+    );
+  }
+
+  static const Color _taskReminderBlue = Color(0xFF0EA5E9);
+  static const Color _taskReminderBlueDark = Color(0xFF0284C7);
+  static const Color _taskReminderBubbleBlue = Color(0xFFE3F2FD);
+
+  /// Picks digest (structured) vs legacy (content) so content is never empty.
+  Widget _buildTaskReminderBubble(
+    BuildContext context, {
+    Map<String, dynamic>? taskReminders,
+    required String content,
+  }) {
+    final tasksRaw = taskReminders?['tasks'];
+    final hasStructuredTasks = tasksRaw is List && tasksRaw.isNotEmpty;
+    if (hasStructuredTasks && taskReminders != null) {
+      return TaskReminderDigestCard.fromPayload(
+        taskReminders,
+        onMarkDone: _markActionItemDone,
+        onRemindAgain: _remindAgain,
+      );
+    }
+    return _buildTaskRemindersLegacyCard(
+      context,
+      content.isNotEmpty ? content : 'Task reminders – no details available.',
+    );
+  }
+
+  /// Same aesthetic card for old reminder messages that only have content (no task_reminders payload).
+  Widget _buildTaskRemindersLegacyCard(BuildContext context, String content) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 10.0, horizontal: 16.0),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          CircleAvatar(
+            radius: 20,
+            backgroundColor: _taskReminderBlue.withOpacity(0.15),
+            child: const Icon(
+              Icons.notification_important_outlined,
+              size: 22,
+              color: _taskReminderBlueDark,
+            ),
+          ),
+          const SizedBox(width: 12),
+          Flexible(
+            child: Container(
+              constraints: const BoxConstraints(maxWidth: 400),
+              decoration: BoxDecoration(
+                color: _taskReminderBubbleBlue,
+                borderRadius: BorderRadius.circular(12),
+                border: Border(
+                  left: const BorderSide(color: _taskReminderBlueDark, width: 4),
+                  top: BorderSide(color: _taskReminderBlue.withOpacity(0.3)),
+                  right: BorderSide(color: _taskReminderBlue.withOpacity(0.3)),
+                  bottom: BorderSide(color: _taskReminderBlue.withOpacity(0.3)),
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.06),
+                    blurRadius: 12,
+                    offset: const Offset(0, 2),
+                  ),
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.04),
+                    blurRadius: 6,
+                    offset: const Offset(0, 1),
+                  ),
+                ],
+              ),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(12),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 14, 16, 10),
+                      child: Row(
+                        children: [
+                          Icon(
+                            Icons.notification_important_outlined,
+                            size: 16,
+                            color: _taskReminderBlueDark,
+                          ),
+                          const SizedBox(width: 6),
+                          Text(
+                            'Urgent Digest',
+                            style: FlutterFlowTheme.of(context).titleSmall.override(
+                                  fontFamily: 'Inter',
+                                  color: _taskReminderBlueDark,
+                                  fontSize: 17,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const Padding(
+                      padding: EdgeInsets.fromLTRB(16, 0, 16, 0),
+                      child: Divider(height: 1, thickness: 1, color: Color(0xFFBBDEFB)),
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+                      child: Container(
+                        width: double.infinity,
+                        constraints: const BoxConstraints(minHeight: 60),
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(color: const Color(0xFFBBDEFB)),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withOpacity(0.04),
+                              blurRadius: 6,
+                              offset: const Offset(0, 1),
+                            ),
+                          ],
+                        ),
+                        child: SelectableText(
+                          content,
+                          style: const TextStyle(
+                            fontFamily: 'Inter',
+                            color: Color(0xFF202124),
+                            fontSize: 13,
+                            height: 1.4,
+                          ),
+                        ),
+                      ),
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                      child: Row(
+                        children: [
+                          Text(
+                            'AI INSIGHT • ACTION REQUIRED',
+                            style: FlutterFlowTheme.of(context).bodySmall.override(
+                                  fontFamily: 'Inter',
+                                  color: const Color(0xFF5F6368),
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                          ),
+                          const Spacer(),
+                          GestureDetector(
+                            onTap: () {},
+                            child: Text(
+                              'View Thread Summary >',
+                              style: FlutterFlowTheme.of(context).bodySmall.override(
+                                    fontFamily: 'Inter',
+                                    color: _taskReminderBlueDark,
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 14),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -2128,6 +2473,47 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
                         ),
                       ),
                     ],
+                  ),
+                ),
+              ),
+            ],
+          );
+        },
+      );
+    }
+
+    // Task reminder from LonaAI – show as card (structured payload or content fallback)
+    final taskReminders = widget.message?.taskReminders;
+    final content = widget.message?.content ?? '';
+    final looksLikeReminder = content.contains('Task reminders') ||
+        content.contains('task reminders') ||
+        content.trim().startsWith('📋');
+    if (taskReminders != null || looksLikeReminder) {
+      return LayoutBuilder(
+        builder: (context, constraints) {
+          return Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Align(
+                alignment: const AlignmentDirectional(-1.0, 0.0),
+                child: Padding(
+                  padding: const EdgeInsets.all(8.0),
+                  child: GestureDetector(
+                    onLongPress: _copyContentIfAny,
+                    child: _withMessageMenu(
+                      bubble: taskReminders != null
+                          ? TaskReminderDigestCard.fromPayload(
+                              taskReminders,
+                              onMarkDone: _markActionItemDone,
+                              onRemindAgain: _remindAgain,
+                            )
+                          : _buildTaskRemindersLegacyCard(
+                              context,
+                              content.isNotEmpty
+                                  ? content
+                                  : 'Task reminders – no details available.',
+                            ),
+                    ),
                   ),
                 ),
               ),

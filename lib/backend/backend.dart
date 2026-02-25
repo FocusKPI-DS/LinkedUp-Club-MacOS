@@ -20,6 +20,7 @@ import 'schema/payment_history_record.dart';
 import 'schema/workspaces_record.dart';
 import 'schema/workspace_members_record.dart';
 import 'schema/action_items_record.dart';
+import 'schema/reminder_digests_record.dart';
 import 'dart:async';
 import 'package:infinite_scroll_pagination/infinite_scroll_pagination.dart';
 import '../custom_code/actions/index.dart' as actions;
@@ -47,6 +48,7 @@ export 'schema/blocked_users_record.dart';
 export 'schema/workspaces_record.dart';
 export 'schema/workspace_members_record.dart';
 export 'schema/action_items_record.dart';
+export 'schema/reminder_digests_record.dart';
 
 /// Functions to query UsersRecords (as a Stream and as a Future).
 Future<int> queryUsersRecordCount({
@@ -1101,6 +1103,19 @@ Future<List<ActionItemsRecord>> queryActionItemsRecordOnce({
     queryCollectionOnce(
       ActionItemsRecord.collection,
       ActionItemsRecord.fromSnapshot,
+      queryBuilder: queryBuilder,
+      limit: limit,
+      singleRecord: singleRecord,
+    );
+
+Stream<List<ReminderDigestsRecord>> queryReminderDigestsRecord({
+  Query Function(Query)? queryBuilder,
+  int limit = -1,
+  bool singleRecord = false,
+}) =>
+    queryCollection(
+      ReminderDigestsRecord.collection,
+      ReminderDigestsRecord.fromSnapshot,
       queryBuilder: queryBuilder,
       limit: limit,
       singleRecord: singleRecord,

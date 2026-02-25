@@ -931,6 +931,57 @@ class _ProfileSettingsWidgetState extends State<ProfileSettingsWidget> {
                   ],
                 ),
               ),
+              SizedBox(height: 16),
+              // Auto Translate Toggle
+              Container(
+                padding: EdgeInsets.all(20),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: Color(0xFFE5E7EB),
+                    width: 1,
+                  ),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Auto Translate',
+                            style: TextStyle(
+                              fontFamily: 'SF Pro Display',
+                              fontSize: 16,
+                              fontWeight: FontWeight.w600,
+                              color: Color(0xFF1A1A1A),
+                            ),
+                          ),
+                          SizedBox(height: 4),
+                          Text(
+                            'Automatically translate all messages to the selected language',
+                            style: TextStyle(
+                              fontFamily: 'SF Pro Display',
+                              fontSize: 14,
+                              color: Color(0xFF666666),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    CupertinoSwitch(
+                      value: FFAppState().autoTranslate,
+                      onChanged: (value) {
+                        setState(() {
+                          FFAppState().autoTranslate = value;
+                        });
+                      },
+                    ),
+                  ],
+                ),
+              ),
               SizedBox(height: 24),
               // Account
               Text(

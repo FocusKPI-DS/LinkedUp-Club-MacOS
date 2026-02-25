@@ -1,3 +1,4 @@
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/foundation.dart';
@@ -583,7 +584,7 @@ class _RichChatInputWidgetState extends State<RichChatInputWidget> {
                         const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                     decoration: BoxDecoration(
                       color: (_isComposing || widget.hasAttachments)
-                          ? const Color(0xFF007A5A)
+                          ? CupertinoColors.systemBlue
                           : Colors.transparent,
                       borderRadius: BorderRadius.circular(4),
                     ),

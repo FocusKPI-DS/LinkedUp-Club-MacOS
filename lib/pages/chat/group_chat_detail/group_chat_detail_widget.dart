@@ -4034,9 +4034,9 @@ class _GroupChatDetailWidgetState extends State<GroupChatDetailWidget>
                                           ],
                                         ),
                                       ],
+                                    ),
+                                  ),
                                 ),
-                              ),
-                            ),
                                 Container(
                                   decoration: BoxDecoration(
                                     color: FlutterFlowTheme.of(context)
@@ -5292,6 +5292,7 @@ class _GroupChatDetailWidgetState extends State<GroupChatDetailWidget>
                                   ),
                                 ),
                               ]
+                                  .cast<Widget>()
                                   .divide(const SizedBox(height: 8.0))
                                   .addToStart(const SizedBox(height: 8.0))
                                   .addToEnd(const SizedBox(height: 16.0)),

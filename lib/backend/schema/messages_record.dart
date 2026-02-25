@@ -129,6 +129,13 @@ class MessagesRecord extends FirestoreRecord {
     return Map<String, dynamic>.from(v as Map);
   }
 
+  /// Task reminder digest payload (overdue_count, intro_text, tasks). Present when message is from LonaAI with task reminders.
+  Map<String, dynamic>? get taskReminders {
+    final v = snapshotData['task_reminders'];
+    if (v == null || v is! Map) return null;
+    return Map<String, dynamic>.from(v as Map);
+  }
+
   DocumentReference get parentReference => reference.parent.parent!;
 
   void _initializeFields() {
