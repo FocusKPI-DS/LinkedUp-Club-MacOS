@@ -3151,69 +3151,72 @@ class ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget>
                                 ),
                               ),
                             ),
-                          // Preview moved inside the input container
-                          // Main Input Row (Replaced with RichChatInputWidget)
-                          Padding(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 8.0, vertical: 8.0),
-                            child: Column(
-                              mainAxisSize: MainAxisSize.min,
-                              crossAxisAlignment: CrossAxisAlignment.stretch,
-                              children: [
-                                // Attachment Previews
-                                _buildAttachmentPreviews(),
+                          // Hide input for read-only service chats (e.g. Lona Service)
+                          if (_isServiceChatReadOnly())
+                            _buildServiceChatReadOnlyMessage()
+                          else
+                            // Main Input Row (Replaced with RichChatInputWidget)
+                            Padding(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 8.0, vertical: 8.0),
+                              child: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                crossAxisAlignment: CrossAxisAlignment.stretch,
+                                children: [
+                                  // Attachment Previews
+                                  _buildAttachmentPreviews(),
 
-                                const SizedBox(height: 4),
+                                  const SizedBox(height: 4),
 
-                                RichChatInputWidget(
-                                  controller: _quillController,
-                                  focusNode: _model.messageFocusNode,
-                                  isMentionActive: _model.showMentionOverlay,
-                                  isScreenRecording: _isScreenRecording,
-                                  hasAttachments:
-                                      _model.pendingAttachments.isNotEmpty ||
-                                          _model.images.isNotEmpty ||
-                                          (_model.image != null &&
-                                              _model.image!.isNotEmpty) ||
-                                          (_model.file != null &&
-                                              _model.file!.isNotEmpty) ||
-                                          (_model.audiopath != null &&
-                                              _model.audiopath!.isNotEmpty) ||
-                                          _model.selectedVideoFile != null,
-                                  onSend: (markdown) =>
-                                      _sendMessage(contentOverride: markdown),
-                                  onAttachment: () async {
-                                    if (_isServiceChatReadOnly()) return;
-                                    await _handleFilePicker();
-                                  },
-                                  onEmoji: _toggleEmojiPicker,
-                                  onMention: (widget.chatReference != null &&
-                                          widget.chatReference!.isGroup)
-                                      ? _openMentionPopup
-                                      : null,
-                                  onScreenshot: () async {
-                                    if (_isServiceChatReadOnly()) return;
-                                    await _handleScreenshot();
-                                  },
-                                  onScreenRecord: () async {
-                                    if (_isServiceChatReadOnly()) return;
-                                    await _handleScreenRecord();
-                                  },
-                                  onPhotoLibrary: () async {
-                                    if (_isServiceChatReadOnly()) return;
-                                    await _handlePhotoLibrary();
-                                  },
-                                  onCamera: () async {
-                                    if (_isServiceChatReadOnly()) return;
-                                    await _handleCamera();
-                                  },
-                                  placeholder: _model.editingMessage != null
-                                      ? 'Edit your message...'
-                                      : 'Message...',
-                                ),
-                              ],
+                                  RichChatInputWidget(
+                                    controller: _quillController,
+                                    focusNode: _model.messageFocusNode,
+                                    isMentionActive: _model.showMentionOverlay,
+                                    isScreenRecording: _isScreenRecording,
+                                    hasAttachments:
+                                        _model.pendingAttachments.isNotEmpty ||
+                                            _model.images.isNotEmpty ||
+                                            (_model.image != null &&
+                                                _model.image!.isNotEmpty) ||
+                                            (_model.file != null &&
+                                                _model.file!.isNotEmpty) ||
+                                            (_model.audiopath != null &&
+                                                _model.audiopath!.isNotEmpty) ||
+                                            _model.selectedVideoFile != null,
+                                    onSend: (markdown) =>
+                                        _sendMessage(contentOverride: markdown),
+                                    onAttachment: () async {
+                                      if (_isServiceChatReadOnly()) return;
+                                      await _handleFilePicker();
+                                    },
+                                    onEmoji: _toggleEmojiPicker,
+                                    onMention: (widget.chatReference != null &&
+                                            widget.chatReference!.isGroup)
+                                        ? _openMentionPopup
+                                        : null,
+                                    onScreenshot: () async {
+                                      if (_isServiceChatReadOnly()) return;
+                                      await _handleScreenshot();
+                                    },
+                                    onScreenRecord: () async {
+                                      if (_isServiceChatReadOnly()) return;
+                                      await _handleScreenRecord();
+                                    },
+                                    onPhotoLibrary: () async {
+                                      if (_isServiceChatReadOnly()) return;
+                                      await _handlePhotoLibrary();
+                                    },
+                                    onCamera: () async {
+                                      if (_isServiceChatReadOnly()) return;
+                                      await _handleCamera();
+                                    },
+                                    placeholder: _model.editingMessage != null
+                                        ? 'Edit your message...'
+                                        : 'Message...',
+                                  ),
+                                ],
+                              ),
                             ),
-                          ),
                         ],
                       ),
                     ),
