@@ -105,8 +105,14 @@ class ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget>
   int _selectedMentionIndex = 0; // For keyboard navigation in mention list
   bool _mentionKeyConsumed =
       false; // Prevents Enter from both selecting mention AND sending message
+  DateTime? _lastMentionSelectTime; //  HardwareKeyboard? _hardwareKeyboard;
+
+  // Mention system state
+
+  // IME Composition state tracking
+  bool _isCurrentlyComposing = false;
   DateTime?
-      _lastMentionSelectTime; // Timestamp guard for mention selection vs send race
+      _compositionEndedTime; // Timestamp guard for IME Enter key race condition
   bool _isScreenRecording = false; // Track screen recording state
 
   // Rich Text Editor Controller
@@ -168,6 +174,8 @@ class ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget>
     _model.messageTextController ??= TextEditingController();
     _model.messageFocusNode ??= FocusNode(
       onKeyEvent: (node, event) {
+        print(
+            'DEBUG FocusNode.onKeyEvent: key=${event.logicalKey.keyLabel}, type=${event.runtimeType}, isValid=${_quillController.plainTextEditingValue.composing.isValid}');
         // Handle Return/Enter key press
         if (event is KeyDownEvent || event is KeyRepeatEvent) {
           // If a mention key was just consumed by _mentionKeyboardHandler,
@@ -189,12 +197,24 @@ class ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget>
             }
           }
           // Check if Return/Enter key is pressed
-          if (event.logicalKey == LogicalKeyboardKey.enter ||
-              event.logicalKey == LogicalKeyboardKey.numpadEnter) {
+          if (event is KeyDownEvent &&
+              (event.logicalKey == LogicalKeyboardKey.enter ||
+                  event.logicalKey == LogicalKeyboardKey.numpadEnter)) {
             // CRITICAL FIX: Check for IME composition (active input method)
-            // If composing range is valid (start != -1), it means user is navigating IME candidates
-            if (_model.messageTextController?.value.composing.isValid == true) {
-              return KeyEventResult.ignored; // Let the IME handle it
+            // flutter_quill uses plainTextEditingValue to expose the current composing range
+            final isComposing =
+                _quillController.plainTextEditingValue.composing.isValid;
+
+            // Check if composition just ended in the last 250ms
+            final recentlyComposed = _compositionEndedTime != null &&
+                DateTime.now()
+                        .difference(_compositionEndedTime!)
+                        .inMilliseconds <
+                    250;
+
+            if (isComposing || recentlyComposed) {
+              return KeyEventResult
+                  .ignored; // Let the IME handle it (e.g. committing Chinese text)
             }
 
             // Check if Shift or Command (Meta) is pressed
@@ -229,6 +249,8 @@ class ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget>
                   _model.messageTextController?.text.trim() ?? '';
               final hasText = messageText.isNotEmpty;
               final hasImages = _model.images.isNotEmpty;
+              print(
+                  'DEBUG onKeyEvent: shouldSend=$shouldSend, hasText=$hasText, messageText="$messageText"');
               final hasSingleImage =
                   _model.image != null && _model.image!.isNotEmpty;
               final hasFile = _model.file != null && _model.file!.isNotEmpty;
@@ -493,16 +515,33 @@ class ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget>
     // Handles mention detection based on plain text
     _handleMentionDetection(text);
 
+    // Track composing state to prevent Enter-to-send race condition
+    final isValid = _quillController.plainTextEditingValue.composing.isValid;
+    if (isValid) {
+      _isCurrentlyComposing = true;
+    } else {
+      if (_isCurrentlyComposing) {
+        // Composition just ended
+        _isCurrentlyComposing = false;
+        _compositionEndedTime = DateTime.now();
+      }
+    }
+
     // Sync to model controller for legacy compatibility if needed
     if (_model.messageTextController != null &&
         _model.messageTextController!.text != text) {
       // Avoid infinite loop if possible, or just sync one way
       // We mainly need this for `_sendMessage` checking emptiness or older logic
+
+      // Clamp the offset to prevent RangeError when Quill has embedded assets
+      int safeOffset = _quillController.selection.baseOffset;
+      if (safeOffset < 0) safeOffset = 0;
+      if (safeOffset > text.length) safeOffset = text.length;
+
       _model.messageTextController!.value =
           _model.messageTextController!.value.copyWith(
         text: text,
-        selection: TextSelection.collapsed(
-            offset: _quillController.selection.baseOffset),
+        selection: TextSelection.collapsed(offset: safeOffset),
         composing: TextRange.empty,
       );
     }
@@ -839,17 +878,43 @@ class ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget>
       _model.isSending = true;
       safeSetState(() {});
 
-      // Update the existing message directly
-      // Strip quotes from mentions before saving
+      final oldMessage = _model.editingMessage!;
+
       final delta = _quillController.document.toDelta();
       final markdown = quillDeltaToMarkdownSimplified(delta);
       final editedContent = _stripQuotesFromMentions(markdown);
 
-      await _model.editingMessage!.reference.update({
+      // We use a batch to update the message and potentially the chat document
+      final batch = FirebaseFirestore.instance.batch();
+
+      batch.update(oldMessage.reference, {
         'content': editedContent,
         'is_edited': true,
         'edited_at': FieldValue.serverTimestamp(),
       });
+
+      // Update the parent chat document's last_message
+      final chatRef = widget.chatReference?.reference;
+      if (chatRef != null) {
+        String messagePreview = editedContent;
+        if (editedContent.isEmpty) {
+          if (oldMessage.images.isNotEmpty) {
+            messagePreview = '📷 Photo';
+          } else if (oldMessage.video.isNotEmpty) {
+            messagePreview = '🎬 Video';
+          } else if (oldMessage.audio.isNotEmpty) {
+            messagePreview = '🎤 Voice message';
+          } else if (oldMessage.attachmentUrl.isNotEmpty) {
+            messagePreview = '📎 File';
+          }
+        }
+        batch.update(chatRef, {
+          'last_message': messagePreview,
+          'last_message_at': FieldValue.serverTimestamp(),
+        });
+      }
+
+      await batch.commit();
 
       // Clear edit mode
       _model.editingMessage = null;
@@ -889,6 +954,11 @@ class ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget>
   /// [contentOverride] when set (e.g. from file preview caption) is used as the message content instead of the text field.
   Future<void> _sendMessage({String? contentOverride}) async {
     if (widget.chatReference == null || currentUserReference == null) return;
+
+    if (_model.editingMessage != null) {
+      await _updateMessage();
+      return;
+    }
 
     String messageText = contentOverride ?? '';
     if (messageText.isEmpty) {
@@ -1955,13 +2025,33 @@ class ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget>
   }
 
   /// Handle clipboard paste events
-  /// Handle clipboard paste events
   void _handleClipboardPaste(ClipboardReadEvent event) async {
     final reader = await event.getClipboardReader();
-    _handleClipboardReader(reader);
-  }
 
-  void _handleClipboardReader(ClipboardReader reader) async {
+    // 0. Check for Plain Text (Fix for regression)
+    if (reader.canProvide(Formats.plainText)) {
+      reader.getValue(Formats.plainText, (text) {
+        if (text == null) return;
+        final String textContent = text;
+
+        if (mounted && textContent.isNotEmpty) {
+          // Insert into QuillController (the active rich text editor)
+          final selection = _quillController.selection;
+          final index = selection.baseOffset;
+          final length = selection.extentOffset - index;
+          _quillController.replaceText(
+            index,
+            length < 0 ? 0 : length,
+            textContent,
+            null,
+          );
+        }
+      }, onError: (error) {
+        debugPrint('Error reading text from clipboard: $error');
+      });
+      return;
+    }
+
     // 1. Check for Images
     if (reader.canProvide(Formats.png) ||
         reader.canProvide(Formats.jpeg) ||
@@ -2084,215 +2174,6 @@ class ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget>
         });
         return;
       }
-    }
-
-    // 4. Check for TIFF (macOS Screenshots)
-    if (reader.canProvide(Formats.tiff)) {
-      reader.getFile(Formats.tiff, (file) async {
-        final bytes = await file.readAll();
-        // Convert TIFF to PNG or just save as is (Flutter might handle TIFF, but PNG is safer)
-        // Here we just save as .tiff for now or .png if we could convert,
-        // but simple save as .tiff is better than nothing.
-        // Actually, let's name it .png and hope the bytes are compatible or just use .tiff
-        final fileName =
-            'screenshot_${DateTime.now().millisecondsSinceEpoch}.tiff';
-
-        final currentUserUid = currentUserReference?.id ?? '';
-        final pathPrefix = 'users/$currentUserUid/uploads';
-        final timestamp = DateTime.now().microsecondsSinceEpoch;
-        final storagePath = '$pathPrefix/$timestamp.tiff';
-
-        final selectedFile = SelectedFile(
-          storagePath: storagePath,
-          filePath: fileName,
-          bytes: bytes,
-        );
-
-        if (mounted) {
-          final added = _model.addPendingAttachment(PendingAttachment(
-            file: selectedFile,
-            fileName: fileName,
-            type: AttachmentType.image,
-          ));
-          if (!added) _showAttachmentLimitSnackbar();
-          safeSetState(() {});
-        }
-      }, onError: (error) {
-        debugPrint('Error reading TIFF from clipboard: $error');
-      });
-      return;
-    }
-
-    // 5. Check for File URIs (Finder Files)
-    if (reader.canProvide(Formats.fileUri)) {
-      reader.getValue(Formats.fileUri, (uri) async {
-        if (uri == null) return;
-        try {
-          // uri is a Uri object
-          final fileUri = uri as Uri;
-          final String filePath = fileUri.toFilePath();
-          final File file = File(filePath);
-
-          if (await file.exists()) {
-            final bytes = await file.readAsBytes();
-            final fileName = filePath.split('/').last;
-            final ext = fileName.contains('.')
-                ? fileName.split('.').last.toLowerCase()
-                : 'file';
-
-            final currentUserUid = currentUserReference?.id ?? '';
-            final pathPrefix = 'users/$currentUserUid/uploads';
-            final timestamp = DateTime.now().microsecondsSinceEpoch;
-            final storagePath = '$pathPrefix/$timestamp.$ext';
-
-            final selectedFile = SelectedFile(
-              storagePath: storagePath,
-              filePath: filePath,
-              bytes: bytes,
-            );
-
-            final imageExtensions = [
-              'jpg',
-              'jpeg',
-              'png',
-              'gif',
-              'webp',
-              'bmp',
-              'heic',
-              'tiff'
-            ];
-            final videoExtensions = [
-              'mp4',
-              'mov',
-              'avi',
-              'mkv',
-              'webm',
-              'flv',
-              'wmv',
-              'm4v',
-              '3gp'
-            ];
-
-            AttachmentType type;
-            if (imageExtensions.contains(ext)) {
-              type = AttachmentType.image;
-            } else if (videoExtensions.contains(ext)) {
-              type = AttachmentType.video;
-            } else {
-              type = AttachmentType.file;
-            }
-
-            if (mounted) {
-              final added = _model.addPendingAttachment(PendingAttachment(
-                file: selectedFile,
-                fileName: fileName,
-                type: type,
-              ));
-              if (!added) _showAttachmentLimitSnackbar();
-              safeSetState(() {});
-            }
-          }
-        } catch (e) {
-          debugPrint('Error processing file URI: $e');
-        }
-      }, onError: (err) {
-        debugPrint('Error reading file URI: $err');
-      });
-      return;
-    }
-
-    // 6. Fallback: Check for Plain Text
-    if (reader.canProvide(Formats.plainText)) {
-      reader.getValue(Formats.plainText, (text) async {
-        if (text == null) return;
-        final String textContent = text;
-
-        if (mounted) {
-          // Heuristic: Check if the text is actually a valid file path on disk
-          // This handles cases where clipboard provides file path as text but fails fileUri check
-          try {
-            final possibleFile = File(textContent.trim());
-            if (await possibleFile.exists()) {
-              print('DEBUG: Text is a valid file path: ${textContent.trim()}');
-              final bytes = await possibleFile.readAsBytes();
-              final fileName = textContent.trim().split('/').last;
-              final ext = fileName.contains('.')
-                  ? fileName.split('.').last.toLowerCase()
-                  : 'file';
-
-              final currentUserUid = currentUserReference?.id ?? '';
-              final pathPrefix = 'users/$currentUserUid/uploads';
-              final timestamp = DateTime.now().microsecondsSinceEpoch;
-              final storagePath = '$pathPrefix/$timestamp.$ext';
-
-              final selectedFile = SelectedFile(
-                storagePath: storagePath,
-                filePath: textContent.trim(),
-                bytes: bytes,
-              );
-
-              final imageExtensions = [
-                'jpg',
-                'jpeg',
-                'png',
-                'gif',
-                'webp',
-                'bmp',
-                'heic',
-                'tiff'
-              ];
-              final videoExtensions = [
-                'mp4',
-                'mov',
-                'avi',
-                'mkv',
-                'webm',
-                'flv',
-                'wmv',
-                'm4v',
-                '3gp'
-              ];
-
-              AttachmentType type;
-              if (imageExtensions.contains(ext)) {
-                type = AttachmentType.image;
-              } else if (videoExtensions.contains(ext)) {
-                type = AttachmentType.video;
-              } else {
-                type = AttachmentType.file;
-              }
-
-              final added = _model.addPendingAttachment(PendingAttachment(
-                file: selectedFile,
-                fileName: fileName,
-                type: type,
-              ));
-              if (!added) _showAttachmentLimitSnackbar();
-              safeSetState(() {});
-              return; // Stop here, processed as file
-            }
-          } catch (e) {
-            // Not a file or error checking, proceed as text
-          }
-
-          // Normal Text Paste
-          if (textContent.isNotEmpty) {
-            // Insert into QuillController (the active rich text editor)
-            final selection = _quillController.selection;
-            final index = selection.baseOffset;
-            final length = selection.extentOffset - index;
-            _quillController.replaceText(
-              index,
-              length < 0 ? 0 : length,
-              textContent,
-              null,
-            );
-          }
-        }
-      }, onError: (error) {
-        debugPrint('Error reading text from clipboard: $error');
-      });
-      return;
     }
   }
 
@@ -2475,12 +2356,9 @@ class ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget>
     final mentionQuery = functions.extractMentionQuery(text, cursorPos);
 
     // Check if the character just before the cursor is @ (Quill appends trailing \n, so endsWith('@') fails)
-    final hasActiveAt = cursorPos > 0 &&
-        cursorPos <= text.length &&
-        text[cursorPos - 1] == '@' &&
-        (cursorPos == 1 ||
-            text[cursorPos - 2] == ' ' ||
-            text[cursorPos - 2] == '\n');
+    // Removed the whitespace/newline requirement so @ triggers even when attached to words/Chinese chars
+    final hasActiveAt =
+        cursorPos > 0 && cursorPos <= text.length && text[cursorPos - 1] == '@';
 
     if (mentionQuery != null || hasActiveAt) {
       _model.mentionQuery = mentionQuery ?? '';
@@ -2558,7 +2436,7 @@ class ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget>
     // Find the @ symbol before the cursor
     int lastAtIndex = _findLastAtIndex(text, cursorPosition);
 
-    final mentionText = '@linkai ';
+    final mentionText = '@\u200Blinkai\u200B ';
     final replaceStart = lastAtIndex == -1 ? cursorPosition : lastAtIndex;
     final replaceLength = cursorPosition - replaceStart;
 
@@ -2617,7 +2495,7 @@ class ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget>
       }
     }
 
-    final mentionText = '@${user.displayName} ';
+    final mentionText = '@\u200B${user.displayName}\u200B ';
     final replaceStart = lastAtIndex == -1 ? cursorPosition : lastAtIndex;
     final replaceLength = cursorPosition - replaceStart;
 
@@ -3288,7 +3166,6 @@ class ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget>
                                 const SizedBox(height: 4),
 
                                 RichChatInputWidget(
-                                  onPaste: _handleClipboardReader,
                                   controller: _quillController,
                                   focusNode: _model.messageFocusNode,
                                   isMentionActive: _model.showMentionOverlay,

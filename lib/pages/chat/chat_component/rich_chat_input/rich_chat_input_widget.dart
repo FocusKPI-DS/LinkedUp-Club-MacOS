@@ -1,13 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/foundation.dart';
+import 'dart:async';
 import 'dart:io';
 import 'package:flutter_quill/flutter_quill.dart';
 import 'package:flutter_quill/quill_delta.dart';
 import 'package:ff_theme/flutter_flow/flutter_flow_theme.dart';
 import '/utils/quill_delta_to_markdown.dart';
+import '/app_state.dart';
 import 'ime_composing_handler.dart';
-import 'package:super_clipboard/super_clipboard.dart';
 
 class RichChatInputWidget extends StatefulWidget {
   final Function(String) onSend;
@@ -17,9 +18,7 @@ class RichChatInputWidget extends StatefulWidget {
   final VoidCallback? onScreenshot;
   final VoidCallback? onScreenRecord;
   final VoidCallback? onPhotoLibrary;
-
   final VoidCallback? onCamera;
-  final Function(ClipboardReader)? onPaste; // New callback
   final bool isScreenRecording;
   final bool hasAttachments;
   final String? initialText;
@@ -38,7 +37,6 @@ class RichChatInputWidget extends StatefulWidget {
     this.onScreenRecord,
     this.onPhotoLibrary,
     this.onCamera,
-    this.onPaste, // New callback
     this.isScreenRecording = false,
     this.hasAttachments = false,
     this.initialText,
@@ -50,6 +48,10 @@ class RichChatInputWidget extends StatefulWidget {
 
   @override
   State<RichChatInputWidget> createState() => _RichChatInputWidgetState();
+}
+
+class SendMessageIntent extends Intent {
+  const SendMessageIntent();
 }
 
 class _RichChatInputWidgetState extends State<RichChatInputWidget> {
@@ -107,12 +109,15 @@ class _RichChatInputWidgetState extends State<RichChatInputWidget> {
     super.dispose();
   }
 
-  void _handleSend() {
-    // Don't send if IME is actively composing (e.g. selecting pinyin candidate)
+  void _handleSend({bool fromHardwareKeyboard = false}) {
+    // Check traditional web IME plugin
     if (_imeHandler.isComposing) {
-      print('DEBUG: _handleSend blocked - IME is composing');
+      print('DEBUG: _handleSend blocked - Web IME is composing');
       return;
     }
+
+    // If not triggered directly from hardware keyboard, no additional IME check needed
+    // (native IME state is tracked via the polling timer).
 
     // Don't send if mention overlay is active (Enter selects mention instead)
     if (widget.isMentionActive) return;
@@ -131,23 +136,6 @@ class _RichChatInputWidgetState extends State<RichChatInputWidget> {
       _showToolbar = false;
       _isComposing = false;
     });
-
-    if (widget.controller != null) {
-      widget.controller!.clear();
-    } else {
-      _controller.clear();
-    }
-  }
-
-  void _handlePaste() async {
-    final clipboard = SystemClipboard.instance;
-    if (clipboard == null) return;
-
-    final reader = await clipboard.read();
-
-    if (widget.onPaste != null) {
-      widget.onPaste!(reader);
-    }
   }
 
   void _toggleToolbar() {
@@ -475,94 +463,41 @@ class _RichChatInputWidgetState extends State<RichChatInputWidget> {
                 minHeight: 40,
                 maxHeight: 200,
               ),
-              child: Focus(
-                onKeyEvent: (node, event) {
-                  // Handle Cmd+V (Paste) - Intercept completely
-                  if (event is KeyDownEvent &&
-                      event.logicalKey == LogicalKeyboardKey.keyV &&
-                      HardwareKeyboard.instance.isMetaPressed) {
-                    print('DEBUG: Cmd+V Intercepted');
-                    _handlePaste();
-                    return KeyEventResult.handled;
-                  }
-
-                  if (event is KeyDownEvent &&
-                      event.logicalKey == LogicalKeyboardKey.enter) {
-                    // 1. Shift+Enter: Newline (Standard behavior)
-                    if (HardwareKeyboard.instance.isShiftPressed) {
-                      return KeyEventResult.ignored;
-                    }
-
-                    // 2. Logic: Let the event propagate. If it was an IME commit, the text will change purely.
-                    // If it was a standard Enter, a newline will be inserted.
-                    // We check the result after a short delay.
-
-                    final preText = _controller.document.toPlainText();
-                    final preSelection = _controller.selection;
-
-                    Future.delayed(const Duration(milliseconds: 50), () {
-                      if (!mounted) return;
-
-                      final postText = _controller.document.toPlainText();
-
-                      // Case A: Text became longer by 1 char (the newline) at the selection point
-                      // Quill adds \n. comparison might be tricky due to Quill's trailing \n.
-                      // Let's verify if the stored 'postText' looks like 'preText' with an inserted \n
-
-                      // Simple check: If just a newline was added
-                      // We assume "Enter to Send" if the text essentially stayed the same EXCEPT for a new newline
-
-                      bool newlineAdded = false;
-                      // Determine if a newline logic was added.
-                      // postText length should correspond to preText length + 1 (for \n)
-                      if (postText.length == preText.length + 1 &&
-                          postText.trim() == preText.trim()) {
-                        newlineAdded = true;
-                      } else if (postText == preText + '\n') {
-                        // Sometimes specific formatting affects length, but basic append check is safe
-                        newlineAdded = true;
-                      }
-
-                      if (newlineAdded) {
-                        // It was a standard "Enter", so we treat it as "Send".
-
-                        // 1. Remove the added newline to clean up
-                        // The newline is likely at the old insertion point
-                        if (preSelection.isValid && preSelection.isCollapsed) {
-                          _controller.replaceText(
-                              preSelection.baseOffset, 1, '', null);
-                        } else {
-                          // Fallback: remove last char if it matches?
-                          // Better to just rely on user knowing text was sent.
-                          // Actually we MUST remove it or the next message starts with empty line if we don't clear.
-                          // But _handleSend usually clears the controller!
-                        }
-
-                        // 2. Trigger Send (which clears the text anyway)
-                        _handleSend();
-                      } else {
-                        // Case B: Text changed significantly (IME commit) or stayed same (some other handling)
-                        // Do nothing (User is still typing/composing)
-                        print(
-                            'DEBUG: Enter ignored (Content changed differently - likely IME)');
-                      }
-                    });
-
-                    // Allow propagation
-                    return KeyEventResult.ignored;
-                  }
-                  return KeyEventResult.ignored;
-                },
-                child: QuillEditor.basic(
-                  controller: _controller,
-                  focusNode: _focusNode,
-                  scrollController: ScrollController(),
-                  config: QuillEditorConfig(
-                    placeholder: widget.placeholder,
-                    autoFocus: false,
-                    expands: false,
-                    padding: EdgeInsets.zero,
-                  ),
+              child: QuillEditor.basic(
+                controller: _controller,
+                focusNode: _focusNode,
+                scrollController: ScrollController(),
+                config: QuillEditorConfig(
+                  placeholder: widget.placeholder,
+                  autoFocus: false,
+                  expands: false,
+                  padding: EdgeInsets.zero,
+                  customShortcuts: {
+                    // The native NSEvent monitor (AppDelegate) handles IME Enter
+                    // interception before Flutter sees the event. Here we simply
+                    // always register Enter → SendMessageIntent; the monitor ensures
+                    // it never reaches here when the IME candidate bar is active.
+                    if (FFAppState().sendMessageShortcut == 0)
+                      const SingleActivator(LogicalKeyboardKey.enter):
+                          const SendMessageIntent(),
+                    if (FFAppState().sendMessageShortcut == 1)
+                      const SingleActivator(LogicalKeyboardKey.enter,
+                          shift: true): const SendMessageIntent(),
+                    if (FFAppState().sendMessageShortcut == 2)
+                      const SingleActivator(LogicalKeyboardKey.enter,
+                          meta: true): const SendMessageIntent(),
+                    const SingleActivator(LogicalKeyboardKey.numpadEnter):
+                        const SendMessageIntent(),
+                  },
+                  customActions: {
+                    SendMessageIntent: CallbackAction<SendMessageIntent>(
+                      onInvoke: (SendMessageIntent intent) {
+                        if (widget.isMentionActive) return null;
+                        _handleSend(fromHardwareKeyboard: true);
+                        return null;
+                      },
+                    ),
+                  },
                 ),
               ),
             ),

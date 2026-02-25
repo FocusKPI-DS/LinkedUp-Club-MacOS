@@ -63,7 +63,7 @@ class _ChatDetailWidgetState extends State<ChatDetailWidget> {
     SchedulerBinding.instance.addPostFrameCallback((_) async {
       _model.isExist = await actions.handleDeletedContent(
         context,
-        widget.chatDoc?.reference.path,
+        widget!.chatDoc?.reference.path,
         'chat',
       );
       if (_model.isExist != true) {
@@ -76,7 +76,7 @@ class _ChatDetailWidgetState extends State<ChatDetailWidget> {
                 fontWeight: FontWeight.w500,
               ),
             ),
-            duration: const Duration(milliseconds: 3000),
+            duration: Duration(milliseconds: 3000),
             backgroundColor: FlutterFlowTheme.of(context).error,
           ),
         );
@@ -88,7 +88,7 @@ class _ChatDetailWidgetState extends State<ChatDetailWidget> {
       _model.blocked = await action_blocks.checkBlock(
         context,
         userRef: currentUserReference,
-        blockedUser: widget.chatDoc?.blockedUser,
+        blockedUser: widget!.chatDoc?.blockedUser,
       );
       if (_model.blocked == true) {
         await showDialog(
@@ -98,21 +98,21 @@ class _ChatDetailWidgetState extends State<ChatDetailWidget> {
               elevation: 0,
               insetPadding: EdgeInsets.zero,
               backgroundColor: Colors.transparent,
-              alignment: const AlignmentDirectional(0.0, 0.0)
+              alignment: AlignmentDirectional(0.0, 0.0)
                   .resolve(Directionality.of(context)),
               child: GestureDetector(
                 onTap: () {
                   FocusScope.of(dialogContext).unfocus();
                   FocusManager.instance.primaryFocus?.unfocus();
                 },
-                child: const BlockedWidget(),
+                child: BlockedWidget(),
               ),
             );
           },
         );
       } else {
-        if (!widget.chatDoc!.lastMessageSeen.contains(currentUserReference)) {
-          await widget.chatDoc!.reference.update({
+        if (!widget!.chatDoc!.lastMessageSeen.contains(currentUserReference)) {
+          await widget!.chatDoc!.reference.update({
             ...mapToFirestore(
               {
                 'last_message_seen':
@@ -124,7 +124,7 @@ class _ChatDetailWidgetState extends State<ChatDetailWidget> {
       }
 
       await Future.delayed(
-        const Duration(
+        Duration(
           milliseconds: 500,
         ),
       );
@@ -171,12 +171,12 @@ class _ChatDetailWidgetState extends State<ChatDetailWidget> {
   Widget build(BuildContext context) {
     return Builder(
       builder: (context) => StreamBuilder<ChatsRecord>(
-        stream: ChatsRecord.getDocument(widget.chatDoc!.reference),
+        stream: ChatsRecord.getDocument(widget!.chatDoc!.reference),
         builder: (context, snapshot) {
           // Customize what your widget looks like when it's loading.
           if (!snapshot.hasData) {
             return Scaffold(
-              backgroundColor: const Color(0xFFF9FAFB),
+              backgroundColor: Color(0xFFF9FAFB),
               body: Center(
                 child: SizedBox(
                   width: 50.0,
@@ -200,7 +200,7 @@ class _ChatDetailWidgetState extends State<ChatDetailWidget> {
             },
             child: Scaffold(
               key: scaffoldKey,
-              backgroundColor: const Color(0xFFF9FAFB),
+              backgroundColor: Color(0xFFF9FAFB),
               body: GestureDetector(
                 onHorizontalDragStart: (details) {
                   // Track drag start position for iOS swipe-to-go-back
@@ -229,7 +229,7 @@ class _ChatDetailWidgetState extends State<ChatDetailWidget> {
                       context.goNamed(
                         ChatWidget.routeName,
                         extra: <String, dynamic>{
-                          kTransitionInfoKey: const TransitionInfo(
+                          kTransitionInfoKey: TransitionInfo(
                             hasTransition: true,
                             transitionType: PageTransitionType.fade,
                             duration: Duration(milliseconds: 0),
@@ -243,7 +243,7 @@ class _ChatDetailWidgetState extends State<ChatDetailWidget> {
                 child: Stack(
                   children: [
                     Align(
-                      alignment: const AlignmentDirectional(0.0, -1.0),
+                      alignment: AlignmentDirectional(0.0, -1.0),
                       child: InkWell(
                         splashColor: Colors.transparent,
                         focusColor: Colors.transparent,
@@ -253,10 +253,10 @@ class _ChatDetailWidgetState extends State<ChatDetailWidget> {
                           await actions.closekeyboard();
                         },
                         child: Container(
-                          constraints: const BoxConstraints(
+                          constraints: BoxConstraints(
                             maxWidth: 650.0,
                           ),
-                          decoration: const BoxDecoration(),
+                          decoration: BoxDecoration(),
                           child: Stack(
                             children: [
                               // ═══════════════════════════════════════════════
@@ -266,10 +266,10 @@ class _ChatDetailWidgetState extends State<ChatDetailWidget> {
                                 child: Column(
                                   children: [
                                     // Top padding for floating header
-                                    const SizedBox(height: 100),
+                                    SizedBox(height: 100),
                                     Expanded(
                                       child: Container(
-                                        decoration: const BoxDecoration(),
+                                        decoration: BoxDecoration(),
                                         child: wrapWithModel(
                                           model:
                                               _model.chatThreadComponentModel,
@@ -329,18 +329,18 @@ class _ChatDetailWidgetState extends State<ChatDetailWidget> {
                                         ),
                                       ),
                                       child: Padding(
-                                        padding: const EdgeInsetsDirectional.fromSTEB(
+                                        padding: EdgeInsetsDirectional.fromSTEB(
                                             16.0, 60.0, 16.0, 16.0),
                                         child: Container(
-                                          decoration: const BoxDecoration(),
+                                          decoration: BoxDecoration(),
                                           child: Builder(
                                             builder: (context) {
-                                              if (widget.chatDoc?.isGroup ==
+                                              if (widget!.chatDoc?.isGroup ==
                                                   false) {
                                                 return StreamBuilder<
                                                     UsersRecord>(
                                                   stream: UsersRecord
-                                                      .getDocument(widget
+                                                      .getDocument(widget!
                                                           .chatDoc!.members
                                                           .where((e) =>
                                                               e.id !=
@@ -391,7 +391,7 @@ class _ChatDetailWidgetState extends State<ChatDetailWidget> {
                                                                   extra: <String,
                                                                       dynamic>{
                                                                     kTransitionInfoKey:
-                                                                        const TransitionInfo(
+                                                                        TransitionInfo(
                                                                       hasTransition:
                                                                           true,
                                                                       transitionType:
@@ -404,7 +404,7 @@ class _ChatDetailWidgetState extends State<ChatDetailWidget> {
                                                                   },
                                                                 );
                                                               },
-                                                              child: const Icon(
+                                                              child: Icon(
                                                                 CupertinoIcons
                                                                     .chevron_left,
                                                                 color: CupertinoColors
@@ -435,7 +435,7 @@ class _ChatDetailWidgetState extends State<ChatDetailWidget> {
                                                                               .titleMedium
                                                                               .fontStyle,
                                                                         ),
-                                                                        color: const Color(
+                                                                        color: Color(
                                                                             0xFF1F2937),
                                                                         fontSize:
                                                                             18.0,
@@ -464,7 +464,7 @@ class _ChatDetailWidgetState extends State<ChatDetailWidget> {
                                                                               .bodySmall
                                                                               .fontStyle,
                                                                         ),
-                                                                        color: const Color(
+                                                                        color: Color(
                                                                             0xFF6B7280),
                                                                         fontSize:
                                                                             12.0,
@@ -480,14 +480,14 @@ class _ChatDetailWidgetState extends State<ChatDetailWidget> {
                                                                 ),
                                                               ],
                                                             ),
-                                                          ].divide(const SizedBox(
+                                                          ].divide(SizedBox(
                                                               width: 16.0)),
                                                         ),
                                                         Row(
                                                           mainAxisSize: MainAxisSize.min,
                                                           children: [
                                                             Padding(
-                                                              padding: const EdgeInsets.only(right: 8),
+                                                              padding: EdgeInsets.only(right: 8),
                                                               child: IconButton(
                                                                 icon: Icon(
                                                                   Icons.search_rounded,
@@ -575,22 +575,22 @@ class _ChatDetailWidgetState extends State<ChatDetailWidget> {
                                                                       (BuildContext
                                                                           context) {
                                                                     return AlertDialog(
-                                                                      title: const Text(
+                                                                      title: Text(
                                                                           'Block User'),
-                                                                      content: const Text(
+                                                                      content: Text(
                                                                           'Are you sure you want to block this user? You will no longer see their messages or be able to contact them.'),
                                                                       actions: [
                                                                         TextButton(
                                                                           onPressed: () =>
                                                                               Navigator.of(context).pop(false),
                                                                           child:
-                                                                              const Text('Cancel'),
+                                                                              Text('Cancel'),
                                                                         ),
                                                                         TextButton(
                                                                           onPressed: () =>
                                                                               Navigator.of(context).pop(true),
                                                                           child:
-                                                                              const Text(
+                                                                              Text(
                                                                             'Block',
                                                                             style:
                                                                                 TextStyle(color: Colors.red),
@@ -621,7 +621,7 @@ class _ChatDetailWidgetState extends State<ChatDetailWidget> {
 
                                                                     // Show success message
                                                                     ScaffoldMessenger.of(context).showSnackBar(
-                                                                      const SnackBar(content: Text('User has been blocked')),
+                                                                      SnackBar(content: Text('User has been blocked')),
                                                                     );
                                                                   } catch (e) {
                                                                     print('Debug: Error blocking user: $e');
@@ -633,16 +633,16 @@ class _ChatDetailWidgetState extends State<ChatDetailWidget> {
                                                                   context: context,
                                                                   builder: (BuildContext context) {
                                                                     return AlertDialog(
-                                                                      title: const Text('Unblock User'),
-                                                                      content: const Text('Are you sure you want to unblock this user? You will be able to see their messages again.'),
+                                                                      title: Text('Unblock User'),
+                                                                      content: Text('Are you sure you want to unblock this user? You will be able to see their messages again.'),
                                                                       actions: [
                                                                         TextButton(
                                                                           onPressed: () => Navigator.of(context).pop(false),
-                                                                          child: const Text('Cancel'),
+                                                                          child: Text('Cancel'),
                                                                         ),
                                                                         TextButton(
                                                                           onPressed: () => Navigator.of(context).pop(true),
-                                                                          child: const Text('Unblock', style: TextStyle(color: Colors.blue)),
+                                                                          child: Text('Unblock', style: TextStyle(color: Colors.blue)),
                                                                         ),
                                                                       ],
                                                                     );
@@ -664,7 +664,7 @@ class _ChatDetailWidgetState extends State<ChatDetailWidget> {
                                                                     }
 
                                                                     ScaffoldMessenger.of(context).showSnackBar(
-                                                                      const SnackBar(content: Text('User has been unblocked')),
+                                                                      SnackBar(content: Text('User has been unblocked')),
                                                                     );
                                                                   } catch (e) {
                                                                     print('Debug: Error unblocking user: $e');
@@ -697,7 +697,7 @@ class _ChatDetailWidgetState extends State<ChatDetailWidget> {
                                                                     context) =>
                                                                 <PopupMenuEntry<
                                                                     String>>[
-                                                              const PopupMenuItem<
+                                                              PopupMenuItem<
                                                                   String>(
                                                                 value:
                                                                     'profile',
@@ -726,7 +726,7 @@ class _ChatDetailWidgetState extends State<ChatDetailWidget> {
                                                                         color: isBlocked ? Colors.blue : Colors.red,
                                                                         size:
                                                                             20),
-                                                                    const SizedBox(
+                                                                    SizedBox(
                                                                         width:
                                                                             8),
                                                                     Text(
@@ -769,7 +769,7 @@ class _ChatDetailWidgetState extends State<ChatDetailWidget> {
                                                               extra: <String,
                                                                   dynamic>{
                                                                 kTransitionInfoKey:
-                                                                    const TransitionInfo(
+                                                                    TransitionInfo(
                                                                   hasTransition:
                                                                       true,
                                                                   transitionType:
@@ -782,7 +782,7 @@ class _ChatDetailWidgetState extends State<ChatDetailWidget> {
                                                               },
                                                             );
                                                           },
-                                                          child: const Icon(
+                                                          child: Icon(
                                                             CupertinoIcons
                                                                 .chevron_left,
                                                             color:
@@ -815,7 +815,7 @@ class _ChatDetailWidgetState extends State<ChatDetailWidget> {
                                                                           .titleMedium
                                                                           .fontStyle,
                                                                     ),
-                                                                    color: const Color(
+                                                                    color: Color(
                                                                         0xFF1F2937),
                                                                     fontSize:
                                                                         18.0,
@@ -851,7 +851,7 @@ class _ChatDetailWidgetState extends State<ChatDetailWidget> {
                                                                           .bodySmall
                                                                           .fontStyle,
                                                                     ),
-                                                                    color: const Color(
+                                                                    color: Color(
                                                                         0xFF6B7280),
                                                                     fontSize:
                                                                         12.0,
@@ -869,13 +869,13 @@ class _ChatDetailWidgetState extends State<ChatDetailWidget> {
                                                             ),
                                                           ],
                                                         ),
-                                                      ].divide(const SizedBox(
+                                                      ].divide(SizedBox(
                                                           width: 16.0)),
                                                     ),
                                                     Row(
                                                       children: [
                                                         Padding(
-                                                          padding: const EdgeInsets.only(right: 8),
+                                                          padding: EdgeInsets.only(right: 8),
                                                           child: FlutterFlowIconButton(
                                                                 borderColor: Colors.transparent,
                                                                 borderRadius: 30.0,
@@ -905,6 +905,20 @@ class _ChatDetailWidgetState extends State<ChatDetailWidget> {
                                                               ),
                                                         ),
                                                     PopupMenuButton<String>(
+                                                      child: Container(
+                                                        padding:
+                                                            EdgeInsets.all(8.0),
+                                                        child: Icon(
+                                                          Platform.isIOS
+                                                              ? CupertinoIcons
+                                                                  .ellipsis
+                                                              : Icons.more_vert,
+                                                          color: FlutterFlowTheme
+                                                                  .of(context)
+                                                              .primaryText,
+                                                          size: 24.0,
+                                                        ),
+                                                      ),
                                                       shape:
                                                           RoundedRectangleBorder(
                                                         borderRadius:
@@ -1055,7 +1069,7 @@ class _ChatDetailWidgetState extends State<ChatDetailWidget> {
                                                                             context)
                                                                         .primaryText,
                                                               ),
-                                                              const SizedBox(
+                                                              SizedBox(
                                                                   width: 12),
                                                               Text(
                                                                 'Add Members',
@@ -1096,7 +1110,7 @@ class _ChatDetailWidgetState extends State<ChatDetailWidget> {
                                                                             context)
                                                                         .primaryText,
                                                               ),
-                                                              const SizedBox(
+                                                              SizedBox(
                                                                   width: 12),
                                                               Text(
                                                                 'Media',
@@ -1137,7 +1151,7 @@ class _ChatDetailWidgetState extends State<ChatDetailWidget> {
                                                                             context)
                                                                         .primaryText,
                                                               ),
-                                                              const SizedBox(
+                                                              SizedBox(
                                                                   width: 12),
                                                               Text(
                                                                 'Search',
@@ -1178,7 +1192,7 @@ class _ChatDetailWidgetState extends State<ChatDetailWidget> {
                                                                             context)
                                                                         .primaryText,
                                                               ),
-                                                              const SizedBox(
+                                                              SizedBox(
                                                                   width: 12),
                                                               Text(
                                                                 'Group Info',
@@ -1201,20 +1215,6 @@ class _ChatDetailWidgetState extends State<ChatDetailWidget> {
                                                           ),
                                                         ),
                                                       ],
-                                                      child: Container(
-                                                        padding:
-                                                            EdgeInsets.all(8.0),
-                                                        child: Icon(
-                                                          Platform.isIOS
-                                                              ? CupertinoIcons
-                                                                  .ellipsis
-                                                              : Icons.more_vert,
-                                                          color: FlutterFlowTheme
-                                                                  .of(context)
-                                                              .primaryText,
-                                                          size: 24.0,
-                                                        ),
-                                                      ),
                                                     ),
                                                   ],
                                                 ),
@@ -1238,12 +1238,12 @@ class _ChatDetailWidgetState extends State<ChatDetailWidget> {
                       Container(
                         width: double.infinity,
                         height: double.infinity,
-                        decoration: const BoxDecoration(
+                        decoration: BoxDecoration(
                           color: Color(0xFFF9FAFB),
                         ),
                         child: Padding(
-                          padding: const EdgeInsets.all(55.0),
-                          child: SizedBox(
+                          padding: EdgeInsets.all(55.0),
+                          child: Container(
                             width: double.infinity,
                             height: double.infinity,
                             child: custom_widgets.FFlowSpinner(
