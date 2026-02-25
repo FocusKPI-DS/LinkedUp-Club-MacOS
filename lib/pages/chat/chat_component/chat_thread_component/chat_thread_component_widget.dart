@@ -119,17 +119,10 @@ class ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget>
     _model.messageFocusNode ??= FocusNode(
       onKeyEvent: (node, event) {
         // Handle Return/Enter key press
+        // On macOS, Enter during IME composition is handled by native NSEvent monitor (AppDelegate).
         if (event is KeyDownEvent || event is KeyRepeatEvent) {
-          // Check if Return/Enter key is pressed
           if (event.logicalKey == LogicalKeyboardKey.enter ||
               event.logicalKey == LogicalKeyboardKey.numpadEnter) {
-            
-            // CRITICAL FIX: Check for IME composition (active input method)
-            // If composing range is valid (start != -1), it means user is navigating IME candidates
-            if (_model.messageTextController?.value.composing.isValid == true) {
-              return KeyEventResult.ignored; // Let the IME handle it
-            }
-
             // Check if Shift or Command (Meta) is pressed
             final isShiftPressed =
                 event.logicalKey == LogicalKeyboardKey.shiftLeft ||
@@ -153,6 +146,8 @@ class ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget>
                   _model.messageTextController?.text.trim() ?? '';
               final hasText = messageText.isNotEmpty;
               final hasImages = _model.images.isNotEmpty;
+              print(
+                  'DEBUG onKeyEvent: shouldSend=$shouldSend, hasText=$hasText, messageText="$messageText"');
               final hasSingleImage =
                   _model.image != null && _model.image!.isNotEmpty;
               final hasFile = _model.file != null && _model.file!.isNotEmpty;
@@ -668,6 +663,28 @@ class ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget>
         'is_edited': true,
         'edited_at': FieldValue.serverTimestamp(),
       });
+
+      // Update the parent chat document's last_message
+      final chatRef = widget.chatReference?.reference;
+      if (chatRef != null) {
+        String messagePreview = editedContent;
+        if (editedContent.isEmpty) {
+          final oldMessage = _model.editingMessage!;
+          if (oldMessage.images.isNotEmpty) {
+            messagePreview = '📷 Photo';
+          } else if (oldMessage.video.isNotEmpty) {
+            messagePreview = '🎬 Video';
+          } else if (oldMessage.audio.isNotEmpty) {
+            messagePreview = '🎤 Voice message';
+          } else if (oldMessage.attachmentUrl.isNotEmpty) {
+            messagePreview = '📎 File';
+          }
+        }
+        await chatRef.update({
+          'last_message': messagePreview,
+          'last_message_at': FieldValue.serverTimestamp(),
+        });
+      }
 
       // Clear edit mode
       _model.editingMessage = null;

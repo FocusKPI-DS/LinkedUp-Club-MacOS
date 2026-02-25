@@ -215,11 +215,105 @@ class AppDelegate: FlutterAppDelegate {
     }
   }
   
+  // MARK: - IME (Input Method Editor) Detection Channel
+  // Provides a native hasMarkedText() check that QuillEditor cannot expose via composing.isValid
+  private func setupIMEChannel() {
+    DispatchQueue.main.async { [weak self] in
+      guard let self = self,
+            let controller = NSApplication.shared.windows.first?.contentViewController as? FlutterViewController else {
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+          self?.setupIMEChannel()
+        }
+        return
+      }
+      let messenger = controller.engine.binaryMessenger
+      let imeChannel = FlutterMethodChannel(
+        name: "com.focuskpi.linkedup/ime",
+        binaryMessenger: messenger
+      )
+      imeChannel.setMethodCallHandler { (call, result) in
+        switch call.method {
+        case "hasMarkedText":
+          // Walk the responder chain from the key window to find the active NSTextView
+          var responder = NSApplication.shared.keyWindow?.firstResponder
+          var hasMarked = false
+          // Check up to 10 responders deep
+          for _ in 0..<10 {
+            if let tv = responder as? NSTextView {
+              hasMarked = tv.hasMarkedText()
+              break
+            }
+            responder = responder?.nextResponder
+          }
+          result(hasMarked)
+        case "commitComposition":
+          // Programmatically commit the current IME composition.
+          // Walk the responder chain to find the active NSTextView and call unmarkText().
+          // unmarkText() commits the current marked text in place (no deletion), which
+          // is exactly what macOS IME does when you press Enter to confirm a Pinyin candidate.
+          var responder = NSApplication.shared.keyWindow?.firstResponder
+          var committed = false
+          for _ in 0..<10 {
+            if let tv = responder as? NSTextView, tv.hasMarkedText() {
+              tv.unmarkText()
+              committed = true
+              break
+            }
+            responder = responder?.nextResponder
+          }
+          result(committed)
+        default:
+          result(FlutterMethodNotImplemented)
+        }
+      }
+      print("✅ [IME] Native hasMarkedText channel ready: com.focuskpi.linkedup/ime")
+    }
+  }
+
+  // MARK: - Native IME Enter Key Interceptor
+  // Intercepts Enter keydowns BEFORE Flutter's CustomShortcuts widget sees them.
+  // When the macOS Pinyin IME has marked text (candidate bar showing), we forward
+  // the Enter event to the native IME (which dismisses the candidate bar normally)
+  // and return nil to swallow it from Flutter (so no message is sent).
+  // When no IME is composing, Enter passes through to Flutter as normal.
+  private var imeKeyMonitor: Any?
+
+  private func setupIMEKeyInterception() {
+    imeKeyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
+      // Only intercept regular Enter (keyCode 36 = Return).
+      // Numpad Enter (keyCode 76) is never used by the IME - always pass through.
+      guard event.keyCode == 36 else { return event }
+
+      // Walk the responder chain to find the focused NSTextView
+      var responder = NSApplication.shared.keyWindow?.firstResponder
+      for _ in 0..<10 {
+        if let tv = responder as? NSTextView {
+          if tv.hasMarkedText() {
+            // IME candidate bar is active — let the IME commit the composition normally
+            tv.inputContext?.handleEvent(event)
+            // Return nil: swallow this event so Flutter never sees it.
+            // Flutter's customShortcuts won't fire, message won't be sent.
+            return nil
+          }
+          break // Found the text view but no marked text — let Flutter handle Enter
+        }
+        responder = responder?.nextResponder
+      }
+      // No IME composing — pass Enter to Flutter normally (sends message via customShortcuts)
+      return event
+    }
+    print("✅ [IME] Native Enter key interceptor active")
+  }
+
   override func applicationDidFinishLaunching(_ notification: Notification) {
     print("🚀 [AppDelegate] applicationDidFinishLaunching started")
-    
+
     // Configure dedicated camera permission + cleanup channels
     self.setupCameraChannels()
+    // Configure IME detection channel
+    self.setupIMEChannel()
+    // Set up native IME Enter key interceptor (must be called on main thread at launch)
+    self.setupIMEKeyInterception()
     
     // Configure Google Sign-In
     self.configureGoogleSignIn()

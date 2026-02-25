@@ -4034,9 +4034,9 @@ class _GroupChatDetailWidgetState extends State<GroupChatDetailWidget>
                                           ],
                                         ),
                                       ],
-                                    ),
-                                  ),
                                 ),
+                              ),
+                            ),
                                 Container(
                                   decoration: BoxDecoration(
                                     color: FlutterFlowTheme.of(context)
