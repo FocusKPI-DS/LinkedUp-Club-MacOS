@@ -4,18 +4,23 @@ import '/backend/schema/enums/enums.dart';
 import '/component/chat_edit/chat_edit_widget.dart';
 import '/flutter_flow/flutter_flow_animations.dart';
 import '/flutter_flow/flutter_flow_util.dart';
+import '/flutter_flow/flutter_flow_widgets.dart';
 import 'dart:async';
+import 'dart:math';
+import 'dart:ui';
 import '/custom_code/widgets/index.dart' as custom_widgets;
 import '/index.dart';
 import 'package:sticky_headers/sticky_headers.dart';
 import 'package:aligned_dialog/aligned_dialog.dart';
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:ff_theme/flutter_flow/flutter_flow_theme.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:provider/provider.dart';
 import 'chat_model.dart';
 export 'chat_model.dart';
 
@@ -61,7 +66,7 @@ class _ChatWidgetState extends State<ChatWidget> with TickerProviderStateMixin {
 
     _model.tabBarController = TabController(
       vsync: this,
-      length: 3,
+      length: 4,
       initialIndex: 0,
     )..addListener(() => safeSetState(() {}));
 
@@ -171,17 +176,20 @@ class _ChatWidgetState extends State<ChatWidget> with TickerProviderStateMixin {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       safeSetState(() {});
       // Listen to blocked users for real-time filtering (UID based)
-      print('Debug: Initializing blocked user listener in ChatWidget. CurrentUserRef: $currentUserReference');
+      print(
+          'Debug: Initializing blocked user listener in ChatWidget. CurrentUserRef: $currentUserReference');
       _blockedUsersSubscription = BlockedUsersRecord.collection
           .where('blocker_user', isEqualTo: currentUserReference)
           .snapshots()
           .listen((snapshot) {
         setState(() {
           _blockedUserIds = snapshot.docs
-              .map((doc) => BlockedUsersRecord.fromSnapshot(doc).blockedUser?.id)
+              .map(
+                  (doc) => BlockedUsersRecord.fromSnapshot(doc).blockedUser?.id)
               .whereType<String>()
               .toSet();
-          print('Debug: ChatWidget (List) updated blocked IDs to: $_blockedUserIds');
+          print(
+              'Debug: ChatWidget (List) updated blocked IDs to: $_blockedUserIds');
         });
       }, onError: (e) {
         print('Debug: Error in ChatWidget blocked user listener: $e');
@@ -197,6 +205,29 @@ class _ChatWidgetState extends State<ChatWidget> with TickerProviderStateMixin {
     super.dispose();
   }
 
+  // ── Mark as Unread helpers ──────────────────────────────────────────────
+
+  bool _isManuallyUnread(ChatsRecord chat) =>
+      _model.manuallyUnreadIds.contains(chat.reference.id);
+
+  void _toggleMarkUnread(ChatsRecord chat) {
+    safeSetState(() {
+      if (_model.manuallyUnreadIds.contains(chat.reference.id)) {
+        _model.manuallyUnreadIds.remove(chat.reference.id);
+      } else {
+        _model.manuallyUnreadIds.add(chat.reference.id);
+      }
+    });
+  }
+
+  /// Returns true if the chat has an unread badge (Firestore OR manually marked).
+  bool _hasUnreadBadge(ChatsRecord chat) {
+    if (_isManuallyUnread(chat)) return true;
+    return !chat.lastMessageSeen.contains(currentUserReference) &&
+        chat.lastMessage.isNotEmpty &&
+        chat.lastMessageSent != currentUserReference;
+  }
+
   @override
   Widget build(BuildContext context) {
     final workspaceRef = currentUserDocument?.currentWorkspaceRef;
@@ -208,7 +239,8 @@ class _ChatWidgetState extends State<ChatWidget> with TickerProviderStateMixin {
           'members',
           arrayContains: currentUserReference,
         );
-        debugPrint('🔍 Querying chats where user is member: ${currentUserReference?.path}');
+        debugPrint(
+            '🔍 Querying chats where user is member: ${currentUserReference?.path}');
         return query;
       },
     );
@@ -230,16 +262,20 @@ class _ChatWidgetState extends State<ChatWidget> with TickerProviderStateMixin {
             final List<ChatsRecord> allChats = [];
             if (regularSnapshot.hasData) {
               allChats.addAll(regularSnapshot.data!);
-              debugPrint('🔍 Regular chats loaded: ${regularSnapshot.data!.length}');
+              debugPrint(
+                  '🔍 Regular chats loaded: ${regularSnapshot.data!.length}');
               // Debug: Find "Lets Gooo" group
-              final letsGoGroup = regularSnapshot.data!.where((c) => 
-                c.title.toLowerCase().contains('lets go') || 
-                c.title.toLowerCase().contains('let\'s go')
-              ).toList();
+              final letsGoGroup = regularSnapshot.data!
+                  .where((c) =>
+                      c.title.toLowerCase().contains('lets go') ||
+                      c.title.toLowerCase().contains('let\'s go'))
+                  .toList();
               if (letsGoGroup.isNotEmpty) {
-                debugPrint('🔍 FOUND "Lets Gooo" group! Title: "${letsGoGroup.first.title}", isGroup: ${letsGoGroup.first.isGroup}, members: ${letsGoGroup.first.members.length}');
+                debugPrint(
+                    '🔍 FOUND "Lets Gooo" group! Title: "${letsGoGroup.first.title}", isGroup: ${letsGoGroup.first.isGroup}, members: ${letsGoGroup.first.members.length}');
               } else {
-                debugPrint('🔍 "Lets Gooo" group NOT found in regular chats query results');
+                debugPrint(
+                    '🔍 "Lets Gooo" group NOT found in regular chats query results');
               }
             }
             if (serviceSnapshot.hasData) {
@@ -363,7 +399,8 @@ class _ChatWidgetState extends State<ChatWidget> with TickerProviderStateMixin {
       // Filter out chats with blocked users (UID based)
       // Check if any member (other than current user) is in the blocked list
       if (chat.members.any((member) =>
-          member != currentUserReference && _blockedUserIds.contains(member.id))) {
+          member != currentUserReference &&
+          _blockedUserIds.contains(member.id))) {
         return false;
       }
 
@@ -382,20 +419,22 @@ class _ChatWidgetState extends State<ChatWidget> with TickerProviderStateMixin {
       // Show legacy chats without workspace_ref
       return true;
     }).toList();
-    
+
     // Debug: Log all groups to help diagnose missing groups
     debugPrint('🔍 All chats after filtering: ${chatChatsRecordList.length}');
-    final allGroups = chatChatsRecordList.where((e) => e.isGroup == true).toList();
+    final allGroups =
+        chatChatsRecordList.where((e) => e.isGroup == true).toList();
     debugPrint('🔍 All groups found: ${allGroups.length}');
-    
+
     // Specifically search for "Lets Gooo" group
-    final letsGoGroups = chatChatsRecordList.where((e) => 
-      e.title.toLowerCase().contains('lets go') || 
-      e.title.toLowerCase().contains('let\'s go') ||
-      e.title.toLowerCase().contains('let\'s gooo') ||
-      e.title.toLowerCase().contains('lets gooo')
-    ).toList();
-    
+    final letsGoGroups = chatChatsRecordList
+        .where((e) =>
+            e.title.toLowerCase().contains('lets go') ||
+            e.title.toLowerCase().contains('let\'s go') ||
+            e.title.toLowerCase().contains('let\'s gooo') ||
+            e.title.toLowerCase().contains('lets gooo'))
+        .toList();
+
     if (letsGoGroups.isNotEmpty) {
       debugPrint('🔍 ✅ FOUND "Lets Gooo" group in filtered list!');
       for (var group in letsGoGroups) {
@@ -410,23 +449,27 @@ class _ChatWidgetState extends State<ChatWidget> with TickerProviderStateMixin {
     } else {
       debugPrint('🔍 ❌ "Lets Gooo" group NOT found in filtered chat list!');
       debugPrint('   Checking all chats before filtering...');
-      final allGroupsBeforeFilter = allChats.where((e) => 
-        (e.title.toLowerCase().contains('lets go') || 
-         e.title.toLowerCase().contains('let\'s go'))
-      ).toList();
+      final allGroupsBeforeFilter = allChats
+          .where((e) => (e.title.toLowerCase().contains('lets go') ||
+              e.title.toLowerCase().contains('let\'s go')))
+          .toList();
       if (allGroupsBeforeFilter.isNotEmpty) {
         debugPrint('   ✅ Found in allChats before filtering!');
         for (var group in allGroupsBeforeFilter) {
-          debugPrint('     - "${group.title}" - Filtered out? Checking workspace...');
-          debugPrint('       workspaceRef: ${group.workspaceRef?.path}, current workspace: ${workspaceRef?.path}');
+          debugPrint(
+              '     - "${group.title}" - Filtered out? Checking workspace...');
+          debugPrint(
+              '       workspaceRef: ${group.workspaceRef?.path}, current workspace: ${workspaceRef?.path}');
         }
       } else {
-        debugPrint('   ❌ Not found in allChats either - might not be in query results');
+        debugPrint(
+            '   ❌ Not found in allChats either - might not be in query results');
       }
     }
-    
+
     for (var group in allGroups) {
-      debugPrint('  - "${group.title}" (isGroup: ${group.isGroup}, isPin: ${group.isPin}, lastMessageAt: ${group.lastMessageAt}, lastMessage: "${group.lastMessage}", workspaceRef: ${group.workspaceRef?.path})');
+      debugPrint(
+          '  - "${group.title}" (isGroup: ${group.isGroup}, isPin: ${group.isPin}, lastMessageAt: ${group.lastMessageAt}, lastMessage: "${group.lastMessage}", workspaceRef: ${group.workspaceRef?.path})');
     }
 
     return GestureDetector(
@@ -594,6 +637,9 @@ class _ChatWidgetState extends State<ChatWidget> with TickerProviderStateMixin {
                                   ),
                                   Tab(
                                     text: 'Group',
+                                  ),
+                                  Tab(
+                                    text: 'Unread',
                                   ),
                                 ],
                                 controller: _model.tabBarController,
@@ -799,16 +845,28 @@ class _ChatWidgetState extends State<ChatWidget> with TickerProviderStateMixin {
                                                                       e.isPin ==
                                                                       true)
                                                                   .toList()
-                                                                  ..sort((a, b) {
-                                                                    final aTime = a.lastMessageAt;
-                                                                    final bTime = b.lastMessageAt;
-                                                                    // Handle null values - put nulls at the end
-                                                                    if (aTime == null && bTime == null) return 0;
-                                                                    if (aTime == null) return 1; // a goes after b
-                                                                    if (bTime == null) return -1; // b goes after a
-                                                                    // Both have values, sort descending (newest first)
-                                                                    return bTime.compareTo(aTime);
-                                                                  });
+                                                                ..sort((a, b) {
+                                                                  final aTime =
+                                                                      a.lastMessageAt;
+                                                                  final bTime =
+                                                                      b.lastMessageAt;
+                                                                  // Handle null values - put nulls at the end
+                                                                  if (aTime ==
+                                                                          null &&
+                                                                      bTime ==
+                                                                          null)
+                                                                    return 0;
+                                                                  if (aTime ==
+                                                                      null)
+                                                                    return 1; // a goes after b
+                                                                  if (bTime ==
+                                                                      null)
+                                                                    return -1; // b goes after a
+                                                                  // Both have values, sort descending (newest first)
+                                                                  return bTime
+                                                                      .compareTo(
+                                                                          aTime);
+                                                                });
 
                                                           return Column(
                                                             mainAxisSize:
@@ -912,6 +970,11 @@ class _ChatWidgetState extends State<ChatWidget> with TickerProviderStateMixin {
                                                                                           delete: () async {
                                                                                             await allChatPinItem.reference.delete();
                                                                                           },
+                isUnread: _isManuallyUnread(allChatPinItem),
+                markAsUnread: () async {
+                    _toggleMarkUnread(allChatPinItem);
+                },
+            
                                                                                         ),
                                                                                       ),
                                                                                     ),
@@ -1094,7 +1157,7 @@ class _ChatWidgetState extends State<ChatWidget> with TickerProviderStateMixin {
                                                                                         ),
                                                                                         Builder(
                                                                                           builder: (context) {
-                                                                                            if (allChatPinItem.lastMessageSeen.contains(currentUserReference) == false) {
+                                                                                            if (_hasUnreadBadge(allChatPinItem)) {
                                                                                               return Container(
                                                                                                 width: 20.0,
                                                                                                 height: 20.0,
@@ -1103,7 +1166,7 @@ class _ChatWidgetState extends State<ChatWidget> with TickerProviderStateMixin {
                                                                                                   shape: BoxShape.circle,
                                                                                                 ),
                                                                                               );
-                                                                                            } else if ((allChatPinItem.lastMessageSeen.contains(currentUserReference) == true) && (allChatPinItem.lastMessageSent == currentUserReference)) {
+                                                                                            } else if (!_hasUnreadBadge(allChatPinItem) && (allChatPinItem.lastMessageSent == currentUserReference)) {
                                                                                               return const Icon(
                                                                                                 Icons.check,
                                                                                                 color: Color(0xFF6B7280),
@@ -1197,6 +1260,11 @@ class _ChatWidgetState extends State<ChatWidget> with TickerProviderStateMixin {
                                                                                         await allChatPinItem.reference.delete();
                                                                                         Navigator.pop(context);
                                                                                       },
+                isUnread: _isManuallyUnread(allChatPinItem),
+                markAsUnread: () async {
+                    _toggleMarkUnread(allChatPinItem);
+                },
+            
                                                                                     ),
                                                                                   ),
                                                                                 ),
@@ -1357,7 +1425,7 @@ class _ChatWidgetState extends State<ChatWidget> with TickerProviderStateMixin {
                                                                                       builder: (context) {
                                                                                         if (allChatPinItem.lastMessageSent != currentUserReference) {
                                                                                           return Visibility(
-                                                                                            visible: !allChatPinItem.lastMessageSeen.contains(currentUserReference),
+                                                                                            visible: _hasUnreadBadge(allChatPinItem),
                                                                                             child: Container(
                                                                                               width: 20.0,
                                                                                               height: 20.0,
@@ -1507,16 +1575,28 @@ class _ChatWidgetState extends State<ChatWidget> with TickerProviderStateMixin {
                                                                       e.isPin ==
                                                                       false)
                                                                   .toList()
-                                                                  ..sort((a, b) {
-                                                                    final aTime = a.lastMessageAt;
-                                                                    final bTime = b.lastMessageAt;
-                                                                    // Handle null values - put nulls at the end
-                                                                    if (aTime == null && bTime == null) return 0;
-                                                                    if (aTime == null) return 1; // a goes after b
-                                                                    if (bTime == null) return -1; // b goes after a
-                                                                    // Both have values, sort descending (newest first)
-                                                                    return bTime.compareTo(aTime);
-                                                                  });
+                                                                ..sort((a, b) {
+                                                                  final aTime =
+                                                                      a.lastMessageAt;
+                                                                  final bTime =
+                                                                      b.lastMessageAt;
+                                                                  // Handle null values - put nulls at the end
+                                                                  if (aTime ==
+                                                                          null &&
+                                                                      bTime ==
+                                                                          null)
+                                                                    return 0;
+                                                                  if (aTime ==
+                                                                      null)
+                                                                    return 1; // a goes after b
+                                                                  if (bTime ==
+                                                                      null)
+                                                                    return -1; // b goes after a
+                                                                  // Both have values, sort descending (newest first)
+                                                                  return bTime
+                                                                      .compareTo(
+                                                                          aTime);
+                                                                });
 
                                                           return Column(
                                                             mainAxisSize:
@@ -1617,6 +1697,11 @@ class _ChatWidgetState extends State<ChatWidget> with TickerProviderStateMixin {
                                                                                           delete: () async {
                                                                                             await allChatAllItem.reference.delete();
                                                                                           },
+                isUnread: _isManuallyUnread(allChatAllItem),
+                markAsUnread: () async {
+                    _toggleMarkUnread(allChatAllItem);
+                },
+            
                                                                                         ),
                                                                                       ),
                                                                                     ),
@@ -1799,7 +1884,7 @@ class _ChatWidgetState extends State<ChatWidget> with TickerProviderStateMixin {
                                                                                         ),
                                                                                         Builder(
                                                                                           builder: (context) {
-                                                                                            if (allChatAllItem.lastMessageSeen.contains(currentUserReference) == false) {
+                                                                                            if (_hasUnreadBadge(allChatAllItem)) {
                                                                                               return Container(
                                                                                                 width: 20.0,
                                                                                                 height: 20.0,
@@ -1808,7 +1893,7 @@ class _ChatWidgetState extends State<ChatWidget> with TickerProviderStateMixin {
                                                                                                   shape: BoxShape.circle,
                                                                                                 ),
                                                                                               );
-                                                                                            } else if ((allChatAllItem.lastMessageSeen.contains(currentUserReference) == true) && (allChatAllItem.lastMessageSent == currentUserReference)) {
+                                                                                            } else if (!_hasUnreadBadge(allChatAllItem) && (allChatAllItem.lastMessageSent == currentUserReference)) {
                                                                                               return const Icon(
                                                                                                 Icons.check,
                                                                                                 color: Color(0xFF6B7280),
@@ -1900,6 +1985,11 @@ class _ChatWidgetState extends State<ChatWidget> with TickerProviderStateMixin {
                                                                                       delete: () async {
                                                                                         await allChatAllItem.reference.delete();
                                                                                       },
+                isUnread: _isManuallyUnread(allChatAllItem),
+                markAsUnread: () async {
+                    _toggleMarkUnread(allChatAllItem);
+                },
+            
                                                                                     ),
                                                                                   ),
                                                                                 ),
@@ -2066,7 +2156,7 @@ class _ChatWidgetState extends State<ChatWidget> with TickerProviderStateMixin {
                                                                                         builder: (context) {
                                                                                           if (allChatAllItem.lastMessageSent != currentUserReference) {
                                                                                             return Visibility(
-                                                                                              visible: !allChatAllItem.lastMessageSeen.contains(currentUserReference),
+                                                                                              visible: _hasUnreadBadge(allChatAllItem),
                                                                                               child: Container(
                                                                                                 width: 20.0,
                                                                                                 height: 20.0,
@@ -2202,16 +2292,24 @@ class _ChatWidgetState extends State<ChatWidget> with TickerProviderStateMixin {
                                                                 (e.isGroup ==
                                                                     false))
                                                             .toList()
-                                                            ..sort((a, b) {
-                                                              final aTime = a.lastMessageAt;
-                                                              final bTime = b.lastMessageAt;
-                                                              // Handle null values - put nulls at the end
-                                                              if (aTime == null && bTime == null) return 0;
-                                                              if (aTime == null) return 1; // a goes after b
-                                                              if (bTime == null) return -1; // b goes after a
-                                                              // Both have values, sort descending (newest first)
-                                                              return bTime.compareTo(aTime);
-                                                            });
+                                                          ..sort((a, b) {
+                                                            final aTime =
+                                                                a.lastMessageAt;
+                                                            final bTime =
+                                                                b.lastMessageAt;
+                                                            // Handle null values - put nulls at the end
+                                                            if (aTime == null &&
+                                                                bTime == null)
+                                                              return 0;
+                                                            if (aTime == null)
+                                                              return 1; // a goes after b
+                                                            if (bTime == null)
+                                                              return -1; // b goes after a
+                                                            // Both have values, sort descending (newest first)
+                                                            return bTime
+                                                                .compareTo(
+                                                                    aTime);
+                                                          });
 
                                                     return Column(
                                                       mainAxisSize:
@@ -2352,6 +2450,11 @@ class _ChatWidgetState extends State<ChatWidget> with TickerProviderStateMixin {
                                                                               delete: () async {
                                                                                 await chatVarItem.reference.delete();
                                                                               },
+                isUnread: _isManuallyUnread(chatVarItem),
+                markAsUnread: () async {
+                    _toggleMarkUnread(chatVarItem);
+                },
+            
                                                                             ),
                                                                           ),
                                                                         ),
@@ -2549,7 +2652,7 @@ class _ChatWidgetState extends State<ChatWidget> with TickerProviderStateMixin {
                                                                             ),
                                                                             Builder(
                                                                               builder: (context) {
-                                                                                if (chatVarItem.lastMessageSeen.contains(currentUserReference) == false) {
+                                                                                if (_hasUnreadBadge(chatVarItem)) {
                                                                                   return Container(
                                                                                     width: 20.0,
                                                                                     height: 20.0,
@@ -2689,16 +2792,28 @@ class _ChatWidgetState extends State<ChatWidget> with TickerProviderStateMixin {
                                                                     (e.isGroup ==
                                                                         false))
                                                                 .toList()
-                                                                ..sort((a, b) {
-                                                                  final aTime = a.lastMessageAt;
-                                                                  final bTime = b.lastMessageAt;
-                                                                  // Handle null values - put nulls at the end
-                                                                  if (aTime == null && bTime == null) return 0;
-                                                                  if (aTime == null) return 1; // a goes after b
-                                                                  if (bTime == null) return -1; // b goes after a
-                                                                  // Both have values, sort descending (newest first)
-                                                                  return bTime.compareTo(aTime);
-                                                                });
+                                                              ..sort((a, b) {
+                                                                final aTime = a
+                                                                    .lastMessageAt;
+                                                                final bTime = b
+                                                                    .lastMessageAt;
+                                                                // Handle null values - put nulls at the end
+                                                                if (aTime ==
+                                                                        null &&
+                                                                    bTime ==
+                                                                        null)
+                                                                  return 0;
+                                                                if (aTime ==
+                                                                    null)
+                                                                  return 1; // a goes after b
+                                                                if (bTime ==
+                                                                    null)
+                                                                  return -1; // b goes after a
+                                                                // Both have values, sort descending (newest first)
+                                                                return bTime
+                                                                    .compareTo(
+                                                                        aTime);
+                                                              });
 
                                                         return Column(
                                                           mainAxisSize:
@@ -2830,6 +2945,11 @@ class _ChatWidgetState extends State<ChatWidget> with TickerProviderStateMixin {
                                                                                   delete: () async {
                                                                                     await chatVarItem.reference.delete();
                                                                                   },
+                isUnread: _isManuallyUnread(chatVarItem),
+                markAsUnread: () async {
+                    _toggleMarkUnread(chatVarItem);
+                },
+            
                                                                                 ),
                                                                               ),
                                                                             ),
@@ -3013,7 +3133,7 @@ class _ChatWidgetState extends State<ChatWidget> with TickerProviderStateMixin {
                                                                                 ),
                                                                                 Builder(
                                                                                   builder: (context) {
-                                                                                    if (chatVarItem.lastMessageSeen.contains(currentUserReference) == false) {
+                                                                                    if (_hasUnreadBadge(chatVarItem)) {
                                                                                       return Container(
                                                                                         width: 20.0,
                                                                                         height: 20.0,
@@ -3022,7 +3142,7 @@ class _ChatWidgetState extends State<ChatWidget> with TickerProviderStateMixin {
                                                                                           shape: BoxShape.circle,
                                                                                         ),
                                                                                       );
-                                                                                    } else if ((chatVarItem.lastMessageSeen.contains(currentUserReference) == true) && (chatVarItem.lastMessageSent == currentUserReference)) {
+                                                                                    } else if (!_hasUnreadBadge(chatVarItem) && (chatVarItem.lastMessageSent == currentUserReference)) {
                                                                                       return const Icon(
                                                                                         Icons.check,
                                                                                         color: Color(0xFF6B7280),
@@ -3304,16 +3424,24 @@ class _ChatWidgetState extends State<ChatWidget> with TickerProviderStateMixin {
                                                                 (e.isGroup ==
                                                                     true))
                                                             .toList()
-                                                            ..sort((a, b) {
-                                                              final aTime = a.lastMessageAt;
-                                                              final bTime = b.lastMessageAt;
-                                                              // Handle null values - put nulls at the end
-                                                              if (aTime == null && bTime == null) return 0;
-                                                              if (aTime == null) return 1; // a goes after b
-                                                              if (bTime == null) return -1; // b goes after a
-                                                              // Both have values, sort descending (newest first)
-                                                              return bTime.compareTo(aTime);
-                                                            });
+                                                          ..sort((a, b) {
+                                                            final aTime =
+                                                                a.lastMessageAt;
+                                                            final bTime =
+                                                                b.lastMessageAt;
+                                                            // Handle null values - put nulls at the end
+                                                            if (aTime == null &&
+                                                                bTime == null)
+                                                              return 0;
+                                                            if (aTime == null)
+                                                              return 1; // a goes after b
+                                                            if (bTime == null)
+                                                              return -1; // b goes after a
+                                                            // Both have values, sort descending (newest first)
+                                                            return bTime
+                                                                .compareTo(
+                                                                    aTime);
+                                                          });
 
                                                     return Column(
                                                       mainAxisSize:
@@ -3410,6 +3538,11 @@ class _ChatWidgetState extends State<ChatWidget> with TickerProviderStateMixin {
                                                                               () async {
                                                                             await chatVarItem.reference.delete();
                                                                           },
+                isUnread: _isManuallyUnread(chatVarItem),
+                markAsUnread: () async {
+                    _toggleMarkUnread(chatVarItem);
+                },
+            
                                                                         ),
                                                                       ),
                                                                     ),
@@ -3593,10 +3726,9 @@ class _ChatWidgetState extends State<ChatWidget> with TickerProviderStateMixin {
                                                                         Builder(
                                                                           builder:
                                                                               (context) {
-                                                                            if (chatVarItem.lastMessageSeen.contains(currentUserReference) ==
-                                                                                false) {
+                                                                            if (_hasUnreadBadge(chatVarItem)) {
                                                                               return Visibility(
-                                                                                visible: !chatVarItem.lastMessageSeen.contains(currentUserReference),
+                                                                                visible: _hasUnreadBadge(chatVarItem),
                                                                                 child: Container(
                                                                                   width: 20.0,
                                                                                   height: 20.0,
@@ -3737,21 +3869,36 @@ class _ChatWidgetState extends State<ChatWidget> with TickerProviderStateMixin {
                                                                     (e.isGroup ==
                                                                         true))
                                                                 .toList()
-                                                                ..sort((a, b) {
-                                                                  final aTime = a.lastMessageAt;
-                                                                  final bTime = b.lastMessageAt;
-                                                                  // Handle null values - put nulls at the end
-                                                                  if (aTime == null && bTime == null) return 0;
-                                                                  if (aTime == null) return 1; // a goes after b
-                                                                  if (bTime == null) return -1; // b goes after a
-                                                                  // Both have values, sort descending (newest first)
-                                                                  return bTime.compareTo(aTime);
-                                                                });
-                                                        
+                                                              ..sort((a, b) {
+                                                                final aTime = a
+                                                                    .lastMessageAt;
+                                                                final bTime = b
+                                                                    .lastMessageAt;
+                                                                // Handle null values - put nulls at the end
+                                                                if (aTime ==
+                                                                        null &&
+                                                                    bTime ==
+                                                                        null)
+                                                                  return 0;
+                                                                if (aTime ==
+                                                                    null)
+                                                                  return 1; // a goes after b
+                                                                if (bTime ==
+                                                                    null)
+                                                                  return -1; // b goes after a
+                                                                // Both have values, sort descending (newest first)
+                                                                return bTime
+                                                                    .compareTo(
+                                                                        aTime);
+                                                              });
+
                                                         // Debug: Log all groups to help diagnose missing groups
-                                                        debugPrint('🔍 Groups found: ${chatVar.length}');
-                                                        for (var group in chatVar) {
-                                                          debugPrint('  - ${group.title} (isGroup: ${group.isGroup}, lastMessageAt: ${group.lastMessageAt}, lastMessage: ${group.lastMessage})');
+                                                        debugPrint(
+                                                            '🔍 Groups found: ${chatVar.length}');
+                                                        for (var group
+                                                            in chatVar) {
+                                                          debugPrint(
+                                                              '  - ${group.title} (isGroup: ${group.isGroup}, lastMessageAt: ${group.lastMessageAt}, lastMessage: ${group.lastMessage})');
                                                         }
 
                                                         return Column(
@@ -3844,6 +3991,11 @@ class _ChatWidgetState extends State<ChatWidget> with TickerProviderStateMixin {
                                                                               delete: () async {
                                                                                 await chatVarItem.reference.delete();
                                                                               },
+                isUnread: _isManuallyUnread(chatVarItem),
+                markAsUnread: () async {
+                    _toggleMarkUnread(chatVarItem);
+                },
+            
                                                                             ),
                                                                           ),
                                                                         ),
@@ -4009,9 +4161,9 @@ class _ChatWidgetState extends State<ChatWidget> with TickerProviderStateMixin {
                                                                             ),
                                                                             Builder(
                                                                               builder: (context) {
-                                                                                if (chatVarItem.lastMessageSeen.contains(currentUserReference) == false) {
+                                                                                if (_hasUnreadBadge(chatVarItem)) {
                                                                                   return Visibility(
-                                                                                    visible: !chatVarItem.lastMessageSeen.contains(currentUserReference),
+                                                                                    visible: _hasUnreadBadge(chatVarItem),
                                                                                     child: Container(
                                                                                       width: 20.0,
                                                                                       height: 20.0,
@@ -4021,7 +4173,7 @@ class _ChatWidgetState extends State<ChatWidget> with TickerProviderStateMixin {
                                                                                       ),
                                                                                     ),
                                                                                   );
-                                                                                } else if ((chatVarItem.lastMessageSeen.contains(currentUserReference) == true) && (chatVarItem.lastMessageSent == currentUserReference)) {
+                                                                                } else if (!_hasUnreadBadge(chatVarItem) && (chatVarItem.lastMessageSent == currentUserReference)) {
                                                                                   return const Icon(
                                                                                     Icons.check,
                                                                                     color: Color(0xFF6B7280),
@@ -4236,7 +4388,1581 @@ class _ChatWidgetState extends State<ChatWidget> with TickerProviderStateMixin {
                                       ),
                                     ),
                                   ),
-                                ],
+                                
+KeepAliveWidgetWrapper(
+                                    builder: (context) => SingleChildScrollView(
+                                      child: Column(
+                                        mainAxisSize: MainAxisSize.min,
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.stretch,
+                                        children: [
+                                          StickyHeader(
+                                            overlapHeaders: false,
+                                            header: InkWell(
+                                              splashColor: Colors.transparent,
+                                              focusColor: Colors.transparent,
+                                              hoverColor: Colors.transparent,
+                                              highlightColor:
+                                                  Colors.transparent,
+                                              onTap: () async {
+                                                context.pushNamed(
+                                                    ContactsListWidget
+                                                        .routeName);
+                                              },
+                                              child: Container(
+                                                width: double.infinity,
+                                                height: 65.0,
+                                                decoration: BoxDecoration(
+                                                  color: FlutterFlowTheme.of(
+                                                          context)
+                                                      .secondaryBackground,
+                                                ),
+                                                child: Align(
+                                                  alignment:
+                                                      const AlignmentDirectional(
+                                                          0.0, 0.0),
+                                                  child: Padding(
+                                                    padding:
+                                                        const EdgeInsetsDirectional
+                                                            .fromSTEB(16.0,
+                                                            12.0, 16.0, 12.0),
+                                                    child: Row(
+                                                      mainAxisSize:
+                                                          MainAxisSize.max,
+                                                      mainAxisAlignment:
+                                                          MainAxisAlignment
+                                                              .spaceBetween,
+                                                      crossAxisAlignment:
+                                                          CrossAxisAlignment
+                                                              .center,
+                                                      children: [
+                                                        Row(
+                                                          mainAxisSize:
+                                                              MainAxisSize.min,
+                                                          children: [
+                                                            Container(
+                                                              width: 40.0,
+                                                              height: 40.0,
+                                                              decoration:
+                                                                  const BoxDecoration(
+                                                                color: Color(
+                                                                    0xFFEFF6FF),
+                                                                shape: BoxShape
+                                                                    .circle,
+                                                              ),
+                                                              child:
+                                                                  const Align(
+                                                                alignment:
+                                                                    AlignmentDirectional(
+                                                                        0.0,
+                                                                        0.0),
+                                                                child: Icon(
+                                                                  Icons.people,
+                                                                  color: Color(
+                                                                      0xFF3B82F6),
+                                                                  size: 20.0,
+                                                                ),
+                                                              ),
+                                                            ),
+                                                            Text(
+                                                              'View network connections',
+                                                              style: FlutterFlowTheme
+                                                                      .of(context)
+                                                                  .bodyMedium
+                                                                  .override(
+                                                                    font: GoogleFonts
+                                                                        .inter(
+                                                                      fontWeight:
+                                                                          FontWeight
+                                                                              .w500,
+                                                                      fontStyle: FlutterFlowTheme.of(
+                                                                              context)
+                                                                          .bodyMedium
+                                                                          .fontStyle,
+                                                                    ),
+                                                                    color: const Color(
+                                                                        0xFF3B82F6),
+                                                                    fontSize:
+                                                                        16.0,
+                                                                    letterSpacing:
+                                                                        0.0,
+                                                                    fontWeight:
+                                                                        FontWeight
+                                                                            .w500,
+                                                                    fontStyle: FlutterFlowTheme.of(
+                                                                            context)
+                                                                        .bodyMedium
+                                                                        .fontStyle,
+                                                                  ),
+                                                            ),
+                                                          ].divide(
+                                                              const SizedBox(
+                                                                  width: 12.0)),
+                                                        ),
+                                                        const Icon(
+                                                          Icons.chevron_right,
+                                                          color:
+                                                              Color(0xFF6B7280),
+                                                          size: 16.0,
+                                                        ),
+                                                      ],
+                                                    ),
+                                                  ),
+                                                ),
+                                              ),
+                                            ),
+                                            content: Column(
+                                              mainAxisSize: MainAxisSize.min,
+                                              children: [
+                                                Padding(
+                                                  padding:
+                                                      const EdgeInsetsDirectional
+                                                          .fromSTEB(
+                                                          18.0, 0.0, 18.0, 0.0),
+                                                  child: Column(
+                                                    mainAxisSize:
+                                                        MainAxisSize.max,
+                                                    crossAxisAlignment:
+                                                        CrossAxisAlignment
+                                                            .start,
+                                                    children: [
+                                                      if (chatChatsRecordList
+                                                          .where((e) =>
+                                                              e.isPin == true)
+                                                          .toList()
+                                                          .isNotEmpty)
+                                                        Padding(
+                                                          padding:
+                                                              const EdgeInsetsDirectional
+                                                                  .fromSTEB(
+                                                                  0.0,
+                                                                  12.0,
+                                                                  0.0,
+                                                                  12.0),
+                                                          child: Text(
+                                                            'Pinned',
+                                                            style: FlutterFlowTheme
+                                                                    .of(context)
+                                                                .bodyMedium
+                                                                .override(
+                                                                  font:
+                                                                      GoogleFonts
+                                                                          .inter(
+                                                                    fontWeight:
+                                                                        FontWeight
+                                                                            .w500,
+                                                                    fontStyle: FlutterFlowTheme.of(
+                                                                            context)
+                                                                        .bodyMedium
+                                                                        .fontStyle,
+                                                                  ),
+                                                                  color: const Color(
+                                                                      0xFF6B7280),
+                                                                  fontSize:
+                                                                      12.0,
+                                                                  letterSpacing:
+                                                                      0.0,
+                                                                  fontWeight:
+                                                                      FontWeight
+                                                                          .w500,
+                                                                  fontStyle: FlutterFlowTheme.of(
+                                                                          context)
+                                                                      .bodyMedium
+                                                                      .fontStyle,
+                                                                ),
+                                                          ).animateOnPageLoad(
+                                                              animationsMap[
+                                                                  'textOnPageLoadAnimation1']!),
+                                                        ),
+                                                      Builder(
+                                                        builder: (context) {
+                                                          final unreadChatPin =
+                                                              chatChatsRecordList
+                                                                  .where((e) =>
+                                                                      e.isPin ==
+                                                                      true)
+                                                                  .toList()
+                                                                ..sort((a, b) {
+                                                                  final aTime =
+                                                                      a.lastMessageAt;
+                                                                  final bTime =
+                                                                      b.lastMessageAt;
+                                                                  // Handle null values - put nulls at the end
+                                                                  if (aTime ==
+                                                                          null &&
+                                                                      bTime ==
+                                                                          null)
+                                                                    return 0;
+                                                                  if (aTime ==
+                                                                      null)
+                                                                    return 1; // a goes after b
+                                                                  if (bTime ==
+                                                                      null)
+                                                                    return -1; // b goes after a
+                                                                  // Both have values, sort descending (newest first)
+                                                                  return bTime
+                                                                      .compareTo(
+                                                                          aTime);
+                                                                });
+
+                                                          return Column(
+                                                            mainAxisSize:
+                                                                MainAxisSize
+                                                                    .max,
+                                                            children: List.generate(
+                                                                unreadChatPin
+                                                                    .length,
+                                                                (unreadChatPinIndex) {
+                                                              final unreadChatPinItem =
+                                                                  unreadChatPin[
+                                                                      unreadChatPinIndex];
+                                                              return Builder(
+                                                                builder:
+                                                                    (context) {
+                                                                  if (unreadChatPinItem
+                                                                          .isGroup ==
+                                                                      false) {
+                                                                    return Builder(
+                                                                      builder: (context) =>
+                                                                          StreamBuilder<
+                                                                              UsersRecord>(
+                                                                        stream: UsersRecord.getDocument(unreadChatPinItem
+                                                                            .members
+                                                                            .where((e) =>
+                                                                                e.id !=
+                                                                                currentUserReference?.id)
+                                                                            .toList()
+                                                                            .firstOrNull!),
+                                                                        builder:
+                                                                            (context,
+                                                                                snapshot) {
+                                                                          // Customize what your widget looks like when it's loading.
+                                                                          if (!snapshot
+                                                                              .hasData) {
+                                                                            return Center(
+                                                                              child: SizedBox(
+                                                                                width: 50.0,
+                                                                                height: 50.0,
+                                                                                child: CircularProgressIndicator(
+                                                                                  valueColor: AlwaysStoppedAnimation<Color>(
+                                                                                    FlutterFlowTheme.of(context).primary,
+                                                                                  ),
+                                                                                ),
+                                                                              ),
+                                                                            );
+                                                                          }
+
+                                                                          final containerUsersRecord =
+                                                                              snapshot.data!;
+
+                                                                          return InkWell(
+                                                                            splashColor:
+                                                                                Colors.transparent,
+                                                                            focusColor:
+                                                                                Colors.transparent,
+                                                                            hoverColor:
+                                                                                Colors.transparent,
+                                                                            highlightColor:
+                                                                                Colors.transparent,
+                                                                            onTap:
+                                                                                () async {
+                                                                              context.pushNamed(
+                                                                                ChatDetailWidget.routeName,
+                                                                                queryParameters: {
+                                                                                  'chatDoc': serializeParam(
+                                                                                    unreadChatPinItem,
+                                                                                    ParamType.Document,
+                                                                                  ),
+                                                                                }.withoutNulls,
+                                                                                extra: <String, dynamic>{
+                                                                                  'chatDoc': unreadChatPinItem,
+                                                                                },
+                                                                              );
+                                                                            },
+                                                                            onLongPress:
+                                                                                () async {
+                                                                              await showAlignedDialog(
+                                                                                context: context,
+                                                                                isGlobal: false,
+                                                                                avoidOverflow: false,
+                                                                                targetAnchor: const AlignmentDirectional(0.0, 0.0).resolve(Directionality.of(context)),
+                                                                                followerAnchor: const AlignmentDirectional(0.0, 0.0).resolve(Directionality.of(context)),
+                                                                                builder: (dialogContext) {
+                                                                                  return Material(
+                                                                                    color: Colors.transparent,
+                                                                                    child: GestureDetector(
+                                                                                      onTap: () {
+                                                                                        FocusScope.of(dialogContext).unfocus();
+                                                                                        FocusManager.instance.primaryFocus?.unfocus();
+                                                                                      },
+                                                                                      child: SizedBox(
+                                                                                        width: 150.0,
+                                                                                        child: ChatEditWidget(
+                                                                                          isPin: true,
+                                                                                          actionEdit: () async {
+                                                                                            await unreadChatPinItem.reference.update(createChatsRecordData(
+                                                                                              isPin: false,
+                                                                                            ));
+                                                                                          },
+                                                                                          delete: () async {
+                                                                                            await unreadChatPinItem.reference.delete();
+                                                                                          },
+                isUnread: _isManuallyUnread(unreadChatPinItem),
+                markAsUnread: () async {
+                    _toggleMarkUnread(unreadChatPinItem);
+                },
+            
+                                                                                        ),
+                                                                                      ),
+                                                                                    ),
+                                                                                  );
+                                                                                },
+                                                                              );
+                                                                            },
+                                                                            child:
+                                                                                Container(
+                                                                              width: double.infinity,
+                                                                              height: 72.0,
+                                                                              decoration: BoxDecoration(
+                                                                                color: FlutterFlowTheme.of(context).secondaryBackground,
+                                                                                borderRadius: BorderRadius.circular(12.0),
+                                                                              ),
+                                                                              child: Padding(
+                                                                                padding: const EdgeInsetsDirectional.fromSTEB(12.0, 12.0, 12.0, 12.0),
+                                                                                child: Row(
+                                                                                  mainAxisSize: MainAxisSize.max,
+                                                                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                                                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                                                                  children: [
+                                                                                    Expanded(
+                                                                                      child: Row(
+                                                                                        mainAxisSize: MainAxisSize.min,
+                                                                                        children: [
+                                                                                          Stack(
+                                                                                            children: [
+                                                                                              ClipRRect(
+                                                                                                borderRadius: BorderRadius.circular(24.0),
+                                                                                                child: CachedNetworkImage(
+                                                                                                  fadeInDuration: const Duration(milliseconds: 300),
+                                                                                                  fadeOutDuration: const Duration(milliseconds: 300),
+                                                                                                  imageUrl: valueOrDefault<String>(
+                                                                                                    containerUsersRecord.photoUrl,
+                                                                                                    'https://firebasestorage.googleapis.com/v0/b/linkedup-c3e29.firebasestorage.app/o/asset%2Fjurica-koletic-7YVZYZeITc8-unsplash.jpg?alt=media&token=d05a38c8-e024-4624-bdb3-82e4f7c6afab',
+                                                                                                  ),
+                                                                                                  width: 48.0,
+                                                                                                  height: 48.0,
+                                                                                                  fit: BoxFit.cover,
+                                                                                                ),
+                                                                                              ),
+                                                                                              if (false)
+                                                                                                Align(
+                                                                                                  alignment: const AlignmentDirectional(1.0, 1.0),
+                                                                                                  child: Container(
+                                                                                                    width: 12.0,
+                                                                                                    height: 12.0,
+                                                                                                    decoration: const BoxDecoration(
+                                                                                                      color: Color(0xFF10B981),
+                                                                                                      shape: BoxShape.circle,
+                                                                                                    ),
+                                                                                                  ),
+                                                                                                ),
+                                                                                            ],
+                                                                                          ),
+                                                                                          Column(
+                                                                                            mainAxisSize: MainAxisSize.max,
+                                                                                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                                                                            crossAxisAlignment: CrossAxisAlignment.start,
+                                                                                            children: [
+                                                                                              Row(
+                                                                                                mainAxisSize: MainAxisSize.min,
+                                                                                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                                                                                children: [
+                                                                                                  Text(
+                                                                                                    valueOrDefault<String>(
+                                                                                                      containerUsersRecord.displayName,
+                                                                                                      'N/A',
+                                                                                                    ).maybeHandleOverflow(
+                                                                                                      maxChars: 15,
+                                                                                                    ),
+                                                                                                    style: FlutterFlowTheme.of(context).bodyMedium.override(
+                                                                                                          font: GoogleFonts.inter(
+                                                                                                            fontWeight: FontWeight.w500,
+                                                                                                            fontStyle: FlutterFlowTheme.of(context).bodyMedium.fontStyle,
+                                                                                                          ),
+                                                                                                          color: const Color(0xFF1F2937),
+                                                                                                          fontSize: 16.0,
+                                                                                                          letterSpacing: 0.0,
+                                                                                                          fontWeight: FontWeight.w500,
+                                                                                                          fontStyle: FlutterFlowTheme.of(context).bodyMedium.fontStyle,
+                                                                                                        ),
+                                                                                                  ),
+                                                                                                ],
+                                                                                              ),
+                                                                                              Stack(
+                                                                                                children: [
+                                                                                                  Row(
+                                                                                                    mainAxisSize: MainAxisSize.max,
+                                                                                                    children: [
+                                                                                                      if (unreadChatPinItem.lastMessage != '')
+                                                                                                        Text(
+                                                                                                          valueOrDefault<String>(
+                                                                                                            unreadChatPinItem.lastMessageSent == currentUserReference ? 'You: ' : '${containerUsersRecord.displayName}: ',
+                                                                                                            'N/A',
+                                                                                                          ).maybeHandleOverflow(
+                                                                                                            maxChars: 10,
+                                                                                                            replacement: '…',
+                                                                                                          ),
+                                                                                                          style: FlutterFlowTheme.of(context).bodyMedium.override(
+                                                                                                                font: GoogleFonts.inter(
+                                                                                                                  fontWeight: FlutterFlowTheme.of(context).bodyMedium.fontWeight,
+                                                                                                                  fontStyle: FlutterFlowTheme.of(context).bodyMedium.fontStyle,
+                                                                                                                ),
+                                                                                                                letterSpacing: 0.0,
+                                                                                                                fontWeight: FlutterFlowTheme.of(context).bodyMedium.fontWeight,
+                                                                                                                fontStyle: FlutterFlowTheme.of(context).bodyMedium.fontStyle,
+                                                                                                              ),
+                                                                                                        ),
+                                                                                                      if (unreadChatPinItem.lastMessageType == MessageType.image)
+                                                                                                        const Icon(
+                                                                                                          Icons.image,
+                                                                                                          color: Color(0xFF6B7280),
+                                                                                                          size: 12.0,
+                                                                                                        ),
+                                                                                                      if (unreadChatPinItem.lastMessageType == MessageType.video)
+                                                                                                        const Icon(
+                                                                                                          Icons.videocam,
+                                                                                                          color: Color(0xFF6B7280),
+                                                                                                          size: 12.0,
+                                                                                                        ),
+                                                                                                      Text(
+                                                                                                        valueOrDefault<String>(
+                                                                                                          unreadChatPinItem.lastMessage == ''
+                                                                                                              ? 'Let\'s start a chat!'
+                                                                                                              : valueOrDefault<String>(
+                                                                                                                  unreadChatPinItem.lastMessage,
+                                                                                                                  'H ey everyone! I\'m excited for...',
+                                                                                                                ),
+                                                                                                          'N/A',
+                                                                                                        ).maybeHandleOverflow(
+                                                                                                          maxChars: 15,
+                                                                                                          replacement: '…',
+                                                                                                        ),
+                                                                                                        style: FlutterFlowTheme.of(context).bodyMedium.override(
+                                                                                                              font: GoogleFonts.inter(
+                                                                                                                fontWeight: FontWeight.normal,
+                                                                                                                fontStyle: FlutterFlowTheme.of(context).bodyMedium.fontStyle,
+                                                                                                              ),
+                                                                                                              color: FlutterFlowTheme.of(context).secondaryText,
+                                                                                                              fontSize: 14.0,
+                                                                                                              letterSpacing: 0.0,
+                                                                                                              fontWeight: FontWeight.normal,
+                                                                                                              fontStyle: FlutterFlowTheme.of(context).bodyMedium.fontStyle,
+                                                                                                            ),
+                                                                                                      ),
+                                                                                                    ],
+                                                                                                  ),
+                                                                                                ],
+                                                                                              ),
+                                                                                            ].divide(const SizedBox(height: 4.0)),
+                                                                                          ),
+                                                                                        ].divide(const SizedBox(width: 12.0)),
+                                                                                      ),
+                                                                                    ),
+                                                                                    Column(
+                                                                                      mainAxisSize: MainAxisSize.max,
+                                                                                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                                                                      crossAxisAlignment: CrossAxisAlignment.end,
+                                                                                      children: [
+                                                                                        Text(
+                                                                                          unreadChatPinItem.lastMessageAt != null
+                                                                                              ? valueOrDefault<String>(
+                                                                                                  dateTimeFormat("relative", unreadChatPinItem.lastMessageAt),
+                                                                                                  'N/A',
+                                                                                                )
+                                                                                              : 'N/A',
+                                                                                          style: FlutterFlowTheme.of(context).bodyMedium.override(
+                                                                                                font: GoogleFonts.inter(
+                                                                                                  fontWeight: FontWeight.normal,
+                                                                                                  fontStyle: FlutterFlowTheme.of(context).bodyMedium.fontStyle,
+                                                                                                ),
+                                                                                                color: const Color(0xFF6B7280),
+                                                                                                fontSize: 12.0,
+                                                                                                letterSpacing: 0.0,
+                                                                                                fontWeight: FontWeight.normal,
+                                                                                                fontStyle: FlutterFlowTheme.of(context).bodyMedium.fontStyle,
+                                                                                              ),
+                                                                                        ),
+                                                                                        Builder(
+                                                                                          builder: (context) {
+                                                                                            if (_hasUnreadBadge(unreadChatPinItem)) {
+                                                                                              return Container(
+                                                                                                width: 20.0,
+                                                                                                height: 20.0,
+                                                                                                decoration: const BoxDecoration(
+                                                                                                  color: Color(0xFF3B82F6),
+                                                                                                  shape: BoxShape.circle,
+                                                                                                ),
+                                                                                              );
+                                                                                            } else if (!_hasUnreadBadge(unreadChatPinItem) && (unreadChatPinItem.lastMessageSent == currentUserReference)) {
+                                                                                              return const Icon(
+                                                                                                Icons.check,
+                                                                                                color: Color(0xFF6B7280),
+                                                                                                size: 16.0,
+                                                                                              );
+                                                                                            } else {
+                                                                                              return Container(
+                                                                                                width: 5.0,
+                                                                                                height: 5.0,
+                                                                                                decoration: BoxDecoration(
+                                                                                                  color: FlutterFlowTheme.of(context).secondaryBackground,
+                                                                                                ),
+                                                                                              );
+                                                                                            }
+                                                                                          },
+                                                                                        ),
+                                                                                      ],
+                                                                                    ),
+                                                                                  ],
+                                                                                ),
+                                                                              ),
+                                                                            ),
+                                                                          );
+                                                                        },
+                                                                      ),
+                                                                    );
+                                                                  } else {
+                                                                    return Builder(
+                                                                      builder:
+                                                                          (context) =>
+                                                                              InkWell(
+                                                                        splashColor:
+                                                                            Colors.transparent,
+                                                                        focusColor:
+                                                                            Colors.transparent,
+                                                                        hoverColor:
+                                                                            Colors.transparent,
+                                                                        highlightColor:
+                                                                            Colors.transparent,
+                                                                        onTap:
+                                                                            () async {
+                                                                          context
+                                                                              .pushNamed(
+                                                                            ChatDetailWidget.routeName,
+                                                                            queryParameters:
+                                                                                {
+                                                                              'chatDoc': serializeParam(
+                                                                                unreadChatPinItem,
+                                                                                ParamType.Document,
+                                                                              ),
+                                                                            }.withoutNulls,
+                                                                            extra: <String,
+                                                                                dynamic>{
+                                                                              'chatDoc': unreadChatPinItem,
+                                                                            },
+                                                                          );
+                                                                        },
+                                                                        onLongPress:
+                                                                            () async {
+                                                                          await showAlignedDialog(
+                                                                            context:
+                                                                                context,
+                                                                            isGlobal:
+                                                                                false,
+                                                                            avoidOverflow:
+                                                                                false,
+                                                                            targetAnchor:
+                                                                                const AlignmentDirectional(0.0, 0.0).resolve(Directionality.of(context)),
+                                                                            followerAnchor:
+                                                                                const AlignmentDirectional(0.0, 0.0).resolve(Directionality.of(context)),
+                                                                            builder:
+                                                                                (dialogContext) {
+                                                                              return Material(
+                                                                                color: Colors.transparent,
+                                                                                child: GestureDetector(
+                                                                                  onTap: () {
+                                                                                    FocusScope.of(dialogContext).unfocus();
+                                                                                    FocusManager.instance.primaryFocus?.unfocus();
+                                                                                  },
+                                                                                  child: SizedBox(
+                                                                                    width: 150.0,
+                                                                                    child: ChatEditWidget(
+                                                                                      isPin: true,
+                                                                                      actionEdit: () async {
+                                                                                        await unreadChatPinItem.reference.update(createChatsRecordData(
+                                                                                          isPin: false,
+                                                                                        ));
+                                                                                        Navigator.pop(context);
+                                                                                      },
+                                                                                      delete: () async {
+                                                                                        await unreadChatPinItem.reference.delete();
+                                                                                        Navigator.pop(context);
+                                                                                      },
+                isUnread: _isManuallyUnread(unreadChatPinItem),
+                markAsUnread: () async {
+                    _toggleMarkUnread(unreadChatPinItem);
+                },
+            
+                                                                                    ),
+                                                                                  ),
+                                                                                ),
+                                                                              );
+                                                                            },
+                                                                          );
+                                                                        },
+                                                                        child:
+                                                                            Container(
+                                                                          width:
+                                                                              double.infinity,
+                                                                          height:
+                                                                              72.0,
+                                                                          decoration:
+                                                                              BoxDecoration(
+                                                                            color:
+                                                                                FlutterFlowTheme.of(context).secondaryBackground,
+                                                                            borderRadius:
+                                                                                BorderRadius.circular(12.0),
+                                                                          ),
+                                                                          child:
+                                                                              Padding(
+                                                                            padding: const EdgeInsetsDirectional.fromSTEB(
+                                                                                12.0,
+                                                                                12.0,
+                                                                                12.0,
+                                                                                12.0),
+                                                                            child:
+                                                                                Row(
+                                                                              mainAxisSize: MainAxisSize.max,
+                                                                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                                                              crossAxisAlignment: CrossAxisAlignment.start,
+                                                                              children: [
+                                                                                Expanded(
+                                                                                  child: Row(
+                                                                                    mainAxisSize: MainAxisSize.min,
+                                                                                    children: [
+                                                                                      Stack(
+                                                                                        children: [
+                                                                                          ClipRRect(
+                                                                                            borderRadius: BorderRadius.circular(24.0),
+                                                                                            child: CachedNetworkImage(
+                                                                                              fadeInDuration: const Duration(milliseconds: 300),
+                                                                                              fadeOutDuration: const Duration(milliseconds: 300),
+                                                                                              imageUrl: valueOrDefault<String>(
+                                                                                                unreadChatPinItem.chatImageUrl,
+                                                                                                'https://firebasestorage.googleapis.com/v0/b/linkedup-c3e29.firebasestorage.app/o/asset%2Fjurica-koletic-7YVZYZeITc8-unsplash.jpg?alt=media&token=d05a38c8-e024-4624-bdb3-82e4f7c6afab',
+                                                                                              ),
+                                                                                              width: 48.0,
+                                                                                              height: 48.0,
+                                                                                              fit: BoxFit.cover,
+                                                                                            ),
+                                                                                          ),
+                                                                                          if (false)
+                                                                                            Align(
+                                                                                              alignment: const AlignmentDirectional(1.0, 1.0),
+                                                                                              child: Container(
+                                                                                                width: 12.0,
+                                                                                                height: 12.0,
+                                                                                                decoration: const BoxDecoration(
+                                                                                                  color: Color(0xFF10B981),
+                                                                                                  shape: BoxShape.circle,
+                                                                                                ),
+                                                                                              ),
+                                                                                            ),
+                                                                                        ],
+                                                                                      ),
+                                                                                      Column(
+                                                                                        mainAxisSize: MainAxisSize.max,
+                                                                                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                                                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                                                                        children: [
+                                                                                          Row(
+                                                                                            mainAxisSize: MainAxisSize.min,
+                                                                                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                                                                            children: [
+                                                                                              Text(
+                                                                                                unreadChatPinItem.title.maybeHandleOverflow(
+                                                                                                  maxChars: 15,
+                                                                                                ),
+                                                                                                style: FlutterFlowTheme.of(context).bodyMedium.override(
+                                                                                                      font: GoogleFonts.inter(
+                                                                                                        fontWeight: FontWeight.w500,
+                                                                                                        fontStyle: FlutterFlowTheme.of(context).bodyMedium.fontStyle,
+                                                                                                      ),
+                                                                                                      color: const Color(0xFF1F2937),
+                                                                                                      fontSize: 16.0,
+                                                                                                      letterSpacing: 0.0,
+                                                                                                      fontWeight: FontWeight.w500,
+                                                                                                      fontStyle: FlutterFlowTheme.of(context).bodyMedium.fontStyle,
+                                                                                                    ),
+                                                                                              ),
+                                                                                            ],
+                                                                                          ),
+                                                                                          Row(
+                                                                                            mainAxisSize: MainAxisSize.max,
+                                                                                            children: [
+                                                                                              if (unreadChatPinItem.lastMessageType == MessageType.image)
+                                                                                                const Icon(
+                                                                                                  Icons.image,
+                                                                                                  color: Color(0xFF6B7280),
+                                                                                                  size: 18.0,
+                                                                                                ),
+                                                                                              if (unreadChatPinItem.lastMessageType == MessageType.video)
+                                                                                                const Icon(
+                                                                                                  Icons.videocam,
+                                                                                                  color: Color(0xFF6B7280),
+                                                                                                  size: 18.0,
+                                                                                                ),
+                                                                                              Text(
+                                                                                                valueOrDefault<String>(
+                                                                                                  unreadChatPinItem.lastMessage,
+                                                                                                  'Let\'s Start a Chat',
+                                                                                                ).maybeHandleOverflow(
+                                                                                                  maxChars: 15,
+                                                                                                  replacement: '…',
+                                                                                                ),
+                                                                                                style: FlutterFlowTheme.of(context).bodyMedium.override(
+                                                                                                      font: GoogleFonts.inter(
+                                                                                                        fontWeight: FlutterFlowTheme.of(context).bodyMedium.fontWeight,
+                                                                                                        fontStyle: FlutterFlowTheme.of(context).bodyMedium.fontStyle,
+                                                                                                      ),
+                                                                                                      letterSpacing: 0.0,
+                                                                                                      fontWeight: FlutterFlowTheme.of(context).bodyMedium.fontWeight,
+                                                                                                      fontStyle: FlutterFlowTheme.of(context).bodyMedium.fontStyle,
+                                                                                                    ),
+                                                                                              ),
+                                                                                            ],
+                                                                                          ),
+                                                                                        ].divide(const SizedBox(height: 4.0)),
+                                                                                      ),
+                                                                                    ].divide(const SizedBox(width: 12.0)),
+                                                                                  ),
+                                                                                ),
+                                                                                Column(
+                                                                                  mainAxisSize: MainAxisSize.max,
+                                                                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                                                                  crossAxisAlignment: CrossAxisAlignment.end,
+                                                                                  children: [
+                                                                                    Text(
+                                                                                      valueOrDefault<String>(
+                                                                                        dateTimeFormat("relative", unreadChatPinItem.lastMessageAt),
+                                                                                        'N/A',
+                                                                                      ),
+                                                                                      style: FlutterFlowTheme.of(context).bodyMedium.override(
+                                                                                            font: GoogleFonts.inter(
+                                                                                              fontWeight: FontWeight.normal,
+                                                                                              fontStyle: FlutterFlowTheme.of(context).bodyMedium.fontStyle,
+                                                                                            ),
+                                                                                            color: const Color(0xFF6B7280),
+                                                                                            fontSize: 12.0,
+                                                                                            letterSpacing: 0.0,
+                                                                                            fontWeight: FontWeight.normal,
+                                                                                            fontStyle: FlutterFlowTheme.of(context).bodyMedium.fontStyle,
+                                                                                          ),
+                                                                                    ),
+                                                                                    Builder(
+                                                                                      builder: (context) {
+                                                                                        if (unreadChatPinItem.lastMessageSent != currentUserReference) {
+                                                                                          return Visibility(
+                                                                                            visible: _hasUnreadBadge(unreadChatPinItem),
+                                                                                            child: Container(
+                                                                                              width: 20.0,
+                                                                                              height: 20.0,
+                                                                                              decoration: const BoxDecoration(
+                                                                                                color: Color(0xFF3B82F6),
+                                                                                                shape: BoxShape.circle,
+                                                                                              ),
+                                                                                            ),
+                                                                                          );
+                                                                                        } else {
+                                                                                          return const Icon(
+                                                                                            Icons.check,
+                                                                                            color: Color(0xFF6B7280),
+                                                                                            size: 16.0,
+                                                                                          );
+                                                                                        }
+                                                                                      },
+                                                                                    ),
+                                                                                  ],
+                                                                                ),
+                                                                              ],
+                                                                            ),
+                                                                          ),
+                                                                        ),
+                                                                      ).animateOnPageLoad(
+                                                                        animationsMap[
+                                                                            'containerOnPageLoadAnimation1']!,
+                                                                        effects: [
+                                                                          MoveEffect(
+                                                                            curve:
+                                                                                Curves.easeInOut,
+                                                                            delay:
+                                                                                valueOrDefault<double>(
+                                                                              (unreadChatPinIndex * 48),
+                                                                              0.0,
+                                                                            ).ms,
+                                                                            duration:
+                                                                                600.0.ms,
+                                                                            begin:
+                                                                                const Offset(0.0, 30.0),
+                                                                            end:
+                                                                                const Offset(0.0, 0.0),
+                                                                          ),
+                                                                        ],
+                                                                      ),
+                                                                    );
+                                                                  }
+                                                                },
+                                                              ).animateOnPageLoad(
+                                                                animationsMap[
+                                                                    'conditionalBuilderOnPageLoadAnimation1']!,
+                                                                effects: [
+                                                                  MoveEffect(
+                                                                    curve: Curves
+                                                                        .easeInOut,
+                                                                    delay: valueOrDefault<
+                                                                        double>(
+                                                                      (unreadChatPinIndex *
+                                                                          48),
+                                                                      0.0,
+                                                                    ).ms,
+                                                                    duration:
+                                                                        600.0
+                                                                            .ms,
+                                                                    begin:
+                                                                        const Offset(
+                                                                            0.0,
+                                                                            30.0),
+                                                                    end: const Offset(
+                                                                        0.0,
+                                                                        0.0),
+                                                                  ),
+                                                                ],
+                                                              );
+                                                            }),
+                                                          );
+                                                        },
+                                                      ),
+                                                    ],
+                                                  ),
+                                                ),
+                                                Padding(
+                                                  padding:
+                                                      const EdgeInsetsDirectional
+                                                          .fromSTEB(
+                                                          18.0, 0.0, 18.0, 0.0),
+                                                  child: Column(
+                                                    mainAxisSize:
+                                                        MainAxisSize.max,
+                                                    crossAxisAlignment:
+                                                        CrossAxisAlignment
+                                                            .start,
+                                                    children: [
+                                                      if (chatChatsRecordList
+                                                          .where((e) =>
+                                                              e.isPin == false)
+                                                          .toList()
+                                                          .isNotEmpty)
+                                                        Padding(
+                                                          padding:
+                                                              const EdgeInsetsDirectional
+                                                                  .fromSTEB(
+                                                                  0.0,
+                                                                  12.0,
+                                                                  0.0,
+                                                                  12.0),
+                                                          child: Text(
+                                                            'Recent',
+                                                            style: FlutterFlowTheme
+                                                                    .of(context)
+                                                                .bodyMedium
+                                                                .override(
+                                                                  font:
+                                                                      GoogleFonts
+                                                                          .inter(
+                                                                    fontWeight:
+                                                                        FontWeight
+                                                                            .w500,
+                                                                    fontStyle: FlutterFlowTheme.of(
+                                                                            context)
+                                                                        .bodyMedium
+                                                                        .fontStyle,
+                                                                  ),
+                                                                  color: const Color(
+                                                                      0xFF6B7280),
+                                                                  fontSize:
+                                                                      12.0,
+                                                                  letterSpacing:
+                                                                      0.0,
+                                                                  fontWeight:
+                                                                      FontWeight
+                                                                          .w500,
+                                                                  fontStyle: FlutterFlowTheme.of(
+                                                                          context)
+                                                                      .bodyMedium
+                                                                      .fontStyle,
+                                                                ),
+                                                          ).animateOnPageLoad(
+                                                              animationsMap[
+                                                                  'textOnPageLoadAnimation2']!),
+                                                        ),
+                                                      Builder(
+                                                        builder: (context) {
+                                                          final unreadChatAll =
+                                                              chatChatsRecordList
+                                                                  .where((e) =>
+                                                                      e.isPin ==
+                                                                      false)
+                                                                  .toList()
+                                                                ..sort((a, b) {
+                                                                  final aTime =
+                                                                      a.lastMessageAt;
+                                                                  final bTime =
+                                                                      b.lastMessageAt;
+                                                                  // Handle null values - put nulls at the end
+                                                                  if (aTime ==
+                                                                          null &&
+                                                                      bTime ==
+                                                                          null)
+                                                                    return 0;
+                                                                  if (aTime ==
+                                                                      null)
+                                                                    return 1; // a goes after b
+                                                                  if (bTime ==
+                                                                      null)
+                                                                    return -1; // b goes after a
+                                                                  // Both have values, sort descending (newest first)
+                                                                  return bTime
+                                                                      .compareTo(
+                                                                          aTime);
+                                                                });
+
+                                                          return Column(
+                                                            mainAxisSize:
+                                                                MainAxisSize
+                                                                    .max,
+                                                            children: List.generate(
+                                                                unreadChatAll
+                                                                    .length,
+                                                                (unreadChatAllIndex) {
+                                                              final unreadChatAllItem =
+                                                                  unreadChatAll[
+                                                                      unreadChatAllIndex];
+                                                              return Builder(
+                                                                builder:
+                                                                    (context) {
+                                                                  if (unreadChatAllItem
+                                                                          .isGroup ==
+                                                                      false) {
+                                                                    return Builder(
+                                                                      builder: (context) =>
+                                                                          FutureBuilder<
+                                                                              UsersRecord>(
+                                                                        future: UsersRecord.getDocumentOnce(unreadChatAllItem.members.where((e) => e.id != currentUserReference?.id).toList().firstOrNull !=
+                                                                                null
+                                                                            ? unreadChatAllItem.members.where((e) => e.id != currentUserReference?.id).toList().firstOrNull!
+                                                                            : unreadChatAllItem.members.lastOrNull!),
+                                                                        builder:
+                                                                            (context,
+                                                                                snapshot) {
+                                                                          // Customize what your widget looks like when it's loading.
+                                                                          if (!snapshot
+                                                                              .hasData) {
+                                                                            return Center(
+                                                                              child: SizedBox(
+                                                                                width: 50.0,
+                                                                                height: 50.0,
+                                                                                child: CircularProgressIndicator(
+                                                                                  valueColor: AlwaysStoppedAnimation<Color>(
+                                                                                    FlutterFlowTheme.of(context).primary,
+                                                                                  ),
+                                                                                ),
+                                                                              ),
+                                                                            );
+                                                                          }
+
+                                                                          final containerUsersRecord =
+                                                                              snapshot.data!;
+
+                                                                          return InkWell(
+                                                                            splashColor:
+                                                                                Colors.transparent,
+                                                                            focusColor:
+                                                                                Colors.transparent,
+                                                                            hoverColor:
+                                                                                Colors.transparent,
+                                                                            highlightColor:
+                                                                                Colors.transparent,
+                                                                            onTap:
+                                                                                () async {
+                                                                              context.pushNamed(
+                                                                                ChatDetailWidget.routeName,
+                                                                                queryParameters: {
+                                                                                  'chatDoc': serializeParam(
+                                                                                    unreadChatAllItem,
+                                                                                    ParamType.Document,
+                                                                                  ),
+                                                                                }.withoutNulls,
+                                                                                extra: <String, dynamic>{
+                                                                                  'chatDoc': unreadChatAllItem,
+                                                                                },
+                                                                              );
+                                                                            },
+                                                                            onLongPress:
+                                                                                () async {
+                                                                              await showAlignedDialog(
+                                                                                context: context,
+                                                                                isGlobal: false,
+                                                                                avoidOverflow: false,
+                                                                                targetAnchor: const AlignmentDirectional(0.0, 0.0).resolve(Directionality.of(context)),
+                                                                                followerAnchor: const AlignmentDirectional(0.0, 0.0).resolve(Directionality.of(context)),
+                                                                                builder: (dialogContext) {
+                                                                                  return Material(
+                                                                                    color: Colors.transparent,
+                                                                                    child: GestureDetector(
+                                                                                      onTap: () {
+                                                                                        FocusScope.of(dialogContext).unfocus();
+                                                                                        FocusManager.instance.primaryFocus?.unfocus();
+                                                                                      },
+                                                                                      child: SizedBox(
+                                                                                        width: 150.0,
+                                                                                        child: ChatEditWidget(
+                                                                                          isPin: false,
+                                                                                          actionEdit: () async {
+                                                                                            await unreadChatAllItem.reference.update(createChatsRecordData(
+                                                                                              isPin: true,
+                                                                                            ));
+                                                                                          },
+                                                                                          delete: () async {
+                                                                                            await unreadChatAllItem.reference.delete();
+                                                                                          },
+                isUnread: _isManuallyUnread(unreadChatAllItem),
+                markAsUnread: () async {
+                    _toggleMarkUnread(unreadChatAllItem);
+                },
+            
+                                                                                        ),
+                                                                                      ),
+                                                                                    ),
+                                                                                  );
+                                                                                },
+                                                                              );
+                                                                            },
+                                                                            child:
+                                                                                Container(
+                                                                              width: double.infinity,
+                                                                              height: 72.0,
+                                                                              decoration: BoxDecoration(
+                                                                                color: FlutterFlowTheme.of(context).secondaryBackground,
+                                                                                borderRadius: BorderRadius.circular(12.0),
+                                                                              ),
+                                                                              child: Padding(
+                                                                                padding: const EdgeInsetsDirectional.fromSTEB(12.0, 12.0, 12.0, 12.0),
+                                                                                child: Row(
+                                                                                  mainAxisSize: MainAxisSize.max,
+                                                                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                                                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                                                                  children: [
+                                                                                    Expanded(
+                                                                                      child: Row(
+                                                                                        mainAxisSize: MainAxisSize.min,
+                                                                                        children: [
+                                                                                          Stack(
+                                                                                            children: [
+                                                                                              ClipRRect(
+                                                                                                borderRadius: BorderRadius.circular(24.0),
+                                                                                                child: CachedNetworkImage(
+                                                                                                  fadeInDuration: const Duration(milliseconds: 300),
+                                                                                                  fadeOutDuration: const Duration(milliseconds: 300),
+                                                                                                  imageUrl: valueOrDefault<String>(
+                                                                                                    containerUsersRecord.photoUrl,
+                                                                                                    'https://firebasestorage.googleapis.com/v0/b/linkedup-c3e29.firebasestorage.app/o/asset%2Fjurica-koletic-7YVZYZeITc8-unsplash.jpg?alt=media&token=d05a38c8-e024-4624-bdb3-82e4f7c6afab',
+                                                                                                  ),
+                                                                                                  width: 48.0,
+                                                                                                  height: 48.0,
+                                                                                                  fit: BoxFit.cover,
+                                                                                                ),
+                                                                                              ),
+                                                                                              if (false)
+                                                                                                Align(
+                                                                                                  alignment: const AlignmentDirectional(1.0, 1.0),
+                                                                                                  child: Container(
+                                                                                                    width: 12.0,
+                                                                                                    height: 12.0,
+                                                                                                    decoration: const BoxDecoration(
+                                                                                                      color: Color(0xFF10B981),
+                                                                                                      shape: BoxShape.circle,
+                                                                                                    ),
+                                                                                                  ),
+                                                                                                ),
+                                                                                            ],
+                                                                                          ),
+                                                                                          Column(
+                                                                                            mainAxisSize: MainAxisSize.max,
+                                                                                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                                                                            crossAxisAlignment: CrossAxisAlignment.start,
+                                                                                            children: [
+                                                                                              Row(
+                                                                                                mainAxisSize: MainAxisSize.min,
+                                                                                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                                                                                children: [
+                                                                                                  Text(
+                                                                                                    valueOrDefault<String>(
+                                                                                                      containerUsersRecord.displayName,
+                                                                                                      'N/A',
+                                                                                                    ).maybeHandleOverflow(
+                                                                                                      maxChars: 15,
+                                                                                                    ),
+                                                                                                    style: FlutterFlowTheme.of(context).bodyMedium.override(
+                                                                                                          font: GoogleFonts.inter(
+                                                                                                            fontWeight: FontWeight.w500,
+                                                                                                            fontStyle: FlutterFlowTheme.of(context).bodyMedium.fontStyle,
+                                                                                                          ),
+                                                                                                          color: const Color(0xFF1F2937),
+                                                                                                          fontSize: 16.0,
+                                                                                                          letterSpacing: 0.0,
+                                                                                                          fontWeight: FontWeight.w500,
+                                                                                                          fontStyle: FlutterFlowTheme.of(context).bodyMedium.fontStyle,
+                                                                                                        ),
+                                                                                                  ),
+                                                                                                ],
+                                                                                              ),
+                                                                                              Stack(
+                                                                                                children: [
+                                                                                                  Row(
+                                                                                                    mainAxisSize: MainAxisSize.max,
+                                                                                                    children: [
+                                                                                                      if (unreadChatAllItem.lastMessage != '')
+                                                                                                        Text(
+                                                                                                          valueOrDefault<String>(
+                                                                                                            unreadChatAllItem.lastMessageSent == currentUserReference ? 'You: ' : '${containerUsersRecord.displayName}: ',
+                                                                                                            'N/A',
+                                                                                                          ).maybeHandleOverflow(
+                                                                                                            maxChars: 10,
+                                                                                                            replacement: '…',
+                                                                                                          ),
+                                                                                                          style: FlutterFlowTheme.of(context).bodyMedium.override(
+                                                                                                                font: GoogleFonts.inter(
+                                                                                                                  fontWeight: FlutterFlowTheme.of(context).bodyMedium.fontWeight,
+                                                                                                                  fontStyle: FlutterFlowTheme.of(context).bodyMedium.fontStyle,
+                                                                                                                ),
+                                                                                                                letterSpacing: 0.0,
+                                                                                                                fontWeight: FlutterFlowTheme.of(context).bodyMedium.fontWeight,
+                                                                                                                fontStyle: FlutterFlowTheme.of(context).bodyMedium.fontStyle,
+                                                                                                              ),
+                                                                                                        ),
+                                                                                                      if (unreadChatAllItem.lastMessageType == MessageType.image)
+                                                                                                        const Icon(
+                                                                                                          Icons.image,
+                                                                                                          color: Color(0xFF6B7280),
+                                                                                                          size: 12.0,
+                                                                                                        ),
+                                                                                                      if (unreadChatAllItem.lastMessageType == MessageType.video)
+                                                                                                        const Icon(
+                                                                                                          Icons.videocam,
+                                                                                                          color: Color(0xFF6B7280),
+                                                                                                          size: 12.0,
+                                                                                                        ),
+                                                                                                      Text(
+                                                                                                        valueOrDefault<String>(
+                                                                                                          unreadChatAllItem.lastMessage == ''
+                                                                                                              ? 'Let\'s start a chat!'
+                                                                                                              : valueOrDefault<String>(
+                                                                                                                  unreadChatAllItem.lastMessage,
+                                                                                                                  'H ey everyone! I\'m excited for...',
+                                                                                                                ),
+                                                                                                          'N/A',
+                                                                                                        ).maybeHandleOverflow(
+                                                                                                          maxChars: 15,
+                                                                                                          replacement: '…',
+                                                                                                        ),
+                                                                                                        style: FlutterFlowTheme.of(context).bodyMedium.override(
+                                                                                                              font: GoogleFonts.inter(
+                                                                                                                fontWeight: FontWeight.normal,
+                                                                                                                fontStyle: FlutterFlowTheme.of(context).bodyMedium.fontStyle,
+                                                                                                              ),
+                                                                                                              color: FlutterFlowTheme.of(context).secondaryText,
+                                                                                                              fontSize: 14.0,
+                                                                                                              letterSpacing: 0.0,
+                                                                                                              fontWeight: FontWeight.normal,
+                                                                                                              fontStyle: FlutterFlowTheme.of(context).bodyMedium.fontStyle,
+                                                                                                            ),
+                                                                                                      ),
+                                                                                                    ],
+                                                                                                  ),
+                                                                                                ],
+                                                                                              ),
+                                                                                            ].divide(const SizedBox(height: 4.0)),
+                                                                                          ),
+                                                                                        ].divide(const SizedBox(width: 12.0)),
+                                                                                      ),
+                                                                                    ),
+                                                                                    Column(
+                                                                                      mainAxisSize: MainAxisSize.max,
+                                                                                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                                                                      crossAxisAlignment: CrossAxisAlignment.end,
+                                                                                      children: [
+                                                                                        Text(
+                                                                                          unreadChatAllItem.lastMessageAt != null
+                                                                                              ? valueOrDefault<String>(
+                                                                                                  dateTimeFormat("relative", unreadChatAllItem.lastMessageAt),
+                                                                                                  'N/A',
+                                                                                                )
+                                                                                              : dateTimeFormat("relative", getCurrentTimestamp),
+                                                                                          style: FlutterFlowTheme.of(context).bodyMedium.override(
+                                                                                                font: GoogleFonts.inter(
+                                                                                                  fontWeight: FontWeight.normal,
+                                                                                                  fontStyle: FlutterFlowTheme.of(context).bodyMedium.fontStyle,
+                                                                                                ),
+                                                                                                color: const Color(0xFF6B7280),
+                                                                                                fontSize: 12.0,
+                                                                                                letterSpacing: 0.0,
+                                                                                                fontWeight: FontWeight.normal,
+                                                                                                fontStyle: FlutterFlowTheme.of(context).bodyMedium.fontStyle,
+                                                                                              ),
+                                                                                        ),
+                                                                                        Builder(
+                                                                                          builder: (context) {
+                                                                                            if (_hasUnreadBadge(unreadChatAllItem)) {
+                                                                                              return Container(
+                                                                                                width: 20.0,
+                                                                                                height: 20.0,
+                                                                                                decoration: const BoxDecoration(
+                                                                                                  color: Color(0xFF3B82F6),
+                                                                                                  shape: BoxShape.circle,
+                                                                                                ),
+                                                                                              );
+                                                                                            } else if (!_hasUnreadBadge(unreadChatAllItem) && (unreadChatAllItem.lastMessageSent == currentUserReference)) {
+                                                                                              return const Icon(
+                                                                                                Icons.check,
+                                                                                                color: Color(0xFF6B7280),
+                                                                                                size: 16.0,
+                                                                                              );
+                                                                                            } else {
+                                                                                              return Container(
+                                                                                                width: 5.0,
+                                                                                                height: 5.0,
+                                                                                                decoration: BoxDecoration(
+                                                                                                  color: FlutterFlowTheme.of(context).secondaryBackground,
+                                                                                                ),
+                                                                                              );
+                                                                                            }
+                                                                                          },
+                                                                                        ),
+                                                                                      ],
+                                                                                    ),
+                                                                                  ],
+                                                                                ),
+                                                                              ),
+                                                                            ),
+                                                                          );
+                                                                        },
+                                                                      ),
+                                                                    );
+                                                                  } else {
+                                                                    return Builder(
+                                                                      builder:
+                                                                          (context) =>
+                                                                              InkWell(
+                                                                        splashColor:
+                                                                            Colors.transparent,
+                                                                        focusColor:
+                                                                            Colors.transparent,
+                                                                        hoverColor:
+                                                                            Colors.transparent,
+                                                                        highlightColor:
+                                                                            Colors.transparent,
+                                                                        onTap:
+                                                                            () async {
+                                                                          context
+                                                                              .pushNamed(
+                                                                            ChatDetailWidget.routeName,
+                                                                            queryParameters:
+                                                                                {
+                                                                              'chatDoc': serializeParam(
+                                                                                unreadChatAllItem,
+                                                                                ParamType.Document,
+                                                                              ),
+                                                                            }.withoutNulls,
+                                                                            extra: <String,
+                                                                                dynamic>{
+                                                                              'chatDoc': unreadChatAllItem,
+                                                                            },
+                                                                          );
+                                                                        },
+                                                                        onLongPress:
+                                                                            () async {
+                                                                          await showAlignedDialog(
+                                                                            context:
+                                                                                context,
+                                                                            isGlobal:
+                                                                                false,
+                                                                            avoidOverflow:
+                                                                                false,
+                                                                            targetAnchor:
+                                                                                const AlignmentDirectional(0.0, 0.0).resolve(Directionality.of(context)),
+                                                                            followerAnchor:
+                                                                                const AlignmentDirectional(0.0, 0.0).resolve(Directionality.of(context)),
+                                                                            builder:
+                                                                                (dialogContext) {
+                                                                              return Material(
+                                                                                color: Colors.transparent,
+                                                                                child: GestureDetector(
+                                                                                  onTap: () {
+                                                                                    FocusScope.of(dialogContext).unfocus();
+                                                                                    FocusManager.instance.primaryFocus?.unfocus();
+                                                                                  },
+                                                                                  child: SizedBox(
+                                                                                    width: 150.0,
+                                                                                    child: ChatEditWidget(
+                                                                                      isPin: false,
+                                                                                      actionEdit: () async {
+                                                                                        await unreadChatAllItem.reference.update(createChatsRecordData(
+                                                                                          isPin: true,
+                                                                                        ));
+                                                                                      },
+                                                                                      delete: () async {
+                                                                                        await unreadChatAllItem.reference.delete();
+                                                                                      },
+                isUnread: _isManuallyUnread(unreadChatAllItem),
+                markAsUnread: () async {
+                    _toggleMarkUnread(unreadChatAllItem);
+                },
+            
+                                                                                    ),
+                                                                                  ),
+                                                                                ),
+                                                                              );
+                                                                            },
+                                                                          );
+                                                                        },
+                                                                        child:
+                                                                            Container(
+                                                                          width:
+                                                                              double.infinity,
+                                                                          height:
+                                                                              72.0,
+                                                                          decoration:
+                                                                              BoxDecoration(
+                                                                            color:
+                                                                                FlutterFlowTheme.of(context).secondaryBackground,
+                                                                            borderRadius:
+                                                                                BorderRadius.circular(12.0),
+                                                                          ),
+                                                                          child:
+                                                                              Padding(
+                                                                            padding: const EdgeInsetsDirectional.fromSTEB(
+                                                                                12.0,
+                                                                                12.0,
+                                                                                12.0,
+                                                                                12.0),
+                                                                            child:
+                                                                                Row(
+                                                                              mainAxisSize: MainAxisSize.max,
+                                                                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                                                              crossAxisAlignment: CrossAxisAlignment.start,
+                                                                              children: [
+                                                                                Expanded(
+                                                                                  child: Row(
+                                                                                    mainAxisSize: MainAxisSize.min,
+                                                                                    children: [
+                                                                                      Stack(
+                                                                                        children: [
+                                                                                          ClipRRect(
+                                                                                            borderRadius: BorderRadius.circular(24.0),
+                                                                                            child: CachedNetworkImage(
+                                                                                              fadeInDuration: const Duration(milliseconds: 300),
+                                                                                              fadeOutDuration: const Duration(milliseconds: 300),
+                                                                                              imageUrl: valueOrDefault<String>(
+                                                                                                unreadChatAllItem.chatImageUrl,
+                                                                                                'https://firebasestorage.googleapis.com/v0/b/linkedup-c3e29.firebasestorage.app/o/asset%2Fjurica-koletic-7YVZYZeITc8-unsplash.jpg?alt=media&token=d05a38c8-e024-4624-bdb3-82e4f7c6afab',
+                                                                                              ),
+                                                                                              width: 48.0,
+                                                                                              height: 48.0,
+                                                                                              fit: BoxFit.cover,
+                                                                                            ),
+                                                                                          ),
+                                                                                          if (false)
+                                                                                            Align(
+                                                                                              alignment: const AlignmentDirectional(1.0, 1.0),
+                                                                                              child: Container(
+                                                                                                width: 12.0,
+                                                                                                height: 12.0,
+                                                                                                decoration: const BoxDecoration(
+                                                                                                  color: Color(0xFF10B981),
+                                                                                                  shape: BoxShape.circle,
+                                                                                                ),
+                                                                                              ),
+                                                                                            ),
+                                                                                        ],
+                                                                                      ),
+                                                                                      Column(
+                                                                                        mainAxisSize: MainAxisSize.max,
+                                                                                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                                                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                                                                        children: [
+                                                                                          Row(
+                                                                                            mainAxisSize: MainAxisSize.min,
+                                                                                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                                                                            children: [
+                                                                                              Text(
+                                                                                                valueOrDefault<String>(
+                                                                                                  unreadChatAllItem.title,
+                                                                                                  'N/A',
+                                                                                                ).maybeHandleOverflow(
+                                                                                                  maxChars: 15,
+                                                                                                ),
+                                                                                                style: FlutterFlowTheme.of(context).bodyMedium.override(
+                                                                                                      font: GoogleFonts.inter(
+                                                                                                        fontWeight: FontWeight.w500,
+                                                                                                        fontStyle: FlutterFlowTheme.of(context).bodyMedium.fontStyle,
+                                                                                                      ),
+                                                                                                      color: const Color(0xFF1F2937),
+                                                                                                      fontSize: 16.0,
+                                                                                                      letterSpacing: 0.0,
+                                                                                                      fontWeight: FontWeight.w500,
+                                                                                                      fontStyle: FlutterFlowTheme.of(context).bodyMedium.fontStyle,
+                                                                                                    ),
+                                                                                              ),
+                                                                                            ],
+                                                                                          ),
+                                                                                          Row(
+                                                                                            mainAxisSize: MainAxisSize.max,
+                                                                                            children: [
+                                                                                              if (unreadChatAllItem.lastMessageType == MessageType.image)
+                                                                                                const Icon(
+                                                                                                  Icons.image,
+                                                                                                  color: Color(0xFF6B7280),
+                                                                                                  size: 18.0,
+                                                                                                ),
+                                                                                              if (unreadChatAllItem.lastMessageType == MessageType.video)
+                                                                                                const Icon(
+                                                                                                  Icons.videocam,
+                                                                                                  color: Color(0xFF6B7280),
+                                                                                                  size: 18.0,
+                                                                                                ),
+                                                                                              Text(
+                                                                                                valueOrDefault<String>(
+                                                                                                  unreadChatAllItem.lastMessage,
+                                                                                                  'Let\'s Start a Chat',
+                                                                                                ).maybeHandleOverflow(
+                                                                                                  maxChars: 15,
+                                                                                                  replacement: '…',
+                                                                                                ),
+                                                                                                style: FlutterFlowTheme.of(context).bodyMedium.override(
+                                                                                                      font: GoogleFonts.inter(
+                                                                                                        fontWeight: FlutterFlowTheme.of(context).bodyMedium.fontWeight,
+                                                                                                        fontStyle: FlutterFlowTheme.of(context).bodyMedium.fontStyle,
+                                                                                                      ),
+                                                                                                      letterSpacing: 0.0,
+                                                                                                      fontWeight: FlutterFlowTheme.of(context).bodyMedium.fontWeight,
+                                                                                                      fontStyle: FlutterFlowTheme.of(context).bodyMedium.fontStyle,
+                                                                                                    ),
+                                                                                              ),
+                                                                                            ],
+                                                                                          ),
+                                                                                        ].divide(const SizedBox(height: 4.0)),
+                                                                                      ),
+                                                                                    ].divide(const SizedBox(width: 12.0)),
+                                                                                  ),
+                                                                                ),
+                                                                                Column(
+                                                                                  mainAxisSize: MainAxisSize.max,
+                                                                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                                                                  crossAxisAlignment: CrossAxisAlignment.end,
+                                                                                  children: [
+                                                                                    Text(
+                                                                                      unreadChatAllItem.lastMessageAt != null
+                                                                                          ? valueOrDefault<String>(
+                                                                                              dateTimeFormat("relative", unreadChatAllItem.lastMessageAt),
+                                                                                              'N/A',
+                                                                                            )
+                                                                                          : 'N/A',
+                                                                                      style: FlutterFlowTheme.of(context).bodyMedium.override(
+                                                                                            font: GoogleFonts.inter(
+                                                                                              fontWeight: FontWeight.normal,
+                                                                                              fontStyle: FlutterFlowTheme.of(context).bodyMedium.fontStyle,
+                                                                                            ),
+                                                                                            color: const Color(0xFF6B7280),
+                                                                                            fontSize: 12.0,
+                                                                                            letterSpacing: 0.0,
+                                                                                            fontWeight: FontWeight.normal,
+                                                                                            fontStyle: FlutterFlowTheme.of(context).bodyMedium.fontStyle,
+                                                                                          ),
+                                                                                    ),
+                                                                                    if (unreadChatAllItem.lastMessage != '')
+                                                                                      Builder(
+                                                                                        builder: (context) {
+                                                                                          if (unreadChatAllItem.lastMessageSent != currentUserReference) {
+                                                                                            return Visibility(
+                                                                                              visible: _hasUnreadBadge(unreadChatAllItem),
+                                                                                              child: Container(
+                                                                                                width: 20.0,
+                                                                                                height: 20.0,
+                                                                                                decoration: const BoxDecoration(
+                                                                                                  color: Color(0xFF3B82F6),
+                                                                                                  shape: BoxShape.circle,
+                                                                                                ),
+                                                                                              ),
+                                                                                            );
+                                                                                          } else {
+                                                                                            return const Icon(
+                                                                                              Icons.check,
+                                                                                              color: Color(0xFF6B7280),
+                                                                                              size: 16.0,
+                                                                                            );
+                                                                                          }
+                                                                                        },
+                                                                                      ),
+                                                                                  ],
+                                                                                ),
+                                                                              ],
+                                                                            ),
+                                                                          ),
+                                                                        ),
+                                                                      ),
+                                                                    );
+                                                                  }
+                                                                },
+                                                              ).animateOnPageLoad(
+                                                                animationsMap[
+                                                                    'conditionalBuilderOnPageLoadAnimation2']!,
+                                                                effects: [
+                                                                  MoveEffect(
+                                                                    curve: Curves
+                                                                        .easeInOut,
+                                                                    delay: valueOrDefault<
+                                                                        double>(
+                                                                      (unreadChatAllIndex *
+                                                                          48),
+                                                                      0.0,
+                                                                    ).ms,
+                                                                    duration:
+                                                                        600.0
+                                                                            .ms,
+                                                                    begin:
+                                                                        const Offset(
+                                                                            0.0,
+                                                                            30.0),
+                                                                    end: const Offset(
+                                                                        0.0,
+                                                                        0.0),
+                                                                  ),
+                                                                ],
+                                                              );
+                                                            }),
+                                                          );
+                                                        },
+                                                      ),
+                                                    ],
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+],
                               ),
                             ),
                           ],

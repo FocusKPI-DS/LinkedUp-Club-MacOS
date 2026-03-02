@@ -5,7 +5,7 @@ import '/auth/firebase_auth/auth_util.dart';
 import '/backend/backend.dart';
 
 class MobileAssistantWidget extends StatefulWidget {
-  const MobileAssistantWidget({super.key});
+  const MobileAssistantWidget({Key? key}) : super(key: key);
 
   static String routeName = 'MobileAssistant';
   static String routePath = '/mobileAssistant';
@@ -146,7 +146,7 @@ class _MobileAssistantWidgetState extends State<MobileAssistantWidget> {
       }
 
       // Wait 1 second for typing effect
-      await Future.delayed(const Duration(seconds: 1));
+      await Future.delayed(Duration(seconds: 1));
 
       // Add welcome message to Firestore
       await FirebaseFirestore.instance
@@ -292,7 +292,7 @@ class _MobileAssistantWidgetState extends State<MobileAssistantWidget> {
                     ? _buildMainContent()
                     : _currentConversationId == 'fallback_conversation'
                         ? _buildFallbackContent()
-                        : const Center(
+                        : Center(
                             child: Column(
                               mainAxisAlignment: MainAxisAlignment.center,
                               children: [
@@ -320,7 +320,7 @@ class _MobileAssistantWidgetState extends State<MobileAssistantWidget> {
           if (_isMenuOpen) _buildSideMenuOverlay(),
           // Side Menu
           AnimatedPositioned(
-            duration: const Duration(milliseconds: 300),
+            duration: Duration(milliseconds: 300),
             curve: Curves.easeInOut,
             left: _isMenuOpen ? 0 : -MediaQuery.of(context).size.width * 0.8,
             top: 0,
@@ -342,7 +342,7 @@ class _MobileAssistantWidgetState extends State<MobileAssistantWidget> {
         right: 16,
         bottom: 12,
       ),
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         color: Colors.white,
         border: Border(
           bottom: BorderSide(color: Color(0xFFE5E7EB), width: 0.5),
@@ -361,17 +361,17 @@ class _MobileAssistantWidgetState extends State<MobileAssistantWidget> {
               width: 40,
               height: 40,
               decoration: BoxDecoration(
-                color: const Color(0xFFF2F2F7),
+                color: Color(0xFFF2F2F7),
                 borderRadius: BorderRadius.circular(20),
               ),
-              child: const Icon(
+              child: Icon(
                 Icons.menu_rounded,
                 color: Color(0xFF1D1D1F),
                 size: 20,
               ),
             ),
           ),
-          const SizedBox(width: 12),
+          SizedBox(width: 12),
           // LonaAI Logo
           ClipRRect(
             borderRadius: BorderRadius.circular(20),
@@ -382,9 +382,9 @@ class _MobileAssistantWidgetState extends State<MobileAssistantWidget> {
               fit: BoxFit.cover,
             ),
           ),
-          const SizedBox(width: 12),
+          SizedBox(width: 12),
           // Title and Subtitle
-          const Expanded(
+          Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -417,17 +417,17 @@ class _MobileAssistantWidgetState extends State<MobileAssistantWidget> {
   Widget _buildFallbackContent() {
     return Center(
       child: Padding(
-        padding: const EdgeInsets.all(24),
+        padding: EdgeInsets.all(24),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            const Icon(
+            Icon(
               Icons.smart_toy_rounded,
               size: 64,
               color: Color(0xFF007AFF),
             ),
-            const SizedBox(height: 16),
-            const Text(
+            SizedBox(height: 16),
+            Text(
               'AI Assistant Ready!',
               style: TextStyle(
                 fontFamily: 'System',
@@ -436,8 +436,8 @@ class _MobileAssistantWidgetState extends State<MobileAssistantWidget> {
                 color: Color(0xFF1D1D1F),
               ),
             ),
-            const SizedBox(height: 8),
-            const Text(
+            SizedBox(height: 8),
+            Text(
               'Start chatting with LonaAI below',
               style: TextStyle(
                 fontFamily: 'System',
@@ -445,22 +445,22 @@ class _MobileAssistantWidgetState extends State<MobileAssistantWidget> {
                 color: Color(0xFF8E8E93),
               ),
             ),
-            const SizedBox(height: 24),
+            SizedBox(height: 24),
             // Simple chat input for fallback
             Container(
               width: double.infinity,
-              padding: const EdgeInsets.all(16),
+              padding: EdgeInsets.all(16),
               decoration: BoxDecoration(
                 color: Colors.white,
                 borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: const Color(0xFFE5E7EB)),
+                border: Border.all(color: Color(0xFFE5E7EB)),
               ),
               child: Row(
                 children: [
                   Expanded(
                     child: TextField(
                       controller: _messageController,
-                      decoration: const InputDecoration(
+                      decoration: InputDecoration(
                         hintText: 'Type your message here...',
                         hintStyle: TextStyle(
                           fontFamily: 'System',
@@ -469,7 +469,7 @@ class _MobileAssistantWidgetState extends State<MobileAssistantWidget> {
                         ),
                         border: InputBorder.none,
                       ),
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontFamily: 'System',
                         fontSize: 16,
                         color: Color(0xFF1D1D1F),
@@ -477,16 +477,16 @@ class _MobileAssistantWidgetState extends State<MobileAssistantWidget> {
                       onSubmitted: (_) => _sendMessage(),
                     ),
                   ),
-                  const SizedBox(width: 8),
+                  SizedBox(width: 8),
                   GestureDetector(
                     onTap: _sendMessage,
                     child: Container(
-                      padding: const EdgeInsets.all(8),
+                      padding: EdgeInsets.all(8),
                       decoration: BoxDecoration(
-                        color: const Color(0xFF007AFF),
+                        color: Color(0xFF007AFF),
                         borderRadius: BorderRadius.circular(8),
                       ),
-                      child: const Icon(
+                      child: Icon(
                         Icons.send,
                         color: Colors.white,
                         size: 20,
@@ -520,7 +520,7 @@ class _MobileAssistantWidgetState extends State<MobileAssistantWidget> {
               final messages = messageSnapshot.data?.docs ?? [];
 
               if (messageSnapshot.connectionState == ConnectionState.waiting) {
-                return const Center(
+                return Center(
                   child: CircularProgressIndicator(
                     valueColor:
                         AlwaysStoppedAnimation<Color>(Color(0xFF007AFF)),
@@ -532,7 +532,7 @@ class _MobileAssistantWidgetState extends State<MobileAssistantWidget> {
                 return Center(
                   child: Text(
                     'Error loading messages: ${messageSnapshot.error}',
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontFamily: 'System',
                       color: Color(0xFF8E8E93),
                     ),
@@ -542,7 +542,7 @@ class _MobileAssistantWidgetState extends State<MobileAssistantWidget> {
 
               if (messages.isEmpty) {
                 return Padding(
-                  padding: const EdgeInsets.all(24),
+                  padding: EdgeInsets.all(24),
                   child: Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
@@ -555,20 +555,20 @@ class _MobileAssistantWidgetState extends State<MobileAssistantWidget> {
                           fit: BoxFit.cover,
                         ),
                       ),
-                      const SizedBox(width: 12),
+                      SizedBox(width: 12),
                       Container(
-                        padding: const EdgeInsets.all(16),
+                        padding: EdgeInsets.all(16),
                         decoration: BoxDecoration(
-                          color: const Color(0xFFF2F2F7),
+                          color: Color(0xFFF2F2F7),
                           borderRadius: BorderRadius.circular(16),
                         ),
                         child: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
                             _buildTypingDot(0),
-                            const SizedBox(width: 4),
+                            SizedBox(width: 4),
                             _buildTypingDot(1),
-                            const SizedBox(width: 4),
+                            SizedBox(width: 4),
                             _buildTypingDot(2),
                           ],
                         ),
@@ -580,7 +580,7 @@ class _MobileAssistantWidgetState extends State<MobileAssistantWidget> {
 
               return ListView.builder(
                 controller: _scrollController,
-                padding: const EdgeInsets.all(12),
+                padding: EdgeInsets.all(12),
                 itemCount: messages.length,
                 itemBuilder: (context, index) {
                   final message = messages[index];
@@ -589,7 +589,7 @@ class _MobileAssistantWidgetState extends State<MobileAssistantWidget> {
                   final content = data['content'] as String? ?? '';
 
                   return Padding(
-                    padding: const EdgeInsets.only(bottom: 12),
+                    padding: EdgeInsets.only(bottom: 12),
                     child: senderType == 'user'
                         ? _buildUserMessageWidget(content)
                         : _buildAIMessageWidget(content),
@@ -610,15 +610,15 @@ class _MobileAssistantWidgetState extends State<MobileAssistantWidget> {
       mainAxisAlignment: MainAxisAlignment.end,
       children: [
         Container(
-          constraints: const BoxConstraints(maxWidth: 240),
-          padding: const EdgeInsets.all(12),
+          constraints: BoxConstraints(maxWidth: 240),
+          padding: EdgeInsets.all(12),
           decoration: BoxDecoration(
-            color: const Color(0xFF007AFF),
+            color: Color(0xFF007AFF),
             borderRadius: BorderRadius.circular(12),
           ),
           child: Text(
             content,
-            style: const TextStyle(
+            style: TextStyle(
               fontFamily: 'System',
               fontSize: 14,
               color: Colors.white,
@@ -642,18 +642,18 @@ class _MobileAssistantWidgetState extends State<MobileAssistantWidget> {
             fit: BoxFit.cover,
           ),
         ),
-        const SizedBox(width: 8),
+        SizedBox(width: 8),
         Expanded(
           child: Container(
-            constraints: const BoxConstraints(maxWidth: 240),
-            padding: const EdgeInsets.all(12),
+            constraints: BoxConstraints(maxWidth: 240),
+            padding: EdgeInsets.all(12),
             decoration: BoxDecoration(
-              color: const Color(0xFFF2F2F7),
+              color: Color(0xFFF2F2F7),
               borderRadius: BorderRadius.circular(12),
             ),
             child: Text(
               content,
-              style: const TextStyle(
+              style: TextStyle(
                 fontFamily: 'System',
                 fontSize: 14,
                 color: Color(0xFF1D1D1F),
@@ -667,8 +667,8 @@ class _MobileAssistantWidgetState extends State<MobileAssistantWidget> {
 
   Widget _buildQuickActionButtons() {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      decoration: const BoxDecoration(
+      padding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      decoration: BoxDecoration(
         color: Colors.white,
         border: Border(
           bottom: BorderSide(color: Color(0xFFE5E7EB), width: 0.5),
@@ -679,11 +679,11 @@ class _MobileAssistantWidgetState extends State<MobileAssistantWidget> {
         child: Row(
           children: [
             _buildQuickActionButton('Events', Icons.calendar_today),
-            const SizedBox(width: 8),
+            SizedBox(width: 8),
             _buildQuickActionButton('Rules', Icons.description),
-            const SizedBox(width: 8),
+            SizedBox(width: 8),
             _buildQuickActionButton('Benefits', Icons.star),
-            const SizedBox(width: 8),
+            SizedBox(width: 8),
             _buildQuickActionButton('Help', Icons.help_outline),
           ],
         ),
@@ -699,24 +699,24 @@ class _MobileAssistantWidgetState extends State<MobileAssistantWidget> {
         _sendMessage();
       },
       child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
+        padding: EdgeInsets.symmetric(vertical: 8, horizontal: 12),
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: const Color(0xFF007AFF)),
+          border: Border.all(color: Color(0xFF007AFF)),
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
             Icon(
               icon,
-              color: const Color(0xFF007AFF),
+              color: Color(0xFF007AFF),
               size: 16,
             ),
-            const SizedBox(width: 6),
+            SizedBox(width: 6),
             Text(
               text,
-              style: const TextStyle(
+              style: TextStyle(
                 fontFamily: 'System',
                 fontSize: 14,
                 fontWeight: FontWeight.w500,
@@ -732,7 +732,7 @@ class _MobileAssistantWidgetState extends State<MobileAssistantWidget> {
   Widget _buildTypingDot(int index) {
     return TweenAnimationBuilder<double>(
       tween: Tween(begin: 0.0, end: 1.0),
-      duration: const Duration(milliseconds: 600),
+      duration: Duration(milliseconds: 600),
       builder: (context, value, child) {
         final delay = index * 0.2;
         final animValue = ((value + delay) % 1.0);
@@ -743,7 +743,7 @@ class _MobileAssistantWidgetState extends State<MobileAssistantWidget> {
           child: Container(
             width: 8,
             height: 8,
-            decoration: const BoxDecoration(
+            decoration: BoxDecoration(
               color: Color(0xFF8E8E93),
               shape: BoxShape.circle,
             ),
@@ -760,8 +760,8 @@ class _MobileAssistantWidgetState extends State<MobileAssistantWidget> {
 
   Widget _buildChatInput() {
     return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: const BoxDecoration(
+      padding: EdgeInsets.all(16),
+      decoration: BoxDecoration(
         color: Colors.white,
         border: Border(
           top: BorderSide(color: Color(0xFFE5E7EB), width: 0.5),
@@ -772,11 +772,11 @@ class _MobileAssistantWidgetState extends State<MobileAssistantWidget> {
           // Text Input
           Expanded(
             child: Container(
-              constraints: const BoxConstraints(maxHeight: 120),
+              constraints: BoxConstraints(maxHeight: 120),
               decoration: BoxDecoration(
-                color: const Color(0xFFF2F2F7),
+                color: Color(0xFFF2F2F7),
                 borderRadius: BorderRadius.circular(20),
-                border: Border.all(color: const Color(0xFFE5E7EB)),
+                border: Border.all(color: Color(0xFFE5E7EB)),
               ),
               child: TextField(
                 controller: _messageController,
@@ -785,16 +785,16 @@ class _MobileAssistantWidgetState extends State<MobileAssistantWidget> {
                 decoration: InputDecoration(
                   hintText:
                       _isLoading ? 'AI is thinking...' : 'Message LonaAI...',
-                  hintStyle: const TextStyle(
+                  hintStyle: TextStyle(
                     fontFamily: 'System',
                     color: Color(0xFF8E8E93),
                     fontSize: 16,
                   ),
                   border: InputBorder.none,
                   contentPadding:
-                      const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                      EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                 ),
-                style: const TextStyle(
+                style: TextStyle(
                   fontFamily: 'System',
                   color: Color(0xFF1D1D1F),
                   fontSize: 16,
@@ -803,7 +803,7 @@ class _MobileAssistantWidgetState extends State<MobileAssistantWidget> {
               ),
             ),
           ),
-          const SizedBox(width: 12),
+          SizedBox(width: 12),
           // Send Button
           GestureDetector(
             onTap: _isLoading ? null : _sendMessage,
@@ -811,11 +811,11 @@ class _MobileAssistantWidgetState extends State<MobileAssistantWidget> {
               width: 40,
               height: 40,
               decoration: BoxDecoration(
-                color: _isLoading ? const Color(0xFF8E8E93) : const Color(0xFF007AFF),
+                color: _isLoading ? Color(0xFF8E8E93) : Color(0xFF007AFF),
                 shape: BoxShape.circle,
               ),
               child: _isLoading
-                  ? const SizedBox(
+                  ? SizedBox(
                       width: 20,
                       height: 20,
                       child: CircularProgressIndicator(
@@ -823,7 +823,7 @@ class _MobileAssistantWidgetState extends State<MobileAssistantWidget> {
                         valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
                       ),
                     )
-                  : const Icon(
+                  : Icon(
                       Icons.send_rounded,
                       color: Colors.white,
                       size: 20,
@@ -858,7 +858,7 @@ class _MobileAssistantWidgetState extends State<MobileAssistantWidget> {
           BoxShadow(
             color: Colors.black.withOpacity(0.1),
             blurRadius: 10,
-            offset: const Offset(2, 0),
+            offset: Offset(2, 0),
           ),
         ],
       ),
@@ -872,7 +872,7 @@ class _MobileAssistantWidgetState extends State<MobileAssistantWidget> {
               right: 20,
               bottom: 16,
             ),
-            decoration: const BoxDecoration(
+            decoration: BoxDecoration(
               color: Color(0xFFF2F2F7),
               border: Border(
                 bottom: BorderSide(color: Color(0xFFE5E7EB), width: 0.5),
@@ -889,8 +889,8 @@ class _MobileAssistantWidgetState extends State<MobileAssistantWidget> {
                     fit: BoxFit.cover,
                   ),
                 ),
-                const SizedBox(width: 12),
-                const Expanded(
+                SizedBox(width: 12),
+                Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
@@ -924,10 +924,10 @@ class _MobileAssistantWidgetState extends State<MobileAssistantWidget> {
                     width: 32,
                     height: 32,
                     decoration: BoxDecoration(
-                      color: const Color(0xFFE5E7EB),
+                      color: Color(0xFFE5E7EB),
                       borderRadius: BorderRadius.circular(16),
                     ),
-                    child: const Icon(
+                    child: Icon(
                       Icons.close,
                       color: Color(0xFF1D1D1F),
                       size: 18,
@@ -939,7 +939,7 @@ class _MobileAssistantWidgetState extends State<MobileAssistantWidget> {
           ),
           // New Chat Button
           Padding(
-            padding: const EdgeInsets.all(16),
+            padding: EdgeInsets.all(16),
             child: GestureDetector(
               onTap: () {
                 _createNewConversation();
@@ -949,12 +949,12 @@ class _MobileAssistantWidgetState extends State<MobileAssistantWidget> {
               },
               child: Container(
                 width: double.infinity,
-                padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+                padding: EdgeInsets.symmetric(vertical: 12, horizontal: 16),
                 decoration: BoxDecoration(
-                  color: const Color(0xFF007AFF),
+                  color: Color(0xFF007AFF),
                   borderRadius: BorderRadius.circular(12),
                 ),
-                child: const Row(
+                child: Row(
                   children: [
                     Icon(
                       Icons.add,
@@ -986,7 +986,7 @@ class _MobileAssistantWidgetState extends State<MobileAssistantWidget> {
                   .snapshots(),
               builder: (context, snapshot) {
                 if (snapshot.connectionState == ConnectionState.waiting) {
-                  return const Center(
+                  return Center(
                     child: CircularProgressIndicator(
                       valueColor:
                           AlwaysStoppedAnimation<Color>(Color(0xFF007AFF)),
@@ -995,7 +995,7 @@ class _MobileAssistantWidgetState extends State<MobileAssistantWidget> {
                 }
 
                 if (snapshot.hasError) {
-                  return const Center(
+                  return Center(
                     child: Text(
                       'Error loading conversations',
                       style: TextStyle(
@@ -1010,7 +1010,7 @@ class _MobileAssistantWidgetState extends State<MobileAssistantWidget> {
                 final conversations = snapshot.data?.docs ?? [];
 
                 if (conversations.isEmpty) {
-                  return const Center(
+                  return Center(
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
@@ -1044,7 +1044,7 @@ class _MobileAssistantWidgetState extends State<MobileAssistantWidget> {
                 }
 
                 return ListView.builder(
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  padding: EdgeInsets.symmetric(horizontal: 16),
                   itemCount: conversations.length,
                   itemBuilder: (context, index) {
                     final conversation = conversations[index];
@@ -1080,15 +1080,15 @@ class _MobileAssistantWidgetState extends State<MobileAssistantWidget> {
                         });
                       },
                       child: Container(
-                        margin: const EdgeInsets.only(bottom: 8),
-                        padding: const EdgeInsets.all(16),
+                        margin: EdgeInsets.only(bottom: 8),
+                        padding: EdgeInsets.all(16),
                         decoration: BoxDecoration(
                           color: isCurrentConversation
-                              ? const Color(0xFFF2F2F7)
+                              ? Color(0xFFF2F2F7)
                               : Colors.transparent,
                           borderRadius: BorderRadius.circular(12),
                           border: isCurrentConversation
-                              ? Border.all(color: const Color(0xFF007AFF), width: 1)
+                              ? Border.all(color: Color(0xFF007AFF), width: 1)
                               : null,
                         ),
                         child: Column(
@@ -1098,7 +1098,7 @@ class _MobileAssistantWidgetState extends State<MobileAssistantWidget> {
                               lastMessage.isNotEmpty
                                   ? 'AI Assistant Chat'
                                   : 'New Conversation',
-                              style: const TextStyle(
+                              style: TextStyle(
                                 fontFamily: 'System',
                                 fontSize: 16,
                                 fontWeight: FontWeight.w500,
@@ -1108,12 +1108,12 @@ class _MobileAssistantWidgetState extends State<MobileAssistantWidget> {
                               overflow: TextOverflow.ellipsis,
                             ),
                             if (lastMessage.isNotEmpty) ...[
-                              const SizedBox(height: 4),
+                              SizedBox(height: 4),
                               Text(
                                 lastMessage.length > 50
                                     ? '${lastMessage.substring(0, 50)}...'
                                     : lastMessage,
-                                style: const TextStyle(
+                                style: TextStyle(
                                   fontFamily: 'System',
                                   fontSize: 14,
                                   color: Color(0xFF8E8E93),
@@ -1122,10 +1122,10 @@ class _MobileAssistantWidgetState extends State<MobileAssistantWidget> {
                                 overflow: TextOverflow.ellipsis,
                               ),
                             ],
-                            const SizedBox(height: 8),
+                            SizedBox(height: 8),
                             Text(
                               timeAgo,
-                              style: const TextStyle(
+                              style: TextStyle(
                                 fontFamily: 'System',
                                 fontSize: 12,
                                 color: Color(0xFF8E8E93),

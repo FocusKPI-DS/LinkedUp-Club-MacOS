@@ -93,12 +93,39 @@ class GroupChatDetailModel extends FlutterFlowModel<GroupChatDetailWidget> {
   // Model for eventComponent component.
   late EventComponentModel eventComponentModel;
 
+  // Fireflies integration (admin connects API key; group sees transcripts)
+  TextEditingController? firefliesApiKeyController;
+  TextEditingController? firefliesSearchController;
+  bool firefliesTranscriptsLoading = false;
+  List<dynamic> firefliesTranscripts = [];
+  String? firefliesError;
+  bool firefliesInitialLoadDone = false;
+  bool firefliesHasMore = true;
+  static const int firefliesPageSize = 5;
+  /// Whether Fireflies is connected for this group (from Cloud Function).
+  bool firefliesConnected = false;
+  bool firefliesKeyLoadAttempted = false;
+  /// Transcript IDs currently being fetched and stored (for loading state on arrow button).
+  Set<String> firefliesFetchingTranscriptIds = {};
+  /// True after we've scheduled the one-time auto-load for transcripts (avoids duplicate schedules).
+  bool firefliesAutoLoadScheduled = false;
+
+  TextEditingController? manualMeetingTranscriptionController;
+  bool manualMeetingTranscriptionInitialized = false;
+  /// When true, Meeting Transcripts section shows manual text input instead of the transcript list.
+  bool firefliesShowManualInput = false;
+  /// True while manual transcript Save is in progress (AI processing).
+  bool manualTranscriptSaving = false;
+
   @override
   void initState(BuildContext context) {
     eventComponentModel = createModel(context, () => EventComponentModel());
     groupMemberSearchController = TextEditingController();
     groupNameController = TextEditingController();
     groupDescriptionController = TextEditingController();
+    firefliesApiKeyController = TextEditingController();
+    firefliesSearchController = TextEditingController();
+    manualMeetingTranscriptionController = TextEditingController();
   }
 
   @override
@@ -107,5 +134,8 @@ class GroupChatDetailModel extends FlutterFlowModel<GroupChatDetailWidget> {
     groupMemberSearchController?.dispose();
     groupNameController?.dispose();
     groupDescriptionController?.dispose();
+    firefliesApiKeyController?.dispose();
+    firefliesSearchController?.dispose();
+    manualMeetingTranscriptionController?.dispose();
   }
 }

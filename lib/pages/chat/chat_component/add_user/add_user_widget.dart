@@ -189,7 +189,7 @@ class _AddUserWidgetState extends State<AddUserWidget> {
                             future: UsersRecord.getDocumentOnce(userRef),
                             builder: (context, snapshot) {
                               if (!snapshot.hasData) {
-                                return const SizedBox.shrink();
+                                return SizedBox.shrink();
                               }
 
                               final containerUsersRecord = snapshot.data!;

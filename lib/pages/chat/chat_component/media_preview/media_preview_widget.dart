@@ -12,11 +12,11 @@ import 'dart:ui';
 
 class MediaPreviewWidget extends StatefulWidget {
   const MediaPreviewWidget({
-    super.key,
+    Key? key,
     required this.mediaFile,
     required this.mediaType, // 'image' or 'video'
     required this.onSend,
-  });
+  }) : super(key: key);
 
   final SelectedFile mediaFile;
   final String mediaType;
@@ -196,7 +196,7 @@ class _MediaPreviewWidgetState extends State<MediaPreviewWidget> {
         backgroundColor: Colors.transparent,
         elevation: 0,
         leading: IconButton(
-          icon: const Icon(
+          icon: Icon(
             Icons.close,
             color: Colors.white,
             size: 28,
@@ -218,7 +218,7 @@ class _MediaPreviewWidgetState extends State<MediaPreviewWidget> {
             // Caption input area - same style as chat input
             Container(
               color: Colors.black,
-              padding: const EdgeInsetsDirectional.fromSTEB(16, 8, 16, 16),
+              padding: EdgeInsetsDirectional.fromSTEB(16, 8, 16, 16),
               child: ClipRRect(
                 borderRadius: BorderRadius.circular(22),
                 child: BackdropFilter(
@@ -269,7 +269,7 @@ class _MediaPreviewWidgetState extends State<MediaPreviewWidget> {
                               fontSize: 16,
                               fontWeight: FontWeight.w400,
                             ),
-                            style: const TextStyle(
+                            style: TextStyle(
                               color: Colors.white,
                               fontSize: 16,
                             ),
@@ -304,7 +304,7 @@ class _MediaPreviewWidgetState extends State<MediaPreviewWidget> {
                                 child: Container(
                                   width: 32,
                                   height: 32,
-                                  decoration: const BoxDecoration(
+                                  decoration: BoxDecoration(
                                     color: CupertinoColors.systemBlue,
                                     shape: BoxShape.circle,
                                   ),
@@ -360,7 +360,7 @@ class _MediaPreviewWidgetState extends State<MediaPreviewWidget> {
 
   Widget _buildVideoPreview() {
     if (!_isVideoInitialized) {
-      return const Center(
+      return Center(
         child: CircularProgressIndicator(
           valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
         ),
@@ -372,23 +372,23 @@ class _MediaPreviewWidgetState extends State<MediaPreviewWidget> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            const Icon(
+            Icon(
               Icons.error_outline,
               color: Colors.white,
               size: 48,
             ),
-            const SizedBox(height: 16),
-            const Text(
+            SizedBox(height: 16),
+            Text(
               'Error loading video',
               style: TextStyle(color: Colors.white, fontSize: 16),
             ),
             if (_videoError != null) ...[
-              const SizedBox(height: 8),
+              SizedBox(height: 8),
               Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 32),
+                padding: EdgeInsets.symmetric(horizontal: 32),
                 child: Text(
                   _videoError!,
-                  style: const TextStyle(color: Colors.white70, fontSize: 12),
+                  style: TextStyle(color: Colors.white70, fontSize: 12),
                   textAlign: TextAlign.center,
                 ),
               ),

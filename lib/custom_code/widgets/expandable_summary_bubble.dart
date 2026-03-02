@@ -91,7 +91,7 @@ class _ExpandableSummaryBubbleState extends State<ExpandableSummaryBubble>
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             // SummerAI header - subtle styling
-            const Row(
+            Row(
               children: [
                 Text(
                   'SummerAI',
@@ -101,7 +101,7 @@ class _ExpandableSummaryBubbleState extends State<ExpandableSummaryBubble>
                     fontWeight: FontWeight.w600,
                   ),
                 ),
-                SizedBox(width: 6.0),
+                const SizedBox(width: 6.0),
                 Icon(
                   Icons.auto_awesome,
                   size: 14.0,
@@ -209,7 +209,7 @@ class _ExpandableSummaryBubbleState extends State<ExpandableSummaryBubble>
                                     _isExpanded
                                         ? widget.collapseText
                                         : widget.expandText,
-                                    style: const TextStyle(
+                                    style: TextStyle(
                                       color: Colors.black,
                                       fontSize: 12.0,
                                       fontWeight: FontWeight.w500,
@@ -219,7 +219,7 @@ class _ExpandableSummaryBubbleState extends State<ExpandableSummaryBubble>
                                   AnimatedRotation(
                                     turns: _isExpanded ? 0.5 : 0.0,
                                     duration: const Duration(milliseconds: 300),
-                                    child: const Icon(
+                                    child: Icon(
                                       Icons.keyboard_arrow_down,
                                       size: 16.0,
                                       color: Colors.black,

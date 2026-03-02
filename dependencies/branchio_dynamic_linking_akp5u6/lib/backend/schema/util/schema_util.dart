@@ -24,7 +24,7 @@ List<T>? getStructList<T>(
         ? null
         : value
             .whereType<Map<String, dynamic>>()
-            .map((e) => structBuilder(e))
+            .map((e) => structBuilder(e as Map<String, dynamic>))
             .toList();
 
 Color? getSchemaColor(dynamic value) => value is String

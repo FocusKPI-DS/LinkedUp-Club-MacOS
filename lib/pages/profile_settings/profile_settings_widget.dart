@@ -16,7 +16,7 @@ import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:permission_handler/permission_handler.dart';
 
 class ProfileSettingsWidget extends StatefulWidget {
-  const ProfileSettingsWidget({super.key});
+  const ProfileSettingsWidget({Key? key}) : super(key: key);
 
   @override
   _ProfileSettingsWidgetState createState() => _ProfileSettingsWidgetState();
@@ -91,12 +91,12 @@ class _ProfileSettingsWidgetState extends State<ProfileSettingsWidget> {
         onTap: onTap,
         borderRadius: BorderRadius.circular(12),
         child: Container(
-          padding: const EdgeInsets.all(20),
+          padding: EdgeInsets.all(20),
           decoration: BoxDecoration(
             color: Colors.white,
             borderRadius: BorderRadius.circular(12),
             border: Border.all(
-              color: const Color(0xFFE5E7EB),
+              color: Color(0xFFE5E7EB),
               width: 1,
             ),
           ),
@@ -105,13 +105,13 @@ class _ProfileSettingsWidgetState extends State<ProfileSettingsWidget> {
               Icon(
                 icon,
                 size: 24,
-                color: const Color(0xFF0077B5),
+                color: Color(0xFF0077B5),
               ),
-              const SizedBox(width: 16),
+              SizedBox(width: 16),
               Expanded(
                 child: Text(
                   title,
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontFamily: 'SF Pro Display',
                     fontSize: 16,
                     fontWeight: FontWeight.w500,
@@ -119,7 +119,7 @@ class _ProfileSettingsWidgetState extends State<ProfileSettingsWidget> {
                   ),
                 ),
               ),
-              const Icon(
+              Icon(
                 CupertinoIcons.chevron_right,
                 size: 20,
                 color: Color(0xFF999999),
@@ -144,12 +144,12 @@ class _ProfileSettingsWidgetState extends State<ProfileSettingsWidget> {
         onTap: onTap,
         borderRadius: BorderRadius.circular(10),
         child: Container(
-          padding: const EdgeInsets.all(16),
+          padding: EdgeInsets.all(16),
           decoration: BoxDecoration(
-            color: isSelected ? const Color(0xFFE3F2FD) : const Color(0xFFF5F5F5),
+            color: isSelected ? Color(0xFFE3F2FD) : Color(0xFFF5F5F5),
             borderRadius: BorderRadius.circular(10),
             border: Border.all(
-              color: isSelected ? const Color(0xFF0077B5) : const Color(0xFFE5E7EB),
+              color: isSelected ? Color(0xFF0077B5) : Color(0xFFE5E7EB),
               width: isSelected ? 2 : 1,
             ),
           ),
@@ -160,21 +160,21 @@ class _ProfileSettingsWidgetState extends State<ProfileSettingsWidget> {
                 height: 22,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  color: isSelected ? const Color(0xFF0077B5) : Colors.transparent,
+                  color: isSelected ? Color(0xFF0077B5) : Colors.transparent,
                   border: Border.all(
-                    color: isSelected ? const Color(0xFF0077B5) : const Color(0xFF999999),
+                    color: isSelected ? Color(0xFF0077B5) : Color(0xFF999999),
                     width: 2,
                   ),
                 ),
                 child: isSelected
-                    ? const Icon(
+                    ? Icon(
                         Icons.check,
                         size: 14,
                         color: Colors.white,
                       )
                     : null,
               ),
-              const SizedBox(width: 14),
+              SizedBox(width: 14),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -185,13 +185,14 @@ class _ProfileSettingsWidgetState extends State<ProfileSettingsWidget> {
                         fontFamily: 'SF Pro Display',
                         fontSize: 15,
                         fontWeight: FontWeight.w600,
-                        color: isSelected ? const Color(0xFF0077B5) : const Color(0xFF1A1A1A),
+                        color:
+                            isSelected ? Color(0xFF0077B5) : Color(0xFF1A1A1A),
                       ),
                     ),
-                    const SizedBox(height: 2),
+                    SizedBox(height: 2),
                     Text(
                       subtitle,
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontFamily: 'SF Pro Display',
                         fontSize: 13,
                         color: Color(0xFF666666),
@@ -212,8 +213,8 @@ class _ProfileSettingsWidgetState extends State<ProfileSettingsWidget> {
     showCupertinoDialog(
       context: context,
       builder: (context) => CupertinoAlertDialog(
-        title: const Text('Privacy Policy'),
-        content: const SingleChildScrollView(
+        title: Text('Privacy Policy'),
+        content: SingleChildScrollView(
           child: Padding(
             padding: EdgeInsets.only(top: 16),
             child: Text(
@@ -242,7 +243,7 @@ class _ProfileSettingsWidgetState extends State<ProfileSettingsWidget> {
         ),
         actions: [
           CupertinoDialogAction(
-            child: const Text('Close'),
+            child: Text('Close'),
             onPressed: () => Navigator.pop(context),
           ),
         ],
@@ -255,8 +256,8 @@ class _ProfileSettingsWidgetState extends State<ProfileSettingsWidget> {
     showCupertinoDialog(
       context: context,
       builder: (context) => CupertinoAlertDialog(
-        title: const Text('Customer Support'),
-        content: const SingleChildScrollView(
+        title: Text('Customer Support'),
+        content: SingleChildScrollView(
           child: Padding(
             padding: EdgeInsets.only(top: 16),
             child: Column(
@@ -324,7 +325,7 @@ class _ProfileSettingsWidgetState extends State<ProfileSettingsWidget> {
         ),
         actions: [
           CupertinoDialogAction(
-            child: const Text('Close'),
+            child: Text('Close'),
             onPressed: () => Navigator.pop(context),
           ),
         ],
@@ -442,7 +443,7 @@ class _ProfileSettingsWidgetState extends State<ProfileSettingsWidget> {
     required bool isSelected,
   }) {
     return Container(
-      margin: const EdgeInsets.only(bottom: 4),
+      margin: EdgeInsets.only(bottom: 4),
       child: Material(
         color: Colors.transparent,
         child: InkWell(
@@ -457,9 +458,9 @@ class _ProfileSettingsWidgetState extends State<ProfileSettingsWidget> {
           },
           borderRadius: BorderRadius.circular(8),
           child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            padding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
             decoration: BoxDecoration(
-              color: isSelected ? const Color(0xFFE3F2FD) : Colors.transparent,
+              color: isSelected ? Color(0xFFE3F2FD) : Colors.transparent,
               borderRadius: BorderRadius.circular(8),
             ),
             child: Row(
@@ -467,16 +468,16 @@ class _ProfileSettingsWidgetState extends State<ProfileSettingsWidget> {
                 Icon(
                   icon,
                   size: 20,
-                  color: isSelected ? const Color(0xFF0077B5) : const Color(0xFF666666),
+                  color: isSelected ? Color(0xFF0077B5) : Color(0xFF666666),
                 ),
-                const SizedBox(width: 12),
+                SizedBox(width: 12),
                 Text(
                   title,
                   style: TextStyle(
                     fontFamily: 'SF Pro Display',
                     fontSize: 15,
                     fontWeight: isSelected ? FontWeight.w600 : FontWeight.w400,
-                    color: isSelected ? const Color(0xFF0077B5) : const Color(0xFF333333),
+                    color: isSelected ? Color(0xFF0077B5) : Color(0xFF333333),
                   ),
                 ),
               ],
@@ -490,7 +491,7 @@ class _ProfileSettingsWidgetState extends State<ProfileSettingsWidget> {
   Widget _buildSidebar() {
     return Container(
       width: 240,
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         color: Colors.white,
         border: Border(
           right: BorderSide(
@@ -502,7 +503,7 @@ class _ProfileSettingsWidgetState extends State<ProfileSettingsWidget> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Padding(
+          Padding(
             padding: EdgeInsets.all(20),
             child: Text(
               'Settings',
@@ -515,7 +516,7 @@ class _ProfileSettingsWidgetState extends State<ProfileSettingsWidget> {
             ),
           ),
           Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 12),
+            padding: EdgeInsets.symmetric(horizontal: 12),
             child: Column(
               children: [
                 _buildSidebarItem(
@@ -542,9 +543,9 @@ class _ProfileSettingsWidgetState extends State<ProfileSettingsWidget> {
                   icon: CupertinoIcons.question_circle_fill,
                   isSelected: _model.selectedTab == SettingsTab.helpFeedback,
                 ),
-                const SizedBox(height: 8),
-                const Divider(height: 1, color: Color(0xFFE5E7EB)),
-                const SizedBox(height: 8),
+                SizedBox(height: 8),
+                Divider(height: 1, color: Color(0xFFE5E7EB)),
+                SizedBox(height: 8),
                 _buildSidebarItem(
                   tab: SettingsTab.logout,
                   title: 'Logout',
@@ -567,7 +568,7 @@ class _ProfileSettingsWidgetState extends State<ProfileSettingsWidget> {
                 userRef: currentUserReference,
                 isEditable: true,
               )
-            : const Center(
+            : Center(
                 child: Text('Please log in to view your profile'),
               );
 
@@ -580,12 +581,12 @@ class _ProfileSettingsWidgetState extends State<ProfileSettingsWidget> {
           });
         }
 
-        return Container(
-          padding: const EdgeInsets.all(40),
+        return SingleChildScrollView(
+          padding: EdgeInsets.all(40),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Row(
+              Row(
                 children: [
                   Icon(
                     CupertinoIcons.bell_fill,
@@ -604,20 +605,20 @@ class _ProfileSettingsWidgetState extends State<ProfileSettingsWidget> {
                   ),
                 ],
               ),
-              const SizedBox(height: 24),
+              SizedBox(height: 24),
               // Suggestion box
               if (!kIsWeb && Platform.isMacOS)
                 Container(
-                  padding: const EdgeInsets.all(16),
+                  padding: EdgeInsets.all(16),
                   decoration: BoxDecoration(
-                    color: const Color(0xFFE3F2FD),
+                    color: Color(0xFFE3F2FD),
                     borderRadius: BorderRadius.circular(12),
                     border: Border.all(
-                      color: const Color(0xFFBBDEFB),
+                      color: Color(0xFFBBDEFB),
                       width: 1,
                     ),
                   ),
-                  child: const Row(
+                  child: Row(
                     children: [
                       Icon(
                         CupertinoIcons.info_circle_fill,
@@ -639,19 +640,19 @@ class _ProfileSettingsWidgetState extends State<ProfileSettingsWidget> {
                     ],
                   ),
                 ),
-              const SizedBox(height: 24),
+              SizedBox(height: 24),
               if (_isLoadingNotificationStatus)
-                const Center(
+                Center(
                   child: CupertinoActivityIndicator(),
                 )
               else
                 Container(
-                  padding: const EdgeInsets.all(20),
+                  padding: EdgeInsets.all(20),
                   decoration: BoxDecoration(
                     color: Colors.white,
                     borderRadius: BorderRadius.circular(12),
                     border: Border.all(
-                      color: const Color(0xFFE5E7EB),
+                      color: Color(0xFFE5E7EB),
                       width: 1,
                     ),
                   ),
@@ -662,7 +663,7 @@ class _ProfileSettingsWidgetState extends State<ProfileSettingsWidget> {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            const Text(
+                            Text(
                               'Allow Notifications',
                               style: TextStyle(
                                 fontFamily: 'SF Pro Display',
@@ -671,12 +672,12 @@ class _ProfileSettingsWidgetState extends State<ProfileSettingsWidget> {
                                 color: Color(0xFF1A1A1A),
                               ),
                             ),
-                            const SizedBox(height: 4),
+                            SizedBox(height: 4),
                             Text(
                               _notificationsEnabled
                                   ? 'Notifications enabled'
                                   : 'Notifications disabled',
-                              style: const TextStyle(
+                              style: TextStyle(
                                 fontFamily: 'SF Pro Display',
                                 fontSize: 14,
                                 color: Color(0xFF666666),
@@ -688,19 +689,19 @@ class _ProfileSettingsWidgetState extends State<ProfileSettingsWidget> {
                       CupertinoSwitch(
                         value: _notificationsEnabled,
                         onChanged: _handleNotificationToggle,
-                        activeTrackColor: const Color(0xFF0077B5),
+                        activeColor: Color(0xFF0077B5),
                       ),
                     ],
                   ),
                 ),
               if (!_isLoadingNotificationStatus && !kIsWeb && Platform.isMacOS)
                 Padding(
-                  padding: const EdgeInsets.only(top: 16),
+                  padding: EdgeInsets.only(top: 16),
                   child: Text(
                     _notificationsEnabled
                         ? 'You will receive notifications for new messages, connection requests, and other updates.'
                         : 'When enabled, you will receive a system notification permission request.',
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontFamily: 'SF Pro Display',
                       fontSize: 13,
                       color: Color(0xFF999999),
@@ -712,12 +713,12 @@ class _ProfileSettingsWidgetState extends State<ProfileSettingsWidget> {
         );
 
       case SettingsTab.preferences:
-        return Container(
-          padding: const EdgeInsets.all(40),
+        return SingleChildScrollView(
+          padding: EdgeInsets.all(40),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Row(
+              Row(
                 children: [
                   Icon(
                     CupertinoIcons.slider_horizontal_3,
@@ -736,9 +737,9 @@ class _ProfileSettingsWidgetState extends State<ProfileSettingsWidget> {
                   ),
                 ],
               ),
-              const SizedBox(height: 24),
+              SizedBox(height: 24),
               // Keyboard Shortcuts Section
-              const Text(
+              Text(
                 'Keyboard Shortcuts',
                 style: TextStyle(
                   fontFamily: 'SF Pro Display',
@@ -747,21 +748,21 @@ class _ProfileSettingsWidgetState extends State<ProfileSettingsWidget> {
                   color: Color(0xFF1A1A1A),
                 ),
               ),
-              const SizedBox(height: 16),
+              SizedBox(height: 16),
               Container(
-                padding: const EdgeInsets.all(20),
+                padding: EdgeInsets.all(20),
                 decoration: BoxDecoration(
                   color: Colors.white,
                   borderRadius: BorderRadius.circular(12),
                   border: Border.all(
-                    color: const Color(0xFFE5E7EB),
+                    color: Color(0xFFE5E7EB),
                     width: 1,
                   ),
                 ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text(
+                    Text(
                       'Send Message Shortcut',
                       style: TextStyle(
                         fontFamily: 'SF Pro Display',
@@ -770,8 +771,8 @@ class _ProfileSettingsWidgetState extends State<ProfileSettingsWidget> {
                         color: Color(0xFF1A1A1A),
                       ),
                     ),
-                    const SizedBox(height: 4),
-                    const Text(
+                    SizedBox(height: 4),
+                    Text(
                       'Choose how you want to send messages in chat',
                       style: TextStyle(
                         fontFamily: 'SF Pro Display',
@@ -779,7 +780,7 @@ class _ProfileSettingsWidgetState extends State<ProfileSettingsWidget> {
                         color: Color(0xFF666666),
                       ),
                     ),
-                    const SizedBox(height: 16),
+                    SizedBox(height: 16),
                     // Option 1: Enter to send
                     _buildKeyboardShortcutOption(
                       title: 'Return (↵) to send',
@@ -791,7 +792,7 @@ class _ProfileSettingsWidgetState extends State<ProfileSettingsWidget> {
                         });
                       },
                     ),
-                    const SizedBox(height: 12),
+                    SizedBox(height: 12),
                     // Option 2: Shift+Enter to send
                     _buildKeyboardShortcutOption(
                       title: 'Shift + Return to send',
@@ -803,7 +804,7 @@ class _ProfileSettingsWidgetState extends State<ProfileSettingsWidget> {
                         });
                       },
                     ),
-                    const SizedBox(height: 12),
+                    SizedBox(height: 12),
                     // Option 3: Command+Enter to send
                     _buildKeyboardShortcutOption(
                       title: 'Command (⌘) + Return to send',
@@ -818,15 +819,15 @@ class _ProfileSettingsWidgetState extends State<ProfileSettingsWidget> {
                   ],
                 ),
               ),
-              const SizedBox(height: 16),
+              SizedBox(height: 16),
               // Info text
               Container(
-                padding: const EdgeInsets.all(16),
+                padding: EdgeInsets.all(16),
                 decoration: BoxDecoration(
-                  color: const Color(0xFFF5F5F5),
+                  color: Color(0xFFF5F5F5),
                   borderRadius: BorderRadius.circular(12),
                 ),
-                child: const Row(
+                child: Row(
                   children: [
                     Icon(
                       CupertinoIcons.info_circle_fill,
@@ -847,9 +848,9 @@ class _ProfileSettingsWidgetState extends State<ProfileSettingsWidget> {
                   ],
                 ),
               ),
-              const SizedBox(height: 24),
+              SizedBox(height: 24),
               // Translation Language Section
-              const Text(
+              Text(
                 'Translation Language',
                 style: TextStyle(
                   fontFamily: 'SF Pro Display',
@@ -858,21 +859,21 @@ class _ProfileSettingsWidgetState extends State<ProfileSettingsWidget> {
                   color: Color(0xFF1A1A1A),
                 ),
               ),
-              const SizedBox(height: 16),
+              SizedBox(height: 16),
               Container(
-                padding: const EdgeInsets.all(20),
+                padding: EdgeInsets.all(20),
                 decoration: BoxDecoration(
                   color: Colors.white,
                   borderRadius: BorderRadius.circular(12),
                   border: Border.all(
-                    color: const Color(0xFFE5E7EB),
+                    color: Color(0xFFE5E7EB),
                     width: 1,
                   ),
                 ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text(
+                    Text(
                       'Target Language',
                       style: TextStyle(
                         fontFamily: 'SF Pro Display',
@@ -881,8 +882,8 @@ class _ProfileSettingsWidgetState extends State<ProfileSettingsWidget> {
                         color: Color(0xFF1A1A1A),
                       ),
                     ),
-                    const SizedBox(height: 4),
-                    const Text(
+                    SizedBox(height: 4),
+                    Text(
                       'Select the language you want messages to be translated into',
                       style: TextStyle(
                         fontFamily: 'SF Pro Display',
@@ -890,27 +891,29 @@ class _ProfileSettingsWidgetState extends State<ProfileSettingsWidget> {
                         color: Color(0xFF666666),
                       ),
                     ),
-                    const SizedBox(height: 16),
+                    SizedBox(height: 16),
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      padding: EdgeInsets.symmetric(horizontal: 16),
                       decoration: BoxDecoration(
-                        color: const Color(0xFFF9FAFB),
+                        color: Color(0xFFF9FAFB),
                         borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: const Color(0xFFE5E7EB)),
+                        border: Border.all(color: Color(0xFFE5E7EB)),
                       ),
                       child: DropdownButtonHideUnderline(
                         child: DropdownButton<String>(
-                          value: _translationLanguages.containsKey(FFAppState().translateLanguage) 
-                              ? FFAppState().translateLanguage 
+                          value: _translationLanguages
+                                  .containsKey(FFAppState().translateLanguage)
+                              ? FFAppState().translateLanguage
                               : 'system',
                           isExpanded: true,
-                          icon: const Icon(Icons.keyboard_arrow_down, color: Color(0xFF666666)),
+                          icon: Icon(Icons.keyboard_arrow_down,
+                              color: Color(0xFF666666)),
                           items: _translationLanguages.entries.map((entry) {
                             return DropdownMenuItem<String>(
                               value: entry.key,
                               child: Text(
                                 entry.value,
-                                style: const TextStyle(
+                                style: TextStyle(
                                   fontFamily: 'SF Pro Display',
                                   fontSize: 15,
                                   color: Color(0xFF1A1A1A),
@@ -931,22 +934,22 @@ class _ProfileSettingsWidgetState extends State<ProfileSettingsWidget> {
                   ],
                 ),
               ),
-              const SizedBox(height: 16),
+              SizedBox(height: 16),
               // Auto Translate Toggle
               Container(
-                padding: const EdgeInsets.all(20),
+                padding: EdgeInsets.all(20),
                 decoration: BoxDecoration(
                   color: Colors.white,
                   borderRadius: BorderRadius.circular(12),
                   border: Border.all(
-                    color: const Color(0xFFE5E7EB),
+                    color: Color(0xFFE5E7EB),
                     width: 1,
                   ),
                 ),
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    const Expanded(
+                    Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
@@ -978,14 +981,13 @@ class _ProfileSettingsWidgetState extends State<ProfileSettingsWidget> {
                           FFAppState().autoTranslate = value;
                         });
                       },
-                      activeTrackColor: const Color(0xFF0077B5),
                     ),
                   ],
                 ),
               ),
-              const SizedBox(height: 24),
+              SizedBox(height: 24),
               // Account
-              const Text(
+              Text(
                 'Account',
                 style: TextStyle(
                   fontFamily: 'SF Pro Display',
@@ -994,7 +996,7 @@ class _ProfileSettingsWidgetState extends State<ProfileSettingsWidget> {
                   color: Color(0xFF1A1A1A),
                 ),
               ),
-              const SizedBox(height: 16),
+              SizedBox(height: 16),
               InkWell(
                 onTap: () async {
                   await showModalBottomSheet(
@@ -1003,32 +1005,43 @@ class _ProfileSettingsWidgetState extends State<ProfileSettingsWidget> {
                     isScrollControlled: true,
                     builder: (context) => Padding(
                       padding: MediaQuery.viewInsetsOf(context),
-                      child: const DeleteAccountWidget(),
+                      child: DeleteAccountWidget(),
                     ),
                   );
                 },
                 child: Container(
-                  padding: const EdgeInsets.all(20),
+                  padding: EdgeInsets.all(20),
                   decoration: BoxDecoration(
                     color: Colors.white,
                     borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: const Color(0xFFE5E7EB), width: 1),
+                    border: Border.all(color: Color(0xFFE5E7EB), width: 1),
                   ),
-                  child: const Row(
+                  child: Row(
                     children: [
-                      Icon(Icons.person_remove_outlined, size: 24, color: Color(0xFFDC2626)),
+                      Icon(Icons.person_remove_outlined,
+                          size: 24, color: Color(0xFFDC2626)),
                       SizedBox(width: 16),
                       Expanded(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text('Account Deletion', style: TextStyle(fontFamily: 'SF Pro Display', fontSize: 16, fontWeight: FontWeight.w600, color: Color(0xFF1A1A1A))),
+                            Text('Account Deletion',
+                                style: TextStyle(
+                                    fontFamily: 'SF Pro Display',
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.w600,
+                                    color: Color(0xFF1A1A1A))),
                             SizedBox(height: 4),
-                            Text('Permanently delete your account', style: TextStyle(fontFamily: 'SF Pro Display', fontSize: 14, color: Color(0xFF666666))),
+                            Text('Permanently delete your account',
+                                style: TextStyle(
+                                    fontFamily: 'SF Pro Display',
+                                    fontSize: 14,
+                                    color: Color(0xFF666666))),
                           ],
                         ),
                       ),
-                      Icon(CupertinoIcons.chevron_right, size: 20, color: Color(0xFF999999)),
+                      Icon(CupertinoIcons.chevron_right,
+                          size: 20, color: Color(0xFF999999)),
                     ],
                   ),
                 ),
@@ -1038,12 +1051,12 @@ class _ProfileSettingsWidgetState extends State<ProfileSettingsWidget> {
         );
 
       case SettingsTab.helpFeedback:
-        return Container(
-          padding: const EdgeInsets.all(40),
+        return SingleChildScrollView(
+          padding: EdgeInsets.all(40),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Row(
+              Row(
                 children: [
                   Icon(
                     CupertinoIcons.question_circle_fill,
@@ -1062,33 +1075,33 @@ class _ProfileSettingsWidgetState extends State<ProfileSettingsWidget> {
                   ),
                 ],
               ),
-              const SizedBox(height: 32),
+              SizedBox(height: 32),
               // Privacy Policy
               _buildHelpItem(
                 icon: CupertinoIcons.lock_shield_fill,
                 title: 'Privacy Policy',
                 onTap: () => _showPrivacyPolicy(context),
               ),
-              const SizedBox(height: 12),
+              SizedBox(height: 12),
               // Customer Support
               _buildHelpItem(
                 icon: CupertinoIcons.chat_bubble_text_fill,
                 title: 'Customer Support',
                 onTap: () => _showCustomerSupport(context),
               ),
-              const SizedBox(height: 32),
+              SizedBox(height: 32),
               // Security Message
               Container(
-                padding: const EdgeInsets.all(20),
+                padding: EdgeInsets.all(20),
                 decoration: BoxDecoration(
-                  color: const Color(0xFFF5F5F5),
+                  color: Color(0xFFF5F5F5),
                   borderRadius: BorderRadius.circular(12),
                   border: Border.all(
-                    color: const Color(0xFFE5E7EB),
+                    color: Color(0xFFE5E7EB),
                     width: 1,
                   ),
                 ),
-                child: const Row(
+                child: Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Icon(
@@ -1135,13 +1148,13 @@ class _ProfileSettingsWidgetState extends State<ProfileSettingsWidget> {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              const Icon(
+              Icon(
                 CupertinoIcons.arrow_right_square_fill,
                 size: 64,
                 color: Color(0xFFFF3B30),
               ),
-              const SizedBox(height: 16),
-              const Text(
+              SizedBox(height: 16),
+              Text(
                 'Logout',
                 style: TextStyle(
                   fontFamily: 'SF Pro Display',
@@ -1150,12 +1163,12 @@ class _ProfileSettingsWidgetState extends State<ProfileSettingsWidget> {
                   color: Color(0xFF1A1A1A),
                 ),
               ),
-              const SizedBox(height: 24),
+              SizedBox(height: 24),
               Container(
                 width: 200,
                 height: 44,
                 decoration: BoxDecoration(
-                  color: const Color(0xFFFF3B30),
+                  color: Color(0xFFFF3B30),
                   borderRadius: BorderRadius.circular(22),
                 ),
                 child: Material(
@@ -1173,13 +1186,13 @@ class _ProfileSettingsWidgetState extends State<ProfileSettingsWidget> {
                           ScaffoldMessenger.of(context).showSnackBar(
                             SnackBar(
                               content: Text('Failed to log out: $e'),
-                              backgroundColor: const Color(0xFFFF3B30),
+                              backgroundColor: Color(0xFFFF3B30),
                             ),
                           );
                         }
                       }
                     },
-                    child: const Center(
+                    child: Center(
                       child: Text(
                         'Logout',
                         style: TextStyle(
@@ -1218,14 +1231,14 @@ class _ProfileSettingsWidgetState extends State<ProfileSettingsWidget> {
                 ],
               )
             : CupertinoPageScaffold(
-                navigationBar: const CupertinoNavigationBar(
+                navigationBar: CupertinoNavigationBar(
                   middle: Text('Settings'),
                 ),
                 child: SafeArea(
                   child: Column(
                     children: [
                       Container(
-                        padding: const EdgeInsets.all(16),
+                        padding: EdgeInsets.all(16),
                         child: Column(
                           children: [
                             _buildSidebarItem(
@@ -1246,8 +1259,8 @@ class _ProfileSettingsWidgetState extends State<ProfileSettingsWidget> {
                               tab: SettingsTab.preferences,
                               title: 'Preferences',
                               icon: CupertinoIcons.slider_horizontal_3,
-                              isSelected: _model.selectedTab ==
-                                  SettingsTab.preferences,
+                              isSelected:
+                                  _model.selectedTab == SettingsTab.preferences,
                             ),
                             _buildSidebarItem(
                               tab: SettingsTab.helpFeedback,
@@ -1256,9 +1269,9 @@ class _ProfileSettingsWidgetState extends State<ProfileSettingsWidget> {
                               isSelected: _model.selectedTab ==
                                   SettingsTab.helpFeedback,
                             ),
-                            const SizedBox(height: 8),
-                            const Divider(height: 1, color: Color(0xFFE5E7EB)),
-                            const SizedBox(height: 8),
+                            SizedBox(height: 8),
+                            Divider(height: 1, color: Color(0xFFE5E7EB)),
+                            SizedBox(height: 8),
                             _buildSidebarItem(
                               tab: SettingsTab.logout,
                               title: 'Logout',

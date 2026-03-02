@@ -259,7 +259,7 @@ class _AddConnectionsWidgetState extends State<AddConnectionsWidget> {
                 // Custom header with iOS 26 native back button
                 Container(
                   height: 44,
-                  padding: const EdgeInsets.symmetric(horizontal: 8),
+                  padding: EdgeInsets.symmetric(horizontal: 8),
                   color: Colors.white,
                   child: Row(
                     children: [
@@ -273,18 +273,18 @@ class _AddConnectionsWidgetState extends State<AddConnectionsWidget> {
                           child: AdaptiveFloatingActionButton(
                             mini: true,
                             backgroundColor: Colors.white,
-                            foregroundColor: const Color(0xFF007AFF),
+                            foregroundColor: Color(0xFF007AFF),
                             onPressed: () => Navigator.of(context).pop(),
-                            child: const Icon(
+                            child: Icon(
                               CupertinoIcons.chevron_left,
                               size: 17,
                             ),
                           ),
                         ),
                       ),
-                      const SizedBox(width: 8),
+                      SizedBox(width: 8),
                       // Centered title
-                      const Expanded(
+                      Expanded(
                         child: Center(
                           child: Text(
                             'Add Connections',
@@ -299,7 +299,7 @@ class _AddConnectionsWidgetState extends State<AddConnectionsWidget> {
                           ),
                         ),
                       ),
-                      const SizedBox(width: 8),
+                      SizedBox(width: 8),
                       // Invite friends button - iOS 26+ style with liquid glass effects
                       LiquidStretch(
                         stretch: 0.5,
@@ -310,9 +310,9 @@ class _AddConnectionsWidgetState extends State<AddConnectionsWidget> {
                           child: AdaptiveFloatingActionButton(
                             mini: true,
                             backgroundColor: Colors.white,
-                            foregroundColor: const Color(0xFF007AFF),
+                            foregroundColor: Color(0xFF007AFF),
                             onPressed: () => _showInviteDialog(context),
-                            child: const Icon(
+                            child: Icon(
                               CupertinoIcons.person_add_solid,
                               size: 17,
                             ),
@@ -322,11 +322,11 @@ class _AddConnectionsWidgetState extends State<AddConnectionsWidget> {
                     ],
                   ),
                 ),
-                const SizedBox(height: 8),
+                SizedBox(height: 8),
                 // Search bar
                 Container(
                   width: double.infinity,
-                  padding: const EdgeInsets.all(16),
+                  padding: EdgeInsets.all(16),
                   color: Colors.white,
                   child: Container(
                     height: 44,
@@ -347,7 +347,7 @@ class _AddConnectionsWidgetState extends State<AddConnectionsWidget> {
                         });
                       },
                       placeholder: 'Search by name or email',
-                      placeholderStyle: const TextStyle(
+                      placeholderStyle: TextStyle(
                         fontFamily: 'SF Pro Text',
                         color: CupertinoColors.systemGrey,
                         fontSize: 14,
@@ -355,8 +355,8 @@ class _AddConnectionsWidgetState extends State<AddConnectionsWidget> {
                         decoration: TextDecoration.none,
                       ),
                       padding:
-                          const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-                      prefix: const Padding(
+                          EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                      prefix: Padding(
                         padding: EdgeInsets.only(left: 12, right: 8),
                         child: Icon(
                           CupertinoIcons.search,
@@ -372,7 +372,7 @@ class _AddConnectionsWidgetState extends State<AddConnectionsWidget> {
                                   _searchQuery = '';
                                 });
                               },
-                              child: const Padding(
+                              child: Padding(
                                 padding: EdgeInsets.only(right: 12),
                                 child: Icon(
                                   CupertinoIcons.xmark_circle_fill,
@@ -382,7 +382,7 @@ class _AddConnectionsWidgetState extends State<AddConnectionsWidget> {
                               ),
                             )
                           : null,
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontFamily: 'SF Pro Text',
                         color: CupertinoColors.label,
                         fontSize: 14,
@@ -398,7 +398,7 @@ class _AddConnectionsWidgetState extends State<AddConnectionsWidget> {
                 ),
                 // Recommended text (only show when no search query)
                 if (_searchQuery.isEmpty)
-                  const Padding(
+                  Padding(
                     padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                     child: Text(
                       'Recommended:',
@@ -428,7 +428,7 @@ class _AddConnectionsWidgetState extends State<AddConnectionsWidget> {
     if (currentUserReference == null) {
       return Container(
         color: Colors.white,
-        child: const Center(
+        child: Center(
           child: CupertinoActivityIndicator(),
         ),
       );
@@ -440,7 +440,7 @@ class _AddConnectionsWidgetState extends State<AddConnectionsWidget> {
         if (!currentUserSnapshot.hasData) {
           return Container(
             color: Colors.white,
-            child: const Center(
+            child: Center(
               child: CupertinoActivityIndicator(),
             ),
           );
@@ -470,7 +470,7 @@ class _AddConnectionsWidgetState extends State<AddConnectionsWidget> {
             if (!searchSnapshot.hasData) {
               return Container(
                 color: Colors.white,
-                child: const Center(
+                child: Center(
                   child: CupertinoActivityIndicator(),
                 ),
               );
@@ -521,8 +521,8 @@ class _AddConnectionsWidgetState extends State<AddConnectionsWidget> {
             return Container(
               color: Colors.white,
               child: GridView.builder(
-                padding: const EdgeInsets.all(16),
-                gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+                padding: EdgeInsets.all(16),
+                gridDelegate: SliverGridDelegateWithMaxCrossAxisExtent(
                   maxCrossAxisExtent: 280,
                   crossAxisSpacing: 16,
                   mainAxisSpacing: 16,
@@ -558,7 +558,7 @@ class _AddConnectionsWidgetState extends State<AddConnectionsWidget> {
       bool isSentRequest = false,
       bool hasIncomingRequest = false}) {
     return Container(
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         color: Colors.white,
         border: Border(
           bottom: BorderSide(
@@ -568,12 +568,12 @@ class _AddConnectionsWidgetState extends State<AddConnectionsWidget> {
         ),
       ),
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             // User avatar
-            SizedBox(
+            Container(
               width: 48,
               height: 48,
               child: ClipRRect(
@@ -587,11 +587,11 @@ class _AddConnectionsWidgetState extends State<AddConnectionsWidget> {
                         placeholder: (context, url) => Container(
                           width: 48,
                           height: 48,
-                          decoration: const BoxDecoration(
+                          decoration: BoxDecoration(
                             color: Color(0xFFF1F5F9),
                             shape: BoxShape.circle,
                           ),
-                          child: const Icon(
+                          child: Icon(
                             CupertinoIcons.person_fill,
                             color: Color(0xFF64748B),
                             size: 24,
@@ -603,7 +603,7 @@ class _AddConnectionsWidgetState extends State<AddConnectionsWidget> {
                     : _buildInitialsAvatar(user),
               ),
             ),
-            const SizedBox(width: 10),
+            SizedBox(width: 10),
 
             // User info
             Expanded(
@@ -614,7 +614,7 @@ class _AddConnectionsWidgetState extends State<AddConnectionsWidget> {
                     user.displayName.isNotEmpty
                         ? user.displayName
                         : 'Unknown User',
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontFamily: 'SF Pro Display',
                       color: Color(0xFF000000),
                       fontSize: 15,
@@ -624,13 +624,13 @@ class _AddConnectionsWidgetState extends State<AddConnectionsWidget> {
                       decoration: TextDecoration.none,
                     ),
                   ),
-                  const SizedBox(height: 2),
+                  SizedBox(height: 2),
 
                   // Bio or job title (can span multiple lines)
                   if (user.bio.isNotEmpty)
                     Text(
                       user.bio,
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontFamily: 'SF Pro Display',
                         color: Color(0xFF666666),
                         fontSize: 13,
@@ -644,7 +644,7 @@ class _AddConnectionsWidgetState extends State<AddConnectionsWidget> {
                   else
                     Text(
                       user.email,
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontFamily: 'SF Pro Display',
                         color: Color(0xFF666666),
                         fontSize: 13,
@@ -697,20 +697,20 @@ class _AddConnectionsWidgetState extends State<AddConnectionsWidget> {
                 height: 36,
                 decoration: BoxDecoration(
                   border: Border.all(
-                    color: const Color(0xFFE5E7EB),
+                    color: Color(0xFFE5E7EB),
                     width: 1,
                   ),
                   shape: BoxShape.circle,
                 ),
                 child: isLoading
-                    ? const Center(
+                    ? Center(
                         child: SizedBox(
                           width: 16,
                           height: 16,
                           child: CupertinoActivityIndicator(),
                         ),
                       )
-                    : const Icon(
+                    : Icon(
                         CupertinoIcons.paperplane_fill,
                         size: 16,
                         color: Color(0xFF000000),
@@ -718,7 +718,7 @@ class _AddConnectionsWidgetState extends State<AddConnectionsWidget> {
               ),
             ),
           ),
-          const SizedBox(width: 6),
+          SizedBox(width: 6),
           // More options button (ellipsis icon)
           Material(
             color: Colors.transparent,
@@ -730,12 +730,12 @@ class _AddConnectionsWidgetState extends State<AddConnectionsWidget> {
                 height: 36,
                 decoration: BoxDecoration(
                   border: Border.all(
-                    color: const Color(0xFFE5E7EB),
+                    color: Color(0xFFE5E7EB),
                     width: 1,
                   ),
                   shape: BoxShape.circle,
                 ),
-                child: const Icon(
+                child: Icon(
                   CupertinoIcons.ellipsis_vertical,
                   size: 16,
                   color: Color(0xFF666666),
@@ -756,18 +756,18 @@ class _AddConnectionsWidgetState extends State<AddConnectionsWidget> {
               onTap: isLoading ? null : () => _acceptConnectionRequest(user),
               borderRadius: BorderRadius.circular(4),
               child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                 decoration: BoxDecoration(
-                  color: const Color(0xFF2563EB),
+                  color: Color(0xFF2563EB),
                   borderRadius: BorderRadius.circular(4),
                 ),
                 child: isLoading
-                    ? const SizedBox(
+                    ? SizedBox(
                         width: 16,
                         height: 16,
                         child: CupertinoActivityIndicator(color: Colors.white),
                       )
-                    : const Text(
+                    : Text(
                         'Accept',
                         style: TextStyle(
                           fontFamily: 'SF Pro Display',
@@ -780,28 +780,28 @@ class _AddConnectionsWidgetState extends State<AddConnectionsWidget> {
               ),
             ),
           ),
-          const SizedBox(width: 8),
+          SizedBox(width: 8),
           Material(
             color: Colors.transparent,
             child: InkWell(
               onTap: isLoading ? null : () => _declineConnectionRequest(user),
               borderRadius: BorderRadius.circular(4),
               child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                 decoration: BoxDecoration(
                   border: Border.all(
-                    color: const Color(0xFFE5E7EB),
+                    color: Color(0xFFE5E7EB),
                     width: 1.5,
                   ),
                   borderRadius: BorderRadius.circular(4),
                 ),
                 child: isLoading
-                    ? const SizedBox(
+                    ? SizedBox(
                         width: 16,
                         height: 16,
                         child: CupertinoActivityIndicator(),
                       )
-                    : const Text(
+                    : Text(
                         'Decline',
                         style: TextStyle(
                           fontFamily: 'SF Pro Display',
@@ -819,12 +819,12 @@ class _AddConnectionsWidgetState extends State<AddConnectionsWidget> {
     } else if (actuallyHasSentRequest) {
       // Show pending state
       return Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
         decoration: BoxDecoration(
-          color: const Color(0xFFF1F5F9),
+          color: Color(0xFFF1F5F9),
           borderRadius: BorderRadius.circular(4),
         ),
-        child: const Text(
+        child: Text(
           'Pending',
           style: TextStyle(
             fontFamily: 'SF Pro Display',
@@ -843,18 +843,18 @@ class _AddConnectionsWidgetState extends State<AddConnectionsWidget> {
           onTap: isLoading ? null : () => _sendConnectionRequest(user),
           borderRadius: BorderRadius.circular(4),
           child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
             decoration: BoxDecoration(
-              color: const Color(0xFF2563EB),
+              color: Color(0xFF2563EB),
               borderRadius: BorderRadius.circular(4),
             ),
             child: isLoading
-                ? const SizedBox(
+                ? SizedBox(
                     width: 16,
                     height: 16,
                     child: CupertinoActivityIndicator(color: Colors.white),
                   )
-                : const Text(
+                : Text(
                     'Connect',
                     style: TextStyle(
                       fontFamily: 'SF Pro Display',
@@ -881,7 +881,7 @@ class _AddConnectionsWidgetState extends State<AddConnectionsWidget> {
               Navigator.pop(context);
               _showRemoveConnectionConfirmation(user, currentUser);
             },
-            child: const Text(
+            child: Text(
               'Remove connection',
               style: TextStyle(color: Color(0xFFDC2626)),
             ),
@@ -889,7 +889,7 @@ class _AddConnectionsWidgetState extends State<AddConnectionsWidget> {
         ],
         cancelButton: CupertinoActionSheetAction(
           onPressed: () => Navigator.pop(context),
-          child: const Text('Cancel'),
+          child: Text('Cancel'),
         ),
       ),
     );
@@ -900,7 +900,7 @@ class _AddConnectionsWidgetState extends State<AddConnectionsWidget> {
     showCupertinoDialog(
       context: context,
       builder: (context) => CupertinoAlertDialog(
-        title: const Text('Remove Connection'),
+        title: Text('Remove Connection'),
         content: Text(
             'Are you sure you want to remove ${user.displayName} from your connections?'),
         actions: [
@@ -910,11 +910,11 @@ class _AddConnectionsWidgetState extends State<AddConnectionsWidget> {
               Navigator.pop(context);
               _removeConnection(user, currentUser);
             },
-            child: const Text('Remove'),
+            child: Text('Remove'),
           ),
           CupertinoDialogAction(
             onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
+            child: Text('Cancel'),
           ),
         ],
       ),
@@ -989,7 +989,7 @@ class _AddConnectionsWidgetState extends State<AddConnectionsWidget> {
         child: SelectionContainer.disabled(
           child: Text(
             initials.toUpperCase(),
-            style: const TextStyle(
+            style: TextStyle(
               color: CupertinoColors.white,
               fontSize: 18,
               fontWeight: FontWeight.w600,
@@ -1005,7 +1005,7 @@ class _AddConnectionsWidgetState extends State<AddConnectionsWidget> {
     if (_isInitialLoading) {
       return Container(
         color: Colors.white,
-        child: const Center(
+        child: Center(
           child: CupertinoActivityIndicator(),
         ),
       );
@@ -1025,7 +1025,7 @@ class _AddConnectionsWidgetState extends State<AddConnectionsWidget> {
         if (!currentUserSnapshot.hasData) {
           return Container(
             color: Colors.white,
-            child: const Center(
+            child: Center(
               child: CupertinoActivityIndicator(),
             ),
           );
@@ -1050,8 +1050,8 @@ class _AddConnectionsWidgetState extends State<AddConnectionsWidget> {
           color: Colors.white,
           child: GridView.builder(
             controller: _scrollController,
-            padding: const EdgeInsets.all(16),
-            gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+            padding: EdgeInsets.all(16),
+            gridDelegate: SliverGridDelegateWithMaxCrossAxisExtent(
               maxCrossAxisExtent: 280,
               crossAxisSpacing: 16,
               mainAxisSpacing: 16,
@@ -1061,7 +1061,7 @@ class _AddConnectionsWidgetState extends State<AddConnectionsWidget> {
             itemBuilder: (context, index) {
               if (index == filteredUsers.length) {
                 // Loading indicator at the end
-                return const Center(
+                return Center(
                   child: CupertinoActivityIndicator(),
                 );
               }
@@ -1125,7 +1125,7 @@ class _AddConnectionsWidgetState extends State<AddConnectionsWidget> {
           decoration: BoxDecoration(
             color: Colors.white,
             borderRadius: BorderRadius.circular(16),
-            boxShadow: const [
+            boxShadow: [
               BoxShadow(
                 color: Color(0x0D000000),
                 blurRadius: 8,
@@ -1137,7 +1137,7 @@ class _AddConnectionsWidgetState extends State<AddConnectionsWidget> {
           child: ClipRRect(
             borderRadius: BorderRadius.circular(16),
             child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+              padding: EdgeInsets.symmetric(horizontal: 16, vertical: 14),
               child: Column(
               crossAxisAlignment: CrossAxisAlignment.center,
               mainAxisSize: MainAxisSize.min,
@@ -1150,7 +1150,7 @@ class _AddConnectionsWidgetState extends State<AddConnectionsWidget> {
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
                     border: Border.all(
-                      color: const Color(0xFFE5E7EB),
+                      color: Color(0xFFE5E7EB),
                       width: 2,
                     ),
                   ),
@@ -1163,16 +1163,16 @@ class _AddConnectionsWidgetState extends State<AddConnectionsWidget> {
                             height: 80,
                             fit: BoxFit.cover,
                             memCacheWidth: 240,
-                            fadeInDuration: const Duration(milliseconds: 200),
-                            fadeOutDuration: const Duration(milliseconds: 100),
+                            fadeInDuration: Duration(milliseconds: 200),
+                            fadeOutDuration: Duration(milliseconds: 100),
                             placeholder: (context, url) => Container(
                               width: 80,
                               height: 80,
-                              decoration: const BoxDecoration(
+                              decoration: BoxDecoration(
                                 color: Color(0xFFF9FAFB),
                                 shape: BoxShape.circle,
                               ),
-                              child: const Icon(
+                              child: Icon(
                                 CupertinoIcons.person_fill,
                                 color: Color(0xFF9CA3AF),
                                 size: 40,
@@ -1184,15 +1184,15 @@ class _AddConnectionsWidgetState extends State<AddConnectionsWidget> {
                         : _buildInitialsAvatarSmall(user),
                   ),
                 ),
-                const SizedBox(height: 10),
+                SizedBox(height: 10),
                 // Name
                 Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 8),
+                  padding: EdgeInsets.symmetric(horizontal: 8),
                   child: Text(
                     user.displayName.isNotEmpty
                         ? user.displayName
                         : 'Unknown User',
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontFamily: 'SF Pro Display',
                       fontSize: 17,
                       fontWeight: FontWeight.w600,
@@ -1206,15 +1206,15 @@ class _AddConnectionsWidgetState extends State<AddConnectionsWidget> {
                     overflow: TextOverflow.ellipsis,
                   ),
                 ),
-                const SizedBox(height: 4),
+                SizedBox(height: 4),
                 // Title/Bio - Fixed height container to ensure consistent card height
-                SizedBox(
+                Container(
                   height: 34,
                   child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 8),
+                    padding: EdgeInsets.symmetric(horizontal: 8),
                     child: Text(
                       title,
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontFamily: 'SF Pro Text',
                         fontSize: 14,
                         fontWeight: FontWeight.w400,
@@ -1229,27 +1229,27 @@ class _AddConnectionsWidgetState extends State<AddConnectionsWidget> {
                     ),
                   ),
                 ),
-                const SizedBox(height: 5),
+                SizedBox(height: 5),
                 // Mutual connections
                 if (mutualText.isNotEmpty)
-                  SizedBox(
+                  Container(
                     height: 16,
                     child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 8),
+                      padding: EdgeInsets.symmetric(horizontal: 8),
                       child: Row(
                         mainAxisAlignment: MainAxisAlignment.center,
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          const Icon(
+                          Icon(
                             CupertinoIcons.person_2_fill,
                             size: 13,
                             color: Color(0xFF9CA3AF),
                           ),
-                          const SizedBox(width: 4),
+                          SizedBox(width: 4),
                           Flexible(
                             child: Text(
                               mutualText,
-                              style: const TextStyle(
+                              style: TextStyle(
                                 fontFamily: 'SF Pro Text',
                                 fontSize: 12,
                                 fontWeight: FontWeight.w400,
@@ -1267,17 +1267,17 @@ class _AddConnectionsWidgetState extends State<AddConnectionsWidget> {
                       ),
                     ),
                   ),
-                if (mutualText.isNotEmpty) const SizedBox(height: 6),
+                if (mutualText.isNotEmpty) SizedBox(height: 6),
                 // Connect button or status
                 Container(
                   width: double.infinity,
                   height: 38,
                   decoration: BoxDecoration(
                     color: isConnected
-                        ? const Color(0xFFF3F4F6)
+                        ? Color(0xFFF3F4F6)
                         : isSentRequest
-                            ? const Color(0xFFF3F4F6)
-                            : const Color(0xFF007AFF),
+                            ? Color(0xFFF3F4F6)
+                            : Color(0xFF007AFF),
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: Material(
@@ -1298,7 +1298,7 @@ class _AddConnectionsWidgetState extends State<AddConnectionsWidget> {
                                 height: 14,
                                 child: CupertinoActivityIndicator(
                                   color: isConnected || isSentRequest
-                                      ? const Color(0xFF6B7280)
+                                      ? Color(0xFF6B7280)
                                       : Colors.white,
                                 ),
                               )
@@ -1314,7 +1314,7 @@ class _AddConnectionsWidgetState extends State<AddConnectionsWidget> {
                                   fontWeight: FontWeight.w600,
                                   letterSpacing: -0.2,
                                   color: isConnected || isSentRequest
-                                      ? const Color(0xFF6B7280)
+                                      ? Color(0xFF6B7280)
                                       : Colors.white,
                                   decoration: TextDecoration.none,
                                 ),
@@ -1339,16 +1339,16 @@ class _AddConnectionsWidgetState extends State<AddConnectionsWidget> {
 
     // Generate a consistent color based on user's name
     final colors = [
-      const Color(0xFF007AFF),
-      const Color(0xFF5856D6),
-      const Color(0xFFAF52DE),
-      const Color(0xFFFF2D55),
-      const Color(0xFFFF3B30),
-      const Color(0xFFFF9500),
-      const Color(0xFFFFCC00),
-      const Color(0xFF34C759),
-      const Color(0xFF5AC8FA),
-      const Color(0xFF00C7BE),
+      Color(0xFF007AFF),
+      Color(0xFF5856D6),
+      Color(0xFFAF52DE),
+      Color(0xFFFF2D55),
+      Color(0xFFFF3B30),
+      Color(0xFFFF9500),
+      Color(0xFFFFCC00),
+      Color(0xFF34C759),
+      Color(0xFF5AC8FA),
+      Color(0xFF00C7BE),
     ];
     final colorIndex = user.displayName.hashCode.abs() % colors.length;
 
@@ -1363,7 +1363,7 @@ class _AddConnectionsWidgetState extends State<AddConnectionsWidget> {
         child: SelectionContainer.disabled(
           child: Text(
             initials.toUpperCase(),
-            style: const TextStyle(
+            style: TextStyle(
               color: Colors.white,
               fontSize: 32,
               fontWeight: FontWeight.w600,
@@ -1385,7 +1385,7 @@ class _AddConnectionsWidgetState extends State<AddConnectionsWidget> {
       color: Colors.white,
       child: Center(
         child: Padding(
-          padding: const EdgeInsets.all(32),
+          padding: EdgeInsets.all(32),
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
@@ -1394,10 +1394,10 @@ class _AddConnectionsWidgetState extends State<AddConnectionsWidget> {
                 size: 80,
                 color: CupertinoColors.systemGrey,
               ),
-              const SizedBox(height: 24),
+              SizedBox(height: 24),
               Text(
                 title,
-                style: const TextStyle(
+                style: TextStyle(
                   fontFamily: 'SF Pro Display',
                   fontSize: 24,
                   fontWeight: FontWeight.bold,
@@ -1405,11 +1405,11 @@ class _AddConnectionsWidgetState extends State<AddConnectionsWidget> {
                   decoration: TextDecoration.none,
                 ),
               ),
-              const SizedBox(height: 12),
+              SizedBox(height: 12),
               Text(
                 subtitle,
                 textAlign: TextAlign.center,
-                style: const TextStyle(
+                style: TextStyle(
                   fontFamily: 'SF Pro Text',
                   fontSize: 16,
                   color: CupertinoColors.secondaryLabel,
@@ -1455,7 +1455,7 @@ class _AddConnectionsWidgetState extends State<AddConnectionsWidget> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Error starting chat: $e'),
-            backgroundColor: const Color(0xFFFF3B30),
+            backgroundColor: Color(0xFFFF3B30),
           ),
         );
       }
@@ -1684,7 +1684,7 @@ class _AddConnectionsWidgetState extends State<AddConnectionsWidget> {
         content: Text(message),
         actions: [
           CupertinoDialogAction(
-            child: const Text('OK'),
+            child: Text('OK'),
             onPressed: () => Navigator.of(context).pop(),
           ),
         ],
@@ -1696,11 +1696,11 @@ class _AddConnectionsWidgetState extends State<AddConnectionsWidget> {
     showCupertinoDialog(
       context: context,
       builder: (context) => CupertinoAlertDialog(
-        title: const Text('Error'),
+        title: Text('Error'),
         content: Text(message),
         actions: [
           CupertinoDialogAction(
-            child: const Text('OK'),
+            child: Text('OK'),
             onPressed: () => Navigator.of(context).pop(),
           ),
         ],

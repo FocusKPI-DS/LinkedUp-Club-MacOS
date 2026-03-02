@@ -430,7 +430,7 @@ class _MobileGroupTasksWidgetState extends State<MobileGroupTasksWidget> {
                           borderRadius: BorderRadius.circular(8),
                         ),
                         child: DropdownButtonFormField<String>(
-                          initialValue: selectedPriority,
+                          value: selectedPriority,
                           decoration: const InputDecoration(
                             border: InputBorder.none,
                             contentPadding: EdgeInsets.symmetric(

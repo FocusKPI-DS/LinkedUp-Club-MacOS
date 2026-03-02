@@ -71,6 +71,7 @@ class _OnboardingProfileWidgetState extends State<OnboardingProfileWidget>
       // Check for referrer from user document (for Google/Apple sign-in)
       if (FFAppState().referrerName == null ||
           FFAppState().referrerName!.isEmpty) {
+        print("ONBOARDING SUBMIT PRESSED");
         try {
           final userDoc = await currentUserReference?.get();
           if (userDoc != null && userDoc.exists) {
@@ -399,6 +400,8 @@ class _OnboardingProfileWidgetState extends State<OnboardingProfileWidget>
 
                                                           var downloadUrls =
                                                               <String>[];
+                                                          print(
+                                                              "ONBOARDING SUBMIT PRESSED");
                                                           try {
                                                             selectedUploadedFiles =
                                                                 selectedMedia
@@ -668,6 +671,8 @@ class _OnboardingProfileWidgetState extends State<OnboardingProfileWidget>
                                                               <FFUploadedFile>[];
                                                           var downloadUrls =
                                                               <String>[];
+                                                          print(
+                                                              "ONBOARDING SUBMIT PRESSED");
                                                           try {
                                                             selectedUploadedFiles =
                                                                 selectedMedia
@@ -4232,7 +4237,7 @@ class _OnboardingProfileWidgetState extends State<OnboardingProfileWidget>
                                             ),
                                           ),
                                         )
-                                      : const Text(
+                                      : Text(
                                           'Connect',
                                           textAlign: TextAlign.center,
                                           style: TextStyle(
@@ -4299,6 +4304,7 @@ class _OnboardingProfileWidgetState extends State<OnboardingProfileWidget>
 
     _startOperation(userId);
 
+    print("ONBOARDING SUBMIT PRESSED");
     try {
       // Check if already connected
       if (currentUser.friends.contains(user.reference)) {

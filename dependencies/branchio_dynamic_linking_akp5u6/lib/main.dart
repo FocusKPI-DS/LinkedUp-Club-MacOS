@@ -19,7 +19,7 @@ void main() async {
   await actions.initBranch();
   // End final custom actions code
 
-  runApp(const MyApp());
+  runApp(MyApp());
 }
 
 class MyApp extends StatefulWidget {

@@ -62,13 +62,30 @@ async function sendLonaAnnouncement() {
     // ═══════════════════════════════════════════════════════════════
     const announcementMessage = `🎉 New macOS Update Available!
 
-macOS version 1.6.3 is now available!
+macOS version 1.6.4 is now available!
 
 What's New:
-• Drag & Drop Preview - Directly opens a preview page when dropping images/videos, with options to comment or send.
-• Camera Access - Camera support for macOS for taking photos/videos.
-• Smart Resizing - Automatic resizing of image/video bubbles based on aspect ratio (vertical/horizontal).
-• Video Download - Ability to download videos sent by others.
+
+Bug Fixes
+1. Unable to locate messages from chat history (Mac)
+2. Unable to input messages using Chinese input method (Mac)
+3. Unable to remove members from a group (All platforms)
+4. Translator showing errors (All platforms)
+5. Users able to send messages on Lona service (All platforms)
+6. Messages sent again when editing a sent message (All platforms)
+7. Message sent again when double-clicking quickly while sending files (Mac)
+8. Messages sent again when replying to a message (Mac)
+
+New Features & Improvements
+- Language Translation in chat
+- Pin files and messages
+- Chat history search (with separate tabs for messages, images/videos, and files)
+- Improved Create/Edit Group experience on iOS
+- Document file previews
+- File message bubble displays full file name
+- Chat History Locate
+- New Rich Chat Box
+- Auto Translator
 
 Update your app now to get the latest features!
 Appstore Link: https://apps.apple.com/us/app/lona-club/id6747595642`;

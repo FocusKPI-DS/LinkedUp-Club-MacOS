@@ -354,9 +354,9 @@ PODS:
   - RecaptchaInterop (101.0.0)
   - record_ios (1.0.0):
     - Flutter
-  - SDWebImage (5.21.6):
-    - SDWebImage/Core (= 5.21.6)
-  - SDWebImage/Core (5.21.6)
+  - SDWebImage (5.21.7):
+    - SDWebImage/Core (= 5.21.7)
+  - SDWebImage/Core (5.21.7)
   - share_plus (0.0.1):
     - Flutter
   - shared_preferences_foundation (0.0.1):
@@ -683,7 +683,7 @@ SPEC CHECKSUMS:
   quill_native_bridge_ios: 2b01d585fcc73d0f5eed78c0bd244ee564b06f5a
   RecaptchaInterop: 11e0b637842dfb48308d242afc3f448062325aba
   record_ios: 1bbc430ab8406174d70332f23e06a3dc751239b4
-  SDWebImage: 1bb6a1b84b6fe87b972a102bdc77dd589df33477
+  SDWebImage: e9fc87c1aab89a8ab1bbd74eba378c6f53be8abf
   share_plus: 8875f4f2500512ea181eef553c3e27dba5135aad
   shared_preferences_foundation: fcdcbc04712aee1108ac7fda236f363274528f78
   sign_in_with_apple: f3bf75217ea4c2c8b91823f225d70230119b8440
@@ -697,6 +697,6 @@ SPEC CHECKSUMS:
   webview_flutter_wkwebview: 29eb20d43355b48fe7d07113835b9128f84e3af4
   zego_express_engine: 08ce2209d3c8af8182fbae5bdb391c477f5630a4
 
-PODFILE CHECKSUM: a96410100fc4305358a045773744277b978ab01c
+PODFILE CHECKSUM: cd550ea571c1290cd617e29504a872b18e64bb83
 
 COCOAPODS: 1.12.1

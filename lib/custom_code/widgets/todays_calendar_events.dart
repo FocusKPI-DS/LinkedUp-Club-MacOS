@@ -14,7 +14,7 @@ class DashedLinePainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final paint = Paint()
-      ..color = const Color(0xFFEF4444)
+      ..color = Color(0xFFEF4444)
       ..strokeWidth = 1
       ..style = PaintingStyle.stroke;
 
@@ -37,7 +37,7 @@ class DashedLinePainter extends CustomPainter {
 }
 
 class TodaysCalendarEvents extends StatefulWidget {
-  const TodaysCalendarEvents({super.key});
+  const TodaysCalendarEvents({Key? key}) : super(key: key);
 
   @override
   State<TodaysCalendarEvents> createState() => _TodaysCalendarEventsState();
@@ -152,7 +152,7 @@ class _TodaysCalendarEventsState extends State<TodaysCalendarEvents> {
       final now = DateTime.now();
       final startOfDay = DateTime(now.year, now.month, now.day, 0, 0, 0);
       final endOfDay =
-          startOfDay.add(const Duration(days: 1)).subtract(const Duration(seconds: 1));
+          startOfDay.add(Duration(days: 1)).subtract(Duration(seconds: 1));
 
       final startOfDayUtc = startOfDay.toUtc();
       final endOfDayUtc = endOfDay.toUtc();
@@ -353,7 +353,7 @@ class _TodaysCalendarEventsState extends State<TodaysCalendarEvents> {
         : defaultEnd;
 
     // Ensure minimum 4 hours of schedule shown
-    final minEnd = scheduleStart.add(const Duration(hours: 4));
+    final minEnd = scheduleStart.add(Duration(hours: 4));
     final finalEnd = scheduleEnd.isAfter(minEnd) ? scheduleEnd : minEnd;
 
     return {'start': scheduleStart, 'end': finalEnd};
@@ -396,7 +396,7 @@ class _TodaysCalendarEventsState extends State<TodaysCalendarEvents> {
     final totalMinutes = endOfDay.difference(startOfDay).inMinutes;
 
     // Fixed height for the schedule area (100px)
-    const scheduleHeight = 100.0;
+    final scheduleHeight = 100.0;
     final pixelsPerMinute = scheduleHeight / totalMinutes;
 
     final top = startMinutes * pixelsPerMinute;
@@ -408,11 +408,11 @@ class _TodaysCalendarEventsState extends State<TodaysCalendarEvents> {
   // Get blue shade based on index
   Color _getBlueShade(int index) {
     final shades = [
-      const Color(0xFFE3F2FD), // Light blue
-      const Color(0xFFBBDEFB), // Medium light blue
-      const Color(0xFF90CAF9), // Medium blue
-      const Color(0xFF64B5F6), // Bright blue
-      const Color(0xFF42A5F5), // Deeper blue
+      Color(0xFFE3F2FD), // Light blue
+      Color(0xFFBBDEFB), // Medium light blue
+      Color(0xFF90CAF9), // Medium blue
+      Color(0xFF64B5F6), // Bright blue
+      Color(0xFF42A5F5), // Deeper blue
     ];
     return shades[index % shades.length];
   }
@@ -424,7 +424,7 @@ class _TodaysCalendarEventsState extends State<TodaysCalendarEvents> {
 
     // Video call icon if meeting link exists
     if (meetingLink != null) {
-      return const Icon(
+      return Icon(
         CupertinoIcons.videocam_fill,
         size: 18,
         color: Color(0xFF2563EB),
@@ -432,7 +432,7 @@ class _TodaysCalendarEventsState extends State<TodaysCalendarEvents> {
     }
     // Location icon if location exists
     else if (location.isNotEmpty) {
-      return const Icon(
+      return Icon(
         CupertinoIcons.location_fill,
         size: 18,
         color: Color(0xFF2563EB),
@@ -440,7 +440,7 @@ class _TodaysCalendarEventsState extends State<TodaysCalendarEvents> {
     }
     // Default group/people icon
     else {
-      return const Icon(
+      return Icon(
         CupertinoIcons.person_3_fill,
         size: 18,
         color: Color(0xFF2563EB),
@@ -509,6 +509,7 @@ class _TodaysCalendarEventsState extends State<TodaysCalendarEvents> {
 
     return CupertinoButton(
       padding: EdgeInsets.zero,
+      minSize: 0,
       onPressed: meetingLink != null
           ? () async {
               final uri = Uri.parse(meetingLink);
@@ -525,7 +526,7 @@ class _TodaysCalendarEventsState extends State<TodaysCalendarEvents> {
             width: 80,
             child: Text(
               timeDisplay,
-              style: const TextStyle(
+              style: TextStyle(
                 fontFamily: '.SF Pro Text',
                 fontSize: 15,
                 fontWeight: FontWeight.w400,
@@ -538,9 +539,9 @@ class _TodaysCalendarEventsState extends State<TodaysCalendarEvents> {
           Container(
             width: 2,
             height: 50,
-            margin: const EdgeInsets.only(right: 16, left: 8),
+            margin: EdgeInsets.only(right: 16, left: 8),
             decoration: BoxDecoration(
-              color: CupertinoColors.systemBlue.withValues(alpha: 0.3),
+              color: CupertinoColors.systemBlue.withOpacity(0.3),
               borderRadius: BorderRadius.circular(1),
             ),
           ),
@@ -552,7 +553,7 @@ class _TodaysCalendarEventsState extends State<TodaysCalendarEvents> {
                 // Event title
                 Text(
                   summary,
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontFamily: '.SF Pro Text',
                     fontSize: 17,
                     fontWeight: FontWeight.w600,
@@ -562,13 +563,13 @@ class _TodaysCalendarEventsState extends State<TodaysCalendarEvents> {
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
-                const SizedBox(height: 4),
+                SizedBox(height: 4),
                 // Description
                 Text(
                   description.isNotEmpty
                       ? description
                       : (location.isNotEmpty ? location : platform),
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontFamily: '.SF Pro Text',
                     fontSize: 15,
                     fontWeight: FontWeight.w400,
@@ -586,7 +587,7 @@ class _TodaysCalendarEventsState extends State<TodaysCalendarEvents> {
             width: 40,
             height: 40,
             decoration: BoxDecoration(
-              color: const Color(0xFF2563EB).withOpacity(0.11),
+              color: Color(0xFF2563EB).withOpacity(0.11),
               shape: BoxShape.circle,
             ),
             child: Center(
@@ -594,7 +595,7 @@ class _TodaysCalendarEventsState extends State<TodaysCalendarEvents> {
             ),
           ),
         ],
-      ), minimumSize: Size(0, 0),
+      ),
     );
   }
 
@@ -602,7 +603,7 @@ class _TodaysCalendarEventsState extends State<TodaysCalendarEvents> {
   Widget build(BuildContext context) {
     // Don't show if user is not connected to Google or if there are no events
     if (!_isLoading && _todayEvents.isEmpty && !_hasError) {
-      return const SizedBox.shrink();
+      return SizedBox.shrink();
     }
 
     return Column(
@@ -615,7 +616,7 @@ class _TodaysCalendarEventsState extends State<TodaysCalendarEvents> {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              const Text(
+              Text(
                 "Today's Schedule",
                 style: TextStyle(
                   fontFamily: '.SF Pro Display',
@@ -627,16 +628,17 @@ class _TodaysCalendarEventsState extends State<TodaysCalendarEvents> {
                 ),
               ),
               if (_isLoading)
-                const CupertinoActivityIndicator(
+                CupertinoActivityIndicator(
                   radius: 10,
                 )
               else if (!_isLoading && _todayEvents.isNotEmpty)
                 CupertinoButton(
                   padding: EdgeInsets.zero,
+                  minSize: 0,
                   onPressed: () {
                     // TODO: Navigate to full schedule view
                   },
-                  child: const Text(
+                  child: Text(
                     'View all',
                     style: TextStyle(
                       fontFamily: '.SF Pro Text',
@@ -645,14 +647,14 @@ class _TodaysCalendarEventsState extends State<TodaysCalendarEvents> {
                       color: CupertinoColors.systemBlue,
                       letterSpacing: -0.2,
                     ),
-                  ), minimumSize: Size(0, 0),
+                  ),
                 ),
             ],
           ),
         ),
-        const SizedBox(height: 16),
+        SizedBox(height: 16),
         if (_isLoading && _todayEvents.isEmpty)
-            const Center(
+            Center(
               child: Padding(
                 padding: EdgeInsets.all(20),
                 child: CupertinoActivityIndicator(
@@ -661,7 +663,7 @@ class _TodaysCalendarEventsState extends State<TodaysCalendarEvents> {
               ),
             )
           else if (_hasError)
-            const Center(
+            Center(
               child: Padding(
                 padding: EdgeInsets.all(20),
                 child: Column(
@@ -705,8 +707,8 @@ class _TodaysCalendarEventsState extends State<TodaysCalendarEvents> {
                         if (!isLast)
                           Container(
                             height: 1,
-                            margin: const EdgeInsets.symmetric(vertical: 8),
-                            color: CupertinoColors.separator.withValues(alpha: 0.3),
+                            margin: EdgeInsets.symmetric(vertical: 8),
+                            color: CupertinoColors.separator.withOpacity(0.3),
                           ),
                       ],
                     );

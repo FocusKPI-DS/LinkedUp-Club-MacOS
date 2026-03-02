@@ -2330,11 +2330,11 @@ class _EventDetailWidgetState extends State<EventDetailWidget>
                                                                 .toList() ??
                                                             [];
                                                         if (speakers.isEmpty) {
-                                                          return const SizedBox(
+                                                          return SizedBox(
                                                             width:
                                                                 double.infinity,
                                                             child:
-                                                                EmptyScheduleWidget(
+                                                                const EmptyScheduleWidget(
                                                               title:
                                                                   'No Feature Speaker',
                                                               description:

@@ -413,9 +413,9 @@ class _ActionItemsWidgetState extends State<ActionItemsWidget> {
                       tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                       foregroundColor: const Color(0xFF2563EB),
                     ),
-                    child: const Row(
+                    child: Row(
                       mainAxisSize: MainAxisSize.min,
-                      children: [
+                      children: const [
                         Text(
                           'Details',
                           style: TextStyle(

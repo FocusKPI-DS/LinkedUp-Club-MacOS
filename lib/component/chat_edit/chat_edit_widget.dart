@@ -1,8 +1,10 @@
 import '/flutter_flow/flutter_flow_util.dart';
 import '/flutter_flow/flutter_flow_widgets.dart';
+import 'dart:ui';
 import 'package:ff_theme/flutter_flow/flutter_flow_theme.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:provider/provider.dart';
 import 'chat_edit_model.dart';
 export 'chat_edit_model.dart';
 
@@ -12,11 +14,21 @@ class ChatEditWidget extends StatefulWidget {
     required this.actionEdit,
     required this.delete,
     bool? isPin,
-  }) : isPin = isPin ?? false;
+    this.markAsUnread,
+    bool? isUnread,
+  })  : isPin = isPin ?? false,
+        isUnread = isUnread ?? false;
 
   final Future Function()? actionEdit;
   final Future Function()? delete;
   final bool isPin;
+
+  /// Optional callback for marking the chat as unread/read (WeChat-style).
+  /// If null, the button is not shown.
+  final Future Function()? markAsUnread;
+
+  /// Whether the chat is currently manually marked as unread.
+  final bool isUnread;
 
   @override
   State<ChatEditWidget> createState() => _ChatEditWidgetState();
@@ -48,6 +60,7 @@ class _ChatEditWidgetState extends State<ChatEditWidget> {
 
   @override
   Widget build(BuildContext context) {
+    final showMarkUnread = widget.markAsUnread != null;
     return Container(
       width: 150.0,
       decoration: const BoxDecoration(),
@@ -67,8 +80,10 @@ class _ChatEditWidgetState extends State<ChatEditWidget> {
             ),
             options: FFButtonOptions(
               height: 40.0,
-              padding: const EdgeInsetsDirectional.fromSTEB(16.0, 0.0, 16.0, 0.0),
-              iconPadding: const EdgeInsetsDirectional.fromSTEB(0.0, 0.0, 0.0, 0.0),
+              padding:
+                  const EdgeInsetsDirectional.fromSTEB(16.0, 0.0, 16.0, 0.0),
+              iconPadding:
+                  const EdgeInsetsDirectional.fromSTEB(0.0, 0.0, 0.0, 0.0),
               color: FlutterFlowTheme.of(context).primaryBackground,
               textStyle: FlutterFlowTheme.of(context).titleSmall.override(
                     font: GoogleFonts.inter(
@@ -83,14 +98,55 @@ class _ChatEditWidgetState extends State<ChatEditWidget> {
                         FlutterFlowTheme.of(context).titleSmall.fontStyle,
                   ),
               elevation: 0.0,
-              borderRadius: const BorderRadius.only(
+              borderRadius: BorderRadius.only(
                 bottomLeft: Radius.circular(0.0),
                 bottomRight: Radius.circular(0.0),
-                topLeft: Radius.circular(8.0),
-                topRight: Radius.circular(8.0),
+                topLeft: Radius.circular(showMarkUnread ? 8.0 : 8.0),
+                topRight: Radius.circular(showMarkUnread ? 8.0 : 8.0),
               ),
             ),
           ),
+          if (showMarkUnread)
+            FFButtonWidget(
+              onPressed: () async {
+                await widget.markAsUnread?.call();
+                Navigator.pop(context);
+              },
+              text: widget.isUnread ? 'Mark as Read' : 'Mark as Unread',
+              icon: Icon(
+                widget.isUnread
+                    ? Icons.mark_chat_read_outlined
+                    : Icons.mark_chat_unread_outlined,
+                size: 20.0,
+              ),
+              options: FFButtonOptions(
+                height: 40.0,
+                padding:
+                    const EdgeInsetsDirectional.fromSTEB(16.0, 0.0, 16.0, 0.0),
+                iconPadding:
+                    const EdgeInsetsDirectional.fromSTEB(0.0, 0.0, 0.0, 0.0),
+                color: FlutterFlowTheme.of(context).primaryBackground,
+                textStyle: FlutterFlowTheme.of(context).titleSmall.override(
+                      font: GoogleFonts.inter(
+                        fontWeight: FontWeight.normal,
+                        fontStyle:
+                            FlutterFlowTheme.of(context).titleSmall.fontStyle,
+                      ),
+                      color: const Color(0xFF3B82F6),
+                      letterSpacing: 0.0,
+                      fontWeight: FontWeight.normal,
+                      fontStyle:
+                          FlutterFlowTheme.of(context).titleSmall.fontStyle,
+                    ),
+                elevation: 0.0,
+                borderRadius: const BorderRadius.only(
+                  bottomLeft: Radius.circular(0.0),
+                  bottomRight: Radius.circular(0.0),
+                  topLeft: Radius.circular(0.0),
+                  topRight: Radius.circular(0.0),
+                ),
+              ),
+            ),
           FFButtonWidget(
             onPressed: () async {
               await widget.delete?.call();
@@ -103,8 +159,10 @@ class _ChatEditWidgetState extends State<ChatEditWidget> {
             ),
             options: FFButtonOptions(
               height: 40.0,
-              padding: const EdgeInsetsDirectional.fromSTEB(16.0, 0.0, 16.0, 0.0),
-              iconPadding: const EdgeInsetsDirectional.fromSTEB(0.0, 0.0, 0.0, 0.0),
+              padding:
+                  const EdgeInsetsDirectional.fromSTEB(16.0, 0.0, 16.0, 0.0),
+              iconPadding:
+                  const EdgeInsetsDirectional.fromSTEB(0.0, 0.0, 0.0, 0.0),
               color: FlutterFlowTheme.of(context).primaryBackground,
               textStyle: FlutterFlowTheme.of(context).titleSmall.override(
                     font: GoogleFonts.inter(

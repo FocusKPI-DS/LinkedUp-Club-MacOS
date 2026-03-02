@@ -152,44 +152,6 @@ class _FlutterFlowExpandedImageViewState
       final url = widget.imageUrl!;
       final fileName = _getFileNameFromUrl(url);
 
-      // Web platform - MUST check kIsWeb FIRST before any Platform.* calls
-      // because dart:io Platform throws UnsupportedError on Flutter Web
-      if (kIsWeb) {
-        try {
-          final response = await http.get(Uri.parse(url));
-          if (response.statusCode != 200) {
-            throw Exception('Download failed: ${response.statusCode}');
-          }
-
-          // Sanitize filename for web
-          String safeFileName = fileName;
-          safeFileName =
-              safeFileName.replaceAll('/', '_').replaceAll('\\', '_');
-          safeFileName = safeFileName.split('/').last.split('\\').last;
-          if (!safeFileName.contains('.')) {
-            final contentType =
-                response.headers['content-type'] ?? 'image/jpeg';
-            String extension = 'jpg';
-            if (contentType.contains('png')) {
-              extension = 'png';
-            } else if (contentType.contains('gif')) {
-              extension = 'gif';
-            } else if (contentType.contains('webp')) {
-              extension = 'webp';
-            }
-            safeFileName = '$safeFileName.$extension';
-          }
-
-          await downloadFileOnWeb(url, safeFileName, response.bodyBytes);
-        } catch (e) {
-          debugPrint('Download failed: $e');
-        }
-        setState(() {
-          _isDownloading = false;
-        });
-        return;
-      }
-
       // macOS - Handle separately
       if (Platform.isMacOS) {
         try {
@@ -199,7 +161,7 @@ class _FlutterFlowExpandedImageViewState
               safeFileName.replaceAll('/', '_').replaceAll('\\', '_');
           safeFileName = safeFileName.split('/').last.split('\\').last;
           if (!safeFileName.contains('.')) {
-            safeFileName = '$safeFileName.jpg';
+            safeFileName = '${safeFileName}.jpg';
           }
 
           // Download the file first
@@ -253,6 +215,43 @@ class _FlutterFlowExpandedImageViewState
         return;
       }
 
+      // Web platform
+      if (kIsWeb) {
+        try {
+          final response = await http.get(Uri.parse(url));
+          if (response.statusCode != 200) {
+            throw Exception('Download failed: ${response.statusCode}');
+          }
+
+          // Sanitize filename for web
+          String safeFileName = fileName;
+          safeFileName =
+              safeFileName.replaceAll('/', '_').replaceAll('\\', '_');
+          safeFileName = safeFileName.split('/').last.split('\\').last;
+          if (!safeFileName.contains('.')) {
+            final contentType =
+                response.headers['content-type'] ?? 'image/jpeg';
+            String extension = 'jpg';
+            if (contentType.contains('png')) {
+              extension = 'png';
+            } else if (contentType.contains('gif')) {
+              extension = 'gif';
+            } else if (contentType.contains('webp')) {
+              extension = 'webp';
+            }
+            safeFileName = '${safeFileName}.$extension';
+          }
+
+          await downloadFileOnWeb(url, safeFileName, response.bodyBytes);
+        } catch (e) {
+          debugPrint('Download failed: $e');
+        }
+        setState(() {
+          _isDownloading = false;
+        });
+        return;
+      }
+
       // Other platforms (Linux, Windows, Mobile)
       if (Platform.isLinux || Platform.isWindows) {
         final response = await http.get(Uri.parse(url));
@@ -276,7 +275,7 @@ class _FlutterFlowExpandedImageViewState
                 safeFileName.replaceAll('/', '_').replaceAll('\\', '_');
             safeFileName = safeFileName.split('/').last.split('\\').last;
             if (!safeFileName.contains('.')) {
-              safeFileName = '$safeFileName.jpg';
+              safeFileName = '${safeFileName}.jpg';
             }
             final file = File('${directory.path}/$safeFileName');
             await file.writeAsBytes(response.bodyBytes);

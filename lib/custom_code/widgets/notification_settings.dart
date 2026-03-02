@@ -450,12 +450,12 @@ class _NotificationSettingsState extends State<NotificationSettings> {
                         child: Row(
                           mainAxisSize: MainAxisSize.max,
                           children: [
-                            const Icon(
+                            Icon(
                               Icons.notifications_active,
                               color: Colors.white,
                               size: 24.0,
                             ),
-                            const SizedBox(width: 12.0),
+                            SizedBox(width: 12.0),
                             Expanded(
                               child: Text(
                                 'Test In-App Notification (TOP)',
@@ -472,7 +472,7 @@ class _NotificationSettingsState extends State<NotificationSettings> {
                                     ),
                               ),
                             ),
-                            const Icon(
+                            Icon(
                               Icons.arrow_forward_ios,
                               color: Colors.white,
                               size: 16.0,
@@ -505,7 +505,7 @@ class _NotificationSettingsState extends State<NotificationSettings> {
 
       // Show a simple success message instead of local notification
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
+        SnackBar(
           content: Text(
               '🎉 Push notifications are working! Check your device notifications.'),
           backgroundColor: Colors.green,

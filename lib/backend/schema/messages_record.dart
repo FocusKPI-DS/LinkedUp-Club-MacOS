@@ -122,6 +122,20 @@ class MessagesRecord extends FirestoreRecord {
   bool get isPinned => _isPinned ?? false;
   bool hasIsPinned() => _isPinned != null;
 
+  /// Fireflies transcript summary card payload (title, action_items, overview, etc.). Present when message is from LonaAI with meeting summary.
+  Map<String, dynamic>? get firefliesSummary {
+    final v = snapshotData['fireflies_summary'];
+    if (v == null || v is! Map) return null;
+    return Map<String, dynamic>.from(v as Map);
+  }
+
+  /// Task reminder digest payload (overdue_count, intro_text, tasks). Present when message is from LonaAI with task reminders.
+  Map<String, dynamic>? get taskReminders {
+    final v = snapshotData['task_reminders'];
+    if (v == null || v is! Map) return null;
+    return Map<String, dynamic>.from(v as Map);
+  }
+
   DocumentReference get parentReference => reference.parent.parent!;
 
   void _initializeFields() {

@@ -124,7 +124,7 @@ class _UserSummaryWidgetState extends State<UserSummaryWidget> {
       height: 120,
       decoration: BoxDecoration(
         shape: BoxShape.circle,
-        gradient: const LinearGradient(
+        gradient: LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
           colors: [
@@ -140,14 +140,14 @@ class _UserSummaryWidgetState extends State<UserSummaryWidget> {
           BoxShadow(
             color: Colors.black.withOpacity(0.1),
             blurRadius: 10,
-            offset: const Offset(0, 4),
+            offset: Offset(0, 4),
           ),
         ],
       ),
       child: Center(
         child: Text(
           initials,
-          style: const TextStyle(
+          style: TextStyle(
             color: Colors.white,
             fontSize: 40,
             fontWeight: FontWeight.w600,
@@ -174,7 +174,7 @@ class _UserSummaryWidgetState extends State<UserSummaryWidget> {
 
   Widget _buildDefaultGradient() {
     return Container(
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         gradient: LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
@@ -246,7 +246,7 @@ class _UserSummaryWidgetState extends State<UserSummaryWidget> {
           // Wait for DesktopChatWidget to initialize, then select the chat
           // Use multiple retries with increasing delays to ensure the widget is ready
           // Start with a longer delay to ensure navigation completes
-          Future.delayed(const Duration(milliseconds: 500), () {
+          Future.delayed(Duration(milliseconds: 500), () {
             _selectChatInDesktop(chatToOpen, retryCount: 0);
           });
         } else {
@@ -494,7 +494,7 @@ class _UserSummaryWidgetState extends State<UserSummaryWidget> {
         content: Text(message),
         actions: [
           CupertinoDialogAction(
-            child: const Text('OK'),
+            child: Text('OK'),
             onPressed: () => Navigator.of(context).pop(),
           ),
         ],
@@ -506,11 +506,11 @@ class _UserSummaryWidgetState extends State<UserSummaryWidget> {
     showCupertinoDialog(
       context: context,
       builder: (context) => CupertinoAlertDialog(
-        title: const Text('Error'),
+        title: Text('Error'),
         content: Text(message),
         actions: [
           CupertinoDialogAction(
-            child: const Text('OK'),
+            child: Text('OK'),
             onPressed: () => Navigator.of(context).pop(),
           ),
         ],
@@ -532,7 +532,7 @@ class _UserSummaryWidgetState extends State<UserSummaryWidget> {
                 Navigator.pop(context);
                 _showRemoveConnectionConfirmation(user, currentUser);
               },
-              child: const Text(
+              child: Text(
                 'Delete Connection',
                 style: TextStyle(
                   color: Color(0xFF000000),
@@ -548,7 +548,7 @@ class _UserSummaryWidgetState extends State<UserSummaryWidget> {
               Navigator.pop(context);
               _showBlockUserConfirmation(user, currentUser);
             },
-            child: const Text(
+            child: Text(
               'Block',
               style: TextStyle(
                 color: Color(0xFFFF3B30),
@@ -561,7 +561,7 @@ class _UserSummaryWidgetState extends State<UserSummaryWidget> {
         ],
         cancelButton: CupertinoActionSheetAction(
           onPressed: () => Navigator.pop(context),
-          child: const Text(
+          child: Text(
             'Cancel',
             style: TextStyle(
               fontFamily: 'SF Pro Display',
@@ -579,7 +579,7 @@ class _UserSummaryWidgetState extends State<UserSummaryWidget> {
     showCupertinoDialog(
       context: context,
       builder: (context) => CupertinoAlertDialog(
-        title: const Text('Delete Connection'),
+        title: Text('Delete Connection'),
         content: Text(
             'Are you sure you want to remove ${user.displayName} from your connections?'),
         actions: [
@@ -589,11 +589,11 @@ class _UserSummaryWidgetState extends State<UserSummaryWidget> {
               Navigator.pop(context);
               _removeConnection(user, currentUser);
             },
-            child: const Text('Delete'),
+            child: Text('Delete'),
           ),
           CupertinoDialogAction(
             onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
+            child: Text('Cancel'),
           ),
         ],
       ),
@@ -639,7 +639,7 @@ class _UserSummaryWidgetState extends State<UserSummaryWidget> {
       if (mounted) {
         _showSuccessMessage('Connection removed successfully');
         // Navigate back after a short delay
-        Future.delayed(const Duration(milliseconds: 500), () {
+        Future.delayed(Duration(milliseconds: 500), () {
           if (mounted) {
             Navigator.of(context).pop();
           }
@@ -666,7 +666,7 @@ class _UserSummaryWidgetState extends State<UserSummaryWidget> {
     showCupertinoDialog(
       context: context,
       builder: (context) => CupertinoAlertDialog(
-        title: const Text('Block User'),
+        title: Text('Block User'),
         content: Text(
             'Are you sure you want to block ${user.displayName}? You won\'t be able to see their profile or receive messages from them.'),
         actions: [
@@ -676,11 +676,11 @@ class _UserSummaryWidgetState extends State<UserSummaryWidget> {
               Navigator.pop(context);
               _blockUser(user, currentUser);
             },
-            child: const Text('Block'),
+            child: Text('Block'),
           ),
           CupertinoDialogAction(
             onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
+            child: Text('Cancel'),
           ),
         ],
       ),
@@ -798,7 +798,7 @@ class _UserSummaryWidgetState extends State<UserSummaryWidget> {
 
         // Navigate back after a short delay if we did something useful
         if (connectionRemoved || requestsCleared || blockRecordCreated) {
-          Future.delayed(const Duration(milliseconds: 500), () {
+          Future.delayed(Duration(milliseconds: 500), () {
             if (mounted) {
               Navigator.of(context).pop();
             }
@@ -816,7 +816,7 @@ class _UserSummaryWidgetState extends State<UserSummaryWidget> {
           // Something worked, show a partial success message
           _showSuccessMessage(
               'Some actions completed, but blocking may not be fully active.');
-          Future.delayed(const Duration(milliseconds: 500), () {
+          Future.delayed(Duration(milliseconds: 500), () {
             if (mounted) {
               Navigator.of(context).pop();
             }
@@ -872,7 +872,7 @@ class _UserSummaryWidgetState extends State<UserSummaryWidget> {
       } catch (e) {
         // Chat not in list yet - might be a new chat that hasn't loaded
         if (retryCount < 5) {
-          Future.delayed(const Duration(milliseconds: 500), () {
+          Future.delayed(Duration(milliseconds: 500), () {
             _selectChatInDesktop(chat, retryCount: retryCount + 1);
           });
           return;
@@ -886,7 +886,7 @@ class _UserSummaryWidgetState extends State<UserSummaryWidget> {
       print('Successfully selected chat: ${chatToSelect.reference.id}');
 
       // Verify selection worked and wait a bit for UI to update
-      Future.delayed(const Duration(milliseconds: 100), () {
+      Future.delayed(Duration(milliseconds: 100), () {
         if (chatController != null) {
           final selectedChat = chatController.selectedChat.value;
           if (selectedChat?.reference.id != chat.reference.id) {
@@ -975,7 +975,7 @@ class _UserSummaryWidgetState extends State<UserSummaryWidget> {
         width: 28,
         height: 28,
         decoration: BoxDecoration(
-          color: const Color(0xFF0077B5), // Blue color
+          color: Color(0xFF0077B5), // Blue color
           shape: BoxShape.circle,
           border: Border.all(
             color: Colors.white,
@@ -985,11 +985,11 @@ class _UserSummaryWidgetState extends State<UserSummaryWidget> {
             BoxShadow(
               color: Colors.black.withOpacity(0.2),
               blurRadius: 6,
-              offset: const Offset(0, 2),
+              offset: Offset(0, 2),
             ),
           ],
         ),
-        child: const Icon(
+        child: Icon(
           CupertinoIcons.pencil,
           color: Colors.white,
           size: 14,
@@ -1069,7 +1069,7 @@ class _UserSummaryWidgetState extends State<UserSummaryWidget> {
           showDialog(
             context: context,
             barrierDismissible: false,
-            builder: (dialogContext) => const Center(
+            builder: (dialogContext) => Center(
               child: CircularProgressIndicator(),
             ),
           );
@@ -1245,17 +1245,17 @@ class _UserSummaryWidgetState extends State<UserSummaryWidget> {
           context: context,
           builder: (context) => CupertinoAlertDialog(
             title: Text('Delete ${isCoverPhoto ? 'Cover' : 'Profile'} Photo'),
-            content: const Text(
+            content: Text(
               'Are you sure you want to delete this photo? This action cannot be undone.',
             ),
             actions: [
               CupertinoDialogAction(
-                child: const Text('Cancel'),
+                child: Text('Cancel'),
                 onPressed: () => Navigator.of(context).pop(false),
               ),
               CupertinoDialogAction(
                 isDestructiveAction: true,
-                child: const Text('Delete'),
+                child: Text('Delete'),
                 onPressed: () => Navigator.of(context).pop(true),
               ),
             ],
@@ -1283,7 +1283,7 @@ class _UserSummaryWidgetState extends State<UserSummaryWidget> {
           showDialog(
             context: context,
             barrierDismissible: false,
-            builder: (dialogContext) => const Center(
+            builder: (dialogContext) => Center(
               child: CircularProgressIndicator(),
             ),
           );
@@ -1407,7 +1407,7 @@ class _UserSummaryWidgetState extends State<UserSummaryWidget> {
   @override
   Widget build(BuildContext context) {
     if (widget.userRef == null) {
-      return const CupertinoPageScaffold(
+      return CupertinoPageScaffold(
         navigationBar: CupertinoNavigationBar(
           middle: Text('User Profile'),
         ),
@@ -1421,7 +1421,7 @@ class _UserSummaryWidgetState extends State<UserSummaryWidget> {
       stream: UsersRecord.getDocument(widget.userRef!),
       builder: (context, userSnapshot) {
         if (!userSnapshot.hasData) {
-          return const CupertinoPageScaffold(
+          return CupertinoPageScaffold(
             navigationBar: CupertinoNavigationBar(
               middle: Text('User Profile'),
             ),
@@ -1481,13 +1481,13 @@ class _UserSummaryWidgetState extends State<UserSummaryWidget> {
                   ? null // Hide navigation bar when used in settings
                   : CupertinoNavigationBar(
                       backgroundColor: Colors.white,
-                      border: const Border(
+                      border: Border(
                         bottom: BorderSide(
                           color: Color(0xFFE5E7EB),
                           width: 0.5,
                         ),
                       ),
-                      middle: const Text(
+                      middle: Text(
                         'Profile',
                         style: TextStyle(
                           fontFamily: 'SF Pro Display',
@@ -1498,7 +1498,7 @@ class _UserSummaryWidgetState extends State<UserSummaryWidget> {
                       ),
                       leading: CupertinoNavigationBarBackButton(
                         onPressed: () => context.safePop(),
-                        color: const Color(0xFF007AFF),
+                        color: Color(0xFF007AFF),
                       ),
                     ),
               child: SafeArea(
@@ -1509,7 +1509,7 @@ class _UserSummaryWidgetState extends State<UserSummaryWidget> {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             // Desktop-optimized Cover Photo - Full width, taller
-                            SizedBox(
+                            Container(
                               height: 280,
                               width: double.infinity,
                               child: Stack(
@@ -1548,13 +1548,13 @@ class _UserSummaryWidgetState extends State<UserSummaryWidget> {
                             // Profile Content - Desktop optimized
                             Container(
                               color: Colors.white,
-                              padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 0),
+                              padding: EdgeInsets.symmetric(horizontal: 40, vertical: 0),
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.center,
                                 children: [
                                   // Profile Photo overlapping cover
                                   Transform.translate(
-                                    offset: const Offset(0, -70),
+                                    offset: Offset(0, -70),
                                     child: Column(
                                       children: [
                                         // Profile Photo
@@ -1573,7 +1573,7 @@ class _UserSummaryWidgetState extends State<UserSummaryWidget> {
                                                       BoxShadow(
                                                         color: Colors.black.withOpacity(0.15),
                                                         blurRadius: 20,
-                                                        offset: const Offset(0, 8),
+                                                        offset: Offset(0, 8),
                                                       ),
                                                     ],
                                                   ),
@@ -1608,18 +1608,18 @@ class _UserSummaryWidgetState extends State<UserSummaryWidget> {
                                             ],
                                           ),
                                         ),
-                                        const SizedBox(height: 20),
+                                        SizedBox(height: 20),
 
                                         // Name - Editable (Desktop: larger font)
                                         widget.isEditable && isOwnProfile && _model.isEditing
                                             ? Container(
-                                                constraints: const BoxConstraints(maxWidth: 500),
+                                                constraints: BoxConstraints(maxWidth: 500),
                                                 child: Material(
                                                   color: Colors.transparent,
                                                   child: TextField(
                                                     controller: _model.displayNameController,
                                                     textAlign: TextAlign.center,
-                                                    style: const TextStyle(
+                                                    style: TextStyle(
                                                       fontFamily: 'SF Pro Display',
                                                       fontSize: 32,
                                                       fontWeight: FontWeight.w800,
@@ -1632,12 +1632,12 @@ class _UserSummaryWidgetState extends State<UserSummaryWidget> {
                                                       ),
                                                       focusedBorder: OutlineInputBorder(
                                                         borderRadius: BorderRadius.circular(12),
-                                                        borderSide: const BorderSide(
+                                                        borderSide: BorderSide(
                                                           color: Color(0xFF0077B5),
                                                           width: 2,
                                                         ),
                                                       ),
-                                                      contentPadding: const EdgeInsets.symmetric(
+                                                      contentPadding: EdgeInsets.symmetric(
                                                           horizontal: 20, vertical: 16),
                                                     ),
                                                   ),
@@ -1647,7 +1647,7 @@ class _UserSummaryWidgetState extends State<UserSummaryWidget> {
                                                 profileUser.displayName.isNotEmpty
                                                     ? profileUser.displayName
                                                     : 'Unknown User',
-                                                style: const TextStyle(
+                                                style: TextStyle(
                                                   fontFamily: 'SF Pro Display',
                                                   fontSize: 32,
                                                   fontWeight: FontWeight.w800,
@@ -1657,19 +1657,19 @@ class _UserSummaryWidgetState extends State<UserSummaryWidget> {
                                                 ),
                                                 textAlign: TextAlign.center,
                                               ),
-                                        const SizedBox(height: 12),
+                                        SizedBox(height: 12),
 
                                         // Bio - Editable
                                         widget.isEditable && isOwnProfile && _model.isEditing
                                             ? Container(
-                                                constraints: const BoxConstraints(maxWidth: 600),
+                                                constraints: BoxConstraints(maxWidth: 600),
                                                 child: Material(
                                                   color: Colors.transparent,
                                                   child: TextField(
                                                     controller: _model.bioController,
                                                     maxLines: 3,
                                                     textAlign: TextAlign.center,
-                                                    style: const TextStyle(
+                                                    style: TextStyle(
                                                       fontFamily: 'SF Pro Display',
                                                       fontSize: 17,
                                                       fontWeight: FontWeight.w400,
@@ -1683,22 +1683,22 @@ class _UserSummaryWidgetState extends State<UserSummaryWidget> {
                                                       ),
                                                       focusedBorder: OutlineInputBorder(
                                                         borderRadius: BorderRadius.circular(12),
-                                                        borderSide: const BorderSide(
+                                                        borderSide: BorderSide(
                                                           color: Color(0xFF0077B5),
                                                           width: 2,
                                                         ),
                                                       ),
-                                                      contentPadding: const EdgeInsets.all(16),
+                                                      contentPadding: EdgeInsets.all(16),
                                                     ),
                                                   ),
                                                 ),
                                               )
                                             : (profileUser.bio.isNotEmpty
                                                 ? Container(
-                                                    constraints: const BoxConstraints(maxWidth: 600),
+                                                    constraints: BoxConstraints(maxWidth: 600),
                                                     child: Text(
                                                       profileUser.bio,
-                                                      style: const TextStyle(
+                                                      style: TextStyle(
                                                         fontFamily: 'SF Pro Display',
                                                         fontSize: 17,
                                                         fontWeight: FontWeight.w400,
@@ -1709,28 +1709,28 @@ class _UserSummaryWidgetState extends State<UserSummaryWidget> {
                                                       textAlign: TextAlign.center,
                                                     ),
                                                   )
-                                                : const SizedBox.shrink()),
+                                                : SizedBox.shrink()),
 
                                         // Location - Editable
                                         if (profileUser.location.isNotEmpty ||
                                             (widget.isEditable && isOwnProfile && _model.isEditing)) ...[
-                                          const SizedBox(height: 12),
+                                          SizedBox(height: 12),
                                           widget.isEditable && isOwnProfile && _model.isEditing
                                               ? Container(
-                                                  constraints: const BoxConstraints(maxWidth: 400),
+                                                  constraints: BoxConstraints(maxWidth: 400),
                                                   child: Material(
                                                     color: Colors.transparent,
                                                     child: TextField(
                                                       controller: _model.locationController,
                                                       textAlign: TextAlign.center,
-                                                      style: const TextStyle(
+                                                      style: TextStyle(
                                                         fontFamily: 'SF Pro Display',
                                                         fontSize: 15,
                                                         color: Color(0xFF666666),
                                                       ),
                                                       decoration: InputDecoration(
                                                         hintText: 'Enter your location',
-                                                        prefixIcon: const Icon(
+                                                        prefixIcon: Icon(
                                                           CupertinoIcons.location_solid,
                                                           size: 16,
                                                           color: Color(0xFF666666),
@@ -1740,12 +1740,12 @@ class _UserSummaryWidgetState extends State<UserSummaryWidget> {
                                                         ),
                                                         focusedBorder: OutlineInputBorder(
                                                           borderRadius: BorderRadius.circular(12),
-                                                          borderSide: const BorderSide(
+                                                          borderSide: BorderSide(
                                                             color: Color(0xFF0077B5),
                                                             width: 2,
                                                           ),
                                                         ),
-                                                        contentPadding: const EdgeInsets.symmetric(
+                                                        contentPadding: EdgeInsets.symmetric(
                                                             horizontal: 16, vertical: 14),
                                                       ),
                                                     ),
@@ -1755,15 +1755,15 @@ class _UserSummaryWidgetState extends State<UserSummaryWidget> {
                                                   mainAxisAlignment: MainAxisAlignment.center,
                                                   mainAxisSize: MainAxisSize.min,
                                                   children: [
-                                                    const Icon(
+                                                    Icon(
                                                       CupertinoIcons.location_solid,
                                                       size: 16,
                                                       color: Color(0xFF6B7280),
                                                     ),
-                                                    const SizedBox(width: 6),
+                                                    SizedBox(width: 6),
                                                     Text(
                                                       profileUser.location,
-                                                      style: const TextStyle(
+                                                      style: TextStyle(
                                                         fontFamily: 'SF Pro Display',
                                                         fontSize: 16,
                                                         fontWeight: FontWeight.w500,
@@ -1777,20 +1777,20 @@ class _UserSummaryWidgetState extends State<UserSummaryWidget> {
 
                                         // Email
                                         if (profileUser.email.isNotEmpty) ...[
-                                          const SizedBox(height: 12),
+                                          SizedBox(height: 12),
                                           Row(
                                             mainAxisAlignment: MainAxisAlignment.center,
                                             mainAxisSize: MainAxisSize.min,
                                             children: [
-                                              const Icon(
+                                              Icon(
                                                 CupertinoIcons.mail_solid,
                                                 size: 18,
                                                 color: Color(0xFF0077B5),
                                               ),
-                                              const SizedBox(width: 8),
+                                              SizedBox(width: 8),
                                               Text(
                                                 profileUser.email,
-                                                style: const TextStyle(
+                                                style: TextStyle(
                                                   fontFamily: 'SF Pro Display',
                                                   fontSize: 17,
                                                   fontWeight: FontWeight.w600,
@@ -1803,10 +1803,10 @@ class _UserSummaryWidgetState extends State<UserSummaryWidget> {
                                         ],
 
                                         // Connections Count
-                                        const SizedBox(height: 12),
+                                        SizedBox(height: 12),
                                         Text(
                                           '${profileUser.friends.length} connection${profileUser.friends.length == 1 ? '' : 's'}',
-                                          style: const TextStyle(
+                                          style: TextStyle(
                                             fontFamily: 'SF Pro Display',
                                             fontSize: 15,
                                             fontWeight: FontWeight.w500,
@@ -1817,7 +1817,7 @@ class _UserSummaryWidgetState extends State<UserSummaryWidget> {
 
                                         // Edit Profile Button (when not editing)
                                         if (widget.isEditable && isOwnProfile && !_model.isEditing) ...[
-                                          const SizedBox(height: 20),
+                                          SizedBox(height: 20),
                                           Center(
                                             child: GestureDetector(
                                               onTap: () {
@@ -1847,7 +1847,7 @@ class _UserSummaryWidgetState extends State<UserSummaryWidget> {
                                                         width: 0.5,
                                                       ),
                                                     ),
-                                                    child: const Icon(
+                                                    child: Icon(
                                                       CupertinoIcons.pencil,
                                                       size: 24,
                                                       color: CupertinoColors.systemBlue,
@@ -1861,9 +1861,9 @@ class _UserSummaryWidgetState extends State<UserSummaryWidget> {
 
                                         // Save/Cancel Buttons (when editing)
                                         if (widget.isEditable && isOwnProfile && _model.isEditing) ...[
-                                          const SizedBox(height: 24),
+                                          SizedBox(height: 24),
                                           Container(
-                                            constraints: const BoxConstraints(maxWidth: 400),
+                                            constraints: BoxConstraints(maxWidth: 400),
                                             child: Row(
                                               children: [
                                                 Expanded(
@@ -1871,7 +1871,7 @@ class _UserSummaryWidgetState extends State<UserSummaryWidget> {
                                                     height: 44,
                                                     decoration: BoxDecoration(
                                                       border: Border.all(
-                                                        color: const Color(0xFF0077B5),
+                                                        color: Color(0xFF0077B5),
                                                         width: 1.5,
                                                       ),
                                                       borderRadius: BorderRadius.circular(22),
@@ -1894,7 +1894,7 @@ class _UserSummaryWidgetState extends State<UserSummaryWidget> {
                                                                 profileUser.interests.join(', ');
                                                           });
                                                         },
-                                                        child: const Center(
+                                                        child: Center(
                                                           child: Text(
                                                             'Cancel',
                                                             style: TextStyle(
@@ -1909,12 +1909,12 @@ class _UserSummaryWidgetState extends State<UserSummaryWidget> {
                                                     ),
                                                   ),
                                                 ),
-                                                const SizedBox(width: 16),
+                                                SizedBox(width: 16),
                                                 Expanded(
                                                   child: Container(
                                                     height: 44,
                                                     decoration: BoxDecoration(
-                                                      color: const Color(0xFF0077B5),
+                                                      color: Color(0xFF0077B5),
                                                       borderRadius: BorderRadius.circular(22),
                                                     ),
                                                     child: Material(
@@ -1922,7 +1922,7 @@ class _UserSummaryWidgetState extends State<UserSummaryWidget> {
                                                       child: InkWell(
                                                         borderRadius: BorderRadius.circular(22),
                                                         onTap: () => _saveProfileChanges(profileUser),
-                                                        child: const Center(
+                                                        child: Center(
                                                           child: Text(
                                                             'Save',
                                                             style: TextStyle(
@@ -1945,7 +1945,7 @@ class _UserSummaryWidgetState extends State<UserSummaryWidget> {
                                     // Action Buttons (for other users)
                                     if (!isOwnProfile &&
                                         currentUser != null) ...[
-                                      const SizedBox(height: 16),
+                                      SizedBox(height: 16),
                                       Row(
                                         children: [
                                           if (isConnected)
@@ -1953,7 +1953,7 @@ class _UserSummaryWidgetState extends State<UserSummaryWidget> {
                                               child: Container(
                                                 height: 40,
                                                 decoration: BoxDecoration(
-                                                  color: const Color(0xFF0077B5),
+                                                  color: Color(0xFF0077B5),
                                                   borderRadius:
                                                       BorderRadius.circular(20),
                                                 ),
@@ -1969,14 +1969,14 @@ class _UserSummaryWidgetState extends State<UserSummaryWidget> {
                                                         _startChat(profileUser),
                                                     child: Center(
                                                       child: isLoading
-                                                          ? const SizedBox(
+                                                          ? SizedBox(
                                                               width: 16,
                                                               height: 16,
                                                               child: CupertinoActivityIndicator(
                                                                 color: Colors.white,
                                                               ),
                                                             )
-                                                          : const Row(
+                                                          : Row(
                                                         mainAxisAlignment:
                                                             MainAxisAlignment
                                                                 .center,
@@ -2019,7 +2019,7 @@ class _UserSummaryWidgetState extends State<UserSummaryWidget> {
                                               child: Container(
                                                 height: 40,
                                                 decoration: BoxDecoration(
-                                                  color: const Color(0xFF0077B5),
+                                                  color: Color(0xFF0077B5),
                                                   borderRadius:
                                                       BorderRadius.circular(20),
                                                 ),
@@ -2033,14 +2033,14 @@ class _UserSummaryWidgetState extends State<UserSummaryWidget> {
                                                               : () => _acceptConnectionRequest(profileUser),
                                                     child: Center(
                                                             child: isLoading
-                                                                ? const SizedBox(
+                                                                ? SizedBox(
                                                                     width: 16,
                                                                     height: 16,
                                                                     child: CupertinoActivityIndicator(
                                                                       color: Colors.white,
                                                                     ),
                                                                   )
-                                                                : const Text(
+                                                                : Text(
                                                                     'Accept',
                                                         style: TextStyle(
                                                           fontFamily:
@@ -2058,13 +2058,13 @@ class _UserSummaryWidgetState extends State<UserSummaryWidget> {
                                                       ),
                                                     ),
                                                   ),
-                                                  const SizedBox(width: 8),
+                                                  SizedBox(width: 8),
                                                   Expanded(
                                                     child: Container(
                                                       height: 40,
                                                       decoration: BoxDecoration(
                                                         border: Border.all(
-                                                          color: const Color(0xFFE5E7EB),
+                                                          color: Color(0xFFE5E7EB),
                                                           width: 1.5,
                                                         ),
                                                         borderRadius:
@@ -2080,12 +2080,12 @@ class _UserSummaryWidgetState extends State<UserSummaryWidget> {
                                                               : () => _declineConnectionRequest(profileUser),
                                                           child: Center(
                                                             child: isLoading
-                                                                ? const SizedBox(
+                                                                ? SizedBox(
                                                                     width: 16,
                                                                     height: 16,
                                                                     child: CupertinoActivityIndicator(),
                                                                   )
-                                                                : const Text(
+                                                                : Text(
                                                                     'Decline',
                                                                     style: TextStyle(
                                                                       fontFamily:
@@ -2112,8 +2112,8 @@ class _UserSummaryWidgetState extends State<UserSummaryWidget> {
                                                 height: 40,
                                                 decoration: BoxDecoration(
                                                   color: isSentRequest
-                                                      ? const Color(0xFFF3F4F6)
-                                                      : const Color(0xFF0077B5),
+                                                      ? Color(0xFFF3F4F6)
+                                                      : Color(0xFF0077B5),
                                                   borderRadius:
                                                       BorderRadius.circular(20),
                                                 ),
@@ -2134,7 +2134,7 @@ class _UserSummaryWidgetState extends State<UserSummaryWidget> {
                                                               height: 16,
                                                               child: CupertinoActivityIndicator(
                                                                 color: isSentRequest
-                                                                    ? const Color(0xFF6B7280)
+                                                                    ? Color(0xFF6B7280)
                                                                     : Colors.white,
                                                               ),
                                                             )
@@ -2149,7 +2149,7 @@ class _UserSummaryWidgetState extends State<UserSummaryWidget> {
                                                                 fontWeight:
                                                                     FontWeight.w600,
                                                                 color: isSentRequest
-                                                                    ? const Color(0xFF6B7280)
+                                                                    ? Color(0xFF6B7280)
                                                                     : Colors.white,
                                                                 decoration:
                                                                     TextDecoration.none,
@@ -2160,13 +2160,13 @@ class _UserSummaryWidgetState extends State<UserSummaryWidget> {
                                                 ),
                                               ),
                                             ),
-                                          const SizedBox(width: 12),
+                                          SizedBox(width: 12),
                                           Container(
                                             width: 40,
                                             height: 40,
                                             decoration: BoxDecoration(
                                               border: Border.all(
-                                                color: const Color(0xFF0077B5),
+                                                color: Color(0xFF0077B5),
                                                 width: 1.5,
                                               ),
                                               borderRadius:
@@ -2180,7 +2180,7 @@ class _UserSummaryWidgetState extends State<UserSummaryWidget> {
                                                 onTap: () {
                                                   _showMoreOptions(profileUser, currentUser);
                                                 },
-                                                child: const Center(
+                                                child: Center(
                                                   child: Icon(
                                                     CupertinoIcons
                                                         .ellipsis_vertical,
@@ -2198,8 +2198,8 @@ class _UserSummaryWidgetState extends State<UserSummaryWidget> {
                                         // Interests Section - Desktop optimized
                                         if (profileUser.interests.isNotEmpty ||
                                             (widget.isEditable && isOwnProfile && _model.isEditing)) ...[
-                                          const SizedBox(height: 32),
-                                          const Text(
+                                          SizedBox(height: 32),
+                                          Text(
                                             'Interests',
                                             style: TextStyle(
                                               fontFamily: 'SF Pro Display',
@@ -2210,16 +2210,16 @@ class _UserSummaryWidgetState extends State<UserSummaryWidget> {
                                             ),
                                             textAlign: TextAlign.center,
                                           ),
-                                          const SizedBox(height: 16),
+                                          SizedBox(height: 16),
                                           widget.isEditable && isOwnProfile && _model.isEditing
                                               ? Container(
-                                                  constraints: const BoxConstraints(maxWidth: 500),
+                                                  constraints: BoxConstraints(maxWidth: 500),
                                                   child: Material(
                                                     color: Colors.transparent,
                                                     child: TextField(
                                                       controller: _model.interestsController,
                                                       textAlign: TextAlign.center,
-                                                      style: const TextStyle(
+                                                      style: TextStyle(
                                                         fontFamily: 'SF Pro Display',
                                                         fontSize: 15,
                                                         color: Color(0xFF000000),
@@ -2231,12 +2231,12 @@ class _UserSummaryWidgetState extends State<UserSummaryWidget> {
                                                         ),
                                                         focusedBorder: OutlineInputBorder(
                                                           borderRadius: BorderRadius.circular(12),
-                                                          borderSide: const BorderSide(
+                                                          borderSide: BorderSide(
                                                             color: Color(0xFF0077B5),
                                                             width: 2,
                                                           ),
                                                         ),
-                                                        contentPadding: const EdgeInsets.all(16),
+                                                        contentPadding: EdgeInsets.all(16),
                                                       ),
                                                     ),
                                                   ),
@@ -2247,19 +2247,19 @@ class _UserSummaryWidgetState extends State<UserSummaryWidget> {
                                                   alignment: WrapAlignment.center,
                                                   children: profileUser.interests.map((interest) {
                                                     return Container(
-                                                      padding: const EdgeInsets.symmetric(
+                                                      padding: EdgeInsets.symmetric(
                                                           horizontal: 18, vertical: 10),
                                                       decoration: BoxDecoration(
-                                                        color: const Color(0xFFF0F4F8),
+                                                        color: Color(0xFFF0F4F8),
                                                         borderRadius: BorderRadius.circular(24),
                                                         border: Border.all(
-                                                          color: const Color(0xFF0077B5),
+                                                          color: Color(0xFF0077B5),
                                                           width: 1.5,
                                                         ),
                                                       ),
                                                       child: Text(
                                                         interest,
-                                                        style: const TextStyle(
+                                                        style: TextStyle(
                                                           fontFamily: 'SF Pro Display',
                                                           fontSize: 15,
                                                           fontWeight: FontWeight.w600,
@@ -2271,19 +2271,13 @@ class _UserSummaryWidgetState extends State<UserSummaryWidget> {
                                                   }).toList(),
                                                 ),
                                         ],
-
-                                        // Blocked Users Section
-                                        if (isOwnProfile) ...[
-                                          const SizedBox(height: 32),
-                                          _buildBlockedUsersSection(),
-                                        ],
                                       ],
                                     ),
                                   ),
                                 ],
                               ),
                             ),
-                            const SizedBox(height: 40),
+                            SizedBox(height: 40),
                           ],
                         ),
                       )
@@ -2291,7 +2285,7 @@ class _UserSummaryWidgetState extends State<UserSummaryWidget> {
                         child: Column(
                           children: [
                             // Cover Photo Section
-                            SizedBox(
+                            Container(
                               height: 200,
                               width: double.infinity,
                               child: Stack(
@@ -2317,15 +2311,15 @@ class _UserSummaryWidgetState extends State<UserSummaryWidget> {
                             // Profile Info Section - Reuse the same structure from desktop
                             Container(
                               color: Colors.white,
-                              padding: const EdgeInsets.only(bottom: 24),
+                              padding: EdgeInsets.only(bottom: 24),
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   // Profile Photo and Name Section
                                   Transform.translate(
-                                    offset: const Offset(0, -60),
+                                    offset: Offset(0, -60),
                                     child: Padding(
-                                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                                      padding: EdgeInsets.symmetric(horizontal: 16),
                                       child: Column(
                                         crossAxisAlignment: CrossAxisAlignment.center,
                                         children: [
@@ -2338,7 +2332,7 @@ class _UserSummaryWidgetState extends State<UserSummaryWidget> {
                                                     _viewPhoto(
                                                         profileUser.photoUrl, false);
                                                   },
-                                                  child: SizedBox(
+                                                  child: Container(
                                                     width: 120,
                                                     height: 120,
                                                     child: ClipRRect(
@@ -2382,7 +2376,7 @@ class _UserSummaryWidgetState extends State<UserSummaryWidget> {
                                               ],
                                             ),
                                           ),
-                                          const SizedBox(height: 16),
+                                          SizedBox(height: 16),
 
                                           // Name and Title - Editable
                                           widget.isEditable &&
@@ -2393,7 +2387,7 @@ class _UserSummaryWidgetState extends State<UserSummaryWidget> {
                                                   child: TextField(
                                                     controller:
                                                         _model.displayNameController,
-                                                    style: const TextStyle(
+                                                    style: TextStyle(
                                                       fontFamily: 'SF Pro Display',
                                                       fontSize: 28,
                                                       fontWeight: FontWeight.w800,
@@ -2409,7 +2403,7 @@ class _UserSummaryWidgetState extends State<UserSummaryWidget> {
                                                       focusedBorder: OutlineInputBorder(
                                                         borderRadius:
                                                             BorderRadius.circular(8),
-                                                        borderSide: const BorderSide(
+                                                        borderSide: BorderSide(
                                                           color: Color(0xFF0077B5),
                                                           width: 2,
                                                         ),
@@ -2421,7 +2415,7 @@ class _UserSummaryWidgetState extends State<UserSummaryWidget> {
                                                   profileUser.displayName.isNotEmpty
                                                       ? profileUser.displayName
                                                       : 'Unknown User',
-                                                  style: const TextStyle(
+                                                  style: TextStyle(
                                                     fontFamily: 'SF Pro Display',
                                                     fontSize: 28,
                                                     fontWeight: FontWeight.w800,
@@ -2433,7 +2427,7 @@ class _UserSummaryWidgetState extends State<UserSummaryWidget> {
                                                   overflow: TextOverflow.ellipsis,
                                                   textAlign: TextAlign.center,
                                                 ),
-                                          const SizedBox(height: 10),
+                                          SizedBox(height: 10),
 
                                           // Bio or Email - Editable
                                           widget.isEditable &&
@@ -2444,7 +2438,7 @@ class _UserSummaryWidgetState extends State<UserSummaryWidget> {
                                                   child: TextField(
                                                     controller: _model.bioController,
                                                     maxLines: 3,
-                                                    style: const TextStyle(
+                                                    style: TextStyle(
                                                       fontFamily: 'SF Pro Display',
                                                       fontSize: 17,
                                                       fontWeight: FontWeight.w400,
@@ -2462,7 +2456,7 @@ class _UserSummaryWidgetState extends State<UserSummaryWidget> {
                                                       focusedBorder: OutlineInputBorder(
                                                         borderRadius:
                                                             BorderRadius.circular(8),
-                                                        borderSide: const BorderSide(
+                                                        borderSide: BorderSide(
                                                           color: Color(0xFF0077B5),
                                                           width: 2,
                                                         ),
@@ -2472,11 +2466,11 @@ class _UserSummaryWidgetState extends State<UserSummaryWidget> {
                                                 )
                                               : (profileUser.bio.isNotEmpty
                                                   ? Container(
-                                                      padding: const EdgeInsets.symmetric(
+                                                      padding: EdgeInsets.symmetric(
                                                           horizontal: 4),
                                                       child: Text(
                                                         profileUser.bio,
-                                                        style: const TextStyle(
+                                                        style: TextStyle(
                                                           fontFamily:
                                                               'SF Pro Display',
                                                           fontSize: 17,
@@ -2493,14 +2487,14 @@ class _UserSummaryWidgetState extends State<UserSummaryWidget> {
                                                         textAlign: TextAlign.center,
                                                       ),
                                                     )
-                                                  : const SizedBox.shrink()),
+                                                  : SizedBox.shrink()),
 
                                           // Location - Editable
                                           if (profileUser.location.isNotEmpty ||
                                               (widget.isEditable &&
                                                   isOwnProfile &&
                                                   _model.isEditing)) ...[
-                                            const SizedBox(height: 8),
+                                            SizedBox(height: 8),
                                             widget.isEditable &&
                                                     isOwnProfile &&
                                                     _model.isEditing
@@ -2509,7 +2503,7 @@ class _UserSummaryWidgetState extends State<UserSummaryWidget> {
                                                     child: TextField(
                                                       controller:
                                                           _model.locationController,
-                                                      style: const TextStyle(
+                                                      style: TextStyle(
                                                         fontFamily: 'SF Pro Display',
                                                         fontSize: 14,
                                                         fontWeight: FontWeight.w400,
@@ -2517,7 +2511,7 @@ class _UserSummaryWidgetState extends State<UserSummaryWidget> {
                                                       ),
                                                       decoration: InputDecoration(
                                                         hintText: 'Enter your location',
-                                                        prefixIcon: const Icon(
+                                                        prefixIcon: Icon(
                                                           CupertinoIcons.location_solid,
                                                           size: 14,
                                                           color: Color(0xFF666666),
@@ -2530,7 +2524,7 @@ class _UserSummaryWidgetState extends State<UserSummaryWidget> {
                                                             OutlineInputBorder(
                                                           borderRadius:
                                                               BorderRadius.circular(8),
-                                                          borderSide: const BorderSide(
+                                                          borderSide: BorderSide(
                                                             color: Color(0xFF0077B5),
                                                             width: 2,
                                                           ),
@@ -2542,16 +2536,16 @@ class _UserSummaryWidgetState extends State<UserSummaryWidget> {
                                                     mainAxisAlignment:
                                                         MainAxisAlignment.center,
                                                     children: [
-                                                      const Icon(
+                                                      Icon(
                                                         CupertinoIcons.location_solid,
                                                         size: 16,
                                                         color: Color(0xFF6B7280),
                                                       ),
-                                                      const SizedBox(width: 6),
+                                                      SizedBox(width: 6),
                                                       Flexible(
                                                         child: Text(
                                                           profileUser.location,
-                                                          style: const TextStyle(
+                                                          style: TextStyle(
                                                             fontFamily:
                                                                 'SF Pro Display',
                                                             fontSize: 16,
@@ -2573,21 +2567,21 @@ class _UserSummaryWidgetState extends State<UserSummaryWidget> {
 
                                           // Email - Bigger and Bolder
                                           if (profileUser.email.isNotEmpty) ...[
-                                            const SizedBox(height: 12),
+                                            SizedBox(height: 12),
                                             Row(
                                               mainAxisAlignment:
                                                   MainAxisAlignment.center,
                                               children: [
-                                                const Icon(
+                                                Icon(
                                                   CupertinoIcons.mail_solid,
                                                   size: 18,
                                                   color: Color(0xFF0077B5),
                                                 ),
-                                                const SizedBox(width: 8),
+                                                SizedBox(width: 8),
                                                 Flexible(
                                                   child: Text(
                                                     profileUser.email,
-                                                    style: const TextStyle(
+                                                    style: TextStyle(
                                                       fontFamily: 'SF Pro Display',
                                                       fontSize: 17,
                                                       fontWeight: FontWeight.w600,
@@ -2606,11 +2600,11 @@ class _UserSummaryWidgetState extends State<UserSummaryWidget> {
                                           // Connection Info
                                           if (!isOwnProfile &&
                                               currentUser != null) ...[
-                                            const SizedBox(height: 12),
+                                            SizedBox(height: 12),
                                             if (isConnected && mutualConnections > 0)
                                               Text(
-                                                '$mutualConnections mutual connection${mutualConnections == 1 ? '' : 's'}',
-                                                style: const TextStyle(
+                                                '${mutualConnections} mutual connection${mutualConnections == 1 ? '' : 's'}',
+                                                style: TextStyle(
                                                   fontFamily: 'SF Pro Display',
                                                   fontSize: 14,
                                                   fontWeight: FontWeight.w500,
@@ -2621,8 +2615,8 @@ class _UserSummaryWidgetState extends State<UserSummaryWidget> {
                                               )
                                             else if (mutualConnections > 0)
                                               Text(
-                                                '$mutualConnections mutual connection${mutualConnections == 1 ? '' : 's'}',
-                                                style: const TextStyle(
+                                                '${mutualConnections} mutual connection${mutualConnections == 1 ? '' : 's'}',
+                                                style: TextStyle(
                                                   fontFamily: 'SF Pro Display',
                                                   fontSize: 14,
                                                   fontWeight: FontWeight.w500,
@@ -2633,10 +2627,10 @@ class _UserSummaryWidgetState extends State<UserSummaryWidget> {
                                               ),
                                           ],
                                           // Total Connections Count
-                                          const SizedBox(height: 10),
+                                          SizedBox(height: 10),
                                           Text(
                                             '${profileUser.friends.length} connection${profileUser.friends.length == 1 ? '' : 's'}',
-                                            style: const TextStyle(
+                                            style: TextStyle(
                                               fontFamily: 'SF Pro Display',
                                               fontSize: 15,
                                               fontWeight: FontWeight.w500,
@@ -2652,7 +2646,7 @@ class _UserSummaryWidgetState extends State<UserSummaryWidget> {
                                           if (widget.isEditable &&
                                               isOwnProfile &&
                                               !_model.isEditing) ...[
-                                            const SizedBox(height: 16),
+                                            SizedBox(height: 16),
                                             Center(
                                               child: GestureDetector(
                                                 onTap: () {
@@ -2700,7 +2694,7 @@ class _UserSummaryWidgetState extends State<UserSummaryWidget> {
                                                           width: 0.5,
                                                         ),
                                                       ),
-                                                      child: const Icon(
+                                                      child: Icon(
                                                         CupertinoIcons.pencil,
                                                         size: 22,
                                                         color: CupertinoColors.systemBlue,
@@ -2716,7 +2710,7 @@ class _UserSummaryWidgetState extends State<UserSummaryWidget> {
                                           if (widget.isEditable &&
                                               isOwnProfile &&
                                               _model.isEditing) ...[
-                                            const SizedBox(height: 16),
+                                            SizedBox(height: 16),
                                             Row(
                                               children: [
                                                 Expanded(
@@ -2724,7 +2718,7 @@ class _UserSummaryWidgetState extends State<UserSummaryWidget> {
                                                     height: 40,
                                                     decoration: BoxDecoration(
                                                       border: Border.all(
-                                                        color: const Color(0xFF0077B5),
+                                                        color: Color(0xFF0077B5),
                                                         width: 1.5,
                                                       ),
                                                       borderRadius:
@@ -2760,7 +2754,7 @@ class _UserSummaryWidgetState extends State<UserSummaryWidget> {
                                                                     .join(', ');
                                                           });
                                                         },
-                                                        child: const Center(
+                                                        child: Center(
                                                           child: Text(
                                                             'Cancel',
                                                             style: TextStyle(
@@ -2780,12 +2774,12 @@ class _UserSummaryWidgetState extends State<UserSummaryWidget> {
                                                     ),
                                                   ),
                                                 ),
-                                                const SizedBox(width: 12),
+                                                SizedBox(width: 12),
                                                 Expanded(
                                                   child: Container(
                                                     height: 40,
                                                     decoration: BoxDecoration(
-                                                      color: const Color(0xFF0077B5),
+                                                      color: Color(0xFF0077B5),
                                                       borderRadius:
                                                           BorderRadius.circular(20),
                                                     ),
@@ -2797,7 +2791,7 @@ class _UserSummaryWidgetState extends State<UserSummaryWidget> {
                                                         onTap: () =>
                                                             _saveProfileChanges(
                                                                 profileUser),
-                                                        child: const Center(
+                                                        child: Center(
                                                           child: Text(
                                                             'Save',
                                                             style: TextStyle(
@@ -2823,7 +2817,7 @@ class _UserSummaryWidgetState extends State<UserSummaryWidget> {
                                           // Action Buttons (for other users)
                                           if (!isOwnProfile &&
                                               currentUser != null) ...[
-                                            const SizedBox(height: 16),
+                                            SizedBox(height: 16),
                                             Row(
                                               children: [
                                                 if (isConnected)
@@ -2831,7 +2825,7 @@ class _UserSummaryWidgetState extends State<UserSummaryWidget> {
                                                     child: Container(
                                                       height: 40,
                                                       decoration: BoxDecoration(
-                                                        color: const Color(0xFF0077B5),
+                                                        color: Color(0xFF0077B5),
                                                         borderRadius:
                                                             BorderRadius.circular(20),
                                                       ),
@@ -2846,14 +2840,14 @@ class _UserSummaryWidgetState extends State<UserSummaryWidget> {
                                                                   _startChat(profileUser),
                                                           child: Center(
                                                             child: isLoading
-                                                                ? const SizedBox(
+                                                                ? SizedBox(
                                                                     width: 16,
                                                                     height: 16,
                                                                     child: CupertinoActivityIndicator(
                                                                       color: Colors.white,
                                                                     ),
                                                                   )
-                                                                : const Row(
+                                                                : Row(
                                                                     mainAxisAlignment:
                                                                         MainAxisAlignment
                                                                             .center,
@@ -2894,7 +2888,7 @@ class _UserSummaryWidgetState extends State<UserSummaryWidget> {
                                                           child: Container(
                                                             height: 40,
                                                             decoration: BoxDecoration(
-                                                              color: const Color(0xFF0077B5),
+                                                              color: Color(0xFF0077B5),
                                                               borderRadius:
                                                                   BorderRadius.circular(20),
                                                             ),
@@ -2908,14 +2902,14 @@ class _UserSummaryWidgetState extends State<UserSummaryWidget> {
                                                                     : () => _acceptConnectionRequest(profileUser),
                                                                 child: Center(
                                                                   child: isLoading
-                                                                      ? const SizedBox(
+                                                                      ? SizedBox(
                                                                           width: 16,
                                                                           height: 16,
                                                                           child: CupertinoActivityIndicator(
                                                                             color: Colors.white,
                                                                           ),
                                                                         )
-                                                                      : const Text(
+                                                                      : Text(
                                                                           'Accept',
                                                                           style: TextStyle(
                                                                             fontFamily:
@@ -2933,13 +2927,13 @@ class _UserSummaryWidgetState extends State<UserSummaryWidget> {
                                                             ),
                                                           ),
                                                         ),
-                                                        const SizedBox(width: 8),
+                                                        SizedBox(width: 8),
                                                         Expanded(
                                                           child: Container(
                                                             height: 40,
                                                             decoration: BoxDecoration(
                                                               border: Border.all(
-                                                                color: const Color(0xFFE5E7EB),
+                                                                color: Color(0xFFE5E7EB),
                                                                 width: 1.5,
                                                               ),
                                                               borderRadius:
@@ -2955,12 +2949,12 @@ class _UserSummaryWidgetState extends State<UserSummaryWidget> {
                                                                     : () => _declineConnectionRequest(profileUser),
                                                                 child: Center(
                                                                   child: isLoading
-                                                                      ? const SizedBox(
+                                                                      ? SizedBox(
                                                                           width: 16,
                                                                           height: 16,
                                                                           child: CupertinoActivityIndicator(),
                                                                         )
-                                                                      : const Text(
+                                                                      : Text(
                                                                           'Decline',
                                                                           style: TextStyle(
                                                                             fontFamily:
@@ -2987,8 +2981,8 @@ class _UserSummaryWidgetState extends State<UserSummaryWidget> {
                                                       height: 40,
                                                       decoration: BoxDecoration(
                                                         color: isSentRequest
-                                                            ? const Color(0xFFF3F4F6)
-                                                            : const Color(0xFF0077B5),
+                                                            ? Color(0xFFF3F4F6)
+                                                            : Color(0xFF0077B5),
                                                         borderRadius:
                                                             BorderRadius.circular(20),
                                                       ),
@@ -3009,7 +3003,7 @@ class _UserSummaryWidgetState extends State<UserSummaryWidget> {
                                                                     height: 16,
                                                                     child: CupertinoActivityIndicator(
                                                                       color: isSentRequest
-                                                                          ? const Color(0xFF6B7280)
+                                                                          ? Color(0xFF6B7280)
                                                                           : Colors.white,
                                                                     ),
                                                                   )
@@ -3024,7 +3018,7 @@ class _UserSummaryWidgetState extends State<UserSummaryWidget> {
                                                                       fontWeight:
                                                                           FontWeight.w600,
                                                                       color: isSentRequest
-                                                                          ? const Color(0xFF6B7280)
+                                                                          ? Color(0xFF6B7280)
                                                                           : Colors.white,
                                                                       decoration:
                                                                           TextDecoration.none,
@@ -3035,13 +3029,13 @@ class _UserSummaryWidgetState extends State<UserSummaryWidget> {
                                                       ),
                                                     ),
                                                   ),
-                                                const SizedBox(width: 12),
+                                                SizedBox(width: 12),
                                                 Container(
                                                   width: 40,
                                                   height: 40,
                                                   decoration: BoxDecoration(
                                                     border: Border.all(
-                                                      color: const Color(0xFF0077B5),
+                                                      color: Color(0xFF0077B5),
                                                       width: 1.5,
                                                     ),
                                                     borderRadius:
@@ -3055,7 +3049,7 @@ class _UserSummaryWidgetState extends State<UserSummaryWidget> {
                                                       onTap: () {
                                                         _showMoreOptions(profileUser, currentUser);
                                                       },
-                                                      child: const Center(
+                                                      child: Center(
                                                         child: Icon(
                                                           CupertinoIcons
                                                               .ellipsis_vertical,
@@ -3075,8 +3069,8 @@ class _UserSummaryWidgetState extends State<UserSummaryWidget> {
                                               (widget.isEditable &&
                                                   isOwnProfile &&
                                                   _model.isEditing)) ...[
-                                            const SizedBox(height: 28),
-                                            const Text(
+                                            SizedBox(height: 28),
+                                            Text(
                                               'Interests',
                                               style: TextStyle(
                                                 fontFamily: 'SF Pro Display',
@@ -3089,7 +3083,7 @@ class _UserSummaryWidgetState extends State<UserSummaryWidget> {
                                               overflow: TextOverflow.visible,
                                               textAlign: TextAlign.center,
                                             ),
-                                            const SizedBox(height: 12),
+                                            SizedBox(height: 12),
                                             widget.isEditable &&
                                                     isOwnProfile &&
                                                     _model.isEditing
@@ -3098,7 +3092,7 @@ class _UserSummaryWidgetState extends State<UserSummaryWidget> {
                                                     child: TextField(
                                                       controller:
                                                           _model.interestsController,
-                                                      style: const TextStyle(
+                                                      style: TextStyle(
                                                         fontFamily: 'SF Pro Display',
                                                         fontSize: 14,
                                                         fontWeight: FontWeight.w400,
@@ -3115,7 +3109,7 @@ class _UserSummaryWidgetState extends State<UserSummaryWidget> {
                                                             OutlineInputBorder(
                                                           borderRadius:
                                                               BorderRadius.circular(8),
-                                                          borderSide: const BorderSide(
+                                                          borderSide: BorderSide(
                                                             color: Color(0xFF0077B5),
                                                             width: 2,
                                                           ),
@@ -3130,30 +3124,30 @@ class _UserSummaryWidgetState extends State<UserSummaryWidget> {
                                                     children: profileUser.interests
                                                         .map((interest) {
                                                       return Container(
-                                                        padding: const EdgeInsets.symmetric(
+                                                        padding: EdgeInsets.symmetric(
                                                             horizontal: 16,
                                                             vertical: 10),
                                                         decoration: BoxDecoration(
-                                                          color: const Color(0xFFF0F4F8),
+                                                          color: Color(0xFFF0F4F8),
                                                           borderRadius:
                                                               BorderRadius.circular(
                                                                   24),
                                                           border: Border.all(
-                                                            color: const Color(0xFF0077B5),
+                                                            color: Color(0xFF0077B5),
                                                             width: 1.5,
                                                           ),
                                                           boxShadow: [
                                                             BoxShadow(
-                                                              color: const Color(0xFF0077B5)
+                                                              color: Color(0xFF0077B5)
                                                                   .withOpacity(0.1),
                                                               blurRadius: 4,
-                                                              offset: const Offset(0, 2),
+                                                              offset: Offset(0, 2),
                                                             ),
                                                           ],
                                                         ),
                                                         child: Text(
                                                           interest,
-                                                          style: const TextStyle(
+                                                          style: TextStyle(
                                                             fontFamily:
                                                                 'SF Pro Display',
                                                             fontSize: 15,
@@ -3169,14 +3163,8 @@ class _UserSummaryWidgetState extends State<UserSummaryWidget> {
                                                           softWrap: false,
                                                         ),
                                                       );
-                                                    }).toList(),
+                                                    }                                                  ).toList(),
                                                   ),
-                                          ],
-
-                                          // Blocked Users Section - Only show on own profile
-                                          if (isOwnProfile) ...[
-                                            const SizedBox(height: 28),
-                                            _buildBlockedUsersSection(),
                                           ],
                                         ],
                                       ),
@@ -3186,7 +3174,7 @@ class _UserSummaryWidgetState extends State<UserSummaryWidget> {
                               ),
                             ),
 
-                            const SizedBox(height: 24),
+                            SizedBox(height: 24),
                           ],
                         ),
                       ),
@@ -3196,246 +3184,5 @@ class _UserSummaryWidgetState extends State<UserSummaryWidget> {
         );
       },
     );
-  }
-
-  Widget _buildBlockedUsersSection() {
-    if (currentUserReference == null) {
-      return const SizedBox.shrink();
-    }
-
-    return StreamBuilder<QuerySnapshot>(
-      stream: BlockedUsersRecord.collection
-          .where('blocker_user', isEqualTo: currentUserReference)
-          .orderBy('created_at', descending: true)
-          .snapshots(),
-      builder: (context, snapshot) {
-        if (!snapshot.hasData) {
-          return const SizedBox.shrink();
-        }
-
-        final blockedDocs = snapshot.data!.docs;
-        
-        if (blockedDocs.isEmpty) {
-          return const SizedBox.shrink();
-        }
-
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text(
-              'Blocked Users',
-              style: TextStyle(
-                fontFamily: 'SF Pro Display',
-                fontSize: 20,
-                fontWeight: FontWeight.w700,
-                color: Color(0xFF1A1A1A),
-                letterSpacing: 0.2,
-                decoration: TextDecoration.none,
-              ),
-              overflow: TextOverflow.visible,
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 12),
-            ...blockedDocs.map((doc) {
-              final blockedRecord = BlockedUsersRecord.fromSnapshot(doc);
-              
-              return StreamBuilder<UsersRecord>(
-                stream: UsersRecord.getDocument(blockedRecord.blockedUser!),
-                builder: (context, userSnapshot) {
-                  if (!userSnapshot.hasData) {
-                    return const SizedBox.shrink();
-                  }
-
-                  final blockedUser = userSnapshot.data!;
-                  
-                  return Container(
-                    margin: const EdgeInsets.only(bottom: 12),
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFFFF5F5),
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(
-                        color: const Color(0xFFFFE5E5),
-                        width: 1,
-                      ),
-                    ),
-                    child: Row(
-                      children: [
-                        // Avatar
-                        Container(
-                          width: 48,
-                          height: 48,
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            color: const Color(0xFFFF3B30).withOpacity(0.1),
-                          ),
-                          child: ClipRRect(
-                            borderRadius: BorderRadius.circular(24),
-                            child: blockedUser.photoUrl.isNotEmpty
-                                ? CachedNetworkImage(
-                                    imageUrl: blockedUser.photoUrl,
-                                    width: 48,
-                                    height: 48,
-                                    fit: BoxFit.cover,
-                                    errorWidget: (context, url, error) =>
-                                        _buildBlockedUserAvatar(blockedUser),
-                                  )
-                                : _buildBlockedUserAvatar(blockedUser),
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        // User info
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                blockedUser.displayName.isNotEmpty
-                                    ? blockedUser.displayName
-                                    : 'Unknown User',
-                                style: const TextStyle(
-                                  fontFamily: 'SF Pro Display',
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.w600,
-                                  color: Color(0xFF1A1A1A),
-                                  decoration: TextDecoration.none,
-                                ),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                              const SizedBox(height: 4),
-                              Text(
-                                blockedUser.email,
-                                style: const TextStyle(
-                                  fontFamily: 'SF Pro Text',
-                                  fontSize: 14,
-                                  fontWeight: FontWeight.w400,
-                                  color: Color(0xFF6B7280),
-                                  decoration: TextDecoration.none,
-                                ),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ],
-                          ),
-                        ),
-                        // Unblock button
-                        CupertinoButton(
-                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                          onPressed: () => _showUnblockConfirmation(blockedUser, blockedRecord),
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                            decoration: BoxDecoration(
-                              color: const Color(0xFFFF3B30),
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            child: const Text(
-                              'Unblock',
-                              style: TextStyle(
-                                fontFamily: 'SF Pro Text',
-                                fontSize: 14,
-                                fontWeight: FontWeight.w600,
-                                color: Colors.white,
-                                decoration: TextDecoration.none,
-                              ),
-                            ),
-                          ), minimumSize: Size(0, 0),
-                        ),
-                      ],
-                    ),
-                  );
-                },
-              );
-            }),
-          ],
-        );
-      },
-    );
-  }
-
-  Widget _buildBlockedUserAvatar(UsersRecord user) {
-    final initials = user.displayName.isNotEmpty
-        ? user.displayName
-            .split(' ')
-            .map((name) => name.isNotEmpty ? name[0] : '')
-            .take(2)
-            .join()
-            .toUpperCase()
-        : 'U';
-
-    return Container(
-      width: 48,
-      height: 48,
-      decoration: const BoxDecoration(
-        shape: BoxShape.circle,
-        color: Color(0xFFFF3B30),
-      ),
-      child: Center(
-        child: Text(
-          initials,
-          style: const TextStyle(
-            color: Colors.white,
-            fontSize: 18,
-            fontWeight: FontWeight.w600,
-          ),
-        ),
-      ),
-    );
-  }
-
-  void _showUnblockConfirmation(UsersRecord user, BlockedUsersRecord blockedRecord) {
-    showCupertinoDialog(
-      context: context,
-      builder: (context) => CupertinoAlertDialog(
-        title: const Text('Unblock User'),
-        content: Text(
-            'Are you sure you want to unblock ${user.displayName}? You will be able to see their profile and receive messages from them.'),
-        actions: [
-          CupertinoDialogAction(
-            isDestructiveAction: false,
-            onPressed: () {
-              Navigator.pop(context);
-              _unblockUser(user, blockedRecord);
-            },
-            child: const Text('Unblock'),
-          ),
-          CupertinoDialogAction(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Future<void> _unblockUser(UsersRecord user, BlockedUsersRecord blockedRecord) async {
-    final userId = user.reference.id;
-
-    // Prevent multiple operations
-    if (_isOperationInProgress(userId)) return;
-
-    _startOperation(userId);
-
-    try {
-      // Delete the blocked user record
-      await blockedRecord.reference.delete();
-
-      if (mounted) {
-        _showSuccessMessage('${user.displayName} has been unblocked');
-      }
-    } catch (e) {
-      print('Error unblocking user: $e');
-      if (mounted) {
-        if (e.toString().contains('permission-denied')) {
-          _showErrorMessage(
-              'Unable to unblock user. This feature requires updated permissions.');
-        } else {
-          _showErrorMessage(
-              'Failed to unblock user. Please check your internet connection and try again.');
-        }
-      }
-    } finally {
-      _stopOperation(userId);
-    }
   }
 }

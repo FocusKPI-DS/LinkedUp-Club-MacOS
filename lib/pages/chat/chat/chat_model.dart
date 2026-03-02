@@ -8,6 +8,10 @@ class ChatModel extends FlutterFlowModel<ChatWidget> {
 
   bool loading = false;
 
+  /// Chat IDs that the user has manually marked as unread (WeChat-style).
+  /// Local-only — cleared when user opens the chat.
+  Set<String> manuallyUnreadIds = {};
+
   ///  State fields for stateful widgets in this page.
 
   // State field(s) for TabBar widget.

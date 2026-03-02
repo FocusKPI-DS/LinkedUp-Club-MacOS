@@ -20,8 +20,16 @@ class ChatController extends GetxController {
   // Blocked users set (reactive)
   final Rx<Set<String>> blockedUserIds = Rx<Set<String>>(<String>{});
 
+  // Cache: userRef.id → display name (populated on chat load for fast search)
+  final Map<String, String> _userDisplayNameCache = {};
+
+  // Chat IDs that matched a message content search (async, cleared when query changes)
+  final RxSet<String> _messageSearchMatchIds = <String>{}.obs;
+
   // Error message
   final RxString errorMessage = ''.obs;
+
+  Timer? _messageSearchDebounce;
 
   @override
   void onInit() {
@@ -99,7 +107,8 @@ class ChatController extends GetxController {
       );
 
       // Listen to blocked users for real-time filtering
-      print('Debug: Initializing blocked user listener in ChatController. CurrentUserRef: $currentUserReference');
+      print(
+          'Debug: Initializing blocked user listener in ChatController. CurrentUserRef: $currentUserReference');
       _blockedUsersSubscription = BlockedUsersRecord.collection
           .where('blocker_user', isEqualTo: currentUserReference)
           .snapshots()
@@ -132,12 +141,13 @@ class ChatController extends GetxController {
     }
 
     final combinedChats = uniqueChats.values.toList();
-    
+
     // Debug: Search for "Lets Gooo" group
-    final letsGoGroups = combinedChats.where((c) => 
-      c.title.toLowerCase().contains('lets go') || 
-      c.title.toLowerCase().contains('let\'s go')
-    ).toList();
+    final letsGoGroups = combinedChats
+        .where((c) =>
+            c.title.toLowerCase().contains('lets go') ||
+            c.title.toLowerCase().contains('let\'s go'))
+        .toList();
     if (letsGoGroups.isNotEmpty) {
       print('🔍 [Desktop Chat] FOUND "Lets Gooo" group in combined chats!');
       for (var group in letsGoGroups) {
@@ -182,10 +192,12 @@ class ChatController extends GetxController {
             // User explicitly saw it and no new messages - safe to remove
             chatsToRemove.add(chatId);
           }
+        } else if (chat.lastMessageSeen.contains(currentUserReference)) {
+          // Add this check! If it was read on another device (Firestore updated),
+          // and we haven't seen it locally here recently, it should be removed from unread!
+          chatsToRemove.add(chatId);
         }
-        // Don't remove based on Firestore lastMessageSeen alone - it might be stale
-        // The user needs to explicitly click on the chat to mark it as seen
-      }
+      } // end for loop over knownUnreadChats
 
       // Remove chats that user explicitly saw
       for (final chatId in chatsToRemove) {
@@ -196,7 +208,7 @@ class ChatController extends GetxController {
       // BUT exclude the currently open chat (WhatsApp-like behavior)
       final currentSelectedChat = selectedChat.value;
       final currentSelectedChatId = currentSelectedChat?.reference.id;
-      
+
       for (final chat in combinedChats) {
         // CRITICAL: If this chat is currently open, don't add it to knownUnreadChats
         // and remove it if it's already there (WhatsApp-like behavior)
@@ -206,14 +218,14 @@ class ChatController extends GetxController {
           knownUnreadChats.remove(chat.reference.id);
           // Update locallySeenChats to current time to keep it in sync
           locallySeenChats[chat.reference.id] = DateTime.now();
-          
+
           // If there are new unread messages in the open chat, mark them as seen
           // This ensures Firestore is updated so other devices also see it as read
           final userInSeenList =
               chat.lastMessageSeen.contains(currentUserReference);
           final hasLastMessage = chat.lastMessage.isNotEmpty;
           final isNotSentByUser = chat.lastMessageSent != currentUserReference;
-          
+
           if (hasLastMessage && isNotSentByUser && !userInSeenList) {
             // New message arrived in open chat - mark as seen in background
             // Don't await to avoid blocking the UI update
@@ -221,7 +233,7 @@ class ChatController extends GetxController {
               print('⚠️ Error auto-marking open chat as seen: $e');
             });
           }
-          
+
           // Skip adding to knownUnreadChats
           continue;
         }
@@ -268,17 +280,38 @@ class ChatController extends GetxController {
 
     chats.value = combinedChats;
     chatState.value = ChatState.success;
+
+    // Populate user display name cache so search can match member names
+    // even if search_names is not populated in Firestore
+    _populateUserDisplayNameCache(combinedChats);
   }
 
   // Set selected chat
   void selectChat(ChatsRecord chat) {
+    _manuallyMarkedUnread.remove(chat.reference.id);
     selectedChat.value = chat;
     markMessagesAsSeen(chat);
   }
 
-  // Update search query
+  // Mark a chat as unread (local-only, WeChat-style)
+  void markChatAsUnread(ChatsRecord chat) {
+    _manuallyMarkedUnread.add(chat.reference.id);
+    knownUnreadChats.add(chat.reference.id);
+    // Set seenAt to epoch so any lastMessageAt is always "after" it
+    locallySeenChats[chat.reference.id] =
+        DateTime.fromMillisecondsSinceEpoch(0);
+  }
+
+  // Update search query and trigger async message search
   void updateSearchQuery(String query) {
     searchQuery.value = query;
+    _messageSearchMatchIds.clear();
+    _messageSearchDebounce?.cancel();
+    if (query.isEmpty) return;
+    // Debounce message search by 400ms to avoid hammering Firestore
+    _messageSearchDebounce = Timer(const Duration(milliseconds: 400), () {
+      _searchMessagesContent(query);
+    });
   }
 
   // Update selected tab
@@ -294,6 +327,10 @@ class ChatController extends GetxController {
   // Track chats we've confirmed as unread to prevent Firestore race conditions
   final RxSet<String> knownUnreadChats = <String>{}.obs;
 
+  // Chats manually marked unread by the user (WeChat-style). These bypass
+  // Firestore seen-list checks so the badge stays even if read on another device.
+  final RxSet<String> _manuallyMarkedUnread = <String>{}.obs;
+
   // Check if chat has unread messages
   bool hasUnreadMessages(ChatsRecord chat) {
     // CRITICAL: If this chat is currently open, it should never show as unread
@@ -304,6 +341,12 @@ class ChatController extends GetxController {
       // Chat is currently open, so it's always considered "seen"
       // Don't mutate observables here - that's handled in _combineAndUpdateChats()
       return false;
+    }
+
+    // If the user manually marked this chat as unread (WeChat-style), always show badge
+    // regardless of what Firestore says — clears when user opens the chat
+    if (_manuallyMarkedUnread.contains(chat.reference.id)) {
+      return true;
     }
 
     // If user has explicitly seen this chat (clicked on it), it's not unread
@@ -320,16 +363,23 @@ class ChatController extends GetxController {
       }
     }
 
-    // Check if we already know this chat is unread (sticky)
-    if (knownUnreadChats.contains(chat.reference.id)) {
-      return true; // Keep showing badge until user clicks
-    }
-
     // Check Firestore state
     if (currentUserReference == null) return false;
 
     final userInSeenList = chat.lastMessageSeen.contains(currentUserReference);
     final hasLastMessage = chat.lastMessage.isNotEmpty;
+
+    // Check if we already know this chat is unread (sticky)
+    if (knownUnreadChats.contains(chat.reference.id)) {
+      // FIX: If Firestore says it's seen, and we are not locally overriding it with an unread state
+      // (meaning there's no newer message since they last saw it on this device),
+      // we should consider it seen (e.g., they read it on their phone).
+      if (userInSeenList) {
+        knownUnreadChats.remove(chat.reference.id);
+        return false;
+      }
+      return true; // Keep showing badge until user clicks
+    }
 
     bool hasUnread = !userInSeenList && hasLastMessage;
 
@@ -430,7 +480,7 @@ class ChatController extends GetxController {
       int totalCount = 0;
 
       // Process chats in batches for better performance
-      const batchSize = 10; // Process 10 chats at a time
+      final batchSize = 10; // Process 10 chats at a time
       for (int i = 0; i < chatsList.length; i += batchSize) {
         final batch = chatsList.skip(i).take(batchSize);
 
@@ -645,13 +695,15 @@ class ChatController extends GetxController {
   // Get filtered chats based on search and tab
   List<ChatsRecord> get filteredChats {
     List<ChatsRecord> filteredChatsList = List.from(chats);
-    
+
     // Debug: Log all groups before filtering
-    final allGroupsBeforeFilter = filteredChatsList.where((c) => c.isGroup == true).toList();
-    print('🔍 [Desktop Chat] All groups before filtering: ${allGroupsBeforeFilter.length}');
-    final letsGoBeforeFilter = allGroupsBeforeFilter.where((c) => 
-      c.title.toLowerCase().contains('lets go')
-    ).toList();
+    final allGroupsBeforeFilter =
+        filteredChatsList.where((c) => c.isGroup == true).toList();
+    print(
+        '🔍 [Desktop Chat] All groups before filtering: ${allGroupsBeforeFilter.length}');
+    final letsGoBeforeFilter = allGroupsBeforeFilter
+        .where((c) => c.title.toLowerCase().contains('lets go'))
+        .toList();
     if (letsGoBeforeFilter.isNotEmpty) {
       print('🔍 [Desktop Chat] "Lets Gooo" found BEFORE filtering');
     }
@@ -665,20 +717,11 @@ class ChatController extends GetxController {
         return true; // Always show service chats
       }
 
-      // Always show group chats even if they have no messages yet
-      if (chat.isGroup == true) {
-        // Still filter out groups with blocked users
-        if (chat.members.any((member) =>
-            member != currentUserReference && blockedUserIds.value.contains(member.id))) {
-          return false;
-        }
-        return true;
-      }
-
       // Filter out chats with blocked users
       // Check if any member (other than current user) is in the blocked list
       if (chat.members.any((member) =>
-          member != currentUserReference && blockedUserIds.value.contains(member.id))) {
+          member != currentUserReference &&
+          blockedUserIds.value.contains(member.id))) {
         return false;
       }
 
@@ -687,10 +730,8 @@ class ChatController extends GetxController {
       if (chat.lastMessageAt != null) {
         return true;
       }
-      // Only hide if both lastMessage and lastMessageAt are empty/null
-      if (chat.lastMessage.isEmpty) {
-        return false;
-      }
+
+      // Allow all connects and groups to display, even if they have no message history yet
       return true;
     }).toList();
 
@@ -718,6 +759,10 @@ class ChatController extends GetxController {
         // Groups only
         filteredChatsList =
             filteredChatsList.where((chat) => chat.isGroup).toList();
+      } else if (selectedTabIndex.value == 3) {
+        // Unread only
+        filteredChatsList =
+            filteredChatsList.where((chat) => hasUnreadMessages(chat)).toList();
       }
       // If selectedTabIndex is 0 (All), we show everything
     }
@@ -727,25 +772,32 @@ class ChatController extends GetxController {
       final query = searchQuery.value.toLowerCase();
       filteredChatsList = filteredChatsList.where((chat) {
         // Check chat title (for groups or if title is set)
-        if (chat.title.toLowerCase().contains(query)) {
-          return true;
-        }
+        if (chat.title.toLowerCase().contains(query)) return true;
 
-        // Check last message
-        if (chat.lastMessage.toLowerCase().contains(query)) {
-          return true;
-        }
+        // Check last message preview
+        if (chat.lastMessage.toLowerCase().contains(query)) return true;
 
         // Check description
-        if (chat.description.toLowerCase().contains(query)) {
-          return true;
+        if (chat.description.toLowerCase().contains(query)) return true;
+
+        // Check search_names from Firestore (if populated)
+        if (chat.searchNames.isNotEmpty) {
+          if (chat.searchNames
+              .any((name) => name.toLowerCase().contains(query))) {
+            return true;
+          }
         }
 
-        // For direct chats, check search_names which contains member names
-        if (chat.searchNames.isNotEmpty) {
-          return chat.searchNames
-              .any((name) => name.toLowerCase().contains(query));
+        // Fallback: check member display names from our local cache
+        // This handles DMs where search_names is not set in Firestore
+        for (final memberRef in chat.members) {
+          if (memberRef == currentUserReference) continue; // skip self
+          final cachedName = _userDisplayNameCache[memberRef.id]?.toLowerCase();
+          if (cachedName != null && cachedName.contains(query)) return true;
         }
+
+        // Check if this chat has a message content match (from async search)
+        if (_messageSearchMatchIds.contains(chat.reference.id)) return true;
 
         return false;
       }).toList();
@@ -760,32 +812,109 @@ class ChatController extends GetxController {
       // Then sort by last message time (most recent first)
       final aTime = a.lastMessageAt;
       final bTime = b.lastMessageAt;
-      
+
       // Handle null values - put nulls at the end
       if (aTime == null && bTime == null) return 0;
       if (aTime == null) return 1; // a goes after b
       if (bTime == null) return -1; // b goes after a
-      
+
       // Both have values, sort descending (newest first)
       return bTime.compareTo(aTime);
     });
 
     // Update tab title with unread count
     _updateTabTitle(filteredChatsList);
-    
+
     // Debug: Check if "Lets Gooo" is in filtered list
-    final letsGoAfterFilter = filteredChatsList.where((c) => 
-      c.title.toLowerCase().contains('lets go')
-    ).toList();
+    final letsGoAfterFilter = filteredChatsList
+        .where((c) => c.title.toLowerCase().contains('lets go'))
+        .toList();
     if (letsGoAfterFilter.isNotEmpty) {
       print('🔍 [Desktop Chat] "Lets Gooo" found AFTER filtering ✅');
     } else {
       print('🔍 [Desktop Chat] "Lets Gooo" NOT found AFTER filtering ❌');
       print('   Total filtered chats: ${filteredChatsList.length}');
-      print('   Groups in filtered list: ${filteredChatsList.where((c) => c.isGroup).length}');
+      print(
+          '   Groups in filtered list: ${filteredChatsList.where((c) => c.isGroup).length}');
     }
 
     return filteredChatsList;
+  }
+
+  // Populate user display name cache from chat members
+  Future<void> _populateUserDisplayNameCache(
+      List<ChatsRecord> updatedChats) async {
+    try {
+      // Collect all member refs we haven't cached yet
+      final refsToFetch = <DocumentReference>{};
+      for (final chat in updatedChats) {
+        for (final memberRef in chat.members) {
+          if (!_userDisplayNameCache.containsKey(memberRef.id)) {
+            refsToFetch.add(memberRef);
+          }
+        }
+      }
+
+      if (refsToFetch.isEmpty) return;
+
+      // Fetch up to 30 at a time with whereIn
+      final refList = refsToFetch.toList();
+      for (int i = 0; i < refList.length; i += 30) {
+        final batch = refList.skip(i).take(30).toList();
+        for (final ref in batch) {
+          try {
+            final doc = await ref.get();
+            if (doc.exists) {
+              final data = doc.data() as Map<String, dynamic>?;
+              final name = (data?['display_name'] as String?) ??
+                  (data?['name'] as String?) ??
+                  '';
+              _userDisplayNameCache[ref.id] = name;
+            }
+          } catch (_) {}
+        }
+      }
+    } catch (e) {
+      print('⚠️ Error populating user name cache: $e');
+    }
+  }
+
+  // Search within message content for all chats and populate _messageSearchMatchIds
+  Future<void> _searchMessagesContent(String query) async {
+    if (query.isEmpty) {
+      _messageSearchMatchIds.clear();
+      return;
+    }
+
+    final lowercaseQuery = query.toLowerCase();
+    final newMatches = <String>{};
+
+    // Search messages in all current chats (limit to avoid too many reads)
+    final chatsToSearch = chats.take(50).toList();
+    for (final chat in chatsToSearch) {
+      try {
+        // Messages are stored as a subcollection of each chat document
+        final messages = await chat.reference
+            .collection('messages')
+            .orderBy('created_at', descending: true)
+            .limit(200)
+            .get();
+
+        for (final doc in messages.docs) {
+          final text = ((doc.data()['content'] ?? '') as String).toLowerCase();
+          if (text.contains(lowercaseQuery)) {
+            newMatches.add(chat.reference.id);
+            break; // Found a match in this chat, move to next
+          }
+        }
+      } catch (_) {}
+    }
+
+    // Only update if the query hasn't changed while we were searching
+    if (searchQuery.value.toLowerCase() == lowercaseQuery) {
+      _messageSearchMatchIds.clear();
+      _messageSearchMatchIds.addAll(newMatches);
+    }
   }
 
   // Refresh chats

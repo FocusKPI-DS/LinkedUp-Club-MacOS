@@ -126,9 +126,9 @@ class _ChatGroupCreationWidgetState extends State<ChatGroupCreationWidget> {
           leading: FlutterFlowIconButton(
             borderRadius: 8.0,
             buttonSize: 40.0,
-            icon: const Icon(
+            icon: Icon(
               Icons.close,
-              color: Color(0xFF6B7280),
+              color: const Color(0xFF6B7280),
               size: 20.0,
             ),
             onPressed: () async {
@@ -170,8 +170,8 @@ class _ChatGroupCreationWidgetState extends State<ChatGroupCreationWidget> {
                     key: _model.formKey,
                     autovalidateMode: AutovalidateMode.disabled,
                     child: Padding(
-                      padding:
-                          const EdgeInsetsDirectional.fromSTEB(0.0, 0.0, 0.0, 70.0),
+                      padding: const EdgeInsetsDirectional.fromSTEB(
+                          0.0, 0.0, 0.0, 70.0),
                       child: SingleChildScrollView(
                         child: Column(
                           mainAxisSize: MainAxisSize.max,
@@ -287,8 +287,9 @@ class _ChatGroupCreationWidgetState extends State<ChatGroupCreationWidget> {
                                                 }
                                               }
 
-                                              if (!(_model.uploadedFileUrl_uploadDataWml ==
-                                                      '')) {
+                                              if (!(_model
+                                                      .uploadedFileUrl_uploadDataWml ==
+                                                  '')) {
                                                 _model.chatImage = _model
                                                     .uploadedFileUrl_uploadDataWml;
                                                 safeSetState(() {});
@@ -301,7 +302,8 @@ class _ChatGroupCreationWidgetState extends State<ChatGroupCreationWidget> {
                                                 Container(
                                                   width: 100.0,
                                                   height: 100.0,
-                                                  decoration: const BoxDecoration(
+                                                  decoration:
+                                                      const BoxDecoration(
                                                     color: Color(0xFFF3F4F6),
                                                     shape: BoxShape.circle,
                                                   ),
@@ -322,7 +324,8 @@ class _ChatGroupCreationWidgetState extends State<ChatGroupCreationWidget> {
                                                     width: 100.0,
                                                     height: 100.0,
                                                     decoration: BoxDecoration(
-                                                      color: const Color(0xFFF3F4F6),
+                                                      color: const Color(
+                                                          0xFFF3F4F6),
                                                       image: DecorationImage(
                                                         fit: BoxFit.cover,
                                                         image:
@@ -341,14 +344,16 @@ class _ChatGroupCreationWidgetState extends State<ChatGroupCreationWidget> {
                                                   Container(
                                                     width: 100.0,
                                                     height: 100.0,
-                                                    decoration: const BoxDecoration(),
+                                                    decoration:
+                                                        const BoxDecoration(),
                                                     child: Align(
                                                       alignment:
                                                           const AlignmentDirectional(
                                                               0.0, 0.0),
                                                       child: Padding(
-                                                        padding: const EdgeInsets.all(
-                                                            16.0),
+                                                        padding:
+                                                            const EdgeInsets
+                                                                .all(16.0),
                                                         child: SizedBox(
                                                           width:
                                                               double.infinity,
@@ -382,11 +387,14 @@ class _ChatGroupCreationWidgetState extends State<ChatGroupCreationWidget> {
                                             text: 'Upload Group Icon',
                                             options: FFButtonOptions(
                                               height: 32.0,
-                                              padding: const EdgeInsetsDirectional
-                                                  .fromSTEB(
+                                              padding:
+                                                  const EdgeInsetsDirectional
+                                                      .fromSTEB(
                                                       16.0, 0.0, 16.0, 0.0),
-                                              iconPadding: const EdgeInsetsDirectional
-                                                  .fromSTEB(0.0, 0.0, 0.0, 0.0),
+                                              iconPadding:
+                                                  const EdgeInsetsDirectional
+                                                      .fromSTEB(
+                                                      0.0, 0.0, 0.0, 0.0),
                                               color:
                                                   FlutterFlowTheme.of(context)
                                                       .secondaryBackground,
@@ -459,8 +467,8 @@ class _ChatGroupCreationWidgetState extends State<ChatGroupCreationWidget> {
                                                                   .bodyMedium
                                                                   .fontStyle,
                                                         ),
-                                                        color:
-                                                            const Color(0xFF374151),
+                                                        color: const Color(
+                                                            0xFF374151),
                                                         fontSize: 14.0,
                                                         letterSpacing: 0.0,
                                                         fontWeight:
@@ -602,8 +610,8 @@ class _ChatGroupCreationWidgetState extends State<ChatGroupCreationWidget> {
                                                         .secondaryBackground,
                                                 contentPadding:
                                                     const EdgeInsetsDirectional
-                                                        .fromSTEB(16.0, 12.0,
-                                                            16.0, 12.0),
+                                                        .fromSTEB(
+                                                        16.0, 12.0, 16.0, 12.0),
                                               ),
                                               style:
                                                   FlutterFlowTheme.of(context)
@@ -669,8 +677,8 @@ class _ChatGroupCreationWidgetState extends State<ChatGroupCreationWidget> {
                                                                   .bodyMedium
                                                                   .fontStyle,
                                                         ),
-                                                        color:
-                                                            const Color(0xFF374151),
+                                                        color: const Color(
+                                                            0xFF374151),
                                                         fontSize: 14.0,
                                                         letterSpacing: 0.0,
                                                         fontWeight:
@@ -813,8 +821,8 @@ class _ChatGroupCreationWidgetState extends State<ChatGroupCreationWidget> {
                                                         .secondaryBackground,
                                                 contentPadding:
                                                     const EdgeInsetsDirectional
-                                                        .fromSTEB(16.0, 12.0,
-                                                            16.0, 12.0),
+                                                        .fromSTEB(
+                                                        16.0, 12.0, 16.0, 12.0),
                                               ),
                                               style:
                                                   FlutterFlowTheme.of(context)
@@ -941,9 +949,8 @@ class _ChatGroupCreationWidgetState extends State<ChatGroupCreationWidget> {
                                               Switch(
                                                 value: _model.privateValue!,
                                                 onChanged: (newValue) async {
-                                                  safeSetState(() =>
-                                                      _model.privateValue =
-                                                          newValue);
+                                                  safeSetState(() => _model
+                                                      .privateValue = newValue);
                                                 },
                                                 activeThumbColor:
                                                     FlutterFlowTheme.of(context)
@@ -1165,7 +1172,8 @@ class _ChatGroupCreationWidgetState extends State<ChatGroupCreationWidget> {
                                       ),
                                     ]
                                         .divide(const SizedBox(height: 24.0))
-                                        .addToStart(const SizedBox(height: 24.0))
+                                        .addToStart(
+                                            const SizedBox(height: 24.0))
                                         .addToEnd(const SizedBox(height: 24.0)),
                                   ),
                                 ),
@@ -1192,8 +1200,9 @@ class _ChatGroupCreationWidgetState extends State<ChatGroupCreationWidget> {
                                     borderRadius: BorderRadius.circular(12.0),
                                   ),
                                   child: Padding(
-                                    padding: const EdgeInsetsDirectional.fromSTEB(
-                                        16.0, 16.0, 16.0, 16.0),
+                                    padding:
+                                        const EdgeInsetsDirectional.fromSTEB(
+                                            16.0, 16.0, 16.0, 16.0),
                                     child: Column(
                                       mainAxisSize: MainAxisSize.min,
                                       crossAxisAlignment:
@@ -1477,7 +1486,8 @@ class _ChatGroupCreationWidgetState extends State<ChatGroupCreationWidget> {
                                                           ? FlutterFlowTheme.of(
                                                                   context)
                                                               .primary
-                                                          : const Color(0x00000000),
+                                                          : const Color(
+                                                              0x00000000),
                                                       borderRadius:
                                                           BorderRadius.circular(
                                                               8.0),
@@ -1492,11 +1502,8 @@ class _ChatGroupCreationWidgetState extends State<ChatGroupCreationWidget> {
                                                     child: Padding(
                                                       padding:
                                                           const EdgeInsetsDirectional
-                                                              .fromSTEB(
-                                                                  12.0,
-                                                                  12.0,
-                                                                  12.0,
-                                                                  12.0),
+                                                              .fromSTEB(12.0,
+                                                              12.0, 12.0, 12.0),
                                                       child: Row(
                                                         mainAxisSize:
                                                             MainAxisSize.max,
@@ -1516,10 +1523,10 @@ class _ChatGroupCreationWidgetState extends State<ChatGroupCreationWidget> {
                                                               padding:
                                                                   const EdgeInsetsDirectional
                                                                       .fromSTEB(
-                                                                          2.0,
-                                                                          2.0,
-                                                                          2.0,
-                                                                          2.0),
+                                                                      2.0,
+                                                                      2.0,
+                                                                      2.0,
+                                                                      2.0),
                                                               child: ClipRRect(
                                                                 borderRadius:
                                                                     BorderRadius
@@ -1632,7 +1639,8 @@ class _ChatGroupCreationWidgetState extends State<ChatGroupCreationWidget> {
                                                     ),
                                                   ),
                                                 );
-                                              }).divide(const SizedBox(height: 8.0)),
+                                              }).divide(
+                                                  const SizedBox(height: 8.0)),
                                             );
                                           },
                                         ),
@@ -1663,8 +1671,9 @@ class _ChatGroupCreationWidgetState extends State<ChatGroupCreationWidget> {
                                     borderRadius: BorderRadius.circular(12.0),
                                   ),
                                   child: Padding(
-                                    padding: const EdgeInsetsDirectional.fromSTEB(
-                                        16.0, 16.0, 16.0, 16.0),
+                                    padding:
+                                        const EdgeInsetsDirectional.fromSTEB(
+                                            16.0, 16.0, 16.0, 16.0),
                                     child: Column(
                                       mainAxisSize: MainAxisSize.min,
                                       crossAxisAlignment:
@@ -1946,11 +1955,8 @@ class _ChatGroupCreationWidgetState extends State<ChatGroupCreationWidget> {
                                                   child: Padding(
                                                     padding:
                                                         const EdgeInsetsDirectional
-                                                            .fromSTEB(
-                                                                12.0,
-                                                                12.0,
-                                                                12.0,
-                                                                12.0),
+                                                            .fromSTEB(12.0,
+                                                            12.0, 12.0, 12.0),
                                                     child: Row(
                                                       mainAxisSize:
                                                           MainAxisSize.max,
@@ -2038,10 +2044,10 @@ class _ChatGroupCreationWidgetState extends State<ChatGroupCreationWidget> {
                                                             padding:
                                                                 const EdgeInsetsDirectional
                                                                     .fromSTEB(
-                                                                        2.0,
-                                                                        2.0,
-                                                                        2.0,
-                                                                        2.0),
+                                                                    2.0,
+                                                                    2.0,
+                                                                    2.0,
+                                                                    2.0),
                                                             child: ClipRRect(
                                                               borderRadius:
                                                                   BorderRadius
@@ -2140,7 +2146,8 @@ class _ChatGroupCreationWidgetState extends State<ChatGroupCreationWidget> {
                                                     ),
                                                   ),
                                                 );
-                                              }).divide(const SizedBox(height: 8.0)),
+                                              }).divide(
+                                                  const SizedBox(height: 8.0)),
                                             );
                                           },
                                         ),
@@ -2176,7 +2183,7 @@ class _ChatGroupCreationWidgetState extends State<ChatGroupCreationWidget> {
                                         return;
                                       }
                                       if (_model.uploadedFileUrl_uploadDataWml
-                                              .isEmpty) {
+                                          .isEmpty) {
                                         return;
                                       }
                                       if ((_model.members.isNotEmpty) != true) {
@@ -2191,8 +2198,8 @@ class _ChatGroupCreationWidgetState extends State<ChatGroupCreationWidget> {
                                                         .secondaryBackground,
                                               ),
                                             ),
-                                            duration:
-                                                const Duration(milliseconds: 2000),
+                                            duration: const Duration(
+                                                milliseconds: 2000),
                                             backgroundColor:
                                                 FlutterFlowTheme.of(context)
                                                     .error,
@@ -2223,7 +2230,10 @@ class _ChatGroupCreationWidgetState extends State<ChatGroupCreationWidget> {
                                         ),
                                         ...mapToFirestore(
                                           {
-                                            'members': _model.members,
+                                            'members': [
+                                              ..._model.members,
+                                              currentUserReference
+                                            ],
                                           },
                                         ),
                                       });
@@ -2245,7 +2255,10 @@ class _ChatGroupCreationWidgetState extends State<ChatGroupCreationWidget> {
                                         ),
                                         ...mapToFirestore(
                                           {
-                                            'members': _model.members,
+                                            'members': [
+                                              ..._model.members,
+                                              currentUserReference
+                                            ],
                                           },
                                         ),
                                       }, chatsRecordReference);
@@ -2272,8 +2285,9 @@ class _ChatGroupCreationWidgetState extends State<ChatGroupCreationWidget> {
                                 height: 48.0,
                                 padding: const EdgeInsetsDirectional.fromSTEB(
                                     24.0, 0.0, 24.0, 0.0),
-                                iconPadding: const EdgeInsetsDirectional.fromSTEB(
-                                    0.0, 0.0, 0.0, 0.0),
+                                iconPadding:
+                                    const EdgeInsetsDirectional.fromSTEB(
+                                        0.0, 0.0, 0.0, 0.0),
                                 color: FlutterFlowTheme.of(context).primary,
                                 textStyle: FlutterFlowTheme.of(context)
                                     .titleSmall
@@ -2336,8 +2350,9 @@ class _ChatGroupCreationWidgetState extends State<ChatGroupCreationWidget> {
                                 height: 48.0,
                                 padding: const EdgeInsetsDirectional.fromSTEB(
                                     24.0, 0.0, 24.0, 0.0),
-                                iconPadding: const EdgeInsetsDirectional.fromSTEB(
-                                    0.0, 0.0, 0.0, 0.0),
+                                iconPadding:
+                                    const EdgeInsetsDirectional.fromSTEB(
+                                        0.0, 0.0, 0.0, 0.0),
                                 color: FlutterFlowTheme.of(context).primary,
                                 textStyle: FlutterFlowTheme.of(context)
                                     .titleSmall

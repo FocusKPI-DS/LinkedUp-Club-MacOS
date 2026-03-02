@@ -60,7 +60,7 @@ class _PDFViewWidgetState extends State<PDFViewWidget> {
 
   Future<void> _loadContent() async {
     if (widget.url == null || widget.url!.isEmpty) return;
-    
+
     final type = _getFileType();
     if (type == 'text') {
       try {
@@ -73,10 +73,10 @@ class _PDFViewWidgetState extends State<PDFViewWidget> {
             });
           }
         } else {
-           if (mounted) setState(() => _errorMessage = 'Failed to load text');
+          if (mounted) setState(() => _errorMessage = 'Failed to load text');
         }
       } catch (e) {
-         if (mounted) setState(() => _errorMessage = 'Error loading text: $e');
+        if (mounted) setState(() => _errorMessage = 'Error loading text: $e');
       }
     } else {
       if (mounted) setState(() => _isLoading = false);
@@ -87,12 +87,15 @@ class _PDFViewWidgetState extends State<PDFViewWidget> {
     if (widget.url == null) return 'unknown';
     final name = widget.fileName ?? widget.url!;
     final ext = name.split('.').last.toLowerCase();
-    
-    if (['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp'].contains(ext)) return 'image';
-    if (['txt', 'md', 'json', 'xml', 'csv', 'log', 'dart', 'js', 'html', 'css'].contains(ext)) return 'text';
-    if (['doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx'].contains(ext)) return 'office';
+
+    if (['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp'].contains(ext))
+      return 'image';
+    if (['txt', 'md', 'json', 'xml', 'csv', 'log', 'dart', 'js', 'html', 'css']
+        .contains(ext)) return 'text';
+    if (['doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx'].contains(ext))
+      return 'office';
     if (['pdf'].contains(ext)) return 'pdf';
-    
+
     return 'unknown';
   }
 
@@ -121,7 +124,9 @@ class _PDFViewWidgetState extends State<PDFViewWidget> {
               maxHeight: MediaQuery.sizeOf(context).height * 0.9,
             ),
             decoration: BoxDecoration(
-              color: FlutterFlowTheme.of(context).secondaryBackground.withOpacity(0.9),
+              color: FlutterFlowTheme.of(context)
+                  .secondaryBackground
+                  .withOpacity(0.9),
               borderRadius: BorderRadius.circular(24.0),
               border: Border.all(
                 color: Colors.white.withOpacity(0.2),
@@ -147,10 +152,14 @@ class _PDFViewWidgetState extends State<PDFViewWidget> {
                       child: Container(
                         width: double.infinity,
                         decoration: BoxDecoration(
-                          color: FlutterFlowTheme.of(context).alternate.withOpacity(0.3),
+                          color: FlutterFlowTheme.of(context)
+                              .alternate
+                              .withOpacity(0.3),
                           borderRadius: BorderRadius.circular(16.0),
                           border: Border.all(
-                            color: FlutterFlowTheme.of(context).alternate.withOpacity(0.5),
+                            color: FlutterFlowTheme.of(context)
+                                .alternate
+                                .withOpacity(0.5),
                             width: 1.0,
                           ),
                         ),
@@ -184,71 +193,73 @@ class _PDFViewWidgetState extends State<PDFViewWidget> {
     final type = _getFileType();
 
     if (type == 'pdf') {
-       return FlutterFlowPdfViewer(
-          networkPath: widget.url!,
-          width: double.infinity,
-          height: double.infinity,
-          horizontalScroll: false,
-       );
+      return FlutterFlowPdfViewer(
+        networkPath: widget.url!,
+        width: double.infinity,
+        height: double.infinity,
+        horizontalScroll: false,
+      );
     } else if (type == 'image') {
-       return Image.network(
-          widget.url!,
-          fit: BoxFit.contain,
-          errorBuilder: (context, error, stackTrace) => const Center(child: Text('Failed to load image')),
-          loadingBuilder: (context, child, loadingProgress) {
-            if (loadingProgress == null) return child;
-            return const Center(child: CircularProgressIndicator());
-          },
-       );
+      return Image.network(
+        widget.url!,
+        fit: BoxFit.contain,
+        errorBuilder: (context, error, stackTrace) =>
+            const Center(child: Text('Failed to load image')),
+        loadingBuilder: (context, child, loadingProgress) {
+          if (loadingProgress == null) return child;
+          return const Center(child: CircularProgressIndicator());
+        },
+      );
     } else if (type == 'text') {
-       if (_isLoading) return const Center(child: CircularProgressIndicator());
-       if (_errorMessage != null) return Center(child: Text(_errorMessage!));
-       return SingleChildScrollView(
-         padding: const EdgeInsets.all(16),
-         child: SelectableText(
-           _textContent ?? '',
-           style: GoogleFonts.robotoMono(fontSize: 14),
-         ),
-       );
+      if (_isLoading) return const Center(child: CircularProgressIndicator());
+      if (_errorMessage != null) return Center(child: Text(_errorMessage!));
+      return SingleChildScrollView(
+        padding: const EdgeInsets.all(16),
+        child: SelectableText(
+          _textContent ?? '',
+          style: GoogleFonts.robotoMono(fontSize: 14),
+        ),
+      );
     } else if (type == 'office') {
-       // Google Docs Viewer (often more reliable for standard public URLs)
-       final encodedUrl = Uri.encodeComponent(widget.url!);
-       final viewerUrl = 'https://docs.google.com/gview?embedded=true&url=$encodedUrl';
-       
-       return Stack(
-         children: [
-           const Center(
-             child: Column(
-               mainAxisSize: MainAxisSize.min,
-               children: [
-                 CircularProgressIndicator(),
-                 SizedBox(height: 16),
-                 Padding(
-                   padding: EdgeInsets.symmetric(horizontal: 24.0),
-                   child: Text(
-                     'Loading preview...\n\nIf the file does not appear, it might not be publicly accessible (e.g. requires login). In that case, please use the Download button below.',
-                     textAlign: TextAlign.center,
-                     style: TextStyle(color: Colors.grey),
-                   ),
-                 ),
-               ],
-             ),
-           ),
-           InAppWebView(
-             initialUrlRequest: URLRequest(url: WebUri(viewerUrl)),
-             initialSettings: InAppWebViewSettings(
-               isInspectable: kDebugMode,
-               mediaPlaybackRequiresUserGesture: false,
-               allowsInlineMediaPlayback: true,
-               iframeAllow: "camera; microphone",
-               iframeAllowFullscreen: true,
-               transparentBackground: true,
-             ),
-           ),
-         ],
-       );
+      // Google Docs Viewer (often more reliable for standard public URLs)
+      final encodedUrl = Uri.encodeComponent(widget.url!);
+      final viewerUrl =
+          'https://docs.google.com/gview?embedded=true&url=$encodedUrl';
+
+      return Stack(
+        children: [
+          const Center(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                CircularProgressIndicator(),
+                SizedBox(height: 16),
+                Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 24.0),
+                  child: Text(
+                    'Loading preview...\n\nIf the file does not appear, it might not be publicly accessible (e.g. requires login). In that case, please use the Download button below.',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(color: Colors.grey),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          InAppWebView(
+            initialUrlRequest: URLRequest(url: WebUri(viewerUrl)),
+            initialSettings: InAppWebViewSettings(
+              isInspectable: kDebugMode,
+              mediaPlaybackRequiresUserGesture: false,
+              allowsInlineMediaPlayback: true,
+              iframeAllow: "camera; microphone",
+              iframeAllowFullscreen: true,
+              transparentBackground: true,
+            ),
+          ),
+        ],
+      );
     } else {
-       return const Center(
+      return const Center(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -259,14 +270,14 @@ class _PDFViewWidgetState extends State<PDFViewWidget> {
             Text('Please download to view'),
           ],
         ),
-       );
+      );
     }
   }
 
   Widget _buildHeader(BuildContext context) {
     final fileName = widget.fileName ?? 'Document Viewer';
     final fileType = _getFileType().toUpperCase();
-    
+
     return Padding(
       padding: const EdgeInsets.all(20.0),
       child: Row(
@@ -279,7 +290,8 @@ class _PDFViewWidgetState extends State<PDFViewWidget> {
                   width: 44,
                   height: 44,
                   decoration: BoxDecoration(
-                    color: FlutterFlowTheme.of(context).primary.withOpacity(0.1),
+                    color:
+                        FlutterFlowTheme.of(context).primary.withOpacity(0.1),
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: Icon(
@@ -295,14 +307,16 @@ class _PDFViewWidgetState extends State<PDFViewWidget> {
                     children: [
                       Text(
                         fileName,
-                        style: FlutterFlowTheme.of(context).headlineMedium.override(
+                        style: FlutterFlowTheme.of(context)
+                            .headlineMedium
+                            .override(
                               fontFamily: 'Inter',
                               fontSize: 18.0,
                               fontWeight: FontWeight.bold,
                               useGoogleFonts: true,
                             ),
-                         maxLines: 1,
-                         overflow: TextOverflow.ellipsis,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                       ),
                       Text(
                         '$fileType Preview',
@@ -366,22 +380,23 @@ class _PDFViewWidgetState extends State<PDFViewWidget> {
                 width: 1.5,
               ),
               borderRadius: BorderRadius.circular(14.0),
-              hoverColor: FlutterFlowTheme.of(context).alternate.withOpacity(0.2),
+              hoverColor:
+                  FlutterFlowTheme.of(context).alternate.withOpacity(0.2),
             ),
           ),
           const SizedBox(width: 16),
           FFButtonWidget(
             onPressed: () async {
               if (widget.url == null || widget.url!.isEmpty) return;
-              
+
               // Helper to get filename
               String fileName = widget.fileName ?? 'document';
               if (widget.url!.isNotEmpty && fileName == 'document') {
-                 fileName = widget.url!.split('/').last.split('?').first;
+                fileName = widget.url!.split('/').last.split('?').first;
               }
               // Unescape URL encoded characters in filename if any
               fileName = Uri.decodeComponent(fileName);
-              
+
               await _downloadFile(widget.url!, fileName);
             },
             text: 'Download',
@@ -515,7 +530,8 @@ class _PDFViewWidgetState extends State<PDFViewWidget> {
         try {
           // Sanitize filename
           String safeFileName = fileName;
-          safeFileName = safeFileName.replaceAll('/', '_').replaceAll('\\', '_');
+          safeFileName =
+              safeFileName.replaceAll('/', '_').replaceAll('\\', '_');
           safeFileName = safeFileName.split('/').last.split('\\').last;
 
           // Download the file first
@@ -552,14 +568,18 @@ class _PDFViewWidgetState extends State<PDFViewWidget> {
             } catch (e) {
               debugPrint('Error saving file: $e');
               ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(content: Text('Error saving file: $e'), backgroundColor: Colors.red),
+                SnackBar(
+                    content: Text('Error saving file: $e'),
+                    backgroundColor: Colors.red),
               );
             }
           }
         } catch (e) {
           debugPrint('Error during download: $e');
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Error downloading file: $e'), backgroundColor: Colors.red),
+            SnackBar(
+                content: Text('Error downloading file: $e'),
+                backgroundColor: Colors.red),
           );
         }
         return;
@@ -574,7 +594,7 @@ class _PDFViewWidgetState extends State<PDFViewWidget> {
           safeFileName =
               safeFileName.replaceAll('/', '_').replaceAll('\\', '_');
           safeFileName = safeFileName.split('/').last.split('\\').last;
-          
+
           // Ensure filename has .pdf extension
           if (!safeFileName.toLowerCase().endsWith('.pdf')) {
             safeFileName = '$safeFileName.pdf';
@@ -654,7 +674,8 @@ class _PDFViewWidgetState extends State<PDFViewWidget> {
             int counter = 1;
             while (await File('${directory.path}/$finalFileName').exists()) {
               final extension = fileName.split('.').last;
-              final nameWithoutExtension = fileName.replaceAll('.$extension', '');
+              final nameWithoutExtension =
+                  fileName.replaceAll('.$extension', '');
               finalFileName = '${nameWithoutExtension}_$counter.$extension';
               counter++;
             }

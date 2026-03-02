@@ -52,7 +52,8 @@ class _ChatDetailWidgetState extends State<ChatDetailWidget> {
   StreamSubscription? _blockedUsersSubscription;
 
   // Key to access ChatThreadComponent state
-  final GlobalKey<ChatThreadComponentWidgetState> _chatThreadKey = GlobalKey<ChatThreadComponentWidgetState>();
+  final GlobalKey<ChatThreadComponentWidgetState> _chatThreadKey =
+      GlobalKey<ChatThreadComponentWidgetState>();
 
   @override
   void initState() {
@@ -136,14 +137,16 @@ class _ChatDetailWidgetState extends State<ChatDetailWidget> {
       safeSetState(() {});
 
       // Listen to blocked users for real-time UI updates
-      print('Debug: Initializing blocked user listener in ChatDetail. CurrentUserRef: $currentUserReference');
+      print(
+          'Debug: Initializing blocked user listener in ChatDetail. CurrentUserRef: $currentUserReference');
       _blockedUsersSubscription = BlockedUsersRecord.collection
           .where('blocker_user', isEqualTo: currentUserReference)
           .snapshots()
           .listen((snapshot) {
         setState(() {
           _blockedUserIds = snapshot.docs
-              .map((doc) => BlockedUsersRecord.fromSnapshot(doc).blockedUser?.id)
+              .map(
+                  (doc) => BlockedUsersRecord.fromSnapshot(doc).blockedUser?.id)
               .whereType<String>()
               .toSet();
           print('Debug: ChatDetail updated blocked IDs to: $_blockedUserIds');
@@ -369,8 +372,8 @@ class _ChatDetailWidgetState extends State<ChatDetailWidget> {
                                                       );
                                                     }
 
-                                      final bigUsersRecord =
-                                                          snapshot.data!;
+                                                    final bigUsersRecord =
+                                                        snapshot.data!;
 
                                                     return Row(
                                                       mainAxisSize:
@@ -380,8 +383,8 @@ class _ChatDetailWidgetState extends State<ChatDetailWidget> {
                                                               .spaceBetween,
                                                       children: [
                                                         Row(
-                                                          mainAxisSize:
-                                                              MainAxisSize.min, // Changed to min to prevent expansion
+                                                          mainAxisSize: MainAxisSize
+                                                              .min, // Changed to min to prevent expansion
                                                           children: [
                                                             GestureDetector(
                                                               onTap: () {
@@ -484,272 +487,297 @@ class _ChatDetailWidgetState extends State<ChatDetailWidget> {
                                                               width: 16.0)),
                                                         ),
                                                         Row(
-                                                          mainAxisSize: MainAxisSize.min,
+                                                          mainAxisSize:
+                                                              MainAxisSize.min,
                                                           children: [
                                                             Padding(
-                                                              padding: EdgeInsets.only(right: 8),
+                                                              padding: EdgeInsets
+                                                                  .only(
+                                                                      right: 8),
                                                               child: IconButton(
                                                                 icon: Icon(
-                                                                  Icons.search_rounded,
-                                                                  color: FlutterFlowTheme.of(context).primaryText,
+                                                                  Icons
+                                                                      .search_rounded,
+                                                                  color: FlutterFlowTheme.of(
+                                                                          context)
+                                                                      .primaryText,
                                                                   size: 24.0,
                                                                 ),
-                                  onPressed: () async {
-                                    final selectedMessageId = await context.pushNamed(
-                                      ChatHistoryWidget.routeName,
-                                      queryParameters: {
-                                        'chatDoc': serializeParam(
-                                          widget.chatDoc,
-                                          ParamType.Document,
-                                        ),
-                                      }.withoutNulls,
-                                      extra: <String, dynamic>{
-                                        'chatDoc': widget.chatDoc,
-                                      },
-                                    );
-
-                                    if (selectedMessageId != null && selectedMessageId is String) {
-                                      ScaffoldMessenger.of(context).showSnackBar(
-                                        SnackBar(content: Text('Jumping to message: $selectedMessageId')),
-                                      );
-                                      // Scroll to message
-                                      _chatThreadKey.currentState?.scrollToMessage(selectedMessageId);
-                                    }
-                                  },
-                                ),
-                              ),
-                                                        Builder(
-                                                          builder: (context) {
-                                                            final isBlocked = _blockedUserIds.contains(bigUsersRecord.reference.id);
-                                                            print('Debug: UI Block check for ${bigUsersRecord.reference.id}: $isBlocked (in list: $_blockedUserIds)');
-
-                                                            return InkWell(
-                                                          splashColor: Colors
-                                                              .transparent,
-                                                          focusColor: Colors
-                                                              .transparent,
-                                                          hoverColor: Colors
-                                                              .transparent,
-                                                          highlightColor: Colors
-                                                              .transparent,
-                                                          onTap: () async {
-                                                            context.pushNamed(
-                                                              UserProfileDetailWidget
-                                                                  .routeName,
-                                                              queryParameters: {
-                                                                'user':
-                                                                    serializeParam(
-                                                                  bigUsersRecord,
-                                                                  ParamType
-                                                                      .Document,
-                                                                ),
-                                                              }.withoutNulls,
-                                                              extra: <String,
-                                                                  dynamic>{
-                                                                'user':
-                                                                    bigUsersRecord,
-                                                              },
-                                                            );
-                                                          },
-                                                          child:
-                                                              PopupMenuButton<
-                                                                  String>(
-                                                            icon: Icon(
-                                                              Icons.more_vert,
-                                                              color: FlutterFlowTheme
-                                                                      .of(context)
-                                                                  .primaryText,
-                                                              size: 24.0,
-                                                            ),
-                                                            onSelected: (String
-                                                                value) async {
-                                                              if (value ==
-                                                                  'block') {
-                                                                // Show confirmation dialog
-                                                                final shouldBlock =
-                                                                    await showDialog<
-                                                                        bool>(
-                                                                  context:
-                                                                      context,
-                                                                  builder:
-                                                                      (BuildContext
-                                                                          context) {
-                                                                    return AlertDialog(
-                                                                      title: Text(
-                                                                          'Block User'),
-                                                                      content: Text(
-                                                                          'Are you sure you want to block this user? You will no longer see their messages or be able to contact them.'),
-                                                                      actions: [
-                                                                        TextButton(
-                                                                          onPressed: () =>
-                                                                              Navigator.of(context).pop(false),
-                                                                          child:
-                                                                              Text('Cancel'),
-                                                                        ),
-                                                                        TextButton(
-                                                                          onPressed: () =>
-                                                                              Navigator.of(context).pop(true),
-                                                                          child:
-                                                                              Text(
-                                                                            'Block',
-                                                                            style:
-                                                                                TextStyle(color: Colors.red),
-                                                                          ),
-                                                                        ),
-                                                                      ],
-                                                                    );
-                                                                  },
-                                                                );
-
-                                                                if (shouldBlock ==
-                                                                    true) {
-                                                                  print('Debug: Blocking user ${bigUsersRecord.reference.id} from ${currentUserReference?.id}');
-                                                                  try {
-                                                                    // Create blocked user record
-                                                                    final ref = await BlockedUsersRecord.collection.add({
-                                                                      ...createBlockedUsersRecordData(
-                                                                        blockerUser:
-                                                                            currentUserReference,
-                                                                        blockedUser:
-                                                                            bigUsersRecord
-                                                                                .reference,
-                                                                        createdAt:
-                                                                            getCurrentTimestamp,
+                                                                onPressed:
+                                                                    () async {
+                                                                  final selectedMessageId =
+                                                                      await context
+                                                                          .pushNamed(
+                                                                    ChatHistoryWidget
+                                                                        .routeName,
+                                                                    queryParameters:
+                                                                        {
+                                                                      'chatDoc':
+                                                                          serializeParam(
+                                                                        widget
+                                                                            .chatDoc,
+                                                                        ParamType
+                                                                            .Document,
                                                                       ),
-                                                                    });
-                                                                    print('Debug: Block record created at ${ref.path}');
+                                                                    }.withoutNulls,
+                                                                    extra: <String,
+                                                                        dynamic>{
+                                                                      'chatDoc':
+                                                                          widget
+                                                                              .chatDoc,
+                                                                    },
+                                                                  );
 
-                                                                    // Show success message
-                                                                    ScaffoldMessenger.of(context).showSnackBar(
-                                                                      SnackBar(content: Text('User has been blocked')),
+                                                                  if (selectedMessageId !=
+                                                                          null &&
+                                                                      selectedMessageId
+                                                                          is String) {
+                                                                    ScaffoldMessenger.of(
+                                                                            context)
+                                                                        .showSnackBar(
+                                                                      SnackBar(
+                                                                          content:
+                                                                              Text('Jumping to message: $selectedMessageId')),
                                                                     );
-                                                                  } catch (e) {
-                                                                    print('Debug: Error blocking user: $e');
+                                                                    // Scroll to message
+                                                                    _chatThreadKey
+                                                                        .currentState
+                                                                        ?.scrollToMessage(
+                                                                            selectedMessageId);
                                                                   }
-                                                                }
-                                                              } else if (value == 'unblock') {
-                                                                // Show confirmation dialog
-                                                                final shouldUnblock = await showDialog<bool>(
-                                                                  context: context,
-                                                                  builder: (BuildContext context) {
-                                                                    return AlertDialog(
-                                                                      title: Text('Unblock User'),
-                                                                      content: Text('Are you sure you want to unblock this user? You will be able to see their messages again.'),
-                                                                      actions: [
-                                                                        TextButton(
-                                                                          onPressed: () => Navigator.of(context).pop(false),
-                                                                          child: Text('Cancel'),
+                                                                },
+                                                              ),
+                                                            ),
+                                                            Builder(
+                                                              builder:
+                                                                  (context) {
+                                                                final isBlocked =
+                                                                    _blockedUserIds.contains(
+                                                                        bigUsersRecord
+                                                                            .reference
+                                                                            .id);
+                                                                print(
+                                                                    'Debug: UI Block check for ${bigUsersRecord.reference.id}: $isBlocked (in list: $_blockedUserIds)');
+
+                                                                return InkWell(
+                                                                  splashColor:
+                                                                      Colors
+                                                                          .transparent,
+                                                                  focusColor: Colors
+                                                                      .transparent,
+                                                                  hoverColor: Colors
+                                                                      .transparent,
+                                                                  highlightColor:
+                                                                      Colors
+                                                                          .transparent,
+                                                                  onTap:
+                                                                      () async {
+                                                                    context
+                                                                        .pushNamed(
+                                                                      UserProfileDetailWidget
+                                                                          .routeName,
+                                                                      queryParameters:
+                                                                          {
+                                                                        'user':
+                                                                            serializeParam(
+                                                                          bigUsersRecord,
+                                                                          ParamType
+                                                                              .Document,
                                                                         ),
-                                                                        TextButton(
-                                                                          onPressed: () => Navigator.of(context).pop(true),
-                                                                          child: Text('Unblock', style: TextStyle(color: Colors.blue)),
-                                                                        ),
-                                                                      ],
+                                                                      }.withoutNulls,
+                                                                      extra: <String,
+                                                                          dynamic>{
+                                                                        'user':
+                                                                            bigUsersRecord,
+                                                                      },
                                                                     );
                                                                   },
-                                                                );
-
-                                                                if (shouldUnblock == true) {
-                                                                  print('Debug: Unblocking user ${bigUsersRecord.reference.id}');
-                                                                  try {
-                                                                    final blockedDocs = await BlockedUsersRecord.collection
-                                                                        .where('blocker_user', isEqualTo: currentUserReference)
-                                                                        .where('blocked_user', isEqualTo: bigUsersRecord.reference)
-                                                                        .get();
-
-                                                                    print('Debug: Found ${blockedDocs.docs.length} records to delete');
-                                                                    for (var doc in blockedDocs.docs) {
-                                                                      await doc.reference.delete();
-                                                                      print('Debug: Deleted ${doc.reference.path}');
-                                                                    }
-
-                                                                    ScaffoldMessenger.of(context).showSnackBar(
-                                                                      SnackBar(content: Text('User has been unblocked')),
-                                                                    );
-                                                                  } catch (e) {
-                                                                    print('Debug: Error unblocking user: $e');
-                                                                  }
-                                                                }
-                                                              } else if (value ==
-                                                                  'profile') {
-                                                                context
-                                                                    .pushNamed(
-                                                                  'Profile',
-                                                                  queryParameters:
-                                                                      {
-                                                                    'userRef':
-                                                                        serializeParam(
-                                                                      bigUsersRecord
-                                                                          .reference,
-                                                                      ParamType
-                                                                          .DocumentReference,
+                                                                  child:
+                                                                      PopupMenuButton<
+                                                                          String>(
+                                                                    icon: Icon(
+                                                                      Icons
+                                                                          .more_vert,
+                                                                      color: FlutterFlowTheme.of(
+                                                                              context)
+                                                                          .primaryText,
+                                                                      size:
+                                                                          24.0,
                                                                     ),
-                                                                  }.withoutNulls,
-                                                                  extra: <String,
-                                                                      dynamic>{
-                                                                    'user':
-                                                                        bigUsersRecord,
-                                                                  },
+                                                                    onSelected:
+                                                                        (String
+                                                                            value) async {
+                                                                      if (value ==
+                                                                          'block') {
+                                                                        // Show confirmation dialog
+                                                                        final shouldBlock =
+                                                                            await showDialog<bool>(
+                                                                          context:
+                                                                              context,
+                                                                          builder:
+                                                                              (BuildContext context) {
+                                                                            return AlertDialog(
+                                                                              title: Text('Block User'),
+                                                                              content: Text('Are you sure you want to block this user? You will no longer see their messages or be able to contact them.'),
+                                                                              actions: [
+                                                                                TextButton(
+                                                                                  onPressed: () => Navigator.of(context).pop(false),
+                                                                                  child: Text('Cancel'),
+                                                                                ),
+                                                                                TextButton(
+                                                                                  onPressed: () => Navigator.of(context).pop(true),
+                                                                                  child: Text(
+                                                                                    'Block',
+                                                                                    style: TextStyle(color: Colors.red),
+                                                                                  ),
+                                                                                ),
+                                                                              ],
+                                                                            );
+                                                                          },
+                                                                        );
+
+                                                                        if (shouldBlock ==
+                                                                            true) {
+                                                                          print(
+                                                                              'Debug: Blocking user ${bigUsersRecord.reference.id} from ${currentUserReference?.id}');
+                                                                          try {
+                                                                            // Create blocked user record
+                                                                            final ref =
+                                                                                await BlockedUsersRecord.collection.add({
+                                                                              ...createBlockedUsersRecordData(
+                                                                                blockerUser: currentUserReference,
+                                                                                blockedUser: bigUsersRecord.reference,
+                                                                                createdAt: getCurrentTimestamp,
+                                                                              ),
+                                                                            });
+                                                                            print('Debug: Block record created at ${ref.path}');
+
+                                                                            // Show success message
+                                                                            ScaffoldMessenger.of(context).showSnackBar(
+                                                                              SnackBar(content: Text('User has been blocked')),
+                                                                            );
+                                                                          } catch (e) {
+                                                                            print('Debug: Error blocking user: $e');
+                                                                          }
+                                                                        }
+                                                                      } else if (value ==
+                                                                          'unblock') {
+                                                                        // Show confirmation dialog
+                                                                        final shouldUnblock =
+                                                                            await showDialog<bool>(
+                                                                          context:
+                                                                              context,
+                                                                          builder:
+                                                                              (BuildContext context) {
+                                                                            return AlertDialog(
+                                                                              title: Text('Unblock User'),
+                                                                              content: Text('Are you sure you want to unblock this user? You will be able to see their messages again.'),
+                                                                              actions: [
+                                                                                TextButton(
+                                                                                  onPressed: () => Navigator.of(context).pop(false),
+                                                                                  child: Text('Cancel'),
+                                                                                ),
+                                                                                TextButton(
+                                                                                  onPressed: () => Navigator.of(context).pop(true),
+                                                                                  child: Text('Unblock', style: TextStyle(color: Colors.blue)),
+                                                                                ),
+                                                                              ],
+                                                                            );
+                                                                          },
+                                                                        );
+
+                                                                        if (shouldUnblock ==
+                                                                            true) {
+                                                                          print(
+                                                                              'Debug: Unblocking user ${bigUsersRecord.reference.id}');
+                                                                          try {
+                                                                            final blockedDocs =
+                                                                                await BlockedUsersRecord.collection.where('blocker_user', isEqualTo: currentUserReference).where('blocked_user', isEqualTo: bigUsersRecord.reference).get();
+
+                                                                            print('Debug: Found ${blockedDocs.docs.length} records to delete');
+                                                                            for (var doc
+                                                                                in blockedDocs.docs) {
+                                                                              await doc.reference.delete();
+                                                                              print('Debug: Deleted ${doc.reference.path}');
+                                                                            }
+
+                                                                            ScaffoldMessenger.of(context).showSnackBar(
+                                                                              SnackBar(content: Text('User has been unblocked')),
+                                                                            );
+                                                                          } catch (e) {
+                                                                            print('Debug: Error unblocking user: $e');
+                                                                          }
+                                                                        }
+                                                                      } else if (value ==
+                                                                          'profile') {
+                                                                        context
+                                                                            .pushNamed(
+                                                                          'Profile',
+                                                                          queryParameters:
+                                                                              {
+                                                                            'userRef':
+                                                                                serializeParam(
+                                                                              bigUsersRecord.reference,
+                                                                              ParamType.DocumentReference,
+                                                                            ),
+                                                                          }.withoutNulls,
+                                                                          extra: <String,
+                                                                              dynamic>{
+                                                                            'user':
+                                                                                bigUsersRecord,
+                                                                          },
+                                                                        );
+                                                                      }
+                                                                    },
+                                                                    itemBuilder: (BuildContext
+                                                                            context) =>
+                                                                        <PopupMenuEntry<
+                                                                            String>>[
+                                                                      PopupMenuItem<
+                                                                          String>(
+                                                                        value:
+                                                                            'profile',
+                                                                        child:
+                                                                            Row(
+                                                                          children: [
+                                                                            Icon(Icons.person,
+                                                                                size: 20),
+                                                                            SizedBox(width: 8),
+                                                                            Text('View Profile'),
+                                                                          ],
+                                                                        ),
+                                                                      ),
+                                                                      PopupMenuItem<
+                                                                          String>(
+                                                                        value: isBlocked
+                                                                            ? 'unblock'
+                                                                            : 'block',
+                                                                        child:
+                                                                            Row(
+                                                                          children: [
+                                                                            Icon(isBlocked ? Icons.check_circle : Icons.block,
+                                                                                color: isBlocked ? Colors.blue : Colors.red,
+                                                                                size: 20),
+                                                                            SizedBox(width: 8),
+                                                                            Text(
+                                                                              isBlocked ? 'Unblock User' : 'Block User',
+                                                                              style: TextStyle(color: isBlocked ? Colors.blue : Colors.red),
+                                                                            ),
+                                                                          ],
+                                                                        ),
+                                                                      ),
+                                                                    ],
+                                                                  ),
                                                                 );
-                                                              }
-                                                            },
-                                                            itemBuilder: (BuildContext
-                                                                    context) =>
-                                                                <PopupMenuEntry<
-                                                                    String>>[
-                                                              PopupMenuItem<
-                                                                  String>(
-                                                                value:
-                                                                    'profile',
-                                                                child: Row(
-                                                                  children: [
-                                                                    Icon(
-                                                                        Icons
-                                                                            .person,
-                                                                        size:
-                                                                            20),
-                                                                    SizedBox(
-                                                                        width:
-                                                                            8),
-                                                                    Text(
-                                                                        'View Profile'),
-                                                                  ],
-                                                                ),
-                                                              ),
-                                                              PopupMenuItem<
-                                                                  String>(
-                                                                value: isBlocked ? 'unblock' : 'block',
-                                                                child: Row(
-                                                                  children: [
-                                                                    Icon(
-                                                                        isBlocked ? Icons.check_circle : Icons.block,
-                                                                        color: isBlocked ? Colors.blue : Colors.red,
-                                                                        size:
-                                                                            20),
-                                                                    SizedBox(
-                                                                        width:
-                                                                            8),
-                                                                    Text(
-                                                                      isBlocked ? 'Unblock User' : 'Block User',
-                                                                      style: TextStyle(
-                                                                          color:
-                                                                              isBlocked ? Colors.blue : Colors.red),
-                                                                    ),
-                                                                  ],
-                                                                ),
-                                                              ),
-                                                            ],
-                                                           ),
-                                                         );
-                                                     },
-                                                  ),
-                                                ],
-                                              ),
-                                            ],
-                                          );
-                                        },
-                                      );
-                                  } else {
+                                                              },
+                                                            ),
+                                                          ],
+                                                        ),
+                                                      ],
+                                                    );
+                                                  },
+                                                );
+                                              } else {
                                                 return Row(
                                                   mainAxisSize:
                                                       MainAxisSize.max,
@@ -875,352 +903,389 @@ class _ChatDetailWidgetState extends State<ChatDetailWidget> {
                                                     Row(
                                                       children: [
                                                         Padding(
-                                                          padding: EdgeInsets.only(right: 8),
-                                                          child: FlutterFlowIconButton(
-                                                                borderColor: Colors.transparent,
-                                                                borderRadius: 30.0,
-                                                                borderWidth: 1.0,
-                                                                buttonSize: 40.0,
-                                                                icon: Icon(
-                                                                  Icons.search_rounded,
-                                                                  color:
-                                                                      FlutterFlowTheme.of(context)
-                                                                          .primaryText,
-                                                                  size: 24.0,
-                                                                ),
-                                                                onPressed: () async {
-                                                                  context.pushNamed(
-                                                                    ChatHistoryWidget.routeName,
-                                                                    queryParameters: {
-                                                                      'chatDoc': serializeParam(
-                                                                        chatDetailChatsRecord,
-                                                                        ParamType.Document,
-                                                                      ),
-                                                                    }.withoutNulls,
-                                                                    extra: <String, dynamic>{
-                                                                      'chatDoc': chatDetailChatsRecord,
-                                                                    },
-                                                                  );
+                                                          padding:
+                                                              EdgeInsets.only(
+                                                                  right: 8),
+                                                          child:
+                                                              FlutterFlowIconButton(
+                                                            borderColor: Colors
+                                                                .transparent,
+                                                            borderRadius: 30.0,
+                                                            borderWidth: 1.0,
+                                                            buttonSize: 40.0,
+                                                            icon: Icon(
+                                                              Icons
+                                                                  .search_rounded,
+                                                              color: FlutterFlowTheme
+                                                                      .of(context)
+                                                                  .primaryText,
+                                                              size: 24.0,
+                                                            ),
+                                                            onPressed:
+                                                                () async {
+                                                              final selectedMessageId =
+                                                                  await context
+                                                                      .pushNamed(
+                                                                ChatHistoryWidget
+                                                                    .routeName,
+                                                                queryParameters:
+                                                                    {
+                                                                  'chatDoc':
+                                                                      serializeParam(
+                                                                    chatDetailChatsRecord,
+                                                                    ParamType
+                                                                        .Document,
+                                                                  ),
+                                                                }.withoutNulls,
+                                                                extra: <String,
+                                                                    dynamic>{
+                                                                  'chatDoc':
+                                                                      chatDetailChatsRecord,
                                                                 },
-                                                              ),
-                                                        ),
-                                                    PopupMenuButton<String>(
-                                                      child: Container(
-                                                        padding:
-                                                            EdgeInsets.all(8.0),
-                                                        child: Icon(
-                                                          Platform.isIOS
-                                                              ? CupertinoIcons
-                                                                  .ellipsis
-                                                              : Icons.more_vert,
-                                                          color: FlutterFlowTheme
-                                                                  .of(context)
-                                                              .primaryText,
-                                                          size: 24.0,
-                                                        ),
-                                                      ),
-                                                      shape:
-                                                          RoundedRectangleBorder(
-                                                        borderRadius:
-                                                            BorderRadius.circular(
-                                                                Platform.isIOS
-                                                                    ? 12.0
-                                                                    : 10.0),
-                                                      ),
-                                                      color: Platform.isIOS
-                                                          ? Colors.white
-                                                          : FlutterFlowTheme.of(
-                                                                  context)
-                                                              .secondaryBackground,
-                                                      elevation: Platform.isIOS
-                                                          ? 8
-                                                          : 6,
-                                                      padding: EdgeInsets.zero,
-                                                      offset: Offset(
-                                                          0,
-                                                          Platform.isIOS
-                                                              ? 8
-                                                              : 4),
-                                                      onOpened: () {
-                                                        print(
-                                                            '🔵🔵🔵 3-dot menu button TAPPED - Menu opened!');
-                                                        debugPrint(
-                                                            '🔵🔵🔵 3-dot menu button TAPPED - Menu opened!');
-                                                        if (Platform.isIOS) {
-                                                          HapticFeedback
-                                                              .mediumImpact();
-                                                        }
-                                                      },
-                                                      onCanceled: () {
-                                                        print(
-                                                            '🔵 Menu canceled');
-                                                      },
-                                                      onSelected:
-                                                          (String value) async {
-                                                        print(
-                                                            '🔵 Menu item selected: $value');
-                                                        if (Platform.isIOS) {
-                                                          HapticFeedback
-                                                              .selectionClick();
-                                                        }
-                                                        if (value ==
-                                                            'add_members') {
-                                                          print(
-                                                              '🔵 Navigating to add members');
-                                                          // Navigate to group detail to add members
-                                                          context.pushNamed(
-                                                            GroupChatDetailWidget
-                                                                .routeName,
-                                                            queryParameters: {
-                                                              'chatDoc':
-                                                                  serializeParam(
-                                                                chatDetailChatsRecord,
-                                                                ParamType
-                                                                    .Document,
-                                                              ),
-                                                            }.withoutNulls,
-                                                            extra: <String,
-                                                                dynamic>{
-                                                              'chatDoc':
-                                                                  chatDetailChatsRecord,
+                                                              );
+
+                                                              if (selectedMessageId !=
+                                                                      null &&
+                                                                  selectedMessageId
+                                                                      is String) {
+                                                                ScaffoldMessenger.of(
+                                                                        context)
+                                                                    .showSnackBar(
+                                                                  SnackBar(
+                                                                      content: Text(
+                                                                          'Jumping to message: $selectedMessageId')),
+                                                                );
+                                                                // Scroll to message
+                                                                _chatThreadKey
+                                                                    .currentState
+                                                                    ?.scrollToMessage(
+                                                                        selectedMessageId);
+                                                              }
                                                             },
-                                                          );
-                                                        } else if (value ==
-                                                            'media') {
-                                                          // Navigate to group detail with media view
-                                                          context.pushNamed(
-                                                            GroupChatDetailWidget
-                                                                .routeName,
-                                                            queryParameters: {
-                                                              'chatDoc':
-                                                                  serializeParam(
-                                                                chatDetailChatsRecord,
-                                                                ParamType
-                                                                    .Document,
-                                                              ),
-                                                            }.withoutNulls,
-                                                            extra: <String,
-                                                                dynamic>{
-                                                              'chatDoc':
-                                                                  chatDetailChatsRecord,
-                                                            },
-                                                          );
-                                                        } else if (value ==
-                                                            'group_info') {
-                                                          // Navigate to group detail
-                                                          context.pushNamed(
-                                                            GroupChatDetailWidget
-                                                                .routeName,
-                                                            queryParameters: {
-                                                              'chatDoc':
-                                                                  serializeParam(
-                                                                chatDetailChatsRecord,
-                                                                ParamType
-                                                                    .Document,
-                                                              ),
-                                                            }.withoutNulls,
-                                                            extra: <String,
-                                                                dynamic>{
-                                                              'chatDoc':
-                                                                  chatDetailChatsRecord,
-                                                            },
-                                                          );
-                                                        } else if (value ==
-                                                            'search') {
-                                                          // Navigate to group detail for search
-                                                          context.pushNamed(
-                                                            GroupChatDetailWidget
-                                                                .routeName,
-                                                            queryParameters: {
-                                                              'chatDoc':
-                                                                  serializeParam(
-                                                                chatDetailChatsRecord,
-                                                                ParamType
-                                                                    .Document,
-                                                              ),
-                                                            }.withoutNulls,
-                                                            extra: <String,
-                                                                dynamic>{
-                                                              'chatDoc':
-                                                                  chatDetailChatsRecord,
-                                                            },
-                                                          );
-                                                        }
-                                                      },
-                                                      itemBuilder: (BuildContext
-                                                              context) =>
-                                                          [
-                                                        PopupMenuItem<String>(
-                                                          value: 'add_members',
-                                                          child: Row(
-                                                            children: [
-                                                              Icon(
-                                                                Platform.isIOS
-                                                                    ? CupertinoIcons
-                                                                        .person_add
-                                                                    : Icons
-                                                                        .person_add,
-                                                                size: 20,
-                                                                color: Platform
-                                                                        .isIOS
-                                                                    ? Colors
-                                                                        .black87
-                                                                    : FlutterFlowTheme.of(
-                                                                            context)
-                                                                        .primaryText,
-                                                              ),
-                                                              SizedBox(
-                                                                  width: 12),
-                                                              Text(
-                                                                'Add Members',
-                                                                style:
-                                                                    TextStyle(
-                                                                  fontSize:
-                                                                      Platform.isIOS
-                                                                          ? 16
-                                                                          : 14,
-                                                                  color: Platform
-                                                                          .isIOS
-                                                                      ? Colors
-                                                                          .black87
-                                                                      : FlutterFlowTheme.of(
-                                                                              context)
-                                                                          .primaryText,
-                                                                ),
-                                                              ),
-                                                            ],
                                                           ),
                                                         ),
-                                                        PopupMenuItem<String>(
-                                                          value: 'media',
-                                                          child: Row(
-                                                            children: [
-                                                              Icon(
-                                                                Platform.isIOS
-                                                                    ? CupertinoIcons
-                                                                        .photo_on_rectangle
-                                                                    : Icons
-                                                                        .photo_library,
-                                                                size: 20,
-                                                                color: Platform
-                                                                        .isIOS
-                                                                    ? Colors
-                                                                        .black87
-                                                                    : FlutterFlowTheme.of(
-                                                                            context)
-                                                                        .primaryText,
-                                                              ),
-                                                              SizedBox(
-                                                                  width: 12),
-                                                              Text(
-                                                                'Media',
-                                                                style:
-                                                                    TextStyle(
-                                                                  fontSize:
-                                                                      Platform.isIOS
+                                                        PopupMenuButton<String>(
+                                                          child: Container(
+                                                            padding:
+                                                                EdgeInsets.all(
+                                                                    8.0),
+                                                            child: Icon(
+                                                              Platform.isIOS
+                                                                  ? CupertinoIcons
+                                                                      .ellipsis
+                                                                  : Icons
+                                                                      .more_vert,
+                                                              color: FlutterFlowTheme
+                                                                      .of(context)
+                                                                  .primaryText,
+                                                              size: 24.0,
+                                                            ),
+                                                          ),
+                                                          shape:
+                                                              RoundedRectangleBorder(
+                                                            borderRadius:
+                                                                BorderRadius.circular(
+                                                                    Platform.isIOS
+                                                                        ? 12.0
+                                                                        : 10.0),
+                                                          ),
+                                                          color: Platform.isIOS
+                                                              ? Colors.white
+                                                              : FlutterFlowTheme
+                                                                      .of(context)
+                                                                  .secondaryBackground,
+                                                          elevation:
+                                                              Platform.isIOS
+                                                                  ? 8
+                                                                  : 6,
+                                                          padding:
+                                                              EdgeInsets.zero,
+                                                          offset: Offset(
+                                                              0,
+                                                              Platform.isIOS
+                                                                  ? 8
+                                                                  : 4),
+                                                          onOpened: () {
+                                                            print(
+                                                                '🔵🔵🔵 3-dot menu button TAPPED - Menu opened!');
+                                                            debugPrint(
+                                                                '🔵🔵🔵 3-dot menu button TAPPED - Menu opened!');
+                                                            if (Platform
+                                                                .isIOS) {
+                                                              HapticFeedback
+                                                                  .mediumImpact();
+                                                            }
+                                                          },
+                                                          onCanceled: () {
+                                                            print(
+                                                                '🔵 Menu canceled');
+                                                          },
+                                                          onSelected: (String
+                                                              value) async {
+                                                            print(
+                                                                '🔵 Menu item selected: $value');
+                                                            if (Platform
+                                                                .isIOS) {
+                                                              HapticFeedback
+                                                                  .selectionClick();
+                                                            }
+                                                            if (value ==
+                                                                'add_members') {
+                                                              print(
+                                                                  '🔵 Navigating to add members');
+                                                              // Navigate to group detail to add members
+                                                              context.pushNamed(
+                                                                GroupChatDetailWidget
+                                                                    .routeName,
+                                                                queryParameters:
+                                                                    {
+                                                                  'chatDoc':
+                                                                      serializeParam(
+                                                                    chatDetailChatsRecord,
+                                                                    ParamType
+                                                                        .Document,
+                                                                  ),
+                                                                }.withoutNulls,
+                                                                extra: <String,
+                                                                    dynamic>{
+                                                                  'chatDoc':
+                                                                      chatDetailChatsRecord,
+                                                                },
+                                                              );
+                                                            } else if (value ==
+                                                                'media') {
+                                                              // Navigate to group detail with media view
+                                                              context.pushNamed(
+                                                                GroupChatDetailWidget
+                                                                    .routeName,
+                                                                queryParameters:
+                                                                    {
+                                                                  'chatDoc':
+                                                                      serializeParam(
+                                                                    chatDetailChatsRecord,
+                                                                    ParamType
+                                                                        .Document,
+                                                                  ),
+                                                                }.withoutNulls,
+                                                                extra: <String,
+                                                                    dynamic>{
+                                                                  'chatDoc':
+                                                                      chatDetailChatsRecord,
+                                                                },
+                                                              );
+                                                            } else if (value ==
+                                                                'group_info') {
+                                                              // Navigate to group detail
+                                                              context.pushNamed(
+                                                                GroupChatDetailWidget
+                                                                    .routeName,
+                                                                queryParameters:
+                                                                    {
+                                                                  'chatDoc':
+                                                                      serializeParam(
+                                                                    chatDetailChatsRecord,
+                                                                    ParamType
+                                                                        .Document,
+                                                                  ),
+                                                                }.withoutNulls,
+                                                                extra: <String,
+                                                                    dynamic>{
+                                                                  'chatDoc':
+                                                                      chatDetailChatsRecord,
+                                                                },
+                                                              );
+                                                            } else if (value ==
+                                                                'search') {
+                                                              // Navigate to group detail for search
+                                                              context.pushNamed(
+                                                                GroupChatDetailWidget
+                                                                    .routeName,
+                                                                queryParameters:
+                                                                    {
+                                                                  'chatDoc':
+                                                                      serializeParam(
+                                                                    chatDetailChatsRecord,
+                                                                    ParamType
+                                                                        .Document,
+                                                                  ),
+                                                                }.withoutNulls,
+                                                                extra: <String,
+                                                                    dynamic>{
+                                                                  'chatDoc':
+                                                                      chatDetailChatsRecord,
+                                                                },
+                                                              );
+                                                            }
+                                                          },
+                                                          itemBuilder:
+                                                              (BuildContext
+                                                                      context) =>
+                                                                  [
+                                                            PopupMenuItem<
+                                                                String>(
+                                                              value:
+                                                                  'add_members',
+                                                              child: Row(
+                                                                children: [
+                                                                  Icon(
+                                                                    Platform.isIOS
+                                                                        ? CupertinoIcons
+                                                                            .person_add
+                                                                        : Icons
+                                                                            .person_add,
+                                                                    size: 20,
+                                                                    color: Platform.isIOS
+                                                                        ? Colors
+                                                                            .black87
+                                                                        : FlutterFlowTheme.of(context)
+                                                                            .primaryText,
+                                                                  ),
+                                                                  SizedBox(
+                                                                      width:
+                                                                          12),
+                                                                  Text(
+                                                                    'Add Members',
+                                                                    style:
+                                                                        TextStyle(
+                                                                      fontSize: Platform
+                                                                              .isIOS
                                                                           ? 16
                                                                           : 14,
-                                                                  color: Platform
-                                                                          .isIOS
-                                                                      ? Colors
-                                                                          .black87
-                                                                      : FlutterFlowTheme.of(
-                                                                              context)
-                                                                          .primaryText,
-                                                                ),
+                                                                      color: Platform.isIOS
+                                                                          ? Colors
+                                                                              .black87
+                                                                          : FlutterFlowTheme.of(context)
+                                                                              .primaryText,
+                                                                    ),
+                                                                  ),
+                                                                ],
                                                               ),
-                                                            ],
-                                                          ),
-                                                        ),
-                                                        PopupMenuItem<String>(
-                                                          value: 'search',
-                                                          child: Row(
-                                                            children: [
-                                                              Icon(
-                                                                Platform.isIOS
-                                                                    ? CupertinoIcons
-                                                                        .search
-                                                                    : Icons
-                                                                        .search,
-                                                                size: 20,
-                                                                color: Platform
-                                                                        .isIOS
-                                                                    ? Colors
-                                                                        .black87
-                                                                    : FlutterFlowTheme.of(
-                                                                            context)
-                                                                        .primaryText,
-                                                              ),
-                                                              SizedBox(
-                                                                  width: 12),
-                                                              Text(
-                                                                'Search',
-                                                                style:
-                                                                    TextStyle(
-                                                                  fontSize:
-                                                                      Platform.isIOS
+                                                            ),
+                                                            PopupMenuItem<
+                                                                String>(
+                                                              value: 'media',
+                                                              child: Row(
+                                                                children: [
+                                                                  Icon(
+                                                                    Platform.isIOS
+                                                                        ? CupertinoIcons
+                                                                            .photo_on_rectangle
+                                                                        : Icons
+                                                                            .photo_library,
+                                                                    size: 20,
+                                                                    color: Platform.isIOS
+                                                                        ? Colors
+                                                                            .black87
+                                                                        : FlutterFlowTheme.of(context)
+                                                                            .primaryText,
+                                                                  ),
+                                                                  SizedBox(
+                                                                      width:
+                                                                          12),
+                                                                  Text(
+                                                                    'Media',
+                                                                    style:
+                                                                        TextStyle(
+                                                                      fontSize: Platform
+                                                                              .isIOS
                                                                           ? 16
                                                                           : 14,
-                                                                  color: Platform
-                                                                          .isIOS
-                                                                      ? Colors
-                                                                          .black87
-                                                                      : FlutterFlowTheme.of(
-                                                                              context)
-                                                                          .primaryText,
-                                                                ),
+                                                                      color: Platform.isIOS
+                                                                          ? Colors
+                                                                              .black87
+                                                                          : FlutterFlowTheme.of(context)
+                                                                              .primaryText,
+                                                                    ),
+                                                                  ),
+                                                                ],
                                                               ),
-                                                            ],
-                                                          ),
-                                                        ),
-                                                        PopupMenuItem<String>(
-                                                          value: 'group_info',
-                                                          child: Row(
-                                                            children: [
-                                                              Icon(
-                                                                Platform.isIOS
-                                                                    ? CupertinoIcons
-                                                                        .info_circle
-                                                                    : Icons
-                                                                        .info_outline,
-                                                                size: 20,
-                                                                color: Platform
-                                                                        .isIOS
-                                                                    ? Colors
-                                                                        .black87
-                                                                    : FlutterFlowTheme.of(
-                                                                            context)
-                                                                        .primaryText,
-                                                              ),
-                                                              SizedBox(
-                                                                  width: 12),
-                                                              Text(
-                                                                'Group Info',
-                                                                style:
-                                                                    TextStyle(
-                                                                  fontSize:
-                                                                      Platform.isIOS
+                                                            ),
+                                                            PopupMenuItem<
+                                                                String>(
+                                                              value: 'search',
+                                                              child: Row(
+                                                                children: [
+                                                                  Icon(
+                                                                    Platform.isIOS
+                                                                        ? CupertinoIcons
+                                                                            .search
+                                                                        : Icons
+                                                                            .search,
+                                                                    size: 20,
+                                                                    color: Platform.isIOS
+                                                                        ? Colors
+                                                                            .black87
+                                                                        : FlutterFlowTheme.of(context)
+                                                                            .primaryText,
+                                                                  ),
+                                                                  SizedBox(
+                                                                      width:
+                                                                          12),
+                                                                  Text(
+                                                                    'Search',
+                                                                    style:
+                                                                        TextStyle(
+                                                                      fontSize: Platform
+                                                                              .isIOS
                                                                           ? 16
                                                                           : 14,
-                                                                  color: Platform
-                                                                          .isIOS
-                                                                      ? Colors
-                                                                          .black87
-                                                                      : FlutterFlowTheme.of(
-                                                                              context)
-                                                                          .primaryText,
-                                                                ),
+                                                                      color: Platform.isIOS
+                                                                          ? Colors
+                                                                              .black87
+                                                                          : FlutterFlowTheme.of(context)
+                                                                              .primaryText,
+                                                                    ),
+                                                                  ),
+                                                                ],
                                                               ),
-                                                            ],
-                                                          ),
+                                                            ),
+                                                            PopupMenuItem<
+                                                                String>(
+                                                              value:
+                                                                  'group_info',
+                                                              child: Row(
+                                                                children: [
+                                                                  Icon(
+                                                                    Platform.isIOS
+                                                                        ? CupertinoIcons
+                                                                            .info_circle
+                                                                        : Icons
+                                                                            .info_outline,
+                                                                    size: 20,
+                                                                    color: Platform.isIOS
+                                                                        ? Colors
+                                                                            .black87
+                                                                        : FlutterFlowTheme.of(context)
+                                                                            .primaryText,
+                                                                  ),
+                                                                  SizedBox(
+                                                                      width:
+                                                                          12),
+                                                                  Text(
+                                                                    'Group Info',
+                                                                    style:
+                                                                        TextStyle(
+                                                                      fontSize: Platform
+                                                                              .isIOS
+                                                                          ? 16
+                                                                          : 14,
+                                                                      color: Platform.isIOS
+                                                                          ? Colors
+                                                                              .black87
+                                                                          : FlutterFlowTheme.of(context)
+                                                                              .primaryText,
+                                                                    ),
+                                                                  ),
+                                                                ],
+                                                              ),
+                                                            ),
+                                                          ],
                                                         ),
                                                       ],
                                                     ),
                                                   ],
-                                                ),
-                                              ],
-                                            );
-                                          }
+                                                );
+                                              }
                                             },
                                           ),
                                         ),

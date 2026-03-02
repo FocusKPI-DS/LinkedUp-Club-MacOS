@@ -66,6 +66,10 @@ class DesktopChatModel extends FlutterFlowModel {
   // Chat History panel
   bool showChatHistoryPanel = false;
 
+  // Meeting Transcripts popup (from header 3-dots menu)
+  bool showMeetingTranscriptsPopup = false;
+  ChatsRecord? meetingTranscriptsPopupChat;
+
   // Sidebar resize/collapse state
   double sidebarWidth = 320.0; // Default width
   bool isSidebarCollapsed = false;

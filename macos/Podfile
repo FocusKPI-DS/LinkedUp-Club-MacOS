@@ -1,4 +1,4 @@
-platform :osx, '13.0'
+platform :osx, '11.0'
 
 # CocoaPods analytics sends network stats synchronously affecting flutter build latency.
 ENV['COCOAPODS_DISABLE_STATS'] = 'true'
@@ -38,30 +38,15 @@ post_install do |installer|
   installer.pods_project.targets.each do |target|
     flutter_additional_macos_build_settings(target)
     target.build_configurations.each do |config|
-      config.build_settings['MACOSX_DEPLOYMENT_TARGET'] = '13.0'
-      config.build_settings['EXCLUDED_ARCHS'] = 'x86_64'
-      config.build_settings['ARCHS'] = 'arm64'
+      config.build_settings['MACOSX_DEPLOYMENT_TARGET'] = '11.0'
       
-      # Fix DT_TOOLCHAIN_DIR for Xcode 15+
-      ['LIBRARY_SEARCH_PATHS', 'LD_RUNPATH_SEARCH_PATHS', 'OTHER_LDFLAGS', 'OTHER_SWIFT_FLAGS'].each do |key|
-        if config.build_settings[key]
-          value = config.build_settings[key]
-          if value.is_a?(Array)
-             # Filter out or replace the problematic value
-             config.build_settings[key] = value.map { |v| v.gsub('DT_TOOLCHAIN_DIR', 'TOOLCHAIN_DIR') }
-          elsif value.is_a?(String)
-             config.build_settings[key] = value.gsub('DT_TOOLCHAIN_DIR', 'TOOLCHAIN_DIR')
-          end
-        end
+      # Fix DT_TOOLCHAIN_DIR issue for Xcode 15
+      if config.base_configuration_reference != nil
+        xcconfig_path = config.base_configuration_reference.real_path
+        xcconfig = File.read(xcconfig_path)
+        xcconfig_mod = xcconfig.gsub(/DT_TOOLCHAIN_DIR/, "TOOLCHAIN_DIR")
+        File.open(xcconfig_path, "w") { |file| file << xcconfig_mod }
       end
-
-      # Specific fix for Firebase frameworks which might be header/framework search paths
-      config.build_settings['FRAMEWORK_SEARCH_PATHS'] ||= ['$(inherited)']
-      config.build_settings['HEADER_SEARCH_PATHS'] ||= ['$(inherited)']
-
-      # Specific fix for Firebase frameworks which might be header/framework search paths
-      config.build_settings['FRAMEWORK_SEARCH_PATHS'] ||= ['$(inherited)']
-      config.build_settings['HEADER_SEARCH_PATHS'] ||= ['$(inherited)']
       
       # Start of the permission_handler configuration
       config.build_settings['GCC_PREPROCESSOR_DEFINITIONS'] ||= [
@@ -70,21 +55,6 @@ post_install do |installer|
         'PERMISSION_MICROPHONE=1',
       ]
       # End of the permission_handler configuration
-    end
-  end
-
-  # Brutal fix: Patch all generated xcconfig files to replace DT_TOOLCHAIN_DIR with TOOLCHAIN_DIR
-  # This handles cases where build settings are locked or coming from binary frameworks
-  Dir.glob(File.join("Pods", "Target Support Files", "**", "*.xcconfig")).each do |file|
-    begin
-      text = File.read(file)
-      if text.include?("DT_TOOLCHAIN_DIR")
-        puts "Patching \#{file} to replace DT_TOOLCHAIN_DIR"
-        new_contents = text.gsub("DT_TOOLCHAIN_DIR", "TOOLCHAIN_DIR")
-        File.open(file, "w") { |f| f.puts new_contents }
-      end
-    rescue => e
-      puts "Failed to patch \#{file}: \#{e}"
     end
   end
 end

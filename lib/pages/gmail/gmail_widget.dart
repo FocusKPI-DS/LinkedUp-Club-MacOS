@@ -21,7 +21,7 @@ import 'package:url_launcher/url_launcher.dart';
 export '/pages/gmail/gmail_model.dart';
 
 class GmailWidget extends StatefulWidget {
-  const GmailWidget({super.key});
+  const GmailWidget({Key? key}) : super(key: key);
 
   @override
   _GmailWidgetState createState() => _GmailWidgetState();
@@ -50,7 +50,7 @@ class _GmailWidgetState extends State<GmailWidget> {
   // Cache management
   StreamSubscription<DocumentSnapshot>? _cacheSubscription;
   Timer? _autoRefreshTimer;
-  final Map<String, Map<String, dynamic>> _emailBodyCache =
+  Map<String, Map<String, dynamic>> _emailBodyCache =
       {}; // In-memory cache for full email bodies (session only)
 
   @override
@@ -549,7 +549,7 @@ class _GmailWidgetState extends State<GmailWidget> {
     });
 
     // Ensure UI frame is rendered before starting async operations
-    await Future.delayed(const Duration(milliseconds: 50));
+    await Future.delayed(Duration(milliseconds: 50));
 
     try {
       // Mark email as read when opened
@@ -645,9 +645,8 @@ class _GmailWidgetState extends State<GmailWidget> {
       0,
       0,
     );
-    final endOfDay = startOfDay
-        .add(const Duration(days: 1))
-        .subtract(const Duration(seconds: 1));
+    final endOfDay =
+        startOfDay.add(Duration(days: 1)).subtract(Duration(seconds: 1));
 
     // Convert to UTC for API call (Google Calendar API expects UTC)
     final startOfDayUtc = startOfDay.toUtc();
@@ -781,19 +780,19 @@ class _GmailWidgetState extends State<GmailWidget> {
         SnackBar(
           content: Row(
             children: [
-              const Icon(Icons.error_outline, color: Colors.white),
-              const SizedBox(width: 12),
+              Icon(Icons.error_outline, color: Colors.white),
+              SizedBox(width: 12),
               Expanded(
                 child: Text(
                   message,
-                  style: const TextStyle(fontSize: 14),
+                  style: TextStyle(fontSize: 14),
                 ),
               ),
             ],
           ),
           backgroundColor: Colors.red,
           behavior: SnackBarBehavior.floating,
-          duration: const Duration(seconds: 4),
+          duration: Duration(seconds: 4),
         ),
       );
     }
@@ -908,7 +907,7 @@ class _GmailWidgetState extends State<GmailWidget> {
     } catch (e) {
       // If date is too long, truncate it
       if (dateString.length > 20) {
-        return '${dateString.substring(0, 20)}...';
+        return dateString.substring(0, 20) + '...';
       }
       return dateString;
     }
@@ -937,32 +936,32 @@ class _GmailWidgetState extends State<GmailWidget> {
   Color _getAvatarColor(String? from) {
     final initial = _getInitials(from);
     if (initial.isEmpty || initial == '?') {
-      return const Color(0xFF8E8E93);
+      return Color(0xFF8E8E93);
     }
 
     // Generate consistent color based on the first character
     final char = initial[0].toUpperCase();
     final colors = [
-      const Color(0xFF007AFF), // Blue
-      const Color(0xFF34C759), // Green
-      const Color(0xFFFF9500), // Orange
-      const Color(0xFFFF3B30), // Red
-      const Color(0xFFAF52DE), // Purple
-      const Color(0xFFFF2D55), // Pink
-      const Color(0xFF5AC8FA), // Light Blue
-      const Color(0xFFFFCC00), // Yellow
-      const Color(0xFF5856D6), // Indigo
-      const Color(0xFFFF9500), // Orange
-      const Color(0xFF00C7BE), // Teal
-      const Color(0xFFFF6B6B), // Coral
-      const Color(0xFF4ECDC4), // Turquoise
-      const Color(0xFF45B7D1), // Sky Blue
-      const Color(0xFF96CEB4), // Mint
-      const Color(0xFFFFEAA7), // Light Yellow
-      const Color(0xFFDDA0DD), // Plum
-      const Color(0xFF98D8C8), // Aqua
-      const Color(0xFFF7DC6F), // Gold
-      const Color(0xFFBB8FCE), // Lavender
+      Color(0xFF007AFF), // Blue
+      Color(0xFF34C759), // Green
+      Color(0xFFFF9500), // Orange
+      Color(0xFFFF3B30), // Red
+      Color(0xFFAF52DE), // Purple
+      Color(0xFFFF2D55), // Pink
+      Color(0xFF5AC8FA), // Light Blue
+      Color(0xFFFFCC00), // Yellow
+      Color(0xFF5856D6), // Indigo
+      Color(0xFFFF9500), // Orange
+      Color(0xFF00C7BE), // Teal
+      Color(0xFFFF6B6B), // Coral
+      Color(0xFF4ECDC4), // Turquoise
+      Color(0xFF45B7D1), // Sky Blue
+      Color(0xFF96CEB4), // Mint
+      Color(0xFFFFEAA7), // Light Yellow
+      Color(0xFFDDA0DD), // Plum
+      Color(0xFF98D8C8), // Aqua
+      Color(0xFFF7DC6F), // Gold
+      Color(0xFFBB8FCE), // Lavender
     ];
 
     // Use character code to get consistent color
@@ -997,12 +996,12 @@ class _GmailWidgetState extends State<GmailWidget> {
         });
       },
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        padding: EdgeInsets.symmetric(horizontal: 12, vertical: 6),
         decoration: BoxDecoration(
           color: isSelected ? Colors.white : Colors.transparent,
           border: isSelected
               ? Border.all(
-                  color: const Color(0xFFDADCE0), // Light grey border
+                  color: Color(0xFFDADCE0), // Light grey border
                   width: 1,
                 )
               : null,
@@ -1015,8 +1014,8 @@ class _GmailWidgetState extends State<GmailWidget> {
             fontSize: 14,
             fontWeight: FontWeight.normal,
             color: isSelected
-                ? const Color(0xFF1F1F1F) // Dark grey when selected
-                : const Color(0xFF9AA0A6), // Light grey when not selected
+                ? Color(0xFF1F1F1F) // Dark grey when selected
+                : Color(0xFF9AA0A6), // Light grey when not selected
             letterSpacing: 0,
           ),
         ),
@@ -1186,8 +1185,8 @@ class _GmailWidgetState extends State<GmailWidget> {
             children: [
               Icon(Icons.logout_rounded,
                   color: FlutterFlowTheme.of(context).error),
-              const SizedBox(width: 12),
-              const Text(
+              SizedBox(width: 12),
+              Text(
                 'Disconnect Gmail?',
                 style: TextStyle(
                   fontSize: 20,
@@ -1196,14 +1195,14 @@ class _GmailWidgetState extends State<GmailWidget> {
               ),
             ],
           ),
-          content: const Text(
+          content: Text(
             'Are you sure you want to disconnect your Gmail account? You\'ll need to reconnect to access your emails again.',
             style: TextStyle(fontSize: 14),
           ),
           actions: [
             TextButton(
               onPressed: () => Navigator.of(context).pop(false),
-              child: const Text(
+              child: Text(
                 'Cancel',
                 style: TextStyle(
                   fontSize: 14,
@@ -1233,7 +1232,7 @@ class _GmailWidgetState extends State<GmailWidget> {
     showDialog(
       context: context,
       barrierDismissible: false,
-      builder: (context) => const Center(
+      builder: (context) => Center(
         child: CircularProgressIndicator(),
       ),
     );
@@ -1265,7 +1264,7 @@ class _GmailWidgetState extends State<GmailWidget> {
         // Show success message
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
+            SnackBar(
               content: Row(
                 children: [
                   Icon(Icons.check_circle, color: Colors.white),
@@ -1294,7 +1293,7 @@ class _GmailWidgetState extends State<GmailWidget> {
       // Show error message
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
+          SnackBar(
             content: Row(
               children: [
                 Icon(Icons.error_outline, color: Colors.white),
@@ -1332,7 +1331,7 @@ class _GmailWidgetState extends State<GmailWidget> {
               height: 32,
               fit: BoxFit.contain,
             ),
-            const SizedBox(width: 12),
+            SizedBox(width: 12),
             Text(
               'Gmail',
               style: FlutterFlowTheme.of(context).headlineMedium.override(
@@ -1345,7 +1344,7 @@ class _GmailWidgetState extends State<GmailWidget> {
         ),
         actions: [
           Padding(
-            padding: const EdgeInsets.only(right: 8),
+            padding: EdgeInsets.only(right: 8),
             child: TextButton.icon(
               onPressed: () {
                 setState(() {
@@ -1372,12 +1371,11 @@ class _GmailWidgetState extends State<GmailWidget> {
                   fontFamily: _interFont,
                   fontSize: 14,
                   fontWeight: FontWeight.w500,
-                  color: const Color(0xFF1F1F1F),
+                  color: Color(0xFF1F1F1F),
                 ),
               ),
               style: TextButton.styleFrom(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                padding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(8),
                 ),
@@ -1385,7 +1383,7 @@ class _GmailWidgetState extends State<GmailWidget> {
             ),
           ),
           IconButton(
-            icon: const Icon(
+            icon: Icon(
               Icons.refresh_rounded,
               color: Color(0xFF1F1F1F), // Dark grey
             ),
@@ -1393,7 +1391,7 @@ class _GmailWidgetState extends State<GmailWidget> {
             tooltip: 'Refresh inbox',
           ),
           IconButton(
-            icon: const Icon(
+            icon: Icon(
               Icons.edit_outlined,
               color: Color(0xFF1F1F1F), // Dark grey
             ),
@@ -1419,20 +1417,20 @@ class _GmailWidgetState extends State<GmailWidget> {
                   : '';
 
               if (userGmailEmail.isEmpty) {
-                return const SizedBox.shrink();
+                return SizedBox.shrink();
               }
 
               return Padding(
-                padding: const EdgeInsets.only(right: 8),
+                padding: EdgeInsets.only(right: 8),
                 child: PopupMenuButton<String>(
-                  offset: const Offset(0, 50),
-                  color: const Color(0xFFF5F5F7),
+                  offset: Offset(0, 50),
+                  color: Color(0xFFF5F5F7),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(12),
                   ),
                   elevation: 8,
                   child: Container(
-                    padding: const EdgeInsets.all(4),
+                    padding: EdgeInsets.all(4),
                     decoration: BoxDecoration(
                       color: Colors.transparent,
                       borderRadius: BorderRadius.circular(20),
@@ -1451,7 +1449,7 @@ class _GmailWidgetState extends State<GmailWidget> {
                                   userGmailEmail.isNotEmpty
                                       ? userGmailEmail[0].toUpperCase()
                                       : 'G',
-                                  style: const TextStyle(
+                                  style: TextStyle(
                                     fontSize: 14,
                                     fontWeight: FontWeight.w600,
                                     color: Colors.white,
@@ -1459,8 +1457,8 @@ class _GmailWidgetState extends State<GmailWidget> {
                                 )
                               : null,
                         ),
-                        const SizedBox(width: 4),
-                        const Icon(
+                        SizedBox(width: 4),
+                        Icon(
                           Icons.arrow_drop_down_rounded,
                           size: 20,
                           color: Color(0xFF9CA3AF),
@@ -1488,7 +1486,7 @@ class _GmailWidgetState extends State<GmailWidget> {
                                         userGmailEmail.isNotEmpty
                                             ? userGmailEmail[0].toUpperCase()
                                             : 'G',
-                                        style: const TextStyle(
+                                        style: TextStyle(
                                           fontSize: 16,
                                           fontWeight: FontWeight.w600,
                                           color: Colors.white,
@@ -1496,7 +1494,7 @@ class _GmailWidgetState extends State<GmailWidget> {
                                       )
                                     : null,
                               ),
-                              const SizedBox(width: 12),
+                              SizedBox(width: 12),
                               Expanded(
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -1510,7 +1508,7 @@ class _GmailWidgetState extends State<GmailWidget> {
                                             .primaryText,
                                       ),
                                     ),
-                                    const SizedBox(height: 2),
+                                    SizedBox(height: 2),
                                     Text(
                                       userGmailEmail,
                                       style: TextStyle(
@@ -1529,7 +1527,7 @@ class _GmailWidgetState extends State<GmailWidget> {
                         ],
                       ),
                     ),
-                    const PopupMenuDivider(),
+                    PopupMenuDivider(),
                     PopupMenuItem<String>(
                       value: 'logout',
                       child: Row(
@@ -1539,7 +1537,7 @@ class _GmailWidgetState extends State<GmailWidget> {
                             size: 20,
                             color: FlutterFlowTheme.of(context).error,
                           ),
-                          const SizedBox(width: 12),
+                          SizedBox(width: 12),
                           Text(
                             'Disconnect Gmail',
                             style: TextStyle(
@@ -1591,7 +1589,7 @@ class _GmailWidgetState extends State<GmailWidget> {
   Widget _buildNotConnectedState() {
     return Center(
       child: Padding(
-        padding: const EdgeInsets.all(32),
+        padding: EdgeInsets.all(32),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
@@ -1601,7 +1599,7 @@ class _GmailWidgetState extends State<GmailWidget> {
               height: 120,
               fit: BoxFit.contain,
             ),
-            const SizedBox(height: 32),
+            SizedBox(height: 32),
             Text(
               'Gmail Not Connected',
               style: FlutterFlowTheme.of(context).headlineMedium.override(
@@ -1611,7 +1609,7 @@ class _GmailWidgetState extends State<GmailWidget> {
                     letterSpacing: 0,
                   ),
             ),
-            const SizedBox(height: 12),
+            SizedBox(height: 12),
             Text(
               'Connect your Gmail account to access and manage your emails directly from Lona',
               style: FlutterFlowTheme.of(context).bodyMedium.override(
@@ -1622,7 +1620,7 @@ class _GmailWidgetState extends State<GmailWidget> {
                   ),
               textAlign: TextAlign.center,
             ),
-            const SizedBox(height: 40),
+            SizedBox(height: 40),
             ElevatedButton.icon(
               onPressed: () async {
                 final success = await actions.gmailOAuthConnect(context);
@@ -1631,8 +1629,8 @@ class _GmailWidgetState extends State<GmailWidget> {
                   _loadEmails();
                 }
               },
-              icon: const Icon(Icons.email_outlined, size: 20),
-              label: const Text(
+              icon: Icon(Icons.email_outlined, size: 20),
+              label: Text(
                 'Connect Gmail',
                 style: TextStyle(
                   fontSize: 16,
@@ -1641,8 +1639,7 @@ class _GmailWidgetState extends State<GmailWidget> {
                 ),
               ),
               style: ElevatedButton.styleFrom(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
+                padding: EdgeInsets.symmetric(horizontal: 32, vertical: 16),
                 elevation: 2,
               ),
             ),
@@ -1663,7 +1660,7 @@ class _GmailWidgetState extends State<GmailWidget> {
               size: 80,
               color: FlutterFlowTheme.of(context).secondaryText,
             ),
-            const SizedBox(height: 24),
+            SizedBox(height: 24),
             Text(
               'Your inbox is empty',
               style: FlutterFlowTheme.of(context).headlineSmall.override(
@@ -1674,7 +1671,7 @@ class _GmailWidgetState extends State<GmailWidget> {
                     letterSpacing: 0,
                   ),
             ),
-            const SizedBox(height: 8),
+            SizedBox(height: 8),
             Text(
               'New emails will appear here',
               style: FlutterFlowTheme.of(context).bodyMedium.override(
@@ -1684,11 +1681,11 @@ class _GmailWidgetState extends State<GmailWidget> {
                     letterSpacing: 0,
                   ),
             ),
-            const SizedBox(height: 24),
+            SizedBox(height: 24),
             OutlinedButton.icon(
               onPressed: () => _loadEmails(refresh: true),
-              icon: const Icon(Icons.refresh_rounded, size: 18),
-              label: const Text(
+              icon: Icon(Icons.refresh_rounded, size: 18),
+              label: Text(
                 'Refresh',
                 style: TextStyle(
                   fontSize: 14,
@@ -1696,8 +1693,7 @@ class _GmailWidgetState extends State<GmailWidget> {
                 ),
               ),
               style: OutlinedButton.styleFrom(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                padding: EdgeInsets.symmetric(horizontal: 24, vertical: 12),
               ),
             ),
           ],
@@ -1724,7 +1720,7 @@ class _GmailWidgetState extends State<GmailWidget> {
               children: [
                 // Search bar
                 Container(
-                  padding: const EdgeInsets.all(16),
+                  padding: EdgeInsets.all(16),
                   color: Colors.white,
                   child: TextField(
                     controller: _searchController,
@@ -1736,18 +1732,18 @@ class _GmailWidgetState extends State<GmailWidget> {
                     decoration: InputDecoration(
                       hintText: 'Search emails...',
                       hintStyle: TextStyle(
-                        color: const Color(0xFF9AA0A6), // Light grey
+                        color: Color(0xFF9AA0A6), // Light grey
                         fontSize: 14,
                         fontFamily: _interFont,
                       ),
-                      prefixIcon: const Icon(
+                      prefixIcon: Icon(
                         Icons.search_rounded,
                         color: Color(0xFF9AA0A6), // Light grey
                         size: 20,
                       ),
                       suffixIcon: _searchController.text.isNotEmpty
                           ? IconButton(
-                              icon: const Icon(
+                              icon: Icon(
                                 Icons.clear_rounded,
                                 color: Color(0xFF9AA0A6),
                                 size: 20,
@@ -1762,34 +1758,34 @@ class _GmailWidgetState extends State<GmailWidget> {
                           : null,
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(8),
-                        borderSide: const BorderSide(
+                        borderSide: BorderSide(
                           color: Color(0xFFDADCE0), // Light grey border
                           width: 1,
                         ),
                       ),
                       enabledBorder: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(8),
-                        borderSide: const BorderSide(
+                        borderSide: BorderSide(
                           color: Color(0xFFDADCE0), // Light grey border
                           width: 1,
                         ),
                       ),
                       focusedBorder: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(8),
-                        borderSide: const BorderSide(
+                        borderSide: BorderSide(
                           color: Color(0xFFDADCE0), // Light grey border
                           width: 1,
                         ),
                       ),
                       filled: true,
                       fillColor: Colors.white,
-                      contentPadding: const EdgeInsets.symmetric(
+                      contentPadding: EdgeInsets.symmetric(
                         horizontal: 16,
                         vertical: 12,
                       ),
                     ),
                     style: TextStyle(
-                      color: const Color(0xFF1F1F1F), // Dark grey
+                      color: Color(0xFF1F1F1F), // Dark grey
                       fontSize: 14,
                       fontFamily: _interFont,
                     ),
@@ -1797,21 +1793,19 @@ class _GmailWidgetState extends State<GmailWidget> {
                 ),
                 // Filter buttons
                 Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                   color: Colors.white,
                   child: Row(
                     children: [
                       _buildFilterButton('All'),
-                      const SizedBox(width: 16),
+                      SizedBox(width: 16),
                       _buildFilterButton('Unread'),
-                      const SizedBox(width: 16),
+                      SizedBox(width: 16),
                       _buildFilterButton('Read'),
                     ],
                   ),
                 ),
-                const Divider(
-                    height: 1, thickness: 1, color: Color(0xFFE8EAED)),
+                Divider(height: 1, thickness: 1, color: Color(0xFFE8EAED)),
                 // Email list
                 Expanded(
                   child: Builder(
@@ -1834,7 +1828,7 @@ class _GmailWidgetState extends State<GmailWidget> {
                                 color:
                                     FlutterFlowTheme.of(context).secondaryText,
                               ),
-                              const SizedBox(height: 16),
+                              SizedBox(height: 16),
                               Text(
                                 'No emails found',
                                 style: FlutterFlowTheme.of(context)
@@ -1848,7 +1842,7 @@ class _GmailWidgetState extends State<GmailWidget> {
                                       letterSpacing: 0,
                                     ),
                               ),
-                              const SizedBox(height: 8),
+                              SizedBox(height: 8),
                               Text(
                                 'Try adjusting your search terms',
                                 style: FlutterFlowTheme.of(context)
@@ -1881,7 +1875,7 @@ class _GmailWidgetState extends State<GmailWidget> {
                               }
                               return Center(
                                 child: Padding(
-                                  padding: const EdgeInsets.all(16),
+                                  padding: EdgeInsets.all(16),
                                   child: CircularProgressIndicator(
                                     strokeWidth: 2,
                                     valueColor: AlwaysStoppedAnimation<Color>(
@@ -1906,19 +1900,19 @@ class _GmailWidgetState extends State<GmailWidget> {
                                 _loadEmailDetail(emailId);
                               },
                               child: Container(
-                                padding: const EdgeInsets.symmetric(
+                                padding: EdgeInsets.symmetric(
                                   horizontal: 16,
                                   vertical: 16,
                                 ),
                                 decoration: BoxDecoration(
                                   color: isSelected
-                                      ? const Color(
+                                      ? Color(
                                           0xFFF8F9FA) // Light grey background when selected
                                       : isUnread
-                                          ? const Color(
+                                          ? Color(
                                               0xFFFAFAFA) // Very light grey for unread
                                           : Colors.white,
-                                  border: const Border(
+                                  border: Border(
                                     bottom: BorderSide(
                                       color: Color(
                                           0xFFE8EAED), // Light grey divider
@@ -1934,16 +1928,16 @@ class _GmailWidgetState extends State<GmailWidget> {
                                       Container(
                                         width: 8,
                                         height: 8,
-                                        margin: const EdgeInsets.only(
-                                            right: 8, top: 6),
-                                        decoration: const BoxDecoration(
+                                        margin:
+                                            EdgeInsets.only(right: 8, top: 6),
+                                        decoration: BoxDecoration(
                                           color: Color(
                                               0xFF1F1F1F), // Dark grey dot for unread (no blue)
                                           shape: BoxShape.circle,
                                         ),
                                       )
                                     else
-                                      const SizedBox(width: 8),
+                                      SizedBox(width: 8),
                                     // Avatar
                                     CircleAvatar(
                                       radius: 20,
@@ -1960,7 +1954,7 @@ class _GmailWidgetState extends State<GmailWidget> {
                                         ),
                                       ),
                                     ),
-                                    const SizedBox(width: 12),
+                                    SizedBox(width: 12),
                                     // Email content
                                     Expanded(
                                       child: Column(
@@ -1989,9 +1983,9 @@ class _GmailWidgetState extends State<GmailWidget> {
                                                             : FontWeight
                                                                 .w500, // Lighter for read
                                                         color: isUnread
-                                                            ? const Color(
+                                                            ? Color(
                                                                 0xFF1F1F1F) // Dark grey for unread
-                                                            : const Color(
+                                                            : Color(
                                                                 0xFF5F6368), // Lighter grey for read
                                                         letterSpacing: 0,
                                                       ),
@@ -1999,7 +1993,7 @@ class _GmailWidgetState extends State<GmailWidget> {
                                                       overflow:
                                                           TextOverflow.ellipsis,
                                                     ),
-                                                    const SizedBox(height: 4),
+                                                    SizedBox(height: 4),
                                                     // Subject
                                                     Text(
                                                       email['subject'] ??
@@ -2013,9 +2007,9 @@ class _GmailWidgetState extends State<GmailWidget> {
                                                             : FontWeight
                                                                 .w500, // Lighter for read
                                                         color: isUnread
-                                                            ? const Color(
+                                                            ? Color(
                                                                 0xFF1F1F1F) // Dark grey for unread
-                                                            : const Color(
+                                                            : Color(
                                                                 0xFF5F6368), // Lighter grey for read
                                                         letterSpacing: 0,
                                                       ),
@@ -2023,26 +2017,24 @@ class _GmailWidgetState extends State<GmailWidget> {
                                                       overflow:
                                                           TextOverflow.ellipsis,
                                                     ),
-                                                    const SizedBox(height: 4),
+                                                    SizedBox(height: 4),
                                                     // Preview text with attachment icon
                                                     Row(
                                                       children: [
                                                         if (hasAttachment) ...[
-                                                          const Icon(
+                                                          Icon(
                                                             Icons.attach_file,
                                                             size: 14,
                                                             color: Color(
                                                                 0xFF9AA0A6), // Light grey
                                                           ),
-                                                          const SizedBox(
-                                                              width: 4),
+                                                          SizedBox(width: 4),
                                                         ],
                                                         Expanded(
                                                           child: Text(
                                                             email['snippet'] ??
                                                                 '',
-                                                            style:
-                                                                const TextStyle(
+                                                            style: TextStyle(
                                                               fontFamily:
                                                                   'Inter',
                                                               fontSize: 13,
@@ -2077,12 +2069,12 @@ class _GmailWidgetState extends State<GmailWidget> {
                                                       fontSize: 13,
                                                       fontWeight:
                                                           FontWeight.normal,
-                                                      color: const Color(
+                                                      color: Color(
                                                           0xFF5F6368), // Lighter grey
                                                       letterSpacing: 0,
                                                     ),
                                                   ),
-                                                  const SizedBox(height: 8),
+                                                  SizedBox(height: 8),
                                                   GestureDetector(
                                                     onTap: () {
                                                       // TODO: Implement star toggle via Gmail API
@@ -2097,9 +2089,9 @@ class _GmailWidgetState extends State<GmailWidget> {
                                                               .star_border_rounded,
                                                       size: 20,
                                                       color: isStarred
-                                                          ? const Color(
+                                                          ? Color(
                                                               0xFFF4B400) // Yellow (no blue)
-                                                          : const Color(
+                                                          : Color(
                                                               0xFF9AA0A6), // Light grey
                                                     ),
                                                   ),
@@ -2140,7 +2132,7 @@ class _GmailWidgetState extends State<GmailWidget> {
                             size: 80,
                             color: FlutterFlowTheme.of(context).secondaryText,
                           ),
-                          const SizedBox(height: 24),
+                          SizedBox(height: 24),
                           Text(
                             'Select an email to view',
                             style: FlutterFlowTheme.of(context)
@@ -2154,7 +2146,7 @@ class _GmailWidgetState extends State<GmailWidget> {
                                   letterSpacing: 0,
                                 ),
                           ),
-                          const SizedBox(height: 8),
+                          SizedBox(height: 8),
                           Text(
                             'Click on any email from the list to read its content',
                             style: FlutterFlowTheme.of(context)
@@ -2184,19 +2176,19 @@ class _GmailWidgetState extends State<GmailWidget> {
     final email = _selectedEmail!;
 
     return Container(
-      padding: const EdgeInsets.all(24),
+      padding: EdgeInsets.all(24),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisSize: MainAxisSize.max,
         children: [
           // Email Header Section - Matching Design
           _buildEmailHeader(email),
-          const SizedBox(height: 24),
+          SizedBox(height: 24),
           // Email Content Section - Matching Design
           Expanded(
             child: SingleChildScrollView(
               child: ConstrainedBox(
-                constraints: const BoxConstraints(
+                constraints: BoxConstraints(
                   minHeight: 0,
                 ),
                 child: _buildEmailContent(email),
@@ -2205,7 +2197,7 @@ class _GmailWidgetState extends State<GmailWidget> {
           ),
           // Reply and Forward buttons at bottom left
           Padding(
-            padding: const EdgeInsets.only(top: 16),
+            padding: EdgeInsets.only(top: 16),
             child: Row(
               children: [
                 _buildActionButton(
@@ -2215,7 +2207,7 @@ class _GmailWidgetState extends State<GmailWidget> {
                     _showReplyDialog(email);
                   },
                 ),
-                const SizedBox(width: 8),
+                SizedBox(width: 8),
                 _buildActionButton(
                   icon: Icons.arrow_forward_rounded,
                   label: 'Forward',
@@ -2249,8 +2241,8 @@ class _GmailWidgetState extends State<GmailWidget> {
         children: [
           // Date Navigation Header - Matching Gmail style
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            decoration: const BoxDecoration(
+            padding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            decoration: BoxDecoration(
               color: Colors.white,
               border: Border(
                 bottom: BorderSide(
@@ -2262,14 +2254,14 @@ class _GmailWidgetState extends State<GmailWidget> {
             child: Row(
               children: [
                 IconButton(
-                  icon: const Icon(
+                  icon: Icon(
                     Icons.chevron_left_rounded,
                     color: Color(0xFF1F1F1F),
                   ),
                   onPressed: () {
                     setState(() {
-                      _selectedCalendarDate = _selectedCalendarDate
-                          .subtract(const Duration(days: 1));
+                      _selectedCalendarDate =
+                          _selectedCalendarDate.subtract(Duration(days: 1));
                     });
                     _loadCalendarEvents(
                         refresh: true, forDate: _selectedCalendarDate);
@@ -2289,23 +2281,23 @@ class _GmailWidgetState extends State<GmailWidget> {
                   ),
                 ),
                 IconButton(
-                  icon: const Icon(
+                  icon: Icon(
                     Icons.chevron_right_rounded,
                     color: Color(0xFF1F1F1F),
                   ),
                   onPressed: () {
                     setState(() {
                       _selectedCalendarDate =
-                          _selectedCalendarDate.add(const Duration(days: 1));
+                          _selectedCalendarDate.add(Duration(days: 1));
                     });
                     _loadCalendarEvents(
                         refresh: true, forDate: _selectedCalendarDate);
                   },
                   tooltip: 'Next day',
                 ),
-                const SizedBox(width: 8),
+                SizedBox(width: 8),
                 IconButton(
-                  icon: const Icon(
+                  icon: Icon(
                     Icons.refresh_rounded,
                     color: Color(0xFF1F1F1F),
                   ),
@@ -2323,8 +2315,8 @@ class _GmailWidgetState extends State<GmailWidget> {
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        const CircularProgressIndicator(),
-                        const SizedBox(height: 16),
+                        CircularProgressIndicator(),
+                        SizedBox(height: 16),
                         Text(
                           'Loading events...',
                           style: FlutterFlowTheme.of(context)
@@ -2349,7 +2341,7 @@ class _GmailWidgetState extends State<GmailWidget> {
                               size: 64,
                               color: FlutterFlowTheme.of(context).secondaryText,
                             ),
-                            const SizedBox(height: 16),
+                            SizedBox(height: 16),
                             Text(
                               'No events',
                               style: FlutterFlowTheme.of(context)
@@ -2362,7 +2354,7 @@ class _GmailWidgetState extends State<GmailWidget> {
                                         .primaryText,
                                   ),
                             ),
-                            const SizedBox(height: 8),
+                            SizedBox(height: 8),
                             Text(
                               'You have no events scheduled for this day.',
                               style: FlutterFlowTheme.of(context)
@@ -2382,8 +2374,8 @@ class _GmailWidgetState extends State<GmailWidget> {
                         onRefresh: () => _loadCalendarEvents(
                             refresh: true, forDate: _selectedCalendarDate),
                         child: ListView.builder(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 16, vertical: 8),
+                          padding:
+                              EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                           itemCount: dayEvents.length,
                           itemBuilder: (context, index) {
                             final event = dayEvents[index];
@@ -2494,8 +2486,8 @@ class _GmailWidgetState extends State<GmailWidget> {
             }
           : null,
       child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 0),
-        decoration: const BoxDecoration(
+        padding: EdgeInsets.symmetric(vertical: 12, horizontal: 0),
+        decoration: BoxDecoration(
           border: Border(
             bottom: BorderSide(
               color: Color(0xFFE8EAED),
@@ -2509,7 +2501,7 @@ class _GmailWidgetState extends State<GmailWidget> {
             // Time column - matching Gmail style
             Container(
               width: 80,
-              padding: const EdgeInsets.only(top: 2),
+              padding: EdgeInsets.only(top: 2),
               child: Text(
                 timeStr,
                 style: FlutterFlowTheme.of(context).bodySmall.override(
@@ -2520,7 +2512,7 @@ class _GmailWidgetState extends State<GmailWidget> {
                     ),
               ),
             ),
-            const SizedBox(width: 16),
+            SizedBox(width: 16),
             // Event content
             Expanded(
               child: Column(
@@ -2536,7 +2528,7 @@ class _GmailWidgetState extends State<GmailWidget> {
                         ),
                   ),
                   if (meetingLink != null && meetingLink.isNotEmpty) ...[
-                    const SizedBox(height: 6),
+                    SizedBox(height: 6),
                     InkWell(
                       onTap: () async {
                         final uri = Uri.parse(meetingLink!);
@@ -2547,12 +2539,12 @@ class _GmailWidgetState extends State<GmailWidget> {
                       },
                       child: Row(
                         children: [
-                          const Icon(
+                          Icon(
                             Icons.videocam_rounded,
                             size: 14,
                             color: Color(0xFF1A73E8),
                           ),
-                          const SizedBox(width: 4),
+                          SizedBox(width: 4),
                           Expanded(
                             child: Text(
                               'Join with Google Meet',
@@ -2561,7 +2553,7 @@ class _GmailWidgetState extends State<GmailWidget> {
                                   .override(
                                     fontFamily: _interFont,
                                     fontSize: 13,
-                                    color: const Color(0xFF1A73E8),
+                                    color: Color(0xFF1A73E8),
                                     fontWeight: FontWeight.w500,
                                   ),
                               maxLines: 1,
@@ -2573,7 +2565,7 @@ class _GmailWidgetState extends State<GmailWidget> {
                     ),
                   ],
                   if (location.isNotEmpty) ...[
-                    const SizedBox(height: 4),
+                    SizedBox(height: 4),
                     Row(
                       children: [
                         Icon(
@@ -2581,7 +2573,7 @@ class _GmailWidgetState extends State<GmailWidget> {
                           size: 14,
                           color: FlutterFlowTheme.of(context).secondaryText,
                         ),
-                        const SizedBox(width: 4),
+                        SizedBox(width: 4),
                         Expanded(
                           child: Text(
                             location,
@@ -2600,7 +2592,7 @@ class _GmailWidgetState extends State<GmailWidget> {
                     ),
                   ],
                   if (description.isNotEmpty) ...[
-                    const SizedBox(height: 4),
+                    SizedBox(height: 4),
                     Text(
                       description.length > 100
                           ? '${description.substring(0, 100)}...'
@@ -2666,11 +2658,11 @@ class _GmailWidgetState extends State<GmailWidget> {
     }
 
     return Card(
-      margin: const EdgeInsets.only(bottom: 12),
+      margin: EdgeInsets.only(bottom: 12),
       elevation: 0,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(8),
-        side: const BorderSide(
+        side: BorderSide(
           color: Color(0xFFE8EAED),
           width: 1,
         ),
@@ -2686,7 +2678,7 @@ class _GmailWidgetState extends State<GmailWidget> {
             : null,
         borderRadius: BorderRadius.circular(8),
         child: Padding(
-          padding: const EdgeInsets.all(16),
+          padding: EdgeInsets.all(16),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -2697,11 +2689,11 @@ class _GmailWidgetState extends State<GmailWidget> {
                     width: 4,
                     height: 48,
                     decoration: BoxDecoration(
-                      color: const Color(0xFF1A73E8),
+                      color: Color(0xFF1A73E8),
                       borderRadius: BorderRadius.circular(2),
                     ),
                   ),
-                  const SizedBox(width: 12),
+                  SizedBox(width: 12),
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -2718,7 +2710,7 @@ class _GmailWidgetState extends State<GmailWidget> {
                               ),
                         ),
                         if (dateStr.isNotEmpty || startTime.isNotEmpty) ...[
-                          const SizedBox(height: 8),
+                          SizedBox(height: 8),
                           Row(
                             children: [
                               Icon(
@@ -2727,7 +2719,7 @@ class _GmailWidgetState extends State<GmailWidget> {
                                 color:
                                     FlutterFlowTheme.of(context).secondaryText,
                               ),
-                              const SizedBox(width: 6),
+                              SizedBox(width: 6),
                               Text(
                                 dateStr.isNotEmpty
                                     ? '$dateStr${startTime != 'All day' ? ' • $startTime' : ''}${endTime.isNotEmpty ? ' - $endTime' : ''}'
@@ -2745,7 +2737,7 @@ class _GmailWidgetState extends State<GmailWidget> {
                           ),
                         ],
                         if (location.isNotEmpty) ...[
-                          const SizedBox(height: 6),
+                          SizedBox(height: 6),
                           Row(
                             children: [
                               Icon(
@@ -2754,7 +2746,7 @@ class _GmailWidgetState extends State<GmailWidget> {
                                 color:
                                     FlutterFlowTheme.of(context).secondaryText,
                               ),
-                              const SizedBox(width: 6),
+                              SizedBox(width: 6),
                               Expanded(
                                 child: Text(
                                   location,
@@ -2772,7 +2764,7 @@ class _GmailWidgetState extends State<GmailWidget> {
                           ),
                         ],
                         if (description.isNotEmpty) ...[
-                          const SizedBox(height: 8),
+                          SizedBox(height: 8),
                           Text(
                             description.length > 150
                                 ? '${description.substring(0, 150)}...'
@@ -2828,7 +2820,7 @@ class _GmailWidgetState extends State<GmailWidget> {
                       fontFamily: _interFont,
                       fontSize: 22,
                       fontWeight: FontWeight.w600,
-                      color: const Color(0xFF1F1F1F), // Dark grey
+                      color: Color(0xFF1F1F1F), // Dark grey
                       letterSpacing: 0,
                       height: 1.3,
                     ),
@@ -2849,9 +2841,8 @@ class _GmailWidgetState extends State<GmailWidget> {
                             ? Icons.star_rounded
                             : Icons.star_border_rounded,
                         color: isStarred
-                            ? const Color(0xFFF4B400) // Yellow when starred
-                            : const Color(
-                                0xFF5F6368), // Dark grey when not starred
+                            ? Color(0xFFF4B400) // Yellow when starred
+                            : Color(0xFF5F6368), // Dark grey when not starred
                       ),
                       onPressed: () {
                         // TODO: Implement star toggle via Gmail API
@@ -2859,13 +2850,13 @@ class _GmailWidgetState extends State<GmailWidget> {
                         _loadEmails(refresh: true);
                       },
                       padding: EdgeInsets.zero,
-                      constraints: const BoxConstraints(),
+                      constraints: BoxConstraints(),
                     );
                   },
                 ),
-                const SizedBox(width: 8),
+                SizedBox(width: 8),
                 IconButton(
-                  icon: const Icon(
+                  icon: Icon(
                     Icons.more_vert_rounded,
                     color: Color(0xFF5F6368), // Dark grey
                   ),
@@ -2873,13 +2864,13 @@ class _GmailWidgetState extends State<GmailWidget> {
                     // TODO: Implement menu
                   },
                   padding: EdgeInsets.zero,
-                  constraints: const BoxConstraints(),
+                  constraints: BoxConstraints(),
                 ),
               ],
             ),
           ],
         ),
-        const SizedBox(height: 20),
+        SizedBox(height: 20),
         // Sender Information Row
         Row(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -2898,7 +2889,7 @@ class _GmailWidgetState extends State<GmailWidget> {
                 ),
               ),
             ),
-            const SizedBox(width: 12),
+            SizedBox(width: 12),
             // Sender Details
             Expanded(
               child: Column(
@@ -2910,22 +2901,22 @@ class _GmailWidgetState extends State<GmailWidget> {
                       fontFamily: _interFont,
                       fontSize: 16,
                       fontWeight: FontWeight.w600,
-                      color: const Color(0xFF1F1F1F), // Dark grey
+                      color: Color(0xFF1F1F1F), // Dark grey
                       letterSpacing: 0,
                     ),
                   ),
-                  const SizedBox(height: 4),
+                  SizedBox(height: 4),
                   Text(
                     senderEmail,
                     style: TextStyle(
                       fontFamily: _interFont,
                       fontSize: 15,
                       fontWeight: FontWeight.normal,
-                      color: const Color(0xFF5F6368), // Lighter grey
+                      color: Color(0xFF5F6368), // Lighter grey
                       letterSpacing: 0,
                     ),
                   ),
-                  const SizedBox(height: 8),
+                  SizedBox(height: 8),
                   // To and CC
                   if (email['to'] != null && email['to'].toString().isNotEmpty)
                     Text(
@@ -2934,20 +2925,20 @@ class _GmailWidgetState extends State<GmailWidget> {
                         fontFamily: _interFont,
                         fontSize: 14,
                         fontWeight: FontWeight.normal,
-                        color: const Color(0xFF5F6368), // Lighter grey
+                        color: Color(0xFF5F6368), // Lighter grey
                         letterSpacing: 0,
                       ),
                     ),
                   if (email['cc'] != null &&
                       email['cc'].toString().isNotEmpty) ...[
-                    const SizedBox(height: 2),
+                    SizedBox(height: 2),
                     Text(
                       'CC: ${email['cc']}',
                       style: TextStyle(
                         fontFamily: _interFont,
                         fontSize: 14,
                         fontWeight: FontWeight.normal,
-                        color: const Color(0xFF5F6368), // Lighter grey
+                        color: Color(0xFF5F6368), // Lighter grey
                         letterSpacing: 0,
                       ),
                     ),
@@ -2962,15 +2953,15 @@ class _GmailWidgetState extends State<GmailWidget> {
                 fontFamily: _interFont,
                 fontSize: 15,
                 fontWeight: FontWeight.normal,
-                color: const Color(0xFF5F6368), // Lighter grey
+                color: Color(0xFF5F6368), // Lighter grey
                 letterSpacing: 0,
               ),
             ),
           ],
         ),
         // Separator line
-        const SizedBox(height: 16),
-        const Divider(
+        SizedBox(height: 16),
+        Divider(
           height: 1,
           thickness: 2,
           color: Color(0xFF000000), // Black
@@ -2986,7 +2977,7 @@ class _GmailWidgetState extends State<GmailWidget> {
     bool isWider = false,
   }) {
     return Material(
-      color: const Color(0xFFF1F3F4), // Light grey background
+      color: Color(0xFFF1F3F4), // Light grey background
       borderRadius: BorderRadius.circular(6),
       child: InkWell(
         onTap: onPressed,
@@ -3002,16 +2993,16 @@ class _GmailWidgetState extends State<GmailWidget> {
               Icon(
                 icon,
                 size: 16,
-                color: const Color(0xFF1F1F1F), // Dark grey
+                color: Color(0xFF1F1F1F), // Dark grey
               ),
-              const SizedBox(width: 6),
+              SizedBox(width: 6),
               Text(
                 label,
                 style: TextStyle(
                   fontFamily: _interFont,
                   fontSize: 14,
                   fontWeight: FontWeight.normal,
-                  color: const Color(0xFF1F1F1F), // Dark grey
+                  color: Color(0xFF1F1F1F), // Dark grey
                   letterSpacing: 0,
                 ),
               ),
@@ -3029,7 +3020,7 @@ class _GmailWidgetState extends State<GmailWidget> {
       children: [
         // Email Body - Clean white background
         _buildEmailBody(email),
-        const SizedBox(height: 24),
+        SizedBox(height: 24),
         // Attachments
         if (email['attachments'] != null &&
             (email['attachments'] as List).isNotEmpty)
@@ -3127,7 +3118,7 @@ class _GmailWidgetState extends State<GmailWidget> {
 
     if (body.isEmpty && snippet.isEmpty) {
       return Padding(
-        padding: const EdgeInsets.all(16),
+        padding: EdgeInsets.all(16),
         child: Text(
           'No content available',
           style: TextStyle(
@@ -3165,7 +3156,7 @@ class _GmailWidgetState extends State<GmailWidget> {
           fontFamily: _interFont,
           fontSize: 14,
           height: 1.6,
-          color: const Color(0xFF1F1F1F), // Dark grey
+          color: Color(0xFF1F1F1F), // Dark grey
           letterSpacing: 0,
           fontWeight: FontWeight.normal,
         ),
@@ -3178,7 +3169,7 @@ class _GmailWidgetState extends State<GmailWidget> {
           fontFamily: _interFont,
           fontSize: 14,
           height: 1.6,
-          color: const Color(0xFF1F1F1F), // Dark grey
+          color: Color(0xFF1F1F1F), // Dark grey
           letterSpacing: 0,
           fontWeight: FontWeight.normal,
         ),
@@ -3200,7 +3191,7 @@ class _GmailWidgetState extends State<GmailWidget> {
             : screenWidth - 80; // Fallback with safe margin
 
         return Padding(
-          padding: const EdgeInsets.all(16),
+          padding: EdgeInsets.all(16),
           child: ConstrainedBox(
             constraints: BoxConstraints(
               maxWidth: maxWidth > 0 && maxWidth.isFinite ? maxWidth : 600,
@@ -3213,7 +3204,7 @@ class _GmailWidgetState extends State<GmailWidget> {
                 fontFamily: _interFont,
                 fontSize: 14,
                 height: 1.6,
-                color: const Color(0xFF1F1F1F),
+                color: Color(0xFF1F1F1F),
               ),
               onTapUrl: (url) async {
                 if (url.startsWith('http://') ||
@@ -3252,7 +3243,7 @@ class _GmailWidgetState extends State<GmailWidget> {
   Widget _buildAttachmentsSection(Map<String, dynamic> email) {
     final attachmentsRaw = email['attachments'];
     if (attachmentsRaw == null) {
-      return const SizedBox.shrink();
+      return SizedBox.shrink();
     }
 
     // Convert attachments list properly
@@ -3269,14 +3260,14 @@ class _GmailWidgetState extends State<GmailWidget> {
     }
 
     if (attachments.isEmpty) {
-      return const SizedBox.shrink();
+      return SizedBox.shrink();
     }
 
     final messageId = email['id']?.toString() ?? '';
 
     // Display attachment cards
     return Padding(
-      padding: const EdgeInsets.only(top: 16),
+      padding: EdgeInsets.only(top: 16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -3286,18 +3277,18 @@ class _GmailWidgetState extends State<GmailWidget> {
               fontFamily: _interFont,
               fontSize: 14,
               fontWeight: FontWeight.w500,
-              color: const Color(0xFF1F1F1F), // Dark grey
+              color: Color(0xFF1F1F1F), // Dark grey
               letterSpacing: 0,
             ),
           ),
-          const SizedBox(height: 12),
+          SizedBox(height: 12),
           ...attachments.map((attachment) {
             if (attachment is Map) {
               return _buildAttachmentCard(
                   Map<String, dynamic>.from(attachment), messageId);
             }
-            return const SizedBox.shrink();
-          }),
+            return SizedBox.shrink();
+          }).toList(),
         ],
       ),
     );
@@ -3327,7 +3318,7 @@ class _GmailWidgetState extends State<GmailWidget> {
       iconColor = Colors.red;
     } else if (mimeType.startsWith('image/')) {
       fileIcon = Icons.image_rounded;
-      iconColor = const Color(0xFF5F6368); // Dark grey (no blue)
+      iconColor = Color(0xFF5F6368); // Dark grey (no blue)
     } else if (mimeType.startsWith('video/')) {
       fileIcon = Icons.video_file_rounded;
       iconColor = Colors.purple;
@@ -3348,8 +3339,8 @@ class _GmailWidgetState extends State<GmailWidget> {
     }
 
     return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(16),
+      margin: EdgeInsets.only(bottom: 12),
+      padding: EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: FlutterFlowTheme.of(context).secondaryBackground,
         borderRadius: BorderRadius.circular(12),
@@ -3361,7 +3352,7 @@ class _GmailWidgetState extends State<GmailWidget> {
       child: Row(
         children: [
           Container(
-            padding: const EdgeInsets.all(12),
+            padding: EdgeInsets.all(12),
             decoration: BoxDecoration(
               color: iconColor.withOpacity(0.1),
               borderRadius: BorderRadius.circular(8),
@@ -3372,7 +3363,7 @@ class _GmailWidgetState extends State<GmailWidget> {
               size: 24,
             ),
           ),
-          const SizedBox(width: 16),
+          SizedBox(width: 16),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -3390,7 +3381,7 @@ class _GmailWidgetState extends State<GmailWidget> {
                   overflow: TextOverflow.ellipsis,
                 ),
                 if (sizeText.isNotEmpty) ...[
-                  const SizedBox(height: 4),
+                  SizedBox(height: 4),
                   Text(
                     sizeText,
                     style: FlutterFlowTheme.of(context).bodySmall.override(
@@ -3404,17 +3395,17 @@ class _GmailWidgetState extends State<GmailWidget> {
               ],
             ),
           ),
-          const SizedBox(width: 8),
+          SizedBox(width: 8),
           if (attachmentId != null && attachmentId.isNotEmpty) ...[
             if (isPdf)
               IconButton(
-                icon: const Icon(Icons.preview_rounded),
+                icon: Icon(Icons.preview_rounded),
                 onPressed: () => _previewPdf(messageId, attachmentId, filename),
                 tooltip: 'Preview PDF',
                 color: FlutterFlowTheme.of(context).primary,
               ),
             IconButton(
-              icon: const Icon(Icons.download_rounded),
+              icon: Icon(Icons.download_rounded),
               onPressed: () => _downloadAttachment(
                 messageId,
                 attachmentId,
@@ -3474,7 +3465,7 @@ class _GmailWidgetState extends State<GmailWidget> {
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
                 content: Text('File saved to: ${file.path}'),
-                duration: const Duration(seconds: 3),
+                duration: Duration(seconds: 3),
               ),
             );
           }
@@ -3502,7 +3493,7 @@ class _GmailWidgetState extends State<GmailWidget> {
       showDialog(
         context: context,
         barrierDismissible: false,
-        builder: (context) => const _DocumentLoadingDialog(
+        builder: (context) => _DocumentLoadingDialog(
           message: 'Loading PDF preview...',
         ),
       );
@@ -3533,7 +3524,7 @@ class _GmailWidgetState extends State<GmailWidget> {
             context: context,
             builder: (context) => Dialog(
               backgroundColor: Colors.transparent,
-              insetPadding: const EdgeInsets.all(16),
+              insetPadding: EdgeInsets.all(16),
               child: Container(
                 height: MediaQuery.of(context).size.height * 0.9,
                 decoration: BoxDecoration(
@@ -3544,7 +3535,7 @@ class _GmailWidgetState extends State<GmailWidget> {
                   children: [
                     // Header
                     Container(
-                      padding: const EdgeInsets.all(16),
+                      padding: EdgeInsets.all(16),
                       decoration: BoxDecoration(
                         border: Border(
                           bottom: BorderSide(
@@ -3570,7 +3561,7 @@ class _GmailWidgetState extends State<GmailWidget> {
                             ),
                           ),
                           IconButton(
-                            icon: const Icon(Icons.close_rounded),
+                            icon: Icon(Icons.close_rounded),
                             onPressed: () => Navigator.of(context).pop(),
                           ),
                         ],
@@ -3583,11 +3574,10 @@ class _GmailWidgetState extends State<GmailWidget> {
                         builder: (context, snapshot) {
                           if (snapshot.connectionState ==
                               ConnectionState.waiting) {
-                            return const Center(
-                                child: CircularProgressIndicator());
+                            return Center(child: CircularProgressIndicator());
                           }
                           if (snapshot.hasError || !snapshot.hasData) {
-                            return const Center(
+                            return Center(
                               child: Column(
                                 mainAxisAlignment: MainAxisAlignment.center,
                                 children: [
@@ -3809,7 +3799,7 @@ class _GmailWidgetState extends State<GmailWidget> {
       if (mounted) {
         if (success) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
+            SnackBar(
               content: Row(
                 children: [
                   Icon(Icons.check_circle, color: Colors.white),
@@ -3874,7 +3864,7 @@ class _GmailWidgetState extends State<GmailWidget> {
       showDialog(
         context: context,
         barrierDismissible: false,
-        builder: (context) => const _EmailSendingDialog(
+        builder: (context) => _EmailSendingDialog(
           message: 'Sending email...',
         ),
       );
@@ -3896,8 +3886,8 @@ class _GmailWidgetState extends State<GmailWidget> {
       // (uploads typically complete quickly, then email sending happens)
       if (attachments.isNotEmpty && messageNotifier != null) {
         final notifier = messageNotifier;
-        Future.delayed(const Duration(milliseconds: 800), () {
-          if (mounted) {
+        Future.delayed(Duration(milliseconds: 800), () {
+          if (mounted && notifier != null) {
             notifier.value = 'Sending email...';
           }
         });
@@ -3924,7 +3914,7 @@ class _GmailWidgetState extends State<GmailWidget> {
 
           // Show success snackbar only
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
+            SnackBar(
               content: Row(
                 children: [
                   Icon(Icons.check_circle, color: Colors.white),
@@ -3970,7 +3960,7 @@ class _GmailWidgetState extends State<GmailWidget> {
   Widget _buildLoadingExperience() {
     return TweenAnimationBuilder<double>(
       tween: Tween(begin: 0.0, end: 1.0),
-      duration: const Duration(milliseconds: 1200),
+      duration: Duration(milliseconds: 1200),
       curve: Curves.easeInOut,
       builder: (context, value, child) {
         return Container(
@@ -3983,10 +3973,10 @@ class _GmailWidgetState extends State<GmailWidget> {
               children: [
                 // Pulsing Gmail Icon
                 _PulsingGmailIcon(),
-                const SizedBox(height: 40),
+                SizedBox(height: 40),
                 // Animated Loading Text
                 _AnimatedLoadingText(),
-                const SizedBox(height: 40),
+                SizedBox(height: 40),
                 // Shimmer Email Cards
                 ...List.generate(
                     3,
@@ -4035,7 +4025,7 @@ class _ComposeEmailDialogState extends State<_ComposeEmailDialog> {
   bool _showCc = false;
   bool _isBold = false;
   bool _isItalic = false;
-  final List<PlatformFile> _attachments = [];
+  List<PlatformFile> _attachments = [];
 
   String get _interFont =>
       'Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif';
@@ -4109,8 +4099,8 @@ class _ComposeEmailDialogState extends State<_ComposeEmailDialog> {
           children: [
             // Header
             Container(
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-              decoration: const BoxDecoration(
+              padding: EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+              decoration: BoxDecoration(
                 border: Border(
                   bottom: BorderSide(color: Color(0xFFE8EAED), width: 1),
                 ),
@@ -4123,16 +4113,16 @@ class _ComposeEmailDialogState extends State<_ComposeEmailDialog> {
                       fontFamily: _interFont,
                       fontSize: 18,
                       fontWeight: FontWeight.w600,
-                      color: const Color(0xFF1F1F1F),
+                      color: Color(0xFF1F1F1F),
                     ),
                   ),
-                  const Spacer(),
+                  Spacer(),
                   IconButton(
-                    icon: const Icon(Icons.close_rounded, size: 20),
-                    color: const Color(0xFF5F6368),
+                    icon: Icon(Icons.close_rounded, size: 20),
+                    color: Color(0xFF5F6368),
                     onPressed: widget.onDiscard,
                     padding: EdgeInsets.zero,
-                    constraints: const BoxConstraints(),
+                    constraints: BoxConstraints(),
                   ),
                 ],
               ),
@@ -4140,7 +4130,7 @@ class _ComposeEmailDialogState extends State<_ComposeEmailDialog> {
             // Content
             Expanded(
               child: SingleChildScrollView(
-                padding: const EdgeInsets.all(20),
+                padding: EdgeInsets.all(20),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -4157,32 +4147,32 @@ class _ComposeEmailDialogState extends State<_ComposeEmailDialog> {
                           hintStyle: TextStyle(
                             fontFamily: _interFont,
                             fontSize: 14,
-                            color: const Color(0xFF9AA0A6),
+                            color: Color(0xFF9AA0A6),
                           ),
                           border: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(4),
                             borderSide: BorderSide(
                               color: _toFocusNode.hasFocus
-                                  ? const Color(0xFF1A73E8) // Blue when focused
-                                  : const Color(0xFFDADCE0),
+                                  ? Color(0xFF1A73E8) // Blue when focused
+                                  : Color(0xFFDADCE0),
                               width: _toFocusNode.hasFocus ? 2 : 1,
                             ),
                           ),
                           enabledBorder: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(4),
-                            borderSide: const BorderSide(
+                            borderSide: BorderSide(
                               color: Color(0xFFDADCE0),
                               width: 1,
                             ),
                           ),
                           focusedBorder: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(4),
-                            borderSide: const BorderSide(
+                            borderSide: BorderSide(
                               color: Color(0xFF1A73E8), // Blue when focused
                               width: 2,
                             ),
                           ),
-                          contentPadding: const EdgeInsets.symmetric(
+                          contentPadding: EdgeInsets.symmetric(
                             horizontal: 12,
                             vertical: 12,
                           ),
@@ -4190,11 +4180,11 @@ class _ComposeEmailDialogState extends State<_ComposeEmailDialog> {
                         style: TextStyle(
                           fontFamily: _interFont,
                           fontSize: 14,
-                          color: const Color(0xFF1F1F1F),
+                          color: Color(0xFF1F1F1F),
                         ),
                       ),
                     ),
-                    const SizedBox(height: 12),
+                    SizedBox(height: 12),
                     // Cc toggle and field
                     Row(
                       children: [
@@ -4210,7 +4200,7 @@ class _ComposeEmailDialogState extends State<_ComposeEmailDialog> {
                               style: TextStyle(
                                 fontFamily: _interFont,
                                 fontSize: 14,
-                                color: const Color(0xFF1A73E8), // Blue
+                                color: Color(0xFF1A73E8), // Blue
                               ),
                             ),
                           ),
@@ -4224,30 +4214,30 @@ class _ComposeEmailDialogState extends State<_ComposeEmailDialog> {
                                 hintStyle: TextStyle(
                                   fontFamily: _interFont,
                                   fontSize: 14,
-                                  color: const Color(0xFF9AA0A6),
+                                  color: Color(0xFF9AA0A6),
                                 ),
                                 border: OutlineInputBorder(
                                   borderRadius: BorderRadius.circular(4),
-                                  borderSide: const BorderSide(
+                                  borderSide: BorderSide(
                                     color: Color(0xFFDADCE0),
                                     width: 1,
                                   ),
                                 ),
                                 enabledBorder: OutlineInputBorder(
                                   borderRadius: BorderRadius.circular(4),
-                                  borderSide: const BorderSide(
+                                  borderSide: BorderSide(
                                     color: Color(0xFFDADCE0),
                                     width: 1,
                                   ),
                                 ),
                                 focusedBorder: OutlineInputBorder(
                                   borderRadius: BorderRadius.circular(4),
-                                  borderSide: const BorderSide(
+                                  borderSide: BorderSide(
                                     color: Color(0xFF1A73E8),
                                     width: 2,
                                   ),
                                 ),
-                                contentPadding: const EdgeInsets.symmetric(
+                                contentPadding: EdgeInsets.symmetric(
                                   horizontal: 12,
                                   vertical: 12,
                                 ),
@@ -4255,14 +4245,14 @@ class _ComposeEmailDialogState extends State<_ComposeEmailDialog> {
                               style: TextStyle(
                                 fontFamily: _interFont,
                                 fontSize: 14,
-                                color: const Color(0xFF1F1F1F),
+                                color: Color(0xFF1F1F1F),
                               ),
                             ),
                           ),
                         ],
                       ],
                     ),
-                    const SizedBox(height: 12),
+                    SizedBox(height: 12),
                     // Subject field
                     TextField(
                       controller: _subjectController,
@@ -4272,30 +4262,30 @@ class _ComposeEmailDialogState extends State<_ComposeEmailDialog> {
                         hintStyle: TextStyle(
                           fontFamily: _interFont,
                           fontSize: 14,
-                          color: const Color(0xFF9AA0A6),
+                          color: Color(0xFF9AA0A6),
                         ),
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(4),
-                          borderSide: const BorderSide(
+                          borderSide: BorderSide(
                             color: Color(0xFFDADCE0),
                             width: 1,
                           ),
                         ),
                         enabledBorder: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(4),
-                          borderSide: const BorderSide(
+                          borderSide: BorderSide(
                             color: Color(0xFFDADCE0),
                             width: 1,
                           ),
                         ),
                         focusedBorder: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(4),
-                          borderSide: const BorderSide(
+                          borderSide: BorderSide(
                             color: Color(0xFF1A73E8),
                             width: 2,
                           ),
                         ),
-                        contentPadding: const EdgeInsets.symmetric(
+                        contentPadding: EdgeInsets.symmetric(
                           horizontal: 12,
                           vertical: 12,
                         ),
@@ -4303,14 +4293,14 @@ class _ComposeEmailDialogState extends State<_ComposeEmailDialog> {
                       style: TextStyle(
                         fontFamily: _interFont,
                         fontSize: 14,
-                        color: const Color(0xFF1F1F1F),
+                        color: Color(0xFF1F1F1F),
                       ),
                     ),
-                    const SizedBox(height: 12),
+                    SizedBox(height: 12),
                     // Rich text editor toolbar
                     Container(
-                      padding: const EdgeInsets.symmetric(vertical: 8),
-                      decoration: const BoxDecoration(
+                      padding: EdgeInsets.symmetric(vertical: 8),
+                      decoration: BoxDecoration(
                         border: Border(
                           bottom:
                               BorderSide(color: Color(0xFFE8EAED), width: 1),
@@ -4323,8 +4313,8 @@ class _ComposeEmailDialogState extends State<_ComposeEmailDialog> {
                               Icons.format_bold_rounded,
                               size: 20,
                               color: _isBold
-                                  ? const Color(0xFF1A73E8)
-                                  : const Color(0xFF5F6368),
+                                  ? Color(0xFF1A73E8)
+                                  : Color(0xFF5F6368),
                             ),
                             onPressed: () {
                               setState(() {
@@ -4332,16 +4322,16 @@ class _ComposeEmailDialogState extends State<_ComposeEmailDialog> {
                               });
                               // TODO: Apply bold formatting
                             },
-                            padding: const EdgeInsets.all(8),
-                            constraints: const BoxConstraints(),
+                            padding: EdgeInsets.all(8),
+                            constraints: BoxConstraints(),
                           ),
                           IconButton(
                             icon: Icon(
                               Icons.format_italic_rounded,
                               size: 20,
                               color: _isItalic
-                                  ? const Color(0xFF1A73E8)
-                                  : const Color(0xFF5F6368),
+                                  ? Color(0xFF1A73E8)
+                                  : Color(0xFF5F6368),
                             ),
                             onPressed: () {
                               setState(() {
@@ -4349,11 +4339,11 @@ class _ComposeEmailDialogState extends State<_ComposeEmailDialog> {
                               });
                               // TODO: Apply italic formatting
                             },
-                            padding: const EdgeInsets.all(8),
-                            constraints: const BoxConstraints(),
+                            padding: EdgeInsets.all(8),
+                            constraints: BoxConstraints(),
                           ),
                           IconButton(
-                            icon: const Icon(
+                            icon: Icon(
                               Icons.link_rounded,
                               size: 20,
                               color: Color(0xFF5F6368),
@@ -4361,24 +4351,24 @@ class _ComposeEmailDialogState extends State<_ComposeEmailDialog> {
                             onPressed: () {
                               // TODO: Insert link
                             },
-                            padding: const EdgeInsets.all(8),
-                            constraints: const BoxConstraints(),
+                            padding: EdgeInsets.all(8),
+                            constraints: BoxConstraints(),
                           ),
-                          const Spacer(),
+                          Spacer(),
                           IconButton(
-                            icon: const Icon(
+                            icon: Icon(
                               Icons.attach_file_rounded,
                               size: 20,
                               color: Color(0xFF5F6368),
                             ),
                             onPressed: _pickFiles,
-                            padding: const EdgeInsets.all(8),
-                            constraints: const BoxConstraints(),
+                            padding: EdgeInsets.all(8),
+                            constraints: BoxConstraints(),
                           ),
                         ],
                       ),
                     ),
-                    const SizedBox(height: 12),
+                    SizedBox(height: 12),
                     // Message body
                     TextField(
                       controller: _bodyController,
@@ -4390,41 +4380,41 @@ class _ComposeEmailDialogState extends State<_ComposeEmailDialog> {
                         hintStyle: TextStyle(
                           fontFamily: _interFont,
                           fontSize: 14,
-                          color: const Color(0xFF9AA0A6),
+                          color: Color(0xFF9AA0A6),
                         ),
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(4),
-                          borderSide: const BorderSide(
+                          borderSide: BorderSide(
                             color: Color(0xFFDADCE0),
                             width: 1,
                           ),
                         ),
                         enabledBorder: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(4),
-                          borderSide: const BorderSide(
+                          borderSide: BorderSide(
                             color: Color(0xFFDADCE0),
                             width: 1,
                           ),
                         ),
                         focusedBorder: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(4),
-                          borderSide: const BorderSide(
+                          borderSide: BorderSide(
                             color: Color(0xFF1A73E8),
                             width: 2,
                           ),
                         ),
-                        contentPadding: const EdgeInsets.all(12),
+                        contentPadding: EdgeInsets.all(12),
                       ),
                       style: TextStyle(
                         fontFamily: _interFont,
                         fontSize: 14,
-                        color: const Color(0xFF1F1F1F),
+                        color: Color(0xFF1F1F1F),
                         height: 1.5,
                       ),
                     ),
                     // Attachments
                     if (_attachments.isNotEmpty) ...[
-                      const SizedBox(height: 12),
+                      SizedBox(height: 12),
                       Wrap(
                         spacing: 8,
                         runSpacing: 8,
@@ -4435,23 +4425,23 @@ class _ComposeEmailDialogState extends State<_ComposeEmailDialog> {
                             label: Row(
                               mainAxisSize: MainAxisSize.min,
                               children: [
-                                const Icon(Icons.attach_file, size: 16),
-                                const SizedBox(width: 4),
+                                Icon(Icons.attach_file, size: 16),
+                                SizedBox(width: 4),
                                 Flexible(
                                   child: Text(
                                     file.name,
                                     overflow: TextOverflow.ellipsis,
-                                    style: const TextStyle(fontSize: 12),
+                                    style: TextStyle(fontSize: 12),
                                   ),
                                 ),
-                                const SizedBox(width: 4),
+                                SizedBox(width: 4),
                                 GestureDetector(
                                   onTap: () => _removeAttachment(index),
-                                  child: const Icon(Icons.close, size: 16),
+                                  child: Icon(Icons.close, size: 16),
                                 ),
                               ],
                             ),
-                            backgroundColor: const Color(0xFFF1F3F4),
+                            backgroundColor: Color(0xFFF1F3F4),
                           );
                         }).toList(),
                       ),
@@ -4462,8 +4452,8 @@ class _ComposeEmailDialogState extends State<_ComposeEmailDialog> {
             ),
             // Footer buttons
             Container(
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-              decoration: const BoxDecoration(
+              padding: EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+              decoration: BoxDecoration(
                 border: Border(
                   top: BorderSide(color: Color(0xFFE8EAED), width: 1),
                 ),
@@ -4473,9 +4463,9 @@ class _ComposeEmailDialogState extends State<_ComposeEmailDialog> {
                   OutlinedButton(
                     onPressed: widget.onDiscard,
                     style: OutlinedButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 20, vertical: 10),
-                      side: const BorderSide(color: Color(0xFFDADCE0)),
+                      padding:
+                          EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                      side: BorderSide(color: Color(0xFFDADCE0)),
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(6),
                       ),
@@ -4485,19 +4475,19 @@ class _ComposeEmailDialogState extends State<_ComposeEmailDialog> {
                       style: TextStyle(
                         fontFamily: _interFont,
                         fontSize: 14,
-                        color: const Color(0xFF1F1F1F),
+                        color: Color(0xFF1F1F1F),
                       ),
                     ),
                   ),
-                  const Spacer(),
+                  Spacer(),
                   OutlinedButton(
                     onPressed: () {
                       // TODO: Save draft
                     },
                     style: OutlinedButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 20, vertical: 10),
-                      side: const BorderSide(color: Color(0xFFDADCE0)),
+                      padding:
+                          EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                      side: BorderSide(color: Color(0xFFDADCE0)),
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(6),
                       ),
@@ -4507,11 +4497,11 @@ class _ComposeEmailDialogState extends State<_ComposeEmailDialog> {
                       style: TextStyle(
                         fontFamily: _interFont,
                         fontSize: 14,
-                        color: const Color(0xFF1F1F1F),
+                        color: Color(0xFF1F1F1F),
                       ),
                     ),
                   ),
-                  const SizedBox(width: 12),
+                  SizedBox(width: 12),
                   ElevatedButton(
                     onPressed: () {
                       // Validate before sending
@@ -4521,7 +4511,7 @@ class _ComposeEmailDialogState extends State<_ComposeEmailDialog> {
 
                       if (to.isEmpty) {
                         ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
+                          SnackBar(
                             content:
                                 Text('Please enter a recipient email address'),
                             backgroundColor: Colors.red,
@@ -4532,7 +4522,7 @@ class _ComposeEmailDialogState extends State<_ComposeEmailDialog> {
 
                       if (subject.isEmpty) {
                         ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
+                          SnackBar(
                             content: Text('Please enter a subject'),
                             backgroundColor: Colors.red,
                           ),
@@ -4542,7 +4532,7 @@ class _ComposeEmailDialogState extends State<_ComposeEmailDialog> {
 
                       if (body.isEmpty) {
                         ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
+                          SnackBar(
                             content: Text('Please enter a message body'),
                             backgroundColor: Colors.red,
                           ),
@@ -4561,9 +4551,9 @@ class _ComposeEmailDialogState extends State<_ComposeEmailDialog> {
                       );
                     },
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF1A73E8), // Blue
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 24, vertical: 10),
+                      backgroundColor: Color(0xFF1A73E8), // Blue
+                      padding:
+                          EdgeInsets.symmetric(horizontal: 24, vertical: 10),
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(6),
                       ),
@@ -4591,7 +4581,7 @@ class _ComposeEmailDialogState extends State<_ComposeEmailDialog> {
 Widget _buildLoadingExperience() {
   return TweenAnimationBuilder<double>(
     tween: Tween(begin: 0.0, end: 1.0),
-    duration: const Duration(milliseconds: 1200),
+    duration: Duration(milliseconds: 1200),
     curve: Curves.easeInOut,
     builder: (context, value, child) {
       return Container(
@@ -4612,14 +4602,14 @@ Widget _buildLoadingExperience() {
           children: [
             // Animated Gmail Icon with Pulsing Effect
             _PulsingGmailIcon(),
-            const SizedBox(height: 40),
+            SizedBox(height: 40),
             // Animated Text
             _AnimatedLoadingText(),
-            const SizedBox(height: 60),
+            SizedBox(height: 60),
             // Shimmer Email Skeleton Cards
             Expanded(
               child: ListView.builder(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
+                padding: EdgeInsets.symmetric(horizontal: 16),
                 itemCount: 5,
                 itemBuilder: (context, index) {
                   return TweenAnimationBuilder<double>(
@@ -4649,7 +4639,7 @@ Widget _buildLoadingExperience() {
 
 Widget _buildEmailContentLoading() {
   return Container(
-    padding: const EdgeInsets.all(24),
+    padding: EdgeInsets.all(24),
     child: Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -4657,16 +4647,16 @@ Widget _buildEmailContentLoading() {
         Center(
           child: _PulsingEmailIcon(),
         ),
-        const SizedBox(height: 32),
+        SizedBox(height: 32),
         // Shimmer header with staggered animation
         TweenAnimationBuilder<double>(
           tween: Tween(begin: 0.0, end: 1.0),
-          duration: const Duration(milliseconds: 600),
+          duration: Duration(milliseconds: 600),
           curve: Curves.easeOut,
           builder: (context, value, child) {
             return Opacity(
               opacity: value,
-              child: const Column(
+              child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   _ShimmerBox(
@@ -4691,19 +4681,19 @@ Widget _buildEmailContentLoading() {
             );
           },
         ),
-        const SizedBox(height: 32),
-        const Divider(),
-        const SizedBox(height: 24),
+        SizedBox(height: 32),
+        Divider(),
+        SizedBox(height: 24),
         // Shimmer body with staggered animation
         Expanded(
           child: TweenAnimationBuilder<double>(
             tween: Tween(begin: 0.0, end: 1.0),
-            duration: const Duration(milliseconds: 800),
+            duration: Duration(milliseconds: 800),
             curve: Curves.easeOut,
             builder: (context, value, child) {
               return Opacity(
                 opacity: value,
-                child: const Column(
+                child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     _ShimmerBox(
@@ -4768,7 +4758,7 @@ class _AnimatedLoadingTextState extends State<_AnimatedLoadingText> {
   }
 
   void _startAnimation() {
-    Future.delayed(const Duration(milliseconds: 2000), () {
+    Future.delayed(Duration(milliseconds: 2000), () {
       if (mounted) {
         setState(() {
           _currentIndex = (_currentIndex + 1) % _loadingMessages.length;
@@ -4781,13 +4771,13 @@ class _AnimatedLoadingTextState extends State<_AnimatedLoadingText> {
   @override
   Widget build(BuildContext context) {
     return AnimatedSwitcher(
-      duration: const Duration(milliseconds: 500),
+      duration: Duration(milliseconds: 500),
       transitionBuilder: (child, animation) {
         return FadeTransition(
           opacity: animation,
           child: SlideTransition(
             position: Tween<Offset>(
-              begin: const Offset(0.0, 0.3),
+              begin: Offset(0.0, 0.3),
               end: Offset.zero,
             ).animate(animation),
             child: child,
@@ -4829,7 +4819,7 @@ class _ShimmerEmailCardState extends State<_ShimmerEmailCard>
     super.initState();
     _controller = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 1500),
+      duration: Duration(milliseconds: 1500),
     );
     Future.delayed(widget.delay, () {
       if (mounted) {
@@ -4847,8 +4837,8 @@ class _ShimmerEmailCardState extends State<_ShimmerEmailCard>
   @override
   Widget build(BuildContext context) {
     return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(16),
+      margin: EdgeInsets.only(bottom: 12),
+      padding: EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: FlutterFlowTheme.of(context).secondaryBackground,
         borderRadius: BorderRadius.circular(12),
@@ -4857,7 +4847,7 @@ class _ShimmerEmailCardState extends State<_ShimmerEmailCard>
           width: 1,
         ),
       ),
-      child: const Row(
+      child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           // Avatar shimmer
@@ -4935,7 +4925,7 @@ class _ShimmerBoxState extends State<_ShimmerBox>
     super.initState();
     _controller = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 1500),
+      duration: Duration(milliseconds: 1500),
     )..repeat();
   }
 
@@ -4963,7 +4953,7 @@ class _ShimmerBoxState extends State<_ShimmerBox>
                 FlutterFlowTheme.of(context).alternate.withOpacity(0.3),
                 FlutterFlowTheme.of(context).alternate.withOpacity(0.1),
               ],
-              stops: const [0.0, 0.5, 1.0],
+              stops: [0.0, 0.5, 1.0],
             ),
           ),
         );
@@ -4992,7 +4982,7 @@ class _PulsingGmailIconState extends State<_PulsingGmailIcon>
     // Scale animation for initial entrance
     _scaleController = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 1500),
+      duration: Duration(milliseconds: 1500),
     );
     _scaleAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
       CurvedAnimation(
@@ -5004,7 +4994,7 @@ class _PulsingGmailIconState extends State<_PulsingGmailIcon>
     // Pulse animation for continuous effect
     _pulseController = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 2000),
+      duration: Duration(milliseconds: 2000),
     );
     _pulseAnimation = Tween<double>(begin: 1.0, end: 1.15).animate(
       CurvedAnimation(
@@ -5040,9 +5030,9 @@ class _PulsingGmailIconState extends State<_PulsingGmailIcon>
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
                 colors: [
-                  const Color(0xFFE8EAED)
+                  Color(0xFFE8EAED)
                       .withOpacity(0.3 + (_pulseAnimation.value - 1.0) * 0.1),
-                  const Color(0xFFDADCE0)
+                  Color(0xFFDADCE0)
                       .withOpacity(0.3 + (_pulseAnimation.value - 1.0) * 0.1),
                 ],
               ),
@@ -5091,7 +5081,7 @@ class _PulsingEmailIconState extends State<_PulsingEmailIcon>
     // Scale animation for initial entrance
     _scaleController = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 1200),
+      duration: Duration(milliseconds: 1200),
     );
     _scaleAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
       CurvedAnimation(
@@ -5103,7 +5093,7 @@ class _PulsingEmailIconState extends State<_PulsingEmailIcon>
     // Pulse animation for continuous effect
     _pulseController = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 1800),
+      duration: Duration(milliseconds: 1800),
     );
     _pulseAnimation = Tween<double>(begin: 1.0, end: 1.12).animate(
       CurvedAnimation(
@@ -5195,7 +5185,7 @@ class _DocumentLoadingDialogState extends State<_DocumentLoadingDialog>
     // Rotation animation for document icon
     _rotationController = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 2000),
+      duration: Duration(milliseconds: 2000),
     )..repeat();
 
     _rotationAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
@@ -5208,7 +5198,7 @@ class _DocumentLoadingDialogState extends State<_DocumentLoadingDialog>
     // Pulse animation for container
     _pulseController = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 1500),
+      duration: Duration(milliseconds: 1500),
     )..repeat(reverse: true);
 
     _pulseAnimation = Tween<double>(begin: 1.0, end: 1.08).animate(
@@ -5236,7 +5226,7 @@ class _DocumentLoadingDialogState extends State<_DocumentLoadingDialog>
           return Transform.scale(
             scale: _pulseAnimation.value,
             child: Container(
-              padding: const EdgeInsets.all(32),
+              padding: EdgeInsets.all(32),
               decoration: BoxDecoration(
                 color: FlutterFlowTheme.of(context).primaryBackground,
                 borderRadius: BorderRadius.circular(20),
@@ -5281,7 +5271,7 @@ class _DocumentLoadingDialogState extends State<_DocumentLoadingDialog>
                       ),
                     ),
                   ),
-                  const SizedBox(height: 24),
+                  SizedBox(height: 24),
                   // Loading text
                   Text(
                     widget.message,
@@ -5295,7 +5285,7 @@ class _DocumentLoadingDialogState extends State<_DocumentLoadingDialog>
                         ),
                     textAlign: TextAlign.center,
                   ),
-                  const SizedBox(height: 20),
+                  SizedBox(height: 20),
                   // Progress indicator
                   SizedBox(
                     width: 40,
@@ -5340,7 +5330,7 @@ class _EmailSendingDialogState extends State<_EmailSendingDialog>
     super.initState();
     _controller = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 2000),
+      duration: Duration(milliseconds: 2000),
     )..repeat();
 
     _flyingAnimation = Tween<double>(begin: -100, end: 100).animate(
@@ -5366,7 +5356,7 @@ class _EmailSendingDialogState extends State<_EmailSendingDialog>
 
   @override
   Widget build(BuildContext context) {
-    const String interFont =
+    const String _interFont =
         'Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif';
 
     return Dialog(
@@ -5376,7 +5366,7 @@ class _EmailSendingDialogState extends State<_EmailSendingDialog>
         animation: _controller,
         builder: (context, child) {
           return Container(
-            padding: const EdgeInsets.all(32),
+            padding: EdgeInsets.all(32),
             decoration: BoxDecoration(
               color: Colors.white,
               borderRadius: BorderRadius.circular(16),
@@ -5392,7 +5382,7 @@ class _EmailSendingDialogState extends State<_EmailSendingDialog>
               mainAxisSize: MainAxisSize.min,
               children: [
                 // Animated airplane flying across
-                SizedBox(
+                Container(
                   height: 120,
                   width: 300,
                   child: Stack(
@@ -5401,7 +5391,7 @@ class _EmailSendingDialogState extends State<_EmailSendingDialog>
                       Positioned(
                         left: 50 + _flyingAnimation.value * 0.5,
                         top: 40,
-                        child: const Opacity(
+                        child: Opacity(
                           opacity: 0.3,
                           child: Icon(
                             Icons.cloud_outlined,
@@ -5413,7 +5403,7 @@ class _EmailSendingDialogState extends State<_EmailSendingDialog>
                       Positioned(
                         left: 100 + _flyingAnimation.value * 0.5,
                         top: 50,
-                        child: const Opacity(
+                        child: Opacity(
                           opacity: 0.2,
                           child: Icon(
                             Icons.cloud_outlined,
@@ -5430,7 +5420,7 @@ class _EmailSendingDialogState extends State<_EmailSendingDialog>
                           scale: _pulseAnimation.value,
                           child: Transform.rotate(
                             angle: 0.1 * (1 - _pulseAnimation.value),
-                            child: const Icon(
+                            child: Icon(
                               Icons.flight_rounded,
                               size: 60,
                               color: Color(0xFF1A73E8),
@@ -5441,12 +5431,12 @@ class _EmailSendingDialogState extends State<_EmailSendingDialog>
                     ],
                   ),
                 ),
-                const SizedBox(height: 24),
+                SizedBox(height: 24),
                 // Loading text
                 Text(
                   widget.message,
-                  style: const TextStyle(
-                    fontFamily: interFont,
+                  style: TextStyle(
+                    fontFamily: _interFont,
                     fontSize: 16,
                     fontWeight: FontWeight.w500,
                     color: Color(0xFF1F1F1F),
@@ -5454,14 +5444,14 @@ class _EmailSendingDialogState extends State<_EmailSendingDialog>
                   ),
                   textAlign: TextAlign.center,
                 ),
-                const SizedBox(height: 24),
+                SizedBox(height: 24),
                 // Progress bar
                 Container(
                   width: 200,
                   height: 4,
                   decoration: BoxDecoration(
                     borderRadius: BorderRadius.circular(2),
-                    color: const Color(0xFFE8EAED),
+                    color: Color(0xFFE8EAED),
                   ),
                   child: Stack(
                     children: [
@@ -5474,7 +5464,7 @@ class _EmailSendingDialogState extends State<_EmailSendingDialog>
                             child: Container(
                               decoration: BoxDecoration(
                                 borderRadius: BorderRadius.circular(2),
-                                gradient: const LinearGradient(
+                                gradient: LinearGradient(
                                   colors: [
                                     Color(0xFF1A73E8),
                                     Color(0xFF4285F4),
@@ -5504,7 +5494,6 @@ class _SimpleSendingDialog extends StatelessWidget {
   final bool isSuccess;
 
   const _SimpleSendingDialog({
-    super.key,
     this.message,
     this.messageNotifier,
     this.isSuccess = false,
@@ -5513,14 +5502,14 @@ class _SimpleSendingDialog extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const String interFont =
+    const String _interFont =
         'Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif';
 
     return Dialog(
       backgroundColor: Colors.transparent,
       elevation: 0,
       child: Container(
-        padding: const EdgeInsets.all(32),
+        padding: EdgeInsets.all(32),
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(16),
@@ -5540,18 +5529,18 @@ class _SimpleSendingDialog extends StatelessWidget {
               width: 60,
               height: 60,
               child: isSuccess
-                  ? const Icon(
+                  ? Icon(
                       Icons.check_circle_rounded,
                       size: 60,
                       color: Color(0xFF34A853), // Green for success
                     )
-                  : const CircularProgressIndicator(
+                  : CircularProgressIndicator(
                       strokeWidth: 4,
                       valueColor:
                           AlwaysStoppedAnimation<Color>(Color(0xFF1A73E8)),
                     ),
             ),
-            const SizedBox(height: 24),
+            SizedBox(height: 24),
             // Loading text - use ValueListenableBuilder if messageNotifier is provided
             messageNotifier != null
                 ? ValueListenableBuilder<String>(
@@ -5559,8 +5548,8 @@ class _SimpleSendingDialog extends StatelessWidget {
                     builder: (context, currentMessage, child) {
                       return Text(
                         currentMessage,
-                        style: const TextStyle(
-                          fontFamily: interFont,
+                        style: TextStyle(
+                          fontFamily: _interFont,
                           fontSize: 16,
                           fontWeight: FontWeight.w500,
                           color: Color(0xFF1F1F1F),
@@ -5573,22 +5562,20 @@ class _SimpleSendingDialog extends StatelessWidget {
                 : Text(
                     message!,
                     style: TextStyle(
-                      fontFamily: interFont,
+                      fontFamily: _interFont,
                       fontSize: 16,
                       fontWeight: FontWeight.w500,
-                      color: isSuccess
-                          ? const Color(0xFF34A853)
-                          : const Color(0xFF1F1F1F),
+                      color: isSuccess ? Color(0xFF34A853) : Color(0xFF1F1F1F),
                       letterSpacing: 0,
                     ),
                     textAlign: TextAlign.center,
                   ),
             if (!isSuccess) ...[
-              const SizedBox(height: 16),
-              const Text(
+              SizedBox(height: 16),
+              Text(
                 'This may take a moment...',
                 style: TextStyle(
-                  fontFamily: interFont,
+                  fontFamily: _interFont,
                   fontSize: 14,
                   fontWeight: FontWeight.normal,
                   color: Color(0xFF5F6368),

@@ -35,7 +35,7 @@ fi
 
 # Step 4: Deploy to Firebase
 echo "🔥 Deploying to Firebase..."
-firebase deploy --only hosting
+firebase deploy --only hosting --project linkedup-c3e29
 
 echo ""
 echo "✅ Deployment complete!"

@@ -59,6 +59,25 @@ service cloud.firestore {
       allow delete: if false;
     }
 
+    // Fireflies API keys – server-only (Cloud Functions use Admin SDK). No client access.
+    match /fireflies_api_keys/{document} {
+      allow read, write: if false;
+    }
+
+    // Fireflies transcripts – stored summary/action items per chat. Read if user is member of chat.
+    match /fireflies_transcripts/{document} {
+      allow read: if request.auth != null &&
+        get(/databases/$(database)/documents/chats/$(resource.data.chatId)).data.members.hasAny([/databases/$(database)/documents/users/$(request.auth.uid)]);
+      allow write: if false;
+    }
+
+    // Manual transcripts – OpenAI-processed pasted notes. Read if user is member of chat.
+    match /manualTranscripts/{document} {
+      allow read: if request.auth != null &&
+        get(/databases/$(database)/documents/chats/$(resource.data.chat_id)).data.members.hasAny([/databases/$(database)/documents/users/$(request.auth.uid)]);
+      allow write: if false;
+    }
+
     match /chats/{document} {
       allow create: if request.auth != null;
       allow read: if request.auth != null;

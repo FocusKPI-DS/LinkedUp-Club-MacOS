@@ -12,6 +12,7 @@ import '/flutter_flow/flutter_flow_util.dart';
 import '/flutter_flow/flutter_flow_video_player.dart';
 import '/flutter_flow/upload_data.dart';
 import '/pages/chat/chat_component/chat_thread/chat_thread_widget.dart';
+import '/pages/chat/chat_component/task_reminder_digest_card.dart';
 import '/pages/chat/chat_component/media_preview/media_preview_widget.dart';
 import '/pages/chat/chat_component/file_preview/file_preview_widget.dart';
 import 'dart:async';
@@ -29,6 +30,8 @@ import '/custom_code/widgets/index.dart' as custom_widgets;
 import '/flutter_flow/custom_functions.dart' as functions;
 import '/flutter_flow/permissions_util.dart';
 // import 'package:stop_watch_timer/stop_watch_timer.dart'; // STOP_WATCH_TIMER - Unused
+import 'package:flutter_svg/flutter_svg.dart';
+import 'package:super_clipboard/super_clipboard.dart';
 import 'package:flutter_quill/flutter_quill.dart';
 import 'package:flutter_quill/quill_delta.dart'; // Explicit import for Delta
 import '../rich_chat_input/rich_chat_input_widget.dart';
@@ -53,12 +56,16 @@ import 'package:liquid_glass_renderer/liquid_glass_renderer.dart';
 import 'package:desktop_drop/desktop_drop.dart';
 import 'package:cross_file/cross_file.dart';
 import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
-import 'package:super_clipboard/super_clipboard.dart';
 import 'package:video_player/video_player.dart';
 import 'package:chewie/chewie.dart';
 import '/app_state.dart';
 import 'chat_thread_component_model.dart';
 export 'chat_thread_component_model.dart';
+
+/// Intent for paste (Cmd+V / Ctrl+V) so we can handle images/files in the input.
+class _PasteIntent extends Intent {
+  const _PasteIntent();
+}
 
 ///
 ///
@@ -105,14 +112,8 @@ class ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget>
   int _selectedMentionIndex = 0; // For keyboard navigation in mention list
   bool _mentionKeyConsumed =
       false; // Prevents Enter from both selecting mention AND sending message
-  DateTime? _lastMentionSelectTime; //  HardwareKeyboard? _hardwareKeyboard;
-
-  // Mention system state
-
-  // IME Composition state tracking
-  bool _isCurrentlyComposing = false;
   DateTime?
-      _compositionEndedTime; // Timestamp guard for IME Enter key race condition
+      _lastMentionSelectTime; // Timestamp guard for mention selection vs send race
   bool _isScreenRecording = false; // Track screen recording state
 
   // Rich Text Editor Controller
@@ -144,10 +145,113 @@ class ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget>
     });
   }
 
+  static String _normalizeActionItemPath(String path) {
+    if (path.isEmpty) return path;
+    if (path.contains('/')) return path;
+    return 'action_items/$path';
+  }
+
+  Future<void> _markActionItemDone(String actionItemRefPath) async {
+    final path = _normalizeActionItemPath(actionItemRefPath);
+    try {
+      final ref = FirebaseFirestore.instance.doc(path);
+      final snap = await ref.get();
+      if (!snap.exists) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Task already completed or removed',
+              style: FlutterFlowTheme.of(context).bodyMedium.override(
+                    fontFamily: 'Inter',
+                    color: FlutterFlowTheme.of(context).secondaryBackground,
+                    fontWeight: FontWeight.w500,
+                  ),
+            ),
+            backgroundColor: FlutterFlowTheme.of(context).secondaryText,
+          ),
+        );
+        return;
+      }
+      await ref.update({
+        'status': 'completed',
+        'completed_time': FieldValue.serverTimestamp(),
+      });
+    } on FirebaseException catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            e.code == 'not-found'
+                ? 'Task already completed or removed'
+                : 'Failed to update: ${e.message}',
+          ),
+          backgroundColor: e.code == 'not-found'
+              ? FlutterFlowTheme.of(context).secondaryText
+              : Colors.red,
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+            content: Text('Failed to update: $e'), backgroundColor: Colors.red),
+      );
+    }
+  }
+
+  Future<void> _remindAgain(String actionItemRefPath) async {
+    final path = _normalizeActionItemPath(actionItemRefPath);
+    try {
+      final ref = FirebaseFirestore.instance.doc(path);
+      final snap = await ref.get();
+      if (!snap.exists) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Task no longer found'),
+            backgroundColor: FlutterFlowTheme.of(context).secondaryText,
+          ),
+        );
+        return;
+      }
+      await ref.update({
+        'last_reminder_at': FieldValue.delete(),
+      });
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Reminder will be sent again on the next run',
+            style: FlutterFlowTheme.of(context).bodyMedium.override(
+                  fontFamily: 'Inter',
+                  color: FlutterFlowTheme.of(context).secondaryBackground,
+                  fontWeight: FontWeight.w500,
+                ),
+          ),
+          duration: const Duration(milliseconds: 2000),
+          backgroundColor: FlutterFlowTheme.of(context).secondaryText,
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Failed to reset reminder: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
   @override
   void setState(VoidCallback callback) {
     super.setState(callback);
     _model.onUpdate();
+  }
+
+  void _onFFAppStateChanged() {
+    if (mounted) safeSetState(() {});
   }
 
   @override
@@ -155,6 +259,9 @@ class ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget>
     super.initState();
     print('📦 ChatThreadComponentWidget initState called');
     _model = createModel(context, () => ChatThreadComponentModel());
+
+    // Rebuild when app state changes (e.g. Auto Translate toggled) so message translations update
+    FFAppState().addListener(_onFFAppStateChanged);
 
     // Initialize Quill Controller
     _quillController = QuillController.basic();
@@ -174,8 +281,6 @@ class ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget>
     _model.messageTextController ??= TextEditingController();
     _model.messageFocusNode ??= FocusNode(
       onKeyEvent: (node, event) {
-        print(
-            'DEBUG FocusNode.onKeyEvent: key=${event.logicalKey.keyLabel}, type=${event.runtimeType}, isValid=${_quillController.plainTextEditingValue.composing.isValid}');
         // Handle Return/Enter key press
         if (event is KeyDownEvent || event is KeyRepeatEvent) {
           // If a mention key was just consumed by _mentionKeyboardHandler,
@@ -197,24 +302,12 @@ class ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget>
             }
           }
           // Check if Return/Enter key is pressed
-          if (event is KeyDownEvent &&
-              (event.logicalKey == LogicalKeyboardKey.enter ||
-                  event.logicalKey == LogicalKeyboardKey.numpadEnter)) {
+          if (event.logicalKey == LogicalKeyboardKey.enter ||
+              event.logicalKey == LogicalKeyboardKey.numpadEnter) {
             // CRITICAL FIX: Check for IME composition (active input method)
-            // flutter_quill uses plainTextEditingValue to expose the current composing range
-            final isComposing =
-                _quillController.plainTextEditingValue.composing.isValid;
-
-            // Check if composition just ended in the last 250ms
-            final recentlyComposed = _compositionEndedTime != null &&
-                DateTime.now()
-                        .difference(_compositionEndedTime!)
-                        .inMilliseconds <
-                    250;
-
-            if (isComposing || recentlyComposed) {
-              return KeyEventResult
-                  .ignored; // Let the IME handle it (e.g. committing Chinese text)
+            // If composing range is valid (start != -1), it means user is navigating IME candidates
+            if (_model.messageTextController?.value.composing.isValid == true) {
+              return KeyEventResult.ignored; // Let the IME handle it
             }
 
             // Check if Shift or Command (Meta) is pressed
@@ -249,8 +342,6 @@ class ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget>
                   _model.messageTextController?.text.trim() ?? '';
               final hasText = messageText.isNotEmpty;
               final hasImages = _model.images.isNotEmpty;
-              print(
-                  'DEBUG onKeyEvent: shouldSend=$shouldSend, hasText=$hasText, messageText="$messageText"');
               final hasSingleImage =
                   _model.image != null && _model.image!.isNotEmpty;
               final hasFile = _model.file != null && _model.file!.isNotEmpty;
@@ -345,9 +436,6 @@ class ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget>
           !anim.applyInitialState),
       this,
     );
-
-    // Register clipboard listener
-    ClipboardEvents.instance?.registerPasteEventListener(_handleClipboardPaste);
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       safeSetState(() {});
@@ -485,15 +573,22 @@ class ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget>
 
   @override
   void dispose() {
+    FFAppState().removeListener(_onFFAppStateChanged);
     _autoMarkReadDebounce?.cancel();
     _removeMentionOverlay(); // Clean up mention overlay
     _model.itemPositionsListener?.itemPositions.removeListener(_onScroll);
     _blockedUsersSubscription?.cancel();
     _model.maybeDispose();
 
-    // Unregister clipboard listener
-    ClipboardEvents.instance
-        ?.unregisterPasteEventListener(_handleClipboardPaste);
+    // Register custom Keyboard listener for chat textarea
+    // HardwareKeyboard.instance.addHandler(_handleKeyEvent); // This line is incorrect in dispose, should be removeHandler
+    // Initial setup of chat text area (if there's a draft, load it here)
+    // _textController.text = ''; // or load draft
+
+    // Add clipboard paste listener
+    ClipboardEvents.instance?.registerPasteEventListener(_handleClipboardPaste);
+
+    // Setup link preview debouncer.id;
 
     // Unregister mention keyboard handler
     HardwareKeyboard.instance.removeHandler(_mentionKeyboardHandler);
@@ -515,33 +610,16 @@ class ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget>
     // Handles mention detection based on plain text
     _handleMentionDetection(text);
 
-    // Track composing state to prevent Enter-to-send race condition
-    final isValid = _quillController.plainTextEditingValue.composing.isValid;
-    if (isValid) {
-      _isCurrentlyComposing = true;
-    } else {
-      if (_isCurrentlyComposing) {
-        // Composition just ended
-        _isCurrentlyComposing = false;
-        _compositionEndedTime = DateTime.now();
-      }
-    }
-
     // Sync to model controller for legacy compatibility if needed
     if (_model.messageTextController != null &&
         _model.messageTextController!.text != text) {
       // Avoid infinite loop if possible, or just sync one way
       // We mainly need this for `_sendMessage` checking emptiness or older logic
-
-      // Clamp the offset to prevent RangeError when Quill has embedded assets
-      int safeOffset = _quillController.selection.baseOffset;
-      if (safeOffset < 0) safeOffset = 0;
-      if (safeOffset > text.length) safeOffset = text.length;
-
       _model.messageTextController!.value =
           _model.messageTextController!.value.copyWith(
         text: text,
-        selection: TextSelection.collapsed(offset: safeOffset),
+        selection: TextSelection.collapsed(
+            offset: _quillController.selection.baseOffset),
         composing: TextRange.empty,
       );
     }
@@ -835,12 +913,6 @@ class ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget>
       // So listViewIndex = messageIndex + (_isLoadingOlderMessages ? 1 : 0)
 
       int scrollIndex = targetIndex + (_isLoadingOlderMessages ? 1 : 0);
-      print(
-          'DEBUG: Scrolling to listViewIndex: $scrollIndex (isLoadingOlder: $_isLoadingOlderMessages)');
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Found at index $scrollIndex. Scrolling...')),
-      );
 
       _model.itemScrollController!
           .scrollTo(
@@ -878,43 +950,17 @@ class ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget>
       _model.isSending = true;
       safeSetState(() {});
 
-      final oldMessage = _model.editingMessage!;
-
+      // Update the existing message directly
+      // Strip quotes from mentions before saving
       final delta = _quillController.document.toDelta();
       final markdown = quillDeltaToMarkdownSimplified(delta);
       final editedContent = _stripQuotesFromMentions(markdown);
 
-      // We use a batch to update the message and potentially the chat document
-      final batch = FirebaseFirestore.instance.batch();
-
-      batch.update(oldMessage.reference, {
+      await _model.editingMessage!.reference.update({
         'content': editedContent,
         'is_edited': true,
         'edited_at': FieldValue.serverTimestamp(),
       });
-
-      // Update the parent chat document's last_message
-      final chatRef = widget.chatReference?.reference;
-      if (chatRef != null) {
-        String messagePreview = editedContent;
-        if (editedContent.isEmpty) {
-          if (oldMessage.images.isNotEmpty) {
-            messagePreview = '📷 Photo';
-          } else if (oldMessage.video.isNotEmpty) {
-            messagePreview = '🎬 Video';
-          } else if (oldMessage.audio.isNotEmpty) {
-            messagePreview = '🎤 Voice message';
-          } else if (oldMessage.attachmentUrl.isNotEmpty) {
-            messagePreview = '📎 File';
-          }
-        }
-        batch.update(chatRef, {
-          'last_message': messagePreview,
-          'last_message_at': FieldValue.serverTimestamp(),
-        });
-      }
-
-      await batch.commit();
 
       // Clear edit mode
       _model.editingMessage = null;
@@ -954,11 +1000,8 @@ class ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget>
   /// [contentOverride] when set (e.g. from file preview caption) is used as the message content instead of the text field.
   Future<void> _sendMessage({String? contentOverride}) async {
     if (widget.chatReference == null || currentUserReference == null) return;
-
-    if (_model.editingMessage != null) {
-      await _updateMessage();
-      return;
-    }
+    if (_model.isSending == true)
+      return; // Prevent duplicate sends during upload
 
     String messageText = contentOverride ?? '';
     if (messageText.isEmpty) {
@@ -2024,34 +2067,28 @@ class ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget>
     safeSetState(() {});
   }
 
-  /// Handle clipboard paste events
+  /// Called when user presses Cmd+V / Ctrl+V in the input area. Intercepts paste
+  /// so we can handle images/files; text is handled by _handleClipboardReader too.
+  Future<void> _onPasteInInput() async {
+    if (_isServiceChatReadOnly()) return;
+    final clipboard = SystemClipboard.instance;
+    if (clipboard == null) return;
+    try {
+      final reader = await clipboard.read();
+      if (!mounted) return;
+      _handleClipboardReader(reader);
+    } catch (e) {
+      debugPrint('Paste in input failed: $e');
+    }
+  }
+
+  /// Handle clipboard paste events (global listener; may not fire when focus is in text field)
   void _handleClipboardPaste(ClipboardReadEvent event) async {
     final reader = await event.getClipboardReader();
+    _handleClipboardReader(reader);
+  }
 
-    // 0. Check for Plain Text (Fix for regression)
-    if (reader.canProvide(Formats.plainText)) {
-      reader.getValue(Formats.plainText, (text) {
-        if (text == null) return;
-        final String textContent = text;
-
-        if (mounted && textContent.isNotEmpty) {
-          // Insert into QuillController (the active rich text editor)
-          final selection = _quillController.selection;
-          final index = selection.baseOffset;
-          final length = selection.extentOffset - index;
-          _quillController.replaceText(
-            index,
-            length < 0 ? 0 : length,
-            textContent,
-            null,
-          );
-        }
-      }, onError: (error) {
-        debugPrint('Error reading text from clipboard: $error');
-      });
-      return;
-    }
-
+  void _handleClipboardReader(ClipboardReader reader) async {
     // 1. Check for Images
     if (reader.canProvide(Formats.png) ||
         reader.canProvide(Formats.jpeg) ||
@@ -2174,6 +2211,215 @@ class ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget>
         });
         return;
       }
+    }
+
+    // 4. Check for TIFF (macOS Screenshots)
+    if (reader.canProvide(Formats.tiff)) {
+      reader.getFile(Formats.tiff, (file) async {
+        final bytes = await file.readAll();
+        // Convert TIFF to PNG or just save as is (Flutter might handle TIFF, but PNG is safer)
+        // Here we just save as .tiff for now or .png if we could convert,
+        // but simple save as .tiff is better than nothing.
+        // Actually, let's name it .png and hope the bytes are compatible or just use .tiff
+        final fileName =
+            'screenshot_${DateTime.now().millisecondsSinceEpoch}.tiff';
+
+        final currentUserUid = currentUserReference?.id ?? '';
+        final pathPrefix = 'users/$currentUserUid/uploads';
+        final timestamp = DateTime.now().microsecondsSinceEpoch;
+        final storagePath = '$pathPrefix/$timestamp.tiff';
+
+        final selectedFile = SelectedFile(
+          storagePath: storagePath,
+          filePath: fileName,
+          bytes: bytes,
+        );
+
+        if (mounted) {
+          final added = _model.addPendingAttachment(PendingAttachment(
+            file: selectedFile,
+            fileName: fileName,
+            type: AttachmentType.image,
+          ));
+          if (!added) _showAttachmentLimitSnackbar();
+          safeSetState(() {});
+        }
+      }, onError: (error) {
+        debugPrint('Error reading TIFF from clipboard: $error');
+      });
+      return;
+    }
+
+    // 5. Check for File URIs (Finder Files)
+    if (reader.canProvide(Formats.fileUri)) {
+      reader.getValue(Formats.fileUri, (uri) async {
+        if (uri == null) return;
+        try {
+          // uri is a Uri object
+          final fileUri = uri as Uri;
+          final String filePath = fileUri.toFilePath();
+          final File file = File(filePath);
+
+          if (await file.exists()) {
+            final bytes = await file.readAsBytes();
+            final fileName = filePath.split('/').last;
+            final ext = fileName.contains('.')
+                ? fileName.split('.').last.toLowerCase()
+                : 'file';
+
+            final currentUserUid = currentUserReference?.id ?? '';
+            final pathPrefix = 'users/$currentUserUid/uploads';
+            final timestamp = DateTime.now().microsecondsSinceEpoch;
+            final storagePath = '$pathPrefix/$timestamp.$ext';
+
+            final selectedFile = SelectedFile(
+              storagePath: storagePath,
+              filePath: filePath,
+              bytes: bytes,
+            );
+
+            final imageExtensions = [
+              'jpg',
+              'jpeg',
+              'png',
+              'gif',
+              'webp',
+              'bmp',
+              'heic',
+              'tiff'
+            ];
+            final videoExtensions = [
+              'mp4',
+              'mov',
+              'avi',
+              'mkv',
+              'webm',
+              'flv',
+              'wmv',
+              'm4v',
+              '3gp'
+            ];
+
+            AttachmentType type;
+            if (imageExtensions.contains(ext)) {
+              type = AttachmentType.image;
+            } else if (videoExtensions.contains(ext)) {
+              type = AttachmentType.video;
+            } else {
+              type = AttachmentType.file;
+            }
+
+            if (mounted) {
+              final added = _model.addPendingAttachment(PendingAttachment(
+                file: selectedFile,
+                fileName: fileName,
+                type: type,
+              ));
+              if (!added) _showAttachmentLimitSnackbar();
+              safeSetState(() {});
+            }
+          }
+        } catch (e) {
+          debugPrint('Error processing file URI: $e');
+        }
+      }, onError: (err) {
+        debugPrint('Error reading file URI: $err');
+      });
+      return;
+    }
+
+    // 6. Fallback: Check for Plain Text
+    if (reader.canProvide(Formats.plainText)) {
+      reader.getValue(Formats.plainText, (text) async {
+        if (text == null) return;
+        final String textContent = text;
+
+        if (mounted) {
+          // Heuristic: Check if the text is actually a valid file path on disk
+          // This handles cases where clipboard provides file path as text but fails fileUri check
+          try {
+            final possibleFile = File(textContent.trim());
+            if (await possibleFile.exists()) {
+              print('DEBUG: Text is a valid file path: ${textContent.trim()}');
+              final bytes = await possibleFile.readAsBytes();
+              final fileName = textContent.trim().split('/').last;
+              final ext = fileName.contains('.')
+                  ? fileName.split('.').last.toLowerCase()
+                  : 'file';
+
+              final currentUserUid = currentUserReference?.id ?? '';
+              final pathPrefix = 'users/$currentUserUid/uploads';
+              final timestamp = DateTime.now().microsecondsSinceEpoch;
+              final storagePath = '$pathPrefix/$timestamp.$ext';
+
+              final selectedFile = SelectedFile(
+                storagePath: storagePath,
+                filePath: textContent.trim(),
+                bytes: bytes,
+              );
+
+              final imageExtensions = [
+                'jpg',
+                'jpeg',
+                'png',
+                'gif',
+                'webp',
+                'bmp',
+                'heic',
+                'tiff'
+              ];
+              final videoExtensions = [
+                'mp4',
+                'mov',
+                'avi',
+                'mkv',
+                'webm',
+                'flv',
+                'wmv',
+                'm4v',
+                '3gp'
+              ];
+
+              AttachmentType type;
+              if (imageExtensions.contains(ext)) {
+                type = AttachmentType.image;
+              } else if (videoExtensions.contains(ext)) {
+                type = AttachmentType.video;
+              } else {
+                type = AttachmentType.file;
+              }
+
+              final added = _model.addPendingAttachment(PendingAttachment(
+                file: selectedFile,
+                fileName: fileName,
+                type: type,
+              ));
+              if (!added) _showAttachmentLimitSnackbar();
+              safeSetState(() {});
+              return; // Stop here, processed as file
+            }
+          } catch (e) {
+            // Not a file or error checking, proceed as text
+          }
+
+          // Normal Text Paste
+          if (textContent.isNotEmpty) {
+            // Insert into QuillController (the active rich text editor)
+            final selection = _quillController.selection;
+            final index = selection.baseOffset;
+            final length = selection.extentOffset - index;
+            _quillController.replaceText(
+              index,
+              length < 0 ? 0 : length,
+              textContent,
+              null,
+            );
+          }
+        }
+      }, onError: (error) {
+        debugPrint('Error reading text from clipboard: $error');
+      });
+      return;
     }
   }
 
@@ -2356,9 +2602,12 @@ class ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget>
     final mentionQuery = functions.extractMentionQuery(text, cursorPos);
 
     // Check if the character just before the cursor is @ (Quill appends trailing \n, so endsWith('@') fails)
-    // Removed the whitespace/newline requirement so @ triggers even when attached to words/Chinese chars
-    final hasActiveAt =
-        cursorPos > 0 && cursorPos <= text.length && text[cursorPos - 1] == '@';
+    final hasActiveAt = cursorPos > 0 &&
+        cursorPos <= text.length &&
+        text[cursorPos - 1] == '@' &&
+        (cursorPos == 1 ||
+            text[cursorPos - 2] == ' ' ||
+            text[cursorPos - 2] == '\n');
 
     if (mentionQuery != null || hasActiveAt) {
       _model.mentionQuery = mentionQuery ?? '';
@@ -2436,7 +2685,7 @@ class ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget>
     // Find the @ symbol before the cursor
     int lastAtIndex = _findLastAtIndex(text, cursorPosition);
 
-    final mentionText = '@\u200Blinkai\u200B ';
+    final mentionText = '@linkai ';
     final replaceStart = lastAtIndex == -1 ? cursorPosition : lastAtIndex;
     final replaceLength = cursorPosition - replaceStart;
 
@@ -2495,7 +2744,7 @@ class ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget>
       }
     }
 
-    final mentionText = '@\u200B${user.displayName}\u200B ';
+    final mentionText = '@${user.displayName} ';
     final replaceStart = lastAtIndex == -1 ? cursorPosition : lastAtIndex;
     final replaceLength = cursorPosition - replaceStart;
 
@@ -2883,124 +3132,190 @@ class ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget>
                             // Update local state for external access
                             _currentMessages = listViewMessagesRecordList;
 
-                            // Update total count for pagination and scroll logic
-                            _totalMessageCount =
-                                listViewMessagesRecordList.length +
+                            // Merge latest reminder digest into timeline (as a normal message) for group chats
+                            return StreamBuilder<List<ReminderDigestsRecord>>(
+                              stream: widget.chatReference?.isGroup == true &&
+                                      widget.chatReference != null
+                                  ? queryReminderDigestsRecord(
+                                      queryBuilder: (q) => q
+                                          .where('chat_ref',
+                                              isEqualTo: widget
+                                                  .chatReference!.reference)
+                                          .orderBy('created_at',
+                                              descending: true)
+                                          .limit(1),
+                                    )
+                                  : Stream<List<ReminderDigestsRecord>>.value(
+                                      []),
+                              builder: (context, digestSnapshot) {
+                                ReminderDigestsRecord? latestDigest;
+                                if (digestSnapshot.hasData &&
+                                    digestSnapshot.data!.isNotEmpty) {
+                                  latestDigest = digestSnapshot.data!.first;
+                                }
+                                // Combined timeline: messages + digest (if any), sorted by time desc so digest appears like a sent message in order
+                                final combined = <_ThreadListItem>[];
+                                for (int i = 0;
+                                    i < listViewMessagesRecordList.length;
+                                    i++) {
+                                  combined.add(_ThreadListItem(
+                                    message: listViewMessagesRecordList[i],
+                                    messageIndex: i,
+                                  ));
+                                }
+                                if (latestDigest != null) {
+                                  combined.add(
+                                      _ThreadListItem(digest: latestDigest));
+                                }
+                                combined.sort((a, b) {
+                                  final at = a.timestamp;
+                                  final bt = b.timestamp;
+                                  if (at == null && bt == null) return 0;
+                                  if (at == null) return 1;
+                                  if (bt == null) return -1;
+                                  return bt.compareTo(at);
+                                });
+                                _totalMessageCount = combined.length +
                                     (_isLoadingOlderMessages ? 1 : 0);
 
-                            return GestureDetector(
-                              onTap: () async {
-                                await actions.closekeyboard();
-                              },
-                              child: ScrollablePositionedList.builder(
-                                itemScrollController:
-                                    _model.itemScrollController,
-                                itemPositionsListener:
-                                    _model.itemPositionsListener,
-                                padding: EdgeInsets.only(
-                                  top: 120 + (_isLoadingOlderMessages ? 50 : 0),
-                                  bottom:
-                                      160 + (_model.showEmojiPicker ? 320 : 0),
-                                ),
-                                reverse: true,
-                                shrinkWrap: false,
-                                scrollDirection: Axis.vertical,
-                                itemCount: _totalMessageCount,
-                                itemBuilder: (context, listViewIndex) {
-                                  // Show loading indicator at the top (first item in reversed list)
-                                  if (_isLoadingOlderMessages &&
-                                      listViewIndex == 0) {
-                                    return Container(
-                                      padding: EdgeInsets.all(16.0),
-                                      alignment: Alignment.center,
-                                      child: CircularProgressIndicator(
-                                        valueColor:
-                                            AlwaysStoppedAnimation<Color>(
-                                          FlutterFlowTheme.of(context).primary,
-                                        ),
-                                      ),
-                                    );
-                                  }
-
-                                  // Adjust index if loading indicator is shown
-                                  int messageIndex = _isLoadingOlderMessages
-                                      ? listViewIndex - 1
-                                      : listViewIndex;
-
-                                  if (messageIndex < 0 ||
-                                      messageIndex >=
-                                          listViewMessagesRecordList.length) {
-                                    return SizedBox.shrink();
-                                  }
-
-                                  final listViewMessagesRecord =
-                                      listViewMessagesRecordList[messageIndex];
-                                  return Container(
-                                    child: wrapWithModel<ChatThreadModel>(
-                                      model: _model.chatThreadModels.getModel(
-                                        listViewMessagesRecord.reference.id,
-                                        messageIndex,
-                                      ),
-                                      updateCallback: () => safeSetState(() {}),
-                                      child: ChatThreadWidget(
-                                        key: Key(
-                                          'Key6sf_${listViewMessagesRecord.reference.id}',
-                                        ),
-                                        message: listViewMessagesRecord,
-                                        senderImage:
-                                            listViewMessagesRecord.senderPhoto,
-                                        name: listViewMessagesRecord.senderName,
-                                        chatRef:
-                                            widget.chatReference!.reference,
-                                        userRef:
-                                            listViewMessagesRecord.senderRef!,
-                                        mentionableUsers: _mentionableUserNames,
-                                        action: () async {
-                                          _model.select = false;
-                                          safeSetState(() {});
-                                        },
-                                        onMessageLongPress:
-                                            widget.onMessageLongPress,
-                                        translateNotifier:
-                                            ChatThreadComponentWidgetState
-                                                .translateNotifier,
-                                        onReplyToMessage: (message) {
-                                          _model.replyingToMessage = message;
-                                          safeSetState(() {});
-                                        },
-                                        onScrollToMessage: (messageId) {
-                                          scrollToMessage(messageId,
-                                              listViewMessagesRecordList);
-                                        },
-                                        onEditMessage: (message) {
-                                          _model.editingMessage = message;
-                                          _model.messageTextController?.text =
-                                              message.content;
-
-                                          // Initialize Quill Controller with message content
-                                          // TODO: Parse Markdown to Delta for full rich text editing support
-                                          // For now, load as plain text (Markdown source)
-                                          _quillController.document =
-                                              Document.fromDelta(Delta()
-                                                ..insert(
-                                                    message.content + '\n'));
-                                          // Move cursor to end
-                                          _quillController.moveCursorToPosition(
-                                              message.content.length);
-
-                                          safeSetState(() {});
-                                        },
-                                        isHighlighted: _model
-                                                .highlightedMessageId ==
-                                            listViewMessagesRecord.reference.id,
-                                        isGroup:
-                                            widget.chatReference?.isGroup ??
-                                                false,
-                                      ),
+                                return GestureDetector(
+                                  onTap: () async {
+                                    await actions.closekeyboard();
+                                  },
+                                  child: ScrollablePositionedList.builder(
+                                    itemScrollController:
+                                        _model.itemScrollController,
+                                    itemPositionsListener:
+                                        _model.itemPositionsListener,
+                                    padding: EdgeInsets.only(
+                                      top: 120 +
+                                          (_isLoadingOlderMessages ? 50 : 0),
+                                      bottom: 160 +
+                                          (_model.showEmojiPicker ? 320 : 0),
                                     ),
-                                  );
-                                },
-                              ),
+                                    reverse: true,
+                                    shrinkWrap: false,
+                                    scrollDirection: Axis.vertical,
+                                    itemCount: _totalMessageCount,
+                                    itemBuilder: (context, listViewIndex) {
+                                      // Show loading indicator at the top (first item in reversed list)
+                                      if (_isLoadingOlderMessages &&
+                                          listViewIndex == 0) {
+                                        return Container(
+                                          padding: EdgeInsets.all(16.0),
+                                          alignment: Alignment.center,
+                                          child: CircularProgressIndicator(
+                                            valueColor:
+                                                AlwaysStoppedAnimation<Color>(
+                                              FlutterFlowTheme.of(context)
+                                                  .primary,
+                                            ),
+                                          ),
+                                        );
+                                      }
+
+                                      final itemIndex = _isLoadingOlderMessages
+                                          ? listViewIndex - 1
+                                          : listViewIndex;
+
+                                      if (itemIndex < 0 ||
+                                          itemIndex >= combined.length) {
+                                        return const SizedBox.shrink();
+                                      }
+
+                                      final item = combined[itemIndex];
+                                      // Reminder digest in timeline (like a normal message)
+                                      if (item.digest != null) {
+                                        return Padding(
+                                          padding: const EdgeInsets.symmetric(
+                                              vertical: 4.0),
+                                          child: TaskReminderDigestCard(
+                                            key: Key(
+                                                'reminder_digest_${item.digest!.reference.id}'),
+                                            overdueCount:
+                                                item.digest!.overdueCount,
+                                            introText: item.digest!.introText,
+                                            tasks: item.digest!.tasks,
+                                            onMarkDone: _markActionItemDone,
+                                            onRemindAgain: _remindAgain,
+                                          ),
+                                        );
+                                      }
+                                      final listViewMessagesRecord =
+                                          item.message!;
+                                      final messageIndex = item.messageIndex!;
+                                      return Container(
+                                        child: wrapWithModel<ChatThreadModel>(
+                                          model:
+                                              _model.chatThreadModels.getModel(
+                                            listViewMessagesRecord.reference.id,
+                                            messageIndex,
+                                          ),
+                                          updateCallback: () =>
+                                              safeSetState(() {}),
+                                          child: ChatThreadWidget(
+                                            key: Key(
+                                              'Key6sf_${listViewMessagesRecord.reference.id}',
+                                            ),
+                                            message: listViewMessagesRecord,
+                                            senderImage: listViewMessagesRecord
+                                                .senderPhoto,
+                                            name: listViewMessagesRecord
+                                                .senderName,
+                                            chatRef:
+                                                widget.chatReference!.reference,
+                                            userRef: listViewMessagesRecord
+                                                .senderRef!,
+                                            mentionableUsers:
+                                                _mentionableUserNames,
+                                            action: () async {
+                                              _model.select = false;
+                                              safeSetState(() {});
+                                            },
+                                            onMessageLongPress:
+                                                widget.onMessageLongPress,
+                                            onReplyToMessage: (message) {
+                                              _model.replyingToMessage =
+                                                  message;
+                                              safeSetState(() {});
+                                            },
+                                            onScrollToMessage: (messageId) {
+                                              scrollToMessage(messageId,
+                                                  listViewMessagesRecordList);
+                                            },
+                                            onEditMessage: (message) {
+                                              _model.editingMessage = message;
+                                              _model.messageTextController
+                                                  ?.text = message.content;
+
+                                              // Initialize Quill Controller with message content
+                                              // TODO: Parse Markdown to Delta for full rich text editing support
+                                              // For now, load as plain text (Markdown source)
+                                              _quillController.document =
+                                                  Document.fromDelta(Delta()
+                                                    ..insert(message.content +
+                                                        '\n'));
+                                              // Move cursor to end
+                                              _quillController
+                                                  .moveCursorToPosition(
+                                                      message.content.length);
+
+                                              safeSetState(() {});
+                                            },
+                                            isHighlighted:
+                                                _model.highlightedMessageId ==
+                                                    listViewMessagesRecord
+                                                        .reference.id,
+                                            isGroup:
+                                                widget.chatReference?.isGroup ??
+                                                    false,
+                                          ),
+                                        ),
+                                      );
+                                    },
+                                  ),
+                                );
+                              },
                             );
                           },
                         ),
@@ -3151,30 +3466,54 @@ class ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget>
                                 ),
                               ),
                             ),
-                          // Hide input for read-only service chats (e.g. Lona Service)
+                          // Lona Service chat: show read-only message instead of input (as in fireflies-integration)
                           if (_isServiceChatReadOnly())
-                            _buildServiceChatReadOnlyMessage()
-                          else
-                            // Main Input Row (Replaced with RichChatInputWidget)
                             Padding(
                               padding: const EdgeInsets.symmetric(
                                   horizontal: 8.0, vertical: 8.0),
-                              child: Column(
-                                mainAxisSize: MainAxisSize.min,
-                                crossAxisAlignment: CrossAxisAlignment.stretch,
-                                children: [
-                                  // Attachment Previews
-                                  _buildAttachmentPreviews(),
+                              child: _buildServiceChatReadOnlyMessage(),
+                            )
+                          else
+                            // Main Input Row (RichChatInputWidget)
+                            // Shortcuts intercept Cmd+V/Ctrl+V so paste (images/files/text) is handled by us
+                            Shortcuts(
+                              shortcuts: const <ShortcutActivator, Intent>{
+                                SingleActivator(LogicalKeyboardKey.keyV,
+                                    meta: true): _PasteIntent(),
+                                SingleActivator(LogicalKeyboardKey.keyV,
+                                    control: true): _PasteIntent(),
+                              },
+                              child: Actions(
+                                actions: <Type, Action<Intent>>{
+                                  _PasteIntent: CallbackAction<_PasteIntent>(
+                                    onInvoke: (_) {
+                                      _onPasteInInput();
+                                      return null;
+                                    },
+                                  ),
+                                },
+                                child: Padding(
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 8.0, vertical: 8.0),
+                                  child: Column(
+                                    mainAxisSize: MainAxisSize.min,
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.stretch,
+                                    children: [
+                                      // Attachment Previews
+                                      _buildAttachmentPreviews(),
 
-                                  const SizedBox(height: 4),
+                                      const SizedBox(height: 4),
 
-                                  RichChatInputWidget(
-                                    controller: _quillController,
-                                    focusNode: _model.messageFocusNode,
-                                    isMentionActive: _model.showMentionOverlay,
-                                    isScreenRecording: _isScreenRecording,
-                                    hasAttachments:
-                                        _model.pendingAttachments.isNotEmpty ||
+                                      RichChatInputWidget(
+                                        controller: _quillController,
+                                        focusNode: _model.messageFocusNode,
+                                        isMentionActive:
+                                            _model.showMentionOverlay,
+                                        isScreenRecording: _isScreenRecording,
+                                        hasAttachments: _model
+                                                .pendingAttachments
+                                                .isNotEmpty ||
                                             _model.images.isNotEmpty ||
                                             (_model.image != null &&
                                                 _model.image!.isNotEmpty) ||
@@ -3183,38 +3522,48 @@ class ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget>
                                             (_model.audiopath != null &&
                                                 _model.audiopath!.isNotEmpty) ||
                                             _model.selectedVideoFile != null,
-                                    onSend: (markdown) =>
-                                        _sendMessage(contentOverride: markdown),
-                                    onAttachment: () async {
-                                      if (_isServiceChatReadOnly()) return;
-                                      await _handleFilePicker();
-                                    },
-                                    onEmoji: _toggleEmojiPicker,
-                                    onMention: (widget.chatReference != null &&
-                                            widget.chatReference!.isGroup)
-                                        ? _openMentionPopup
-                                        : null,
-                                    onScreenshot: () async {
-                                      if (_isServiceChatReadOnly()) return;
-                                      await _handleScreenshot();
-                                    },
-                                    onScreenRecord: () async {
-                                      if (_isServiceChatReadOnly()) return;
-                                      await _handleScreenRecord();
-                                    },
-                                    onPhotoLibrary: () async {
-                                      if (_isServiceChatReadOnly()) return;
-                                      await _handlePhotoLibrary();
-                                    },
-                                    onCamera: () async {
-                                      if (_isServiceChatReadOnly()) return;
-                                      await _handleCamera();
-                                    },
-                                    placeholder: _model.editingMessage != null
-                                        ? 'Edit your message...'
-                                        : 'Message...',
+                                        onSend: (markdown) {
+                                          if (_model.editingMessage != null) {
+                                            _updateMessage();
+                                          } else {
+                                            _sendMessage(
+                                                contentOverride: markdown);
+                                          }
+                                        },
+                                        onAttachment: () async {
+                                          if (_isServiceChatReadOnly()) return;
+                                          await _handleFilePicker();
+                                        },
+                                        onEmoji: _toggleEmojiPicker,
+                                        onMention: (widget.chatReference !=
+                                                    null &&
+                                                widget.chatReference!.isGroup)
+                                            ? _openMentionPopup
+                                            : null,
+                                        onScreenshot: () async {
+                                          if (_isServiceChatReadOnly()) return;
+                                          await _handleScreenshot();
+                                        },
+                                        onScreenRecord: () async {
+                                          if (_isServiceChatReadOnly()) return;
+                                          await _handleScreenRecord();
+                                        },
+                                        onPhotoLibrary: () async {
+                                          if (_isServiceChatReadOnly()) return;
+                                          await _handlePhotoLibrary();
+                                        },
+                                        onCamera: () async {
+                                          if (_isServiceChatReadOnly()) return;
+                                          await _handleCamera();
+                                        },
+                                        placeholder:
+                                            _model.editingMessage != null
+                                                ? 'Edit your message...'
+                                                : 'Message...',
+                                      ),
+                                    ],
                                   ),
-                                ],
+                                ),
                               ),
                             ),
                         ],
@@ -3833,5 +4182,20 @@ class ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget>
         ),
       ),
     );
+  }
+}
+
+/// One item in the combined chat timeline: either a message or the reminder digest.
+class _ThreadListItem {
+  _ThreadListItem({this.message, this.digest, this.messageIndex})
+      : assert(message == null || digest == null),
+        assert(message != null || digest != null);
+  final MessagesRecord? message;
+  final ReminderDigestsRecord? digest;
+  final int? messageIndex;
+  DateTime? get timestamp {
+    if (message != null) return message!.createdAt;
+    if (digest != null) return digest!.createdAt;
+    return null;
   }
 }

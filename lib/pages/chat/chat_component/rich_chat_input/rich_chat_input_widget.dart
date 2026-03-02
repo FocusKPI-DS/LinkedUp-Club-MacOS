@@ -1,3 +1,4 @@
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/foundation.dart';
@@ -166,7 +167,7 @@ class _RichChatInputWidgetState extends State<RichChatInputWidget> {
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
       color: FlutterFlowTheme.of(context).secondaryBackground,
       items: [
-        if (Platform.isIOS) ...[
+        if (!kIsWeb && Platform.isIOS) ...[
           PopupMenuItem(
             value: 'file',
             onTap: widget.onAttachment,
@@ -213,7 +214,7 @@ class _RichChatInputWidgetState extends State<RichChatInputWidget> {
             ),
           ),
         ] else ...[
-          // Non-iOS (existing logic)
+          // Non-iOS and non-web: Android, macOS, Windows, Linux
           PopupMenuItem(
             value: 'upload',
             onTap: widget.onAttachment,
@@ -221,9 +222,10 @@ class _RichChatInputWidgetState extends State<RichChatInputWidget> {
               children: [
                 Icon(
                     kIsWeb ||
-                            (Platform.isMacOS ||
-                                Platform.isWindows ||
-                                Platform.isLinux)
+                            (!kIsWeb &&
+                                (Platform.isMacOS ||
+                                    Platform.isWindows ||
+                                    Platform.isLinux))
                         ? Icons.computer
                         : Icons.photo_library,
                     size: 20,
@@ -231,9 +233,10 @@ class _RichChatInputWidgetState extends State<RichChatInputWidget> {
                 const SizedBox(width: 12),
                 Text(
                   kIsWeb ||
-                          (Platform.isMacOS ||
-                              Platform.isWindows ||
-                              Platform.isLinux)
+                          (!kIsWeb &&
+                              (Platform.isMacOS ||
+                                  Platform.isWindows ||
+                                  Platform.isLinux))
                       ? 'Upload from computer'
                       : 'Photo Library',
                   style: FlutterFlowTheme.of(context).bodyMedium,
@@ -243,7 +246,10 @@ class _RichChatInputWidgetState extends State<RichChatInputWidget> {
           ),
         ],
         if (kIsWeb ||
-            (Platform.isMacOS || Platform.isWindows || Platform.isLinux)) ...[
+            (!kIsWeb &&
+                (Platform.isMacOS ||
+                    Platform.isWindows ||
+                    Platform.isLinux))) ...[
           PopupMenuItem(
             value: 'screenshot',
             onTap: widget.onScreenshot,
@@ -385,11 +391,18 @@ class _RichChatInputWidgetState extends State<RichChatInputWidget> {
     return Container(
       decoration: BoxDecoration(
         color: FlutterFlowTheme.of(context).secondaryBackground,
-        borderRadius: BorderRadius.circular(8.0),
+        borderRadius: BorderRadius.circular(14.0),
         border: Border.all(
           color: FlutterFlowTheme.of(context).alternate,
-          width: 1.0,
+          width: 1.5,
         ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -457,10 +470,10 @@ class _RichChatInputWidgetState extends State<RichChatInputWidget> {
           // Editor with Enter-to-Send shortcut
           Padding(
             padding:
-                const EdgeInsets.symmetric(horizontal: 12.0, vertical: 8.0),
+                const EdgeInsets.symmetric(horizontal: 16.0, vertical: 10.0),
             child: ConstrainedBox(
               constraints: const BoxConstraints(
-                minHeight: 40,
+                minHeight: 48,
                 maxHeight: 200,
               ),
               child: QuillEditor.basic(
@@ -503,96 +516,147 @@ class _RichChatInputWidgetState extends State<RichChatInputWidget> {
             ),
           ),
 
-          // Bottom Actions
+          // Subtle divider separating editor from action bar
+          Divider(
+            height: 1,
+            thickness: 1,
+            color: FlutterFlowTheme.of(context).alternate.withOpacity(0.5),
+          ),
+
+          // Bottom Actions Bar
           Padding(
-            padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
+            padding:
+                const EdgeInsets.symmetric(horizontal: 10.0, vertical: 6.0),
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.center,
               children: [
-                // (+) Button
-                InkWell(
-                  key: _plusButtonKey,
-                  onTap: _showPlusMenu,
-                  borderRadius: BorderRadius.circular(20),
-                  child: Container(
-                    padding: const EdgeInsets.all(6),
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      color: FlutterFlowTheme.of(context).alternate,
+                // (+) Attach Button
+                Tooltip(
+                  message: 'Attach',
+                  child: InkWell(
+                    key: _plusButtonKey,
+                    onTap: _showPlusMenu,
+                    borderRadius: BorderRadius.circular(10),
+                    child: Container(
+                      width: 36,
+                      height: 36,
+                      decoration: BoxDecoration(
+                        color: FlutterFlowTheme.of(context)
+                            .primary
+                            .withOpacity(0.12),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Icon(
+                        Icons.add_rounded,
+                        size: 22,
+                        color: FlutterFlowTheme.of(context).primary,
+                      ),
                     ),
-                    child: Icon(Icons.add,
-                        size: 16,
-                        color: FlutterFlowTheme.of(context).primaryText),
                   ),
                 ),
 
-                const SizedBox(width: 8),
+                const SizedBox(width: 6),
 
-                // (Aa) Button
-                IconButton(
-                  icon: Icon(Icons.text_format,
-                      size: 20,
-                      color: _showToolbar
-                          ? FlutterFlowTheme.of(context).primary
-                          : FlutterFlowTheme.of(context).secondaryText),
-                  onPressed: _toggleToolbar,
-                  tooltip: 'Formatting',
-                  constraints:
-                      const BoxConstraints(minWidth: 32, minHeight: 32),
-                  padding: EdgeInsets.zero,
+                // Format (Aa) Button
+                Tooltip(
+                  message: 'Formatting',
+                  child: InkWell(
+                    onTap: _toggleToolbar,
+                    borderRadius: BorderRadius.circular(8),
+                    child: Container(
+                      width: 36,
+                      height: 36,
+                      decoration: BoxDecoration(
+                        color: _showToolbar
+                            ? FlutterFlowTheme.of(context)
+                                .primary
+                                .withOpacity(0.15)
+                            : Colors.transparent,
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Icon(
+                        Icons.text_format_rounded,
+                        size: 22,
+                        color: _showToolbar
+                            ? FlutterFlowTheme.of(context).primary
+                            : FlutterFlowTheme.of(context).secondaryText,
+                      ),
+                    ),
+                  ),
                 ),
 
-                const SizedBox(width: 4),
+                const SizedBox(width: 2),
 
                 // Emoji Button
-                IconButton(
-                  icon: Icon(Icons.emoji_emotions_outlined,
-                      size: 20,
-                      color: FlutterFlowTheme.of(context).secondaryText),
-                  onPressed: widget.onEmoji,
-                  tooltip: 'Emoji',
-                  constraints:
-                      const BoxConstraints(minWidth: 32, minHeight: 32),
-                  padding: EdgeInsets.zero,
+                Tooltip(
+                  message: 'Emoji',
+                  child: InkWell(
+                    onTap: widget.onEmoji,
+                    borderRadius: BorderRadius.circular(8),
+                    child: SizedBox(
+                      width: 36,
+                      height: 36,
+                      child: Icon(
+                        Icons.emoji_emotions_outlined,
+                        size: 22,
+                        color: FlutterFlowTheme.of(context).secondaryText,
+                      ),
+                    ),
+                  ),
                 ),
 
-                const SizedBox(width: 4),
+                const SizedBox(width: 2),
 
-                // @ Button
-                IconButton(
-                  icon: Icon(Icons.alternate_email,
-                      size: 20,
-                      color: FlutterFlowTheme.of(context).secondaryText),
-                  onPressed: widget.onMention,
-                  tooltip: 'Mention',
-                  constraints:
-                      const BoxConstraints(minWidth: 32, minHeight: 32),
-                  padding: EdgeInsets.zero,
-                ),
+                // @ Mention Button
+                if (widget.onMention != null)
+                  Tooltip(
+                    message: 'Mention',
+                    child: InkWell(
+                      onTap: widget.onMention,
+                      borderRadius: BorderRadius.circular(8),
+                      child: SizedBox(
+                        width: 36,
+                        height: 36,
+                        child: Icon(
+                          Icons.alternate_email_rounded,
+                          size: 21,
+                          color: FlutterFlowTheme.of(context).secondaryText,
+                        ),
+                      ),
+                    ),
+                  ),
 
                 const Spacer(),
 
-                // Send Button
-                InkWell(
-                  onTap: (_isComposing || widget.hasAttachments)
-                      ? _handleSend
-                      : null,
-                  borderRadius: BorderRadius.circular(4),
-                  child: Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                    decoration: BoxDecoration(
-                      color: (_isComposing || widget.hasAttachments)
-                          ? const Color(0xFF007A5A)
-                          : Colors.transparent,
-                      borderRadius: BorderRadius.circular(4),
-                    ),
-                    child: Icon(
-                      Icons.send,
-                      size: 18,
-                      color: (_isComposing || widget.hasAttachments)
-                          ? Colors.white
-                          : FlutterFlowTheme.of(context).secondaryText,
+                // Send Button — animated color transition
+                AnimatedContainer(
+                  duration: const Duration(milliseconds: 200),
+                  curve: Curves.easeInOut,
+                  decoration: BoxDecoration(
+                    color: (_isComposing || widget.hasAttachments)
+                        ? CupertinoColors.systemBlue
+                        : FlutterFlowTheme.of(context)
+                            .alternate
+                            .withOpacity(0.6),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Material(
+                    color: Colors.transparent,
+                    borderRadius: BorderRadius.circular(10),
+                    child: InkWell(
+                      onTap: (_isComposing || widget.hasAttachments)
+                          ? _handleSend
+                          : null,
+                      borderRadius: BorderRadius.circular(10),
+                      child: const Padding(
+                        padding:
+                            EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                        child: Icon(
+                          Icons.send_rounded,
+                          size: 20,
+                          color: Colors.white,
+                        ),
+                      ),
                     ),
                   ),
                 ),

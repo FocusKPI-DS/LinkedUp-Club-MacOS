@@ -63,7 +63,7 @@ class FFAppState extends ChangeNotifier {
           _translateLanguage = stored;
         }
       });
-       _safeInit(() {
+      _safeInit(() {
         _autoTranslate = prefs.getBool('ff_autoTranslate') ?? _autoTranslate;
       });
     });
@@ -431,7 +431,7 @@ class FFAppState extends ChangeNotifier {
     notifyListeners();
   }
 
-  // Auto translate preference
+  // Auto translate preference: when true, messages are translated to the selected target language automatically
   bool _autoTranslate = false;
   bool get autoTranslate => _autoTranslate;
   set autoTranslate(bool value) {

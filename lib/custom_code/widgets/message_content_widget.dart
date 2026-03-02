@@ -1,6 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
+import 'package:markdown/markdown.dart' as md;
+import 'package:flutter_highlighter/flutter_highlighter.dart';
+import 'package:flutter_highlighter/themes/atom-one-dark.dart';
+import 'package:google_fonts/google_fonts.dart';
+import 'package:flutter/services.dart';
+import 'package:ff_theme/flutter_flow/flutter_flow_theme.dart';
 import '/custom_code/widgets/index.dart' as custom_widgets;
 
 // Helper class to track match information
@@ -9,7 +15,7 @@ class _MatchInfo {
   final int end;
   final String text;
   final bool isMention;
-  
+
   _MatchInfo({
     required this.start,
     required this.end,
@@ -37,7 +43,7 @@ class MessageContentWidget extends StatelessWidget {
   /// WhatsApp-style: Only the @username portion is colored, not following text
   List<InlineSpan> _buildTextWithMentionsAndLinks() {
     final List<InlineSpan> spans = [];
-    
+
     // Match patterns for mentions:
     // 1. @FirstName (capitalized) - e.g., @Mitansh
     // 2. @FirstName LastName (both capitalized) - e.g., @Mitansh Patel
@@ -46,7 +52,7 @@ class MessageContentWidget extends StatelessWidget {
     final mentionRegex = RegExp(
       r'@(?:linkai|[A-Z][a-zA-Z]*(?:\s+[A-Z][a-zA-Z]*)?|[a-z]+)',
     );
-    
+
     // Match patterns for hyperlinks (URLs)
     // Supports: http://, https://, www., and common TLDs
     final urlRegex = RegExp(
@@ -75,7 +81,7 @@ class MessageContentWidget extends StatelessWidget {
     );
 
     // Style for hyperlinks - Blue (not bold, but clickable)
-    const linkStyle = TextStyle(
+    final linkStyle = TextStyle(
       fontSize: 17.0,
       fontFamily: 'SF Pro Text',
       color: const Color(0xFF007AFF), // iOS system blue
@@ -88,7 +94,7 @@ class MessageContentWidget extends StatelessWidget {
     // Find all mentions and links
     final mentionMatches = mentionRegex.allMatches(content).toList();
     final linkMatches = urlRegex.allMatches(content).toList();
-    
+
     // Combine all matches and sort by position
     final allMatches = <_MatchInfo>[];
     for (final match in mentionMatches) {
@@ -113,10 +119,10 @@ class MessageContentWidget extends StatelessWidget {
         ));
       }
     }
-    
+
     // Sort by start position
     allMatches.sort((a, b) => a.start.compareTo(b.start));
-    
+
     // Remove overlapping matches (mentions take priority)
     final filteredMatches = <_MatchInfo>[];
     for (final match in allMatches) {
@@ -136,10 +142,10 @@ class MessageContentWidget extends StatelessWidget {
         filteredMatches.add(match);
       }
     }
-    
+
     // Re-sort after filtering
     filteredMatches.sort((a, b) => a.start.compareTo(b.start));
-    
+
     // If no matches found, return full text in black
     if (filteredMatches.isEmpty) {
       return [
@@ -169,10 +175,10 @@ class MessageContentWidget extends StatelessWidget {
         ));
       } else {
         // Add hyperlink - BLUE and clickable
-        final url = match.text.startsWith('http') 
-            ? match.text 
-            : (match.text.startsWith('www.') 
-                ? 'https://${match.text}' 
+        final url = match.text.startsWith('http')
+            ? match.text
+            : (match.text.startsWith('www.')
+                ? 'https://${match.text}'
                 : 'https://${match.text}');
         spans.add(TextSpan(
           text: match.text,
@@ -213,8 +219,10 @@ class MessageContentWidget extends StatelessWidget {
       );
     }
 
-    // Check if content contains mentions
-    final hasMentions = content.contains(RegExp(r'@\w+'));
+    // Check if content contains mentions.
+    // Prioritize markdown code block rendering over mention if both exist.
+    final hasMentions =
+        content.contains(RegExp(r'@\w+')) && !content.contains('```');
 
     if (hasMentions) {
       // Render message with styled @mentions (bold blue), hyperlinks (blue), and normal text (black)
@@ -239,6 +247,125 @@ class MessageContentWidget extends StatelessWidget {
       selectable: true,
       onTapLink: onTapLink,
       styleSheet: styleSheet,
+      builders: {
+        'code': CodeElementBuilder(context),
+      },
+    );
+  }
+}
+
+class CodeElementBuilder extends MarkdownElementBuilder {
+  final BuildContext context;
+  CodeElementBuilder(this.context);
+
+  @override
+  Widget? visitElementAfter(md.Element element, TextStyle? preferredStyle) {
+    var language = '';
+
+    if (element.attributes['class'] != null) {
+      String lg = element.attributes['class'] as String;
+      if (lg.startsWith('language-')) {
+        language = lg.substring(9); // "language-dart" -> "dart"
+      }
+    }
+
+    // Determine if it is a block of code or inline code
+    final textContent = element.textContent;
+    final isCodeBlock = textContent.contains('\n') || language.isNotEmpty;
+
+    if (isCodeBlock) {
+      return Container(
+        margin: const EdgeInsets.symmetric(vertical: 8.0),
+        decoration: BoxDecoration(
+          color: const Color(0xFF282C34), // atom one dark background
+          borderRadius: BorderRadius.circular(8.0),
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            // Header with language and copy button
+            Container(
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+              color: const Color(0xFF21252B),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    language.isEmpty ? 'code' : language,
+                    style: const TextStyle(
+                      color: Color(0xFFABB2BF),
+                      fontSize: 12,
+                      fontFamily: 'SF Pro Text',
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  InkWell(
+                    onTap: () async {
+                      await Clipboard.setData(ClipboardData(text: textContent));
+                      if (!context.mounted) return;
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text(
+                            'Code copied to clipboard',
+                            style: GoogleFonts.inter(
+                              color: FlutterFlowTheme.of(context)
+                                  .secondaryBackground,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                          backgroundColor:
+                              FlutterFlowTheme.of(context).secondaryText,
+                          duration: const Duration(milliseconds: 1600),
+                        ),
+                      );
+                    },
+                    child: const Icon(Icons.copy,
+                        size: 16, color: Color(0xFFABB2BF)),
+                  )
+                ],
+              ),
+            ),
+            SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              padding: const EdgeInsets.all(16.0),
+              child: HighlightView(
+                textContent,
+                language: language.isEmpty
+                    ? 'dart'
+                    : language, // fallback language if not specified
+                theme: atomOneDarkTheme,
+                padding: EdgeInsets.zero,
+                textStyle: GoogleFonts.firaCode(
+                  fontSize: 14,
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    // Inline code
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 4.0, vertical: 2.0),
+      decoration: BoxDecoration(
+        color: FlutterFlowTheme.of(context).secondaryBackground,
+        borderRadius: BorderRadius.circular(4.0),
+        border: Border.all(
+          color: FlutterFlowTheme.of(context).alternate,
+          width: 1.0,
+        ),
+      ),
+      child: Text(
+        textContent,
+        style: preferredStyle?.copyWith(
+          fontFamily: GoogleFonts.firaCode().fontFamily,
+          backgroundColor: Colors.transparent,
+          color: FlutterFlowTheme.of(context).primaryText,
+        ),
+      ),
     );
   }
 }

@@ -10,6 +10,8 @@ import '/flutter_flow/flutter_flow_util.dart';
 // import '/flutter_flow/flutter_flow_widgets.dart';
 import '/pages/chat/chat_component/p_d_f_view/p_d_f_view_widget.dart';
 import '/pages/chat/chat_component/report_component/report_component_widget.dart';
+import '/pages/chat/chat_component/task_reminder_digest_card.dart';
+import '../chat_thread_component/chat_thread_component_widget.dart';
 import 'dart:ui';
 import 'dart:io';
 import 'package:flutter/foundation.dart' show kIsWeb;
@@ -51,7 +53,6 @@ class ChatThreadWidget extends StatefulWidget {
     this.onReplyToMessage,
     this.onScrollToMessage,
     this.onEditMessage,
-    this.translateNotifier,
     this.isHighlighted = false,
     this.isGroup = false,
     this.mentionableUsers = const [],
@@ -67,7 +68,6 @@ class ChatThreadWidget extends StatefulWidget {
   final Function(MessagesRecord)? onReplyToMessage;
   final Function(String)? onScrollToMessage;
   final Function(MessagesRecord)? onEditMessage;
-  final ValueNotifier<String?>? translateNotifier;
   final bool isHighlighted;
   final bool isGroup; // Show profile photos only in group chats
   final List<String> mentionableUsers;
@@ -83,6 +83,7 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
   final Set<String> _locallyRemovedReactions = <String>{};
   bool _isHoveredForMenu = false;
   bool _isMenuOpen = false;
+  bool _isSummarySectionExpanded = false;
   // Cache for file info results to prevent unnecessary rebuilds
   Map<String, dynamic>? _cachedFileInfo;
   ScaffoldMessengerState? _scaffoldMessenger;
@@ -90,39 +91,46 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
   bool _isTranslating = false;
 
   Future<void> _translateMessage() async {
-    print('🌐 _translateMessage called for ${widget.message?.reference.id}');
-    if (widget.message?.content == null || widget.message!.content.isEmpty) return;
-    
+    if (widget.message?.content == null || widget.message!.content.isEmpty)
+      return;
+
     // If already translated, toggle it off (optional, or just keep it)
     // For now, let's just translate if not present
     if (_translatedContent != null) return;
 
     setState(() => _isTranslating = true);
-    
+
     try {
       final translator = GoogleTranslator();
       String toLang;
       // Determine target language
       if (FFAppState().translateLanguage == 'system') {
         if (!kIsWeb && Platform.localeName.isNotEmpty) {
-           toLang = Platform.localeName.split('_').first;
+          final locale = Platform.localeName.toLowerCase().replaceAll('_', '-');
+          if (locale.contains('hant') ||
+              locale.contains('tw') ||
+              locale.contains('hk')) {
+            toLang = 'zh-tw';
+          } else if (locale.startsWith('zh')) {
+            toLang = 'zh-cn';
+          } else {
+            toLang = locale.split('-').first;
+          }
         } else {
-           toLang = 'en'; // Default or fallback
+          toLang = 'en'; // Default or fallback
         }
       } else {
         toLang = FFAppState().translateLanguage;
       }
 
-      // Fix specific language codes mappings if needed for the translator package
-      // The package supports most standard codes, but some might need adjustment
-      // zh -> zh-cn is critical. pt usually works but specific variants are better.
-      if (toLang == 'zh') toLang = 'zh-cn';
-      if (toLang == 'pt') toLang = 'pt-br'; // Default pt to pt-br if generic
+      // Final safety check for 'zh' which translator package doesn't support directly
+      if (toLang == 'zh') {
+        toLang = 'zh-cn';
+      }
 
-      print('🌐 Translating to: $toLang');
-      
-      final translation = await translator.translate(widget.message!.content, to: toLang);
-      
+      final translation =
+          await translator.translate(widget.message!.content, to: toLang);
+
       if (mounted) {
         setState(() {
           _translatedContent = translation.text;
@@ -135,16 +143,16 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
         // Show user-friendly error
         String errorMessage = 'Translation service unavailable';
         if (e.toString().contains('500') || e.toString().contains('html')) {
-           errorMessage = 'Translation busy. Please try again later.';
+          errorMessage = 'Translation busy. Please try again later.';
         } else if (kIsWeb) {
-           errorMessage = 'Translation may be blocked on Web. Try Desktop app.';
+          errorMessage = 'Translation may be blocked on Web. Try Desktop app.';
         }
-        
+
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('$errorMessage: $e'),
+            content: Text(errorMessage),
             backgroundColor: Colors.red,
-            duration: const Duration(seconds: 5),
+            duration: Duration(seconds: 3),
           ),
         );
       }
@@ -160,35 +168,38 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
   @override
   void initState() {
     super.initState();
-    print('🧵 ChatThreadWidget initState for message: ${widget.message?.reference.id}');
     _model = createModel(context, () => ChatThreadModel());
-    
     // Auto-translate if enabled
     if (FFAppState().autoTranslate) {
       _translateMessage();
     }
-
-    // Listen for translate requests from mobile menu
-    widget.translateNotifier?.addListener(_onTranslateNotified);
-
+    ChatThreadComponentWidgetState.translateNotifier
+        .addListener(_onTranslateTriggered);
     WidgetsBinding.instance.addPostFrameCallback((_) => safeSetState(() {}));
+  }
+
+  void _onTranslateTriggered() {
+    if (ChatThreadComponentWidgetState.translateNotifier.value ==
+        widget.message?.reference.id) {
+      if (_translatedContent == null) {
+        _translateMessage();
+      }
+    }
   }
 
   @override
   void didUpdateWidget(ChatThreadWidget oldWidget) {
     super.didUpdateWidget(oldWidget);
-    // Reload if auto-translate setting changed or message content changed
+    // When auto-translate is on, translate if content changed or not yet translated
     if (FFAppState().autoTranslate) {
-       // If message content changed
-       if (widget.message?.content != oldWidget.message?.content) {
-         _translatedContent = null; // Reset translation
-         _translateMessage();
-       }
-       
-       // If just enabled auto-translate (handled via setState elsewhere, but good to have)
-       if (_translatedContent == null && widget.message?.content != null) {
-          _translateMessage();
-       }
+      if (widget.message?.content != oldWidget.message?.content) {
+        _translatedContent = null;
+        _translateMessage();
+      } else if (_translatedContent == null &&
+          widget.message?.content != null &&
+          widget.message!.content.trim().isNotEmpty) {
+        _translateMessage();
+      }
     }
   }
 
@@ -201,21 +212,11 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
 
   @override
   void dispose() {
-    widget.translateNotifier?.removeListener(_onTranslateNotified);
+    ChatThreadComponentWidgetState.translateNotifier
+        .removeListener(_onTranslateTriggered);
     _model.maybeDispose();
     _scaffoldMessenger = null;
     super.dispose();
-  }
-
-  /// Called when translateNotifier fires - check if this message should translate
-  void _onTranslateNotified() {
-    final targetId = widget.translateNotifier?.value;
-    print('🔔 _onTranslateNotified: targetId=$targetId, myId=${widget.message?.reference.id}');
-    if (targetId != null && 
-        widget.message?.reference.id == targetId &&
-        _translatedContent == null) {
-      _translateMessage();
-    }
   }
 
   String _formatMessageTimestamp(DateTime? timestamp) {
@@ -302,38 +303,61 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
 
   Widget _buildFileAttachmentCard(
       Map<String, dynamic> fileInfo, String attachmentUrl) {
-    final isPdf = fileInfo['isPdf'] == true;
     final fileName = fileInfo['fileName'] as String? ?? 'document';
-    final ext = fileName.split('.').last.toLowerCase();
-    
-    // Define previewable extensions
-    final isPreviewable = isPdf || 
-        ['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 
-         'txt', 'md', 'json', 'xml', 'csv', 'log', 'dart', 'js', 'html', 'css',
-         'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx'].contains(ext);
+    final ext =
+        fileName.contains('.') ? fileName.split('.').last.toLowerCase() : '';
+    // Same as Vertin-Dev: preview PDF, images, text, and Office docs in one viewer
+    final isPreviewable = fileInfo['isPdf'] == true ||
+        [
+          'jpg',
+          'jpeg',
+          'png',
+          'gif',
+          'webp',
+          'bmp',
+          'txt',
+          'md',
+          'json',
+          'xml',
+          'csv',
+          'log',
+          'dart',
+          'js',
+          'html',
+          'css',
+          'doc',
+          'docx',
+          'xls',
+          'xlsx',
+          'ppt',
+          'pptx',
+        ].contains(ext);
 
     return GestureDetector(
       onTap: () async {
         if (isPreviewable) {
-          await showDialog(
-            context: context,
-            builder: (dialogContext) {
-              return Dialog(
-                elevation: 0,
-                insetPadding: EdgeInsets.zero,
-                backgroundColor: Colors.transparent,
-                alignment: const AlignmentDirectional(0.0, 0.0)
-                    .resolve(Directionality.of(context)),
-                child: PDFViewWidget(
-                  url: attachmentUrl,
-                  fileName: fileName,
-                ),
-              );
-            },
-          );
+          final url = attachmentUrl;
+          final name = fileName;
+          WidgetsBinding.instance.addPostFrameCallback((_) async {
+            if (!context.mounted) return;
+            await showDialog(
+              context: context,
+              builder: (dialogContext) {
+                return Dialog(
+                  elevation: 0,
+                  insetPadding: EdgeInsets.zero,
+                  backgroundColor: Colors.transparent,
+                  alignment: const AlignmentDirectional(0.0, 0.0)
+                      .resolve(Directionality.of(context)),
+                  child: PDFViewWidget(
+                    url: url,
+                    fileName: name,
+                  ),
+                );
+              },
+            );
+          });
         } else {
-          // Download file directly instead of opening in browser
-          // final fileName = fileInfo['fileName'] as String; // Already defined above
           await _downloadFile(attachmentUrl, fileName);
         }
       },
@@ -341,7 +365,7 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
         constraints: const BoxConstraints(
           maxWidth: 280.0,
         ),
-        padding: const EdgeInsets.all(12.0),
+        padding: EdgeInsets.all(12.0),
         decoration: BoxDecoration(
           color: FlutterFlowTheme.of(context).secondaryBackground,
           borderRadius: BorderRadius.circular(12.0),
@@ -366,7 +390,7 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
                 size: 28.0,
               ),
             ),
-            const SizedBox(width: 12.0),
+            SizedBox(width: 12.0),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -379,8 +403,10 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
                           fontSize: 14.0,
                           fontWeight: FontWeight.w600,
                         ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                   ),
-                  const SizedBox(height: 4.0),
+                  SizedBox(height: 4.0),
                   Text(
                     (fileInfo['fileSize'] as String).isNotEmpty
                         ? '${fileInfo['fileType']} • ${fileInfo['fileSize']}'
@@ -394,7 +420,7 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
                 ],
               ),
             ),
-            const SizedBox(width: 8.0),
+            SizedBox(width: 8.0),
             GestureDetector(
               onTap: () async {
                 final fileName = fileInfo['fileName'] as String;
@@ -459,44 +485,59 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
       if (storedFileName is String && storedFileName.trim().isNotEmpty) {
         fileName = storedFileName.trim();
       } else {
-      // Fallback: try to get filename from message content or URL
-      final hasAttachment = widget.message?.attachmentUrl != null &&
-          widget.message!.attachmentUrl.isNotEmpty;
+        // Fallback: try to get filename from message content or URL
+        final hasAttachment = widget.message?.attachmentUrl != null &&
+            widget.message!.attachmentUrl.isNotEmpty;
 
-      if (widget.message?.content != null &&
-          widget.message!.content.isNotEmpty) {
-        final content = widget.message!.content;
-        // Check if content looks like a file name
-        final hasExtension = content.contains('.');
-        final noPathSeparators =
-            !content.contains('/') && !content.contains('\\');
-        final notStoragePath =
-            !content.contains('users/') && !content.contains('uploads/');
-        final reasonableLength = content.length < 200 && content.isNotEmpty;
+        if (widget.message?.content != null &&
+            widget.message!.content.isNotEmpty) {
+          final content = widget.message!.content;
+          // Check if content looks like a file name
+          final hasExtension = content.contains('.');
+          final noPathSeparators =
+              !content.contains('/') && !content.contains('\\');
+          final notStoragePath =
+              !content.contains('users/') && !content.contains('uploads/');
+          final reasonableLength = content.length < 200 && content.length > 0;
 
-        // If there's an attachment, be more lenient - content is likely the filename
-        // Allow spaces in filenames (e.g., "test data.csv", "test_data.csv")
-        // Exclude if it looks like a full sentence (too many words or too long)
-        final wordCount = content.split(' ').length;
-        final looksLikeFilename = hasExtension &&
-            noPathSeparators &&
-            notStoragePath &&
-            reasonableLength &&
-            // If there's an attachment, prioritize treating content as filename
-            // unless it's clearly a sentence (many words or very long)
-            (hasAttachment
-                ? (content.length < 150 && wordCount < 8)
-                : (content.length < 100 && wordCount < 5));
+          // If there's an attachment, be more lenient - content is likely the filename
+          // Allow spaces in filenames (e.g., "test data.csv", "test_data.csv")
+          // Exclude if it looks like a full sentence (too many words or too long)
+          final wordCount = content.split(' ').length;
+          final looksLikeFilename = hasExtension &&
+              noPathSeparators &&
+              notStoragePath &&
+              reasonableLength &&
+              // If there's an attachment, prioritize treating content as filename
+              // unless it's clearly a sentence (many words or very long)
+              (hasAttachment
+                  ? (content.length < 150 && wordCount < 8)
+                  : (content.length < 100 && wordCount < 5));
 
-        if (looksLikeFilename) {
-          fileName = content;
+          if (looksLikeFilename) {
+            fileName = content;
+          } else {
+            // If content is not a file name, extract from URL
+            final pathSegments = uri.pathSegments;
+            if (pathSegments.isNotEmpty) {
+              final lastSegment = pathSegments.last.split('?').first;
+              // If it's a Firebase Storage path, try to extract just the filename part
+              // Format: users/.../uploads/timestamp.ext -> extract timestamp.ext
+              if (lastSegment.contains('/')) {
+                fileName = lastSegment.split('/').last;
+              } else {
+                fileName = lastSegment;
+              }
+            } else {
+              fileName = 'file';
+            }
+          }
         } else {
-          // If content is not a file name, extract from URL
+          // Extract from URL if no content
           final pathSegments = uri.pathSegments;
           if (pathSegments.isNotEmpty) {
             final lastSegment = pathSegments.last.split('?').first;
             // If it's a Firebase Storage path, try to extract just the filename part
-            // Format: users/.../uploads/timestamp.ext -> extract timestamp.ext
             if (lastSegment.contains('/')) {
               fileName = lastSegment.split('/').last;
             } else {
@@ -506,25 +547,23 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
             fileName = 'file';
           }
         }
-      } else {
-        // Extract from URL if no content
-        final pathSegments = uri.pathSegments;
-        if (pathSegments.isNotEmpty) {
-          final lastSegment = pathSegments.last.split('?').first;
-          // If it's a Firebase Storage path, try to extract just the filename part
-          if (lastSegment.contains('/')) {
-            fileName = lastSegment.split('/').last;
-          } else {
-            fileName = lastSegment;
-          }
-        } else {
-          fileName = 'file';
-        }
-      }
       } // end else (no stored file_name)
 
-      final extension =
+      // Extension from fileName; fallback: detect from URL path (e.g. Firebase Storage encoded paths)
+      String extension =
           fileName.contains('.') ? fileName.split('.').last.toLowerCase() : '';
+      if (extension.isEmpty || extension.length > 5) {
+        final decodedPath = Uri.decodeComponent(fileUrl);
+        final urlExtMatch = RegExp(r'\.(pdf|docx?|pptx?|xlsx?|txt|csv)(?:\?|$)',
+                caseSensitive: false)
+            .firstMatch(decodedPath);
+        if (urlExtMatch != null) {
+          extension = urlExtMatch.group(1)!.toLowerCase();
+          if (!fileName.contains('.'))
+            fileName =
+                fileName == 'file' ? 'file.$extension' : '$fileName.$extension';
+        }
+      }
 
       IconData fileIcon;
       String fileType;
@@ -573,10 +612,10 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
           iconColor = FlutterFlowTheme.of(context).primary;
       }
 
-      // Try to get file size
+      // Try to get file size and optional filename from Content-Disposition
       String fileSizeText = '';
       try {
-        final response = await http.head(uri).timeout(const Duration(seconds: 3));
+        final response = await http.head(uri).timeout(Duration(seconds: 3));
         final contentLength = response.headers['content-length'];
         if (contentLength != null) {
           final size = int.tryParse(contentLength) ?? 0;
@@ -587,6 +626,38 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
               fileSizeText = '${(size / 1024).toStringAsFixed(1)} KB';
             } else {
               fileSizeText = '${(size / (1024 * 1024)).toStringAsFixed(1)} MB';
+            }
+          }
+        }
+        // Use Content-Disposition filename when we still don't have a proper extension
+        if (extension.isEmpty || extension.length > 5) {
+          final disposition = response.headers['content-disposition'];
+          if (disposition != null) {
+            final filenameMatch = RegExp(
+                    r'filename\*?=(?:UTF-8' ')?"?([^";\s]+)"?',
+                    caseSensitive: false)
+                .firstMatch(disposition);
+            if (filenameMatch != null) {
+              final suggestedName =
+                  Uri.decodeComponent(filenameMatch.group(1)!.trim());
+              if (suggestedName.contains('.')) {
+                final ext = suggestedName.split('.').last.toLowerCase();
+                if ([
+                  'pdf',
+                  'doc',
+                  'docx',
+                  'ppt',
+                  'pptx',
+                  'xls',
+                  'xlsx',
+                  'txt',
+                  'csv'
+                ].contains(ext)) {
+                  extension = ext;
+                  if (fileName == 'file' || !fileName.contains('.'))
+                    fileName = suggestedName;
+                }
+              }
             }
           }
         }
@@ -601,6 +672,8 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
         'fileIcon': fileIcon,
         'iconColor': iconColor,
         'isPdf': extension == 'pdf',
+        'isDocx': extension == 'docx' || extension == 'doc',
+        'isPpt': extension == 'pptx' || extension == 'ppt',
       };
     } catch (e) {
       return {
@@ -610,6 +683,8 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
         'fileIcon': Icons.insert_drive_file,
         'iconColor': FlutterFlowTheme.of(context).primary,
         'isPdf': false,
+        'isDocx': false,
+        'isPpt': false,
       };
     }
   }
@@ -658,12 +733,131 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
     );
   }
 
+  /// Normalize path to full "action_items/xyz" so update hits the right doc.
+  static String _normalizeActionItemPath(String path) {
+    if (path.isEmpty) return path;
+    if (path.contains('/')) return path;
+    return 'action_items/$path';
+  }
+
+  Future<void> _markActionItemDone(String actionItemRefPath) async {
+    final path = _normalizeActionItemPath(actionItemRefPath);
+    try {
+      final ref = FirebaseFirestore.instance.doc(path);
+      final snap = await ref.get();
+      if (!snap.exists) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Task already completed or removed',
+              style: GoogleFonts.inter(
+                color: FlutterFlowTheme.of(context).secondaryBackground,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+            duration: const Duration(milliseconds: 2000),
+            backgroundColor: FlutterFlowTheme.of(context).secondaryText,
+          ),
+        );
+        return;
+      }
+      await ref.update({
+        'status': 'completed',
+        'completed_time': FieldValue.serverTimestamp(),
+      });
+    } on FirebaseException catch (e) {
+      if (!mounted) return;
+      final isNotFound = e.code == 'not-found';
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            isNotFound
+                ? 'Task already completed or removed'
+                : 'Failed to update: ${e.message}',
+          ),
+          backgroundColor: isNotFound
+              ? FlutterFlowTheme.of(context).secondaryText
+              : Colors.red,
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Failed to update: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
+  Future<void> _remindAgain(String actionItemRefPath) async {
+    final path = _normalizeActionItemPath(actionItemRefPath);
+    try {
+      final ref = FirebaseFirestore.instance.doc(path);
+      final snap = await ref.get();
+      if (!snap.exists) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Task no longer found',
+              style: GoogleFonts.inter(
+                color: FlutterFlowTheme.of(context).secondaryBackground,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+            backgroundColor: FlutterFlowTheme.of(context).secondaryText,
+          ),
+        );
+        return;
+      }
+      await ref.update({'last_reminder_at': FieldValue.delete()});
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Reminder will be sent again on the next run',
+            style: GoogleFonts.inter(
+              color: FlutterFlowTheme.of(context).secondaryBackground,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+          duration: const Duration(milliseconds: 2000),
+          backgroundColor: FlutterFlowTheme.of(context).secondaryText,
+        ),
+      );
+    } on FirebaseException catch (e) {
+      if (!mounted) return;
+      final isNotFound = e.code == 'not-found';
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            isNotFound
+                ? 'Task no longer found'
+                : 'Failed to reset reminder: ${e.message}',
+          ),
+          backgroundColor: isNotFound
+              ? FlutterFlowTheme.of(context).secondaryText
+              : Colors.red,
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Failed to reset reminder: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
   Future<void> _openReportDialog() async {
     if (widget.message == null ||
         widget.chatRef == null ||
-        widget.userRef == null) {
-      return;
-    }
+        widget.userRef == null) return;
     await showAlignedDialog(
       context: context,
       isGlobal: false,
@@ -923,7 +1117,7 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
             size: (!kIsWeb && Platform.isIOS) ? 16 : 12,
             color: (!kIsWeb && Platform.isIOS)
                 ? Colors.black54
-                : const Color(0xFF4B5563),
+                : Color(0xFF4B5563),
           ),
         ),
       ),
@@ -957,7 +1151,8 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
             break;
           case _MsgAction.save:
             // Check if it's a video or image
-            if (widget.message?.video != null && widget.message!.video.isNotEmpty) {
+            if (widget.message?.video != null &&
+                widget.message!.video!.isNotEmpty) {
               await _saveVideo();
             } else {
               await _saveImage();
@@ -1046,7 +1241,7 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
             (widget.message?.images != null &&
                 widget.message!.images.isNotEmpty) ||
             (widget.message?.video != null &&
-                widget.message!.video.isNotEmpty)) ...[
+                widget.message!.video!.isNotEmpty)) ...[
           PopupMenuItem(
             value: _MsgAction.save,
             child: _MenuRow(
@@ -1295,8 +1490,8 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
             ),
             if (_isHoveredForMenu || _isMenuOpen)
               Positioned(
-                top: -4,
-                right: -5,
+                top: -1,
+                right: 8,
                 child: _messageMenuButton(),
               ),
             // Reactions badge at OPPOSITE corner to avoid timestamp
@@ -1382,7 +1577,7 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
                 future: _formatUsernames(uids),
                 builder: (context, snapshot) {
                   final message =
-                      '${emoji} reacted by: ${snapshot.data ?? '…'}';
+                      '${emoji} reacted by: ' + (snapshot.data ?? '…');
                   return Tooltip(
                     message: message,
                     waitDuration: const Duration(milliseconds: 250),
@@ -1444,6 +1639,846 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
     }
   }
 
+  String? _formatFirefliesDate(String? dateString) {
+    if (dateString == null || dateString.isEmpty) return null;
+    try {
+      final dt = DateTime.parse(dateString);
+      final local = dt.toLocal();
+      return '${_monthShort(local.month)} ${local.day}, ${local.year} · ${local.hour > 12 ? local.hour - 12 : (local.hour == 0 ? 12 : local.hour)}:${local.minute.toString().padLeft(2, '0')} ${local.hour >= 12 ? 'PM' : 'AM'}';
+    } catch (_) {
+      return dateString;
+    }
+  }
+
+  String _monthShort(int month) {
+    const m = [
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec'
+    ];
+    return m[month - 1];
+  }
+
+  static const List<Color> _actionItemCardColors = [
+    Color(0xFF1A73E8), // blue
+    Color(0xFF0D9488), // teal/green
+    Color(0xFF7C3AED), // purple
+    Color(0xFFEA580C), // orange
+  ];
+
+  String _getInitials(String name) {
+    final parts = name.trim().split(RegExp(r'\s+'));
+    if (parts.isEmpty) return '?';
+    if (parts.length == 1)
+      return parts[0].isNotEmpty ? parts[0].substring(0, 1).toUpperCase() : '?';
+    final a = parts[0].isNotEmpty ? parts[0].substring(0, 1).toUpperCase() : '';
+    final b = parts[1].isNotEmpty ? parts[1].substring(0, 1).toUpperCase() : '';
+    return a + b;
+  }
+
+  Color _getColorForName(String name) {
+    var hash = 0;
+    for (var i = 0; i < name.length; i++)
+      hash = (hash * 31 + name.codeUnitAt(i)) & 0x7FFFFFFF;
+    return _actionItemCardColors[hash % _actionItemCardColors.length];
+  }
+
+  /// Parses Fireflies action_items string (e.g. " **Name** task1 (06:35) task2 **Name2** ...") into by-person structure.
+  static List<Map<String, dynamic>> _parseFirefliesActionItemsByPerson(
+      String? raw) {
+    if (raw == null || raw.trim().isEmpty) return [];
+    final list = <Map<String, dynamic>>[];
+    final namePattern = RegExp(r'\*\*([^*]+)\*\*');
+    final matches = namePattern.allMatches(raw).toList();
+    if (matches.isEmpty) return [];
+    for (var i = 0; i < matches.length; i++) {
+      final name = matches[i].group(1)?.trim() ?? '';
+      if (name.isEmpty) continue;
+      final start = matches[i].end;
+      final end = i + 1 < matches.length ? matches[i + 1].start : raw.length;
+      final block = raw.substring(start, end).trim();
+      if (block.isEmpty) continue;
+      // Split block into individual tasks by (MM:SS) or (M:SS) timestamp pattern
+      final taskStrings = block.split(RegExp(r'\s*\(\d{1,2}:\d{2}\)\s*'));
+      final tasks = taskStrings
+          .map((s) => s.trim())
+          .where((s) => s.isNotEmpty)
+          .map((title) => <String, dynamic>{'title': title})
+          .toList();
+      if (tasks.isEmpty) tasks.add(<String, dynamic>{'title': block});
+      list.add(<String, dynamic>{'person': name, 'tasks': tasks});
+    }
+    return list;
+  }
+
+  Widget _buildFirefliesSummaryCard(
+    BuildContext context,
+    Map<String, dynamic> summary, {
+    bool isSummaryExpanded = true,
+    VoidCallback? onSummaryToggle,
+  }) {
+    final title = summary['title'] as String? ?? 'Meeting summary';
+    final dateString = summary['dateString'] as String?;
+    final duration = summary['duration'];
+    final actionItems = summary['action_items'];
+    final actionList = actionItems is List
+        ? actionItems.map((e) => e is String ? e : e.toString()).toList()
+        : <String>[];
+    final actionItemsByPersonRaw = summary['action_items_by_person'];
+    var actionItemsByPerson = actionItemsByPersonRaw is List
+        ? actionItemsByPersonRaw
+            .map((e) => e is Map ? Map<String, dynamic>.from(e as Map) : null)
+            .whereType<Map<String, dynamic>>()
+            .toList()
+        : <Map<String, dynamic>>[];
+    if (actionItemsByPerson.isEmpty && actionItems is String) {
+      actionItemsByPerson =
+          _parseFirefliesActionItemsByPerson(actionItems as String);
+    }
+    final useByPerson = actionItemsByPerson.isNotEmpty;
+    final overview = summary['overview'] as String?;
+    final bulletGist = summary['bullet_gist'] as String?;
+    final shortSummary = summary['short_summary'] as String?;
+    final bodyText = overview?.isNotEmpty == true
+        ? overview
+        : (bulletGist?.isNotEmpty == true ? bulletGist : shortSummary);
+    final formattedDate = _formatFirefliesDate(dateString?.toString());
+    final durationStr =
+        (duration != null && duration is num && (duration as num) > 0)
+            ? '${(duration as num).toStringAsFixed(1)} min'
+            : null;
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final maxWidth = constraints.maxWidth * 0.82;
+        return Padding(
+          padding: const EdgeInsets.symmetric(vertical: 10.0, horizontal: 16.0),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              CircleAvatar(
+                radius: 20,
+                backgroundColor: const Color(0xFF0EA5E9).withOpacity(0.15),
+                child: const Icon(
+                  Icons.auto_awesome,
+                  size: 22,
+                  color: Color(0xFF0284C7),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Flexible(
+                child: Container(
+                  constraints: BoxConstraints(maxWidth: maxWidth),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: const Color(0xFFE8EAED),
+                      width: 1,
+                    ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.06),
+                        blurRadius: 12,
+                        offset: const Offset(0, 2),
+                      ),
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.04),
+                        blurRadius: 6,
+                        offset: const Offset(0, 1),
+                      ),
+                    ],
+                  ),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(12),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // Header strip: LonaAI pill (Google-style chip)
+                        Padding(
+                          padding: const EdgeInsets.fromLTRB(16, 14, 16, 0),
+                          child: Row(
+                            children: [
+                              Icon(
+                                Icons.auto_awesome,
+                                size: 16,
+                                color: const Color(0xFF5F6368),
+                              ),
+                              const SizedBox(width: 6),
+                              Text(
+                                'LonaAI',
+                                style: FlutterFlowTheme.of(context)
+                                    .bodySmall
+                                    .override(
+                                      fontFamily: 'Inter',
+                                      color: const Color(0xFF5F6368),
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w600,
+                                      letterSpacing: 0.2,
+                                    ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        // Title
+                        Padding(
+                          padding: const EdgeInsets.fromLTRB(16, 10, 16, 0),
+                          child: Text(
+                            title,
+                            style: FlutterFlowTheme.of(context)
+                                .titleSmall
+                                .override(
+                                  fontFamily: 'Inter',
+                                  color: const Color(0xFF202124),
+                                  fontSize: 17,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                          ),
+                        ),
+                        // Meta: date · duration
+                        if (formattedDate != null || durationStr != null) ...[
+                          Padding(
+                            padding: const EdgeInsets.fromLTRB(16, 4, 16, 0),
+                            child: Text(
+                              [
+                                if (formattedDate != null) formattedDate,
+                                if (durationStr != null) durationStr,
+                              ].join(' · '),
+                              style: FlutterFlowTheme.of(context)
+                                  .bodySmall
+                                  .override(
+                                    fontFamily: 'Inter',
+                                    color: const Color(0xFF5F6368),
+                                    fontSize: 12,
+                                  ),
+                            ),
+                          ),
+                        ],
+                        // Divider (Google-style subtle separator)
+                        const Padding(
+                          padding: EdgeInsets.fromLTRB(16, 12, 16, 0),
+                          child: Divider(
+                            height: 1,
+                            thickness: 1,
+                            color: Color(0xFFE8EAED),
+                          ),
+                        ),
+                        // Action items section (by-person format for manual transcript, else flat list)
+                        if (useByPerson || actionList.isNotEmpty) ...[
+                          const SizedBox(height: 12),
+                          Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 16),
+                            child: Container(
+                              width: double.infinity,
+                              padding:
+                                  const EdgeInsets.fromLTRB(14, 14, 14, 14),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFF8F9FA),
+                                borderRadius: BorderRadius.circular(10),
+                                border:
+                                    Border.all(color: const Color(0xFFE8EAED)),
+                              ),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Text(
+                                    'Action items',
+                                    style: FlutterFlowTheme.of(context)
+                                        .titleSmall
+                                        .override(
+                                          fontFamily: 'Inter',
+                                          color: const Color(0xFF202124),
+                                          fontSize: 15,
+                                          fontWeight: FontWeight.w600,
+                                          letterSpacing: 0.1,
+                                        ),
+                                  ),
+                                  const SizedBox(height: 10),
+                                  if (useByPerson)
+                                    LayoutBuilder(
+                                      builder: (context, constraints) {
+                                        final cardWidth =
+                                            (constraints.maxWidth - 10) / 2;
+                                        return Wrap(
+                                          spacing: 10,
+                                          runSpacing: 10,
+                                          children: actionItemsByPerson
+                                              .map((personBlock) {
+                                            final personName =
+                                                personBlock['person']
+                                                        as String? ??
+                                                    'Unassigned';
+                                            final tasksRaw =
+                                                personBlock['tasks'];
+                                            final tasks = tasksRaw is List
+                                                ? tasksRaw
+                                                    .map((e) => e is Map
+                                                        ? Map<String,
+                                                                dynamic>.from(
+                                                            e as Map)
+                                                        : null)
+                                                    .whereType<
+                                                        Map<String, dynamic>>()
+                                                    .toList()
+                                                : <Map<String, dynamic>>[];
+                                            final color =
+                                                _getColorForName(personName);
+                                            const cardHeight = 220.0;
+                                            return SizedBox(
+                                              width: cardWidth,
+                                              height: cardHeight,
+                                              child: Container(
+                                                padding:
+                                                    const EdgeInsets.all(12),
+                                                decoration: BoxDecoration(
+                                                  color: Colors.white,
+                                                  borderRadius:
+                                                      BorderRadius.circular(10),
+                                                  border: Border.all(
+                                                      color: const Color(
+                                                          0xFFE8EAED)),
+                                                  boxShadow: [
+                                                    BoxShadow(
+                                                      color: Colors.black
+                                                          .withOpacity(0.04),
+                                                      blurRadius: 6,
+                                                      offset:
+                                                          const Offset(0, 1),
+                                                    ),
+                                                  ],
+                                                ),
+                                                child: Column(
+                                                  crossAxisAlignment:
+                                                      CrossAxisAlignment.start,
+                                                  mainAxisSize:
+                                                      MainAxisSize.min,
+                                                  children: [
+                                                    Row(
+                                                      children: [
+                                                        CircleAvatar(
+                                                          radius: 16,
+                                                          backgroundColor: color
+                                                              .withOpacity(0.2),
+                                                          child: Text(
+                                                            _getInitials(
+                                                                personName),
+                                                            style: TextStyle(
+                                                              fontFamily:
+                                                                  'Inter',
+                                                              fontSize: 12,
+                                                              fontWeight:
+                                                                  FontWeight
+                                                                      .w700,
+                                                              color: color,
+                                                            ),
+                                                          ),
+                                                        ),
+                                                        const SizedBox(
+                                                            width: 8),
+                                                        Expanded(
+                                                          child: Text(
+                                                            personName,
+                                                            style: FlutterFlowTheme
+                                                                    .of(context)
+                                                                .bodyMedium
+                                                                .override(
+                                                                  fontFamily:
+                                                                      'Inter',
+                                                                  color: const Color(
+                                                                      0xFF202124),
+                                                                  fontSize: 14,
+                                                                  fontWeight:
+                                                                      FontWeight
+                                                                          .w600,
+                                                                ),
+                                                            maxLines: 1,
+                                                            overflow:
+                                                                TextOverflow
+                                                                    .ellipsis,
+                                                          ),
+                                                        ),
+                                                      ],
+                                                    ),
+                                                    const SizedBox(height: 8),
+                                                    Expanded(
+                                                      child:
+                                                          SingleChildScrollView(
+                                                        physics:
+                                                            const BouncingScrollPhysics(),
+                                                        child: Column(
+                                                          crossAxisAlignment:
+                                                              CrossAxisAlignment
+                                                                  .start,
+                                                          mainAxisSize:
+                                                              MainAxisSize.min,
+                                                          children: tasks
+                                                              .asMap()
+                                                              .entries
+                                                              .map((entry) {
+                                                            final index =
+                                                                entry.key + 1;
+                                                            final t =
+                                                                entry.value;
+                                                            final taskTitle = t[
+                                                                        'title']
+                                                                    as String? ??
+                                                                '';
+                                                            final dueDate =
+                                                                t['due_date']
+                                                                    as String?;
+                                                            final priority = t[
+                                                                        'priority']
+                                                                    as String? ??
+                                                                '';
+                                                            final line = dueDate !=
+                                                                        null &&
+                                                                    dueDate
+                                                                        .isNotEmpty
+                                                                ? '$taskTitle: Due $dueDate, $priority'
+                                                                : priority
+                                                                        .isNotEmpty
+                                                                    ? '$taskTitle ($priority)'
+                                                                    : taskTitle;
+                                                            return Padding(
+                                                              padding:
+                                                                  const EdgeInsets
+                                                                      .only(
+                                                                      bottom:
+                                                                          6),
+                                                              child: Row(
+                                                                crossAxisAlignment:
+                                                                    CrossAxisAlignment
+                                                                        .start,
+                                                                children: [
+                                                                  Container(
+                                                                    width: 20,
+                                                                    height: 20,
+                                                                    alignment:
+                                                                        Alignment
+                                                                            .center,
+                                                                    decoration:
+                                                                        BoxDecoration(
+                                                                      color: color
+                                                                          .withOpacity(
+                                                                              0.2),
+                                                                      shape: BoxShape
+                                                                          .circle,
+                                                                    ),
+                                                                    child: Text(
+                                                                      '$index',
+                                                                      style:
+                                                                          TextStyle(
+                                                                        fontFamily:
+                                                                            'Inter',
+                                                                        fontSize:
+                                                                            11,
+                                                                        fontWeight:
+                                                                            FontWeight.w600,
+                                                                        color:
+                                                                            color,
+                                                                      ),
+                                                                    ),
+                                                                  ),
+                                                                  const SizedBox(
+                                                                      width: 8),
+                                                                  Expanded(
+                                                                    child: Text(
+                                                                      line,
+                                                                      style: FlutterFlowTheme.of(
+                                                                              context)
+                                                                          .bodySmall
+                                                                          .override(
+                                                                            fontFamily:
+                                                                                'Inter',
+                                                                            color:
+                                                                                const Color(0xFF202124),
+                                                                            fontSize:
+                                                                                13,
+                                                                          ),
+                                                                    ),
+                                                                  ),
+                                                                ],
+                                                              ),
+                                                            );
+                                                          }).toList(),
+                                                        ),
+                                                      ),
+                                                    ),
+                                                  ],
+                                                ),
+                                              ),
+                                            );
+                                          }).toList(),
+                                        );
+                                      },
+                                    )
+                                  else
+                                    ...actionList.asMap().entries.map((entry) {
+                                      final index = entry.key + 1;
+                                      final item = entry.value;
+                                      return Padding(
+                                        padding:
+                                            const EdgeInsets.only(bottom: 10),
+                                        child: Row(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
+                                          children: [
+                                            Padding(
+                                              padding:
+                                                  const EdgeInsets.only(top: 2),
+                                              child: Container(
+                                                width: 22,
+                                                height: 22,
+                                                alignment: Alignment.center,
+                                                decoration: BoxDecoration(
+                                                  color: const Color(0xFF1A73E8)
+                                                      .withOpacity(0.12),
+                                                  shape: BoxShape.circle,
+                                                ),
+                                                child: Text(
+                                                  '$index',
+                                                  style: const TextStyle(
+                                                    fontFamily: 'Inter',
+                                                    fontSize: 12,
+                                                    fontWeight: FontWeight.w600,
+                                                    color: Color(0xFF1A73E8),
+                                                  ),
+                                                ),
+                                              ),
+                                            ),
+                                            const SizedBox(width: 10),
+                                            Expanded(
+                                              child: Text(
+                                                item,
+                                                style:
+                                                    FlutterFlowTheme.of(context)
+                                                        .bodySmall
+                                                        .override(
+                                                          fontFamily: 'Inter',
+                                                          color: const Color(
+                                                              0xFF202124),
+                                                          fontSize: 13,
+                                                        ),
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      );
+                                    }),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ],
+                        // Summary / bullet gist: collapsible section
+                        if (bodyText != null && bodyText.isNotEmpty) ...[
+                          const SizedBox(height: 12),
+                          Padding(
+                            padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                            child: Container(
+                              width: double.infinity,
+                              padding:
+                                  const EdgeInsets.fromLTRB(14, 14, 14, 14),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFF8F9FA),
+                                borderRadius: BorderRadius.circular(10),
+                                border:
+                                    Border.all(color: const Color(0xFFE8EAED)),
+                              ),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  InkWell(
+                                    onTap: onSummaryToggle,
+                                    borderRadius: BorderRadius.circular(6),
+                                    child: Padding(
+                                      padding: const EdgeInsets.symmetric(
+                                          vertical: 2),
+                                      child: Row(
+                                        children: [
+                                          Text(
+                                            'Summary',
+                                            style: FlutterFlowTheme.of(context)
+                                                .titleSmall
+                                                .override(
+                                                  fontFamily: 'Inter',
+                                                  color:
+                                                      const Color(0xFF202124),
+                                                  fontSize: 15,
+                                                  fontWeight: FontWeight.w600,
+                                                  letterSpacing: 0.1,
+                                                ),
+                                          ),
+                                          const SizedBox(width: 6),
+                                          Icon(
+                                            isSummaryExpanded
+                                                ? Icons
+                                                    .keyboard_arrow_up_rounded
+                                                : Icons
+                                                    .keyboard_arrow_down_rounded,
+                                            size: 20,
+                                            color: const Color(0xFF5F6368),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                  if (isSummaryExpanded) ...[
+                                    const SizedBox(height: 10),
+                                    ...bodyText
+                                        .split(RegExp(r'\n'))
+                                        .where((s) => s.trim().isNotEmpty)
+                                        .map((line) {
+                                      final trimmed = line.trim();
+                                      final bullet = trimmed.startsWith('- ')
+                                          ? trimmed.substring(2)
+                                          : trimmed;
+                                      return Padding(
+                                        padding:
+                                            const EdgeInsets.only(bottom: 10),
+                                        child: Row(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
+                                          children: [
+                                            const Padding(
+                                              padding: EdgeInsets.only(top: 5),
+                                              child: Icon(
+                                                Icons.fiber_manual_record,
+                                                size: 6,
+                                                color: Color(0xFF1A73E8),
+                                              ),
+                                            ),
+                                            const SizedBox(width: 10),
+                                            Expanded(
+                                              child: MarkdownBody(
+                                                data: bullet,
+                                                styleSheet: MarkdownStyleSheet(
+                                                  p: const TextStyle(
+                                                    fontFamily: 'Inter',
+                                                    color: Color(0xFF202124),
+                                                    fontSize: 13,
+                                                  ),
+                                                  strong: const TextStyle(
+                                                    fontFamily: 'Inter',
+                                                    color: Color(0xFF202124),
+                                                    fontSize: 13,
+                                                    fontWeight: FontWeight.w700,
+                                                  ),
+                                                ),
+                                                shrinkWrap: true,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      );
+                                    }),
+                                  ],
+                                ],
+                              ),
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  static const Color _taskReminderBlue = Color(0xFF0EA5E9);
+  static const Color _taskReminderBlueDark = Color(0xFF0284C7);
+  static const Color _taskReminderBubbleBlue = Color(0xFFE3F2FD);
+
+  /// Picks digest (structured) vs legacy (content) so content is never empty.
+  Widget _buildTaskReminderBubble(
+    BuildContext context, {
+    Map<String, dynamic>? taskReminders,
+    required String content,
+  }) {
+    final tasksRaw = taskReminders?['tasks'];
+    final hasStructuredTasks = tasksRaw is List && tasksRaw.isNotEmpty;
+    if (hasStructuredTasks && taskReminders != null) {
+      return TaskReminderDigestCard.fromPayload(
+        taskReminders,
+        onMarkDone: _markActionItemDone,
+        onRemindAgain: _remindAgain,
+      );
+    }
+    return _buildTaskRemindersLegacyCard(
+      context,
+      content.isNotEmpty ? content : 'Task reminders – no details available.',
+    );
+  }
+
+  /// Same aesthetic card for old reminder messages that only have content (no task_reminders payload).
+  Widget _buildTaskRemindersLegacyCard(BuildContext context, String content) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 10.0, horizontal: 16.0),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          CircleAvatar(
+            radius: 20,
+            backgroundColor: _taskReminderBlue.withOpacity(0.15),
+            child: const Icon(
+              Icons.notification_important_outlined,
+              size: 22,
+              color: _taskReminderBlueDark,
+            ),
+          ),
+          const SizedBox(width: 12),
+          Flexible(
+            child: Container(
+              constraints: const BoxConstraints(maxWidth: 400),
+              decoration: BoxDecoration(
+                color: _taskReminderBubbleBlue,
+                borderRadius: BorderRadius.circular(12),
+                border: Border(
+                  left:
+                      const BorderSide(color: _taskReminderBlueDark, width: 4),
+                  top: BorderSide(color: _taskReminderBlue.withOpacity(0.3)),
+                  right: BorderSide(color: _taskReminderBlue.withOpacity(0.3)),
+                  bottom: BorderSide(color: _taskReminderBlue.withOpacity(0.3)),
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.06),
+                    blurRadius: 12,
+                    offset: const Offset(0, 2),
+                  ),
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.04),
+                    blurRadius: 6,
+                    offset: const Offset(0, 1),
+                  ),
+                ],
+              ),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(12),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 14, 16, 10),
+                      child: Row(
+                        children: [
+                          Icon(
+                            Icons.notification_important_outlined,
+                            size: 16,
+                            color: _taskReminderBlueDark,
+                          ),
+                          const SizedBox(width: 6),
+                          Text(
+                            'Urgent Digest',
+                            style: FlutterFlowTheme.of(context)
+                                .titleSmall
+                                .override(
+                                  fontFamily: 'Inter',
+                                  color: _taskReminderBlueDark,
+                                  fontSize: 17,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const Padding(
+                      padding: EdgeInsets.fromLTRB(16, 0, 16, 0),
+                      child: Divider(
+                          height: 1, thickness: 1, color: Color(0xFFBBDEFB)),
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+                      child: Container(
+                        width: double.infinity,
+                        constraints: const BoxConstraints(minHeight: 60),
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(color: const Color(0xFFBBDEFB)),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withOpacity(0.04),
+                              blurRadius: 6,
+                              offset: const Offset(0, 1),
+                            ),
+                          ],
+                        ),
+                        child: SelectableText(
+                          content,
+                          style: const TextStyle(
+                            fontFamily: 'Inter',
+                            color: Color(0xFF202124),
+                            fontSize: 13,
+                            height: 1.4,
+                          ),
+                        ),
+                      ),
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                      child: Row(
+                        children: [
+                          Text(
+                            'AI INSIGHT • ACTION REQUIRED',
+                            style:
+                                FlutterFlowTheme.of(context).bodySmall.override(
+                                      fontFamily: 'Inter',
+                                      color: const Color(0xFF5F6368),
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w500,
+                                    ),
+                          ),
+                          const Spacer(),
+                          GestureDetector(
+                            onTap: () {},
+                            child: Text(
+                              'View Thread Summary >',
+                              style: FlutterFlowTheme.of(context)
+                                  .bodySmall
+                                  .override(
+                                    fontFamily: 'Inter',
+                                    color: _taskReminderBlueDark,
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 14),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final isMe = widget.message?.senderRef == currentUserReference;
@@ -1470,6 +2505,103 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
                 ),
           ),
         ),
+      );
+    }
+
+    // Fireflies summary card from LonaAI – same layout as received messages so "Message options" dropdown appears
+    final firefliesSummary = widget.message?.firefliesSummary;
+    if (firefliesSummary != null) {
+      return LayoutBuilder(
+        builder: (context, constraints) {
+          final availableWidth = constraints.maxWidth;
+          return Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Align(
+                alignment: const AlignmentDirectional(-1.0, 0.0),
+                child: Padding(
+                  padding: const EdgeInsets.all(8.0),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    mainAxisAlignment: MainAxisAlignment.start,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Flexible(
+                        child: Container(
+                          constraints: BoxConstraints(
+                            maxWidth: availableWidth * 0.82,
+                          ),
+                          child: Align(
+                            alignment: const AlignmentDirectional(-1.0, -1.0),
+                            child: Padding(
+                              padding: const EdgeInsetsDirectional.fromSTEB(
+                                  12.0, 0.0, 12.0, 0.0),
+                              child: GestureDetector(
+                                onLongPress: _copyContentIfAny,
+                                child: _withMessageMenu(
+                                  bubble: _buildFirefliesSummaryCard(
+                                    context,
+                                    firefliesSummary,
+                                    isSummaryExpanded:
+                                        _isSummarySectionExpanded,
+                                    onSummaryToggle: () => setState(() =>
+                                        _isSummarySectionExpanded =
+                                            !_isSummarySectionExpanded),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          );
+        },
+      );
+    }
+
+    // Task reminder from LonaAI – show as card (structured payload or content fallback)
+    final taskReminders = widget.message?.taskReminders;
+    final content = widget.message?.content ?? '';
+    final looksLikeReminder = content.contains('Task reminders') ||
+        content.contains('task reminders') ||
+        content.trim().startsWith('📋');
+    if (taskReminders != null || looksLikeReminder) {
+      return LayoutBuilder(
+        builder: (context, constraints) {
+          return Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Align(
+                alignment: const AlignmentDirectional(-1.0, 0.0),
+                child: Padding(
+                  padding: const EdgeInsets.all(8.0),
+                  child: GestureDetector(
+                    onLongPress: _copyContentIfAny,
+                    child: _withMessageMenu(
+                      bubble: taskReminders != null
+                          ? TaskReminderDigestCard.fromPayload(
+                              taskReminders,
+                              onMarkDone: _markActionItemDone,
+                              onRemindAgain: _remindAgain,
+                            )
+                          : _buildTaskRemindersLegacyCard(
+                              context,
+                              content.isNotEmpty
+                                  ? content
+                                  : 'Task reminders – no details available.',
+                            ),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          );
+        },
       );
     }
 
@@ -1575,9 +2707,10 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
                                               final hasVideo =
                                                   widget.message?.video !=
                                                           null &&
-                                                      widget.message!.video
+                                                      widget.message!.video!
                                                           .isNotEmpty;
-                                              final hasMedia = hasImage || hasVideo;
+                                              final hasMedia =
+                                                  hasImage || hasVideo;
                                               return _withMessageMenu(
                                                 bubble: AnimatedContainer(
                                                   duration: const Duration(
@@ -1729,109 +2862,191 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
                                                             ),
                                                           ),
                                                         // Show content (caption/text) whenever present, including with file attachment
-                                                        if (widget.message?.content !=
+                                                        if (widget.message
+                                                                    ?.content !=
                                                                 null &&
                                                             widget.message
                                                                     ?.content !=
                                                                 '')
                                                           Container(
-                                                            constraints: BoxConstraints(
-                                                              maxWidth: hasMedia ? 280.0 : double.infinity,
-                                                            ),
-                                                            child: Column(
-  mainAxisSize: MainAxisSize.min,
-  crossAxisAlignment: CrossAxisAlignment.start,
-  children: [
-    custom_widgets.MessageContentWidget(
-      content: valueOrDefault<String>(
-        widget.message?.content,
-        'I\'m at the venue now. Here\'s the map with the room highlighted:',
-      ),
-      senderName: widget.name,
-      onTapLink: (text, url, title) async {
-        if (url != null) {
-          await _launchURL(url);
-        }
-      },
-      styleSheet: MarkdownStyleSheet(
-        // iOS native text styling
-        p: const TextStyle(
-          fontFamily: 'SF Pro Text',
-          color: Color(0xFF000000),
-          fontSize: 17.0,
-          letterSpacing: -0.4,
-          fontWeight: FontWeight.w400,
-          height: 1.3,
-        ),
-        a: const TextStyle(
-          fontFamily: 'SF Pro Text',
-          color: Color(0xFF007AFF),
-          fontSize: 17.0,
-          letterSpacing: -0.4,
-          fontWeight: FontWeight.w400,
-          decoration: TextDecoration.underline,
-        ),
-        code: const TextStyle(
-          fontFamily: 'SF Mono',
-          color: Color(0xFF000000),
-          fontSize: 15.0,
-        ),
-        codeblockDecoration: BoxDecoration(
-          color: const Color(0xFFE5E7EB),
-          borderRadius: BorderRadius.circular(6),
-        ),
-        strong: const TextStyle(
-          fontFamily: 'SF Pro Text',
-          color: Color(0xFF000000),
-          fontSize: 17.0,
-          fontWeight: FontWeight.w600,
-        ),
-        em: const TextStyle(
-          fontFamily: 'SF Pro Text',
-          color: Color(0xFF000000),
-          fontSize: 17.0,
-          fontStyle: FontStyle.italic,
-          fontWeight: FontWeight.w400,
-        ),
-        tableBody: const TextStyle(
-          fontFamily: 'SF Pro Text',
-          color: Color(0xFF000000),
-          fontSize: 15.0,
-          fontWeight: FontWeight.w400,
-        ),
-        tableHead: const TextStyle(
-          fontFamily: 'SF Pro Text',
-          color: Color(0xFF000000),
-          fontSize: 15.0,
-          fontWeight: FontWeight.w600,
-        ),
-      ),
-    ),
-    if (_translatedContent != null) ...[
-      const SizedBox(height: 8.0),
-      const Divider(height: 1.0, color: Color(0x33000000)),
-      const SizedBox(height: 8.0),
-      SelectableText(
-        _translatedContent!,
-        style: FlutterFlowTheme.of(context).bodyMedium.override(
-          fontFamily: 'Inter',
-          fontStyle: FontStyle.italic,
-          color: Colors.black87,
-        ),
-      ),
-    ],
-    if (_isTranslating)
-      const Padding(
-        padding: EdgeInsets.only(top: 8.0),
-        child: SizedBox(
-          width: 16,
-          height: 16,
-          child: CircularProgressIndicator(strokeWidth: 2),
-        ),
-      ),
-  ],
-)
-                                                        ),
+                                                              constraints:
+                                                                  BoxConstraints(
+                                                                maxWidth: hasMedia
+                                                                    ? 280.0
+                                                                    : double
+                                                                        .infinity,
+                                                              ),
+                                                              child: Column(
+                                                                mainAxisSize:
+                                                                    MainAxisSize
+                                                                        .min,
+                                                                crossAxisAlignment:
+                                                                    CrossAxisAlignment
+                                                                        .start,
+                                                                children: [
+                                                                  custom_widgets
+                                                                      .MessageContentWidget(
+                                                                    content:
+                                                                        valueOrDefault<
+                                                                            String>(
+                                                                      widget
+                                                                          .message
+                                                                          ?.content,
+                                                                      'I\'m at the venue now. Here\'s the map with the room highlighted:',
+                                                                    ),
+                                                                    senderName:
+                                                                        widget
+                                                                            .name,
+                                                                    onTapLink:
+                                                                        (text,
+                                                                            url,
+                                                                            title) async {
+                                                                      if (url !=
+                                                                          null) {
+                                                                        await _launchURL(
+                                                                            url);
+                                                                      }
+                                                                    },
+                                                                    styleSheet:
+                                                                        MarkdownStyleSheet(
+                                                                      // iOS native text styling
+                                                                      p: const TextStyle(
+                                                                        fontFamily:
+                                                                            'SF Pro Text',
+                                                                        color: Color(
+                                                                            0xFF000000),
+                                                                        fontSize:
+                                                                            17.0,
+                                                                        letterSpacing:
+                                                                            -0.4,
+                                                                        fontWeight:
+                                                                            FontWeight.w400,
+                                                                        height:
+                                                                            1.3,
+                                                                      ),
+                                                                      a: const TextStyle(
+                                                                        fontFamily:
+                                                                            'SF Pro Text',
+                                                                        color: Color(
+                                                                            0xFF007AFF),
+                                                                        fontSize:
+                                                                            17.0,
+                                                                        letterSpacing:
+                                                                            -0.4,
+                                                                        fontWeight:
+                                                                            FontWeight.w400,
+                                                                        decoration:
+                                                                            TextDecoration.underline,
+                                                                      ),
+                                                                      code:
+                                                                          const TextStyle(
+                                                                        fontFamily:
+                                                                            'SF Mono',
+                                                                        color: Color(
+                                                                            0xFF000000),
+                                                                        fontSize:
+                                                                            15.0,
+                                                                      ),
+                                                                      codeblockDecoration:
+                                                                          BoxDecoration(
+                                                                        color: const Color(
+                                                                            0xFFE5E7EB),
+                                                                        borderRadius:
+                                                                            BorderRadius.circular(6),
+                                                                      ),
+                                                                      strong:
+                                                                          const TextStyle(
+                                                                        fontFamily:
+                                                                            'SF Pro Text',
+                                                                        color: Color(
+                                                                            0xFF000000),
+                                                                        fontSize:
+                                                                            17.0,
+                                                                        fontWeight:
+                                                                            FontWeight.w600,
+                                                                      ),
+                                                                      em: const TextStyle(
+                                                                        fontFamily:
+                                                                            'SF Pro Text',
+                                                                        color: Color(
+                                                                            0xFF000000),
+                                                                        fontSize:
+                                                                            17.0,
+                                                                        fontStyle:
+                                                                            FontStyle.italic,
+                                                                        fontWeight:
+                                                                            FontWeight.w400,
+                                                                      ),
+                                                                      tableBody:
+                                                                          const TextStyle(
+                                                                        fontFamily:
+                                                                            'SF Pro Text',
+                                                                        color: Color(
+                                                                            0xFF000000),
+                                                                        fontSize:
+                                                                            15.0,
+                                                                        fontWeight:
+                                                                            FontWeight.w400,
+                                                                      ),
+                                                                      tableHead:
+                                                                          const TextStyle(
+                                                                        fontFamily:
+                                                                            'SF Pro Text',
+                                                                        color: Color(
+                                                                            0xFF000000),
+                                                                        fontSize:
+                                                                            15.0,
+                                                                        fontWeight:
+                                                                            FontWeight.w600,
+                                                                      ),
+                                                                    ),
+                                                                  ),
+                                                                  if (_translatedContent !=
+                                                                      null) ...[
+                                                                    const SizedBox(
+                                                                        height:
+                                                                            8.0),
+                                                                    const Divider(
+                                                                        height:
+                                                                            1.0,
+                                                                        color: Color(
+                                                                            0x33000000)),
+                                                                    const SizedBox(
+                                                                        height:
+                                                                            8.0),
+                                                                    SelectableText(
+                                                                      _translatedContent!,
+                                                                      style: FlutterFlowTheme.of(
+                                                                              context)
+                                                                          .bodyMedium
+                                                                          .override(
+                                                                            fontFamily:
+                                                                                'Inter',
+                                                                            fontStyle:
+                                                                                FontStyle.italic,
+                                                                            color:
+                                                                                Colors.black87,
+                                                                          ),
+                                                                    ),
+                                                                  ],
+                                                                  if (_isTranslating)
+                                                                    const Padding(
+                                                                      padding: EdgeInsets
+                                                                          .only(
+                                                                              top: 8.0),
+                                                                      child:
+                                                                          SizedBox(
+                                                                        width:
+                                                                            16,
+                                                                        height:
+                                                                            16,
+                                                                        child: CircularProgressIndicator(
+                                                                            strokeWidth:
+                                                                                2),
+                                                                      ),
+                                                                    ),
+                                                                ],
+                                                              )),
                                                         // Edited indicator
                                                         if (widget.message
                                                                 ?.isEdited ==
@@ -1849,13 +3064,13 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
                                                                   MainAxisSize
                                                                       .min,
                                                               children: [
-                                                                const Text(
+                                                                Text(
                                                                   'edited',
                                                                   style:
                                                                       TextStyle(
                                                                     fontFamily:
                                                                         'SF Pro Text',
-                                                                    color: Color(
+                                                                    color: const Color(
                                                                         0xFF8E8E93),
                                                                     fontSize:
                                                                         11.0,
@@ -1868,10 +3083,10 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
                                                                         .message
                                                                         ?.editedAt !=
                                                                     null) ...[
-                                                                  const Text(
+                                                                  Text(
                                                                     ' • ',
                                                                     style:
-                                                                        TextStyle(
+                                                                        const TextStyle(
                                                                       fontFamily:
                                                                           'SF Pro Text',
                                                                       color: Color(
@@ -1928,7 +3143,7 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
                                                                   // Image bubble container (WhatsApp style: fixed width)
                                                                   Container(
                                                                     constraints:
-                                                                        const BoxConstraints(
+                                                                        BoxConstraints(
                                                                       maxWidth:
                                                                           280.0, // Fixed width like WhatsApp
                                                                       maxHeight:
@@ -1950,11 +3165,11 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
                                                                           BorderRadius
                                                                               .only(
                                                                         topLeft:
-                                                                            const Radius.circular(8.0),
+                                                                            Radius.circular(8.0),
                                                                         topRight:
-                                                                            const Radius.circular(8.0),
+                                                                            Radius.circular(8.0),
                                                                         bottomLeft:
-                                                                            const Radius.circular(8.0),
+                                                                            Radius.circular(8.0),
                                                                         bottomRight: Radius.circular((widget.message?.content != null &&
                                                                                 widget.message!.content.isNotEmpty &&
                                                                                 (widget.message?.attachmentUrl == null || widget.message?.attachmentUrl == ''))
@@ -2013,11 +3228,11 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
                                                                           borderRadius:
                                                                               BorderRadius.only(
                                                                             topLeft:
-                                                                                const Radius.circular(8.0),
+                                                                                Radius.circular(8.0),
                                                                             topRight:
-                                                                                const Radius.circular(8.0),
+                                                                                Radius.circular(8.0),
                                                                             bottomLeft:
-                                                                                const Radius.circular(8.0),
+                                                                                Radius.circular(8.0),
                                                                             bottomRight: Radius.circular((widget.message?.content != null && widget.message!.content.isNotEmpty && (widget.message?.attachmentUrl == null || widget.message?.attachmentUrl == ''))
                                                                                 ? 0.0
                                                                                 : 8.0),
@@ -2044,7 +3259,7 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
                                                                               width: double.infinity,
                                                                               height: 200.0,
                                                                               color: const Color(0xFFE5E7EB),
-                                                                              child: const Icon(
+                                                                              child: Icon(
                                                                                 Icons.broken_image,
                                                                                 color: Colors.grey,
                                                                               ),
@@ -2065,43 +3280,84 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
                                                                     ?.video !=
                                                                 '')
                                                           Container(
-                                                            constraints: const BoxConstraints(
+                                                            constraints:
+                                                                BoxConstraints(
                                                               maxWidth: 280.0,
                                                               maxHeight: 400.0,
                                                             ),
-                                                            width: 280.0, // Fixed width like WhatsApp
-                                                            margin: const EdgeInsets.only(
+                                                            width:
+                                                                280.0, // Fixed width like WhatsApp
+                                                            margin:
+                                                                const EdgeInsets
+                                                                    .only(
                                                               bottom: 4.0,
                                                             ),
-                                                            decoration: BoxDecoration(
-                                                              color: const Color(0xFFE5E7EB),
-                                                              borderRadius: BorderRadius.only(
-                                                                topLeft: const Radius.circular(8.0),
-                                                                topRight: const Radius.circular(8.0),
-                                                                bottomLeft: const Radius.circular(8.0),
-                                                                bottomRight: Radius.circular((widget.message?.content != null &&
-                                                                        widget.message!.content.isNotEmpty &&
-                                                                        (widget.message?.attachmentUrl == null || widget.message?.attachmentUrl == ''))
+                                                            decoration:
+                                                                BoxDecoration(
+                                                              color: const Color(
+                                                                  0xFFE5E7EB),
+                                                              borderRadius:
+                                                                  BorderRadius
+                                                                      .only(
+                                                                topLeft: Radius
+                                                                    .circular(
+                                                                        8.0),
+                                                                topRight: Radius
+                                                                    .circular(
+                                                                        8.0),
+                                                                bottomLeft: Radius
+                                                                    .circular(
+                                                                        8.0),
+                                                                bottomRight: Radius.circular((widget.message?.content !=
+                                                                            null &&
+                                                                        widget
+                                                                            .message!
+                                                                            .content
+                                                                            .isNotEmpty &&
+                                                                        (widget.message?.attachmentUrl ==
+                                                                                null ||
+                                                                            widget.message?.attachmentUrl ==
+                                                                                ''))
                                                                     ? 0.0
                                                                     : 8.0),
                                                               ),
                                                             ),
                                                             child: ClipRRect(
-                                                              borderRadius: BorderRadius.only(
-                                                                topLeft: const Radius.circular(8.0),
-                                                                topRight: const Radius.circular(8.0),
-                                                                bottomLeft: const Radius.circular(8.0),
-                                                                bottomRight: Radius.circular((widget.message?.content != null &&
-                                                                        widget.message!.content.isNotEmpty &&
-                                                                        (widget.message?.attachmentUrl == null || widget.message?.attachmentUrl == ''))
+                                                              borderRadius:
+                                                                  BorderRadius
+                                                                      .only(
+                                                                topLeft: Radius
+                                                                    .circular(
+                                                                        8.0),
+                                                                topRight: Radius
+                                                                    .circular(
+                                                                        8.0),
+                                                                bottomLeft: Radius
+                                                                    .circular(
+                                                                        8.0),
+                                                                bottomRight: Radius.circular((widget.message?.content !=
+                                                                            null &&
+                                                                        widget
+                                                                            .message!
+                                                                            .content
+                                                                            .isNotEmpty &&
+                                                                        (widget.message?.attachmentUrl ==
+                                                                                null ||
+                                                                            widget.message?.attachmentUrl ==
+                                                                                ''))
                                                                     ? 0.0
                                                                     : 8.0),
                                                               ),
-                                                              child: VideoMessageWidget(
-                                                                videoUrl: widget.message?.video ?? '',
+                                                              child:
+                                                                  VideoMessageWidget(
+                                                                videoUrl: widget
+                                                                        .message
+                                                                        ?.video ??
+                                                                    '',
                                                                 width: 280.0,
                                                                 height: 200.0,
-                                                                isOwnMessage: isMe,
+                                                                isOwnMessage:
+                                                                    isMe,
                                                               ),
                                                             ),
                                                           ),
@@ -2355,12 +3611,20 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
                                                                 MainAxisSize
                                                                     .min,
                                                             children: [
-                                                              if (widget.message?.isPinned == true)
-                                                                const Padding(
-                                                                  padding: EdgeInsets.only(right: 4.0),
+                                                              if (widget.message
+                                                                      ?.isPinned ==
+                                                                  true)
+                                                                Padding(
+                                                                  padding:
+                                                                      const EdgeInsets
+                                                                          .only(
+                                                                          right:
+                                                                              4.0),
                                                                   child: Icon(
-                                                                    Icons.star_rounded,
-                                                                    color: Color(0xFFFFD700),
+                                                                    Icons
+                                                                        .star_rounded,
+                                                                    color: const Color(
+                                                                        0xFFFFD700),
                                                                     size: 14.0,
                                                                   ),
                                                                 ),
@@ -2579,9 +3843,10 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
                                               final hasVideo =
                                                   widget.message?.video !=
                                                           null &&
-                                                      widget.message!.video
+                                                      widget.message!.video!
                                                           .isNotEmpty;
-                                              final hasMedia = hasImage || hasVideo;
+                                              final hasMedia =
+                                                  hasImage || hasVideo;
                                               return _withMessageMenu(
                                                 bubble: AnimatedContainer(
                                                   duration: const Duration(
@@ -2733,109 +3998,191 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
                                                             ),
                                                           ),
                                                         // Show content (caption/text) whenever present, including with file attachment
-                                                        if (widget.message?.content !=
+                                                        if (widget.message
+                                                                    ?.content !=
                                                                 null &&
                                                             widget.message
                                                                     ?.content !=
                                                                 '')
                                                           Container(
-                                                            constraints: BoxConstraints(
-                                                              maxWidth: hasMedia ? 280.0 : double.infinity,
-                                                            ),
-                                                            child: Column(
-  mainAxisSize: MainAxisSize.min,
-  crossAxisAlignment: CrossAxisAlignment.start,
-  children: [
-    custom_widgets.MessageContentWidget(
-      content: valueOrDefault<String>(
-        widget.message?.content,
-        'I\'m at the venue now. Here\'s the map with the room highlighted:',
-      ),
-      senderName: widget.name,
-      onTapLink: (text, url, title) async {
-        if (url != null) {
-          await _launchURL(url);
-        }
-      },
-      styleSheet: MarkdownStyleSheet(
-        // iMessage received bubble: dark text on gray
-        p: const TextStyle(
-          fontFamily: 'SF Pro Text',
-          color: Color(0xFF000000),
-          fontSize: 17.0,
-          letterSpacing: -0.4,
-          fontWeight: FontWeight.w400,
-          height: 1.3,
-        ),
-        a: const TextStyle(
-          fontFamily: 'SF Pro Text',
-          color: Color(0xFF007AFF),
-          fontSize: 17.0,
-          letterSpacing: -0.4,
-          fontWeight: FontWeight.w400,
-          decoration: TextDecoration.underline,
-        ),
-        code: const TextStyle(
-          fontFamily: 'SF Mono',
-          color: Color(0xFF000000),
-          fontSize: 15.0,
-        ),
-        codeblockDecoration: BoxDecoration(
-          color: const Color(0xFFD1D1D6),
-          borderRadius: BorderRadius.circular(6),
-        ),
-        strong: const TextStyle(
-          fontFamily: 'SF Pro Text',
-          color: Color(0xFF000000),
-          fontSize: 17.0,
-          fontWeight: FontWeight.w600,
-        ),
-        em: const TextStyle(
-          fontFamily: 'SF Pro Text',
-          color: Color(0xFF000000),
-          fontSize: 17.0,
-          fontStyle: FontStyle.italic,
-          fontWeight: FontWeight.w400,
-        ),
-        tableBody: const TextStyle(
-          fontFamily: 'SF Pro Text',
-          color: Color(0xFF000000),
-          fontSize: 15.0,
-          fontWeight: FontWeight.w400,
-        ),
-        tableHead: const TextStyle(
-          fontFamily: 'SF Pro Text',
-          color: Color(0xFF000000),
-          fontSize: 15.0,
-          fontWeight: FontWeight.w600,
-        ),
-      ),
-    ),
-    if (_translatedContent != null) ...[
-      const SizedBox(height: 8.0),
-      const Divider(height: 1.0, color: Color(0x33000000)),
-      const SizedBox(height: 8.0),
-      SelectableText(
-        _translatedContent!,
-        style: FlutterFlowTheme.of(context).bodyMedium.override(
-          fontFamily: 'Inter',
-          fontStyle: FontStyle.italic,
-          color: Colors.black87,
-        ),
-      ),
-    ],
-    if (_isTranslating)
-      const Padding(
-        padding: EdgeInsets.only(top: 8.0),
-        child: SizedBox(
-          width: 16,
-          height: 16,
-          child: CircularProgressIndicator(strokeWidth: 2),
-        ),
-      ),
-  ],
-)
-                                                        ),
+                                                              constraints:
+                                                                  BoxConstraints(
+                                                                maxWidth: hasMedia
+                                                                    ? 280.0
+                                                                    : double
+                                                                        .infinity,
+                                                              ),
+                                                              child: Column(
+                                                                mainAxisSize:
+                                                                    MainAxisSize
+                                                                        .min,
+                                                                crossAxisAlignment:
+                                                                    CrossAxisAlignment
+                                                                        .start,
+                                                                children: [
+                                                                  custom_widgets
+                                                                      .MessageContentWidget(
+                                                                    content:
+                                                                        valueOrDefault<
+                                                                            String>(
+                                                                      widget
+                                                                          .message
+                                                                          ?.content,
+                                                                      'I\'m at the venue now. Here\'s the map with the room highlighted:',
+                                                                    ),
+                                                                    senderName:
+                                                                        widget
+                                                                            .name,
+                                                                    onTapLink:
+                                                                        (text,
+                                                                            url,
+                                                                            title) async {
+                                                                      if (url !=
+                                                                          null) {
+                                                                        await _launchURL(
+                                                                            url);
+                                                                      }
+                                                                    },
+                                                                    styleSheet:
+                                                                        MarkdownStyleSheet(
+                                                                      // iMessage received bubble: dark text on gray
+                                                                      p: const TextStyle(
+                                                                        fontFamily:
+                                                                            'SF Pro Text',
+                                                                        color: Color(
+                                                                            0xFF000000),
+                                                                        fontSize:
+                                                                            17.0,
+                                                                        letterSpacing:
+                                                                            -0.4,
+                                                                        fontWeight:
+                                                                            FontWeight.w400,
+                                                                        height:
+                                                                            1.3,
+                                                                      ),
+                                                                      a: const TextStyle(
+                                                                        fontFamily:
+                                                                            'SF Pro Text',
+                                                                        color: Color(
+                                                                            0xFF007AFF),
+                                                                        fontSize:
+                                                                            17.0,
+                                                                        letterSpacing:
+                                                                            -0.4,
+                                                                        fontWeight:
+                                                                            FontWeight.w400,
+                                                                        decoration:
+                                                                            TextDecoration.underline,
+                                                                      ),
+                                                                      code:
+                                                                          const TextStyle(
+                                                                        fontFamily:
+                                                                            'SF Mono',
+                                                                        color: Color(
+                                                                            0xFF000000),
+                                                                        fontSize:
+                                                                            15.0,
+                                                                      ),
+                                                                      codeblockDecoration:
+                                                                          BoxDecoration(
+                                                                        color: const Color(
+                                                                            0xFFD1D1D6),
+                                                                        borderRadius:
+                                                                            BorderRadius.circular(6),
+                                                                      ),
+                                                                      strong:
+                                                                          const TextStyle(
+                                                                        fontFamily:
+                                                                            'SF Pro Text',
+                                                                        color: Color(
+                                                                            0xFF000000),
+                                                                        fontSize:
+                                                                            17.0,
+                                                                        fontWeight:
+                                                                            FontWeight.w600,
+                                                                      ),
+                                                                      em: const TextStyle(
+                                                                        fontFamily:
+                                                                            'SF Pro Text',
+                                                                        color: Color(
+                                                                            0xFF000000),
+                                                                        fontSize:
+                                                                            17.0,
+                                                                        fontStyle:
+                                                                            FontStyle.italic,
+                                                                        fontWeight:
+                                                                            FontWeight.w400,
+                                                                      ),
+                                                                      tableBody:
+                                                                          const TextStyle(
+                                                                        fontFamily:
+                                                                            'SF Pro Text',
+                                                                        color: Color(
+                                                                            0xFF000000),
+                                                                        fontSize:
+                                                                            15.0,
+                                                                        fontWeight:
+                                                                            FontWeight.w400,
+                                                                      ),
+                                                                      tableHead:
+                                                                          const TextStyle(
+                                                                        fontFamily:
+                                                                            'SF Pro Text',
+                                                                        color: Color(
+                                                                            0xFF000000),
+                                                                        fontSize:
+                                                                            15.0,
+                                                                        fontWeight:
+                                                                            FontWeight.w600,
+                                                                      ),
+                                                                    ),
+                                                                  ),
+                                                                  if (_translatedContent !=
+                                                                      null) ...[
+                                                                    const SizedBox(
+                                                                        height:
+                                                                            8.0),
+                                                                    const Divider(
+                                                                        height:
+                                                                            1.0,
+                                                                        color: Color(
+                                                                            0x33000000)),
+                                                                    const SizedBox(
+                                                                        height:
+                                                                            8.0),
+                                                                    SelectableText(
+                                                                      _translatedContent!,
+                                                                      style: FlutterFlowTheme.of(
+                                                                              context)
+                                                                          .bodyMedium
+                                                                          .override(
+                                                                            fontFamily:
+                                                                                'Inter',
+                                                                            fontStyle:
+                                                                                FontStyle.italic,
+                                                                            color:
+                                                                                Colors.black87,
+                                                                          ),
+                                                                    ),
+                                                                  ],
+                                                                  if (_isTranslating)
+                                                                    const Padding(
+                                                                      padding: EdgeInsets
+                                                                          .only(
+                                                                              top: 8.0),
+                                                                      child:
+                                                                          SizedBox(
+                                                                        width:
+                                                                            16,
+                                                                        height:
+                                                                            16,
+                                                                        child: CircularProgressIndicator(
+                                                                            strokeWidth:
+                                                                                2),
+                                                                      ),
+                                                                    ),
+                                                                ],
+                                                              )),
                                                         // Edited indicator for received messages
                                                         if (widget.message
                                                                 ?.isEdited ==
@@ -2930,7 +4277,7 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
                                                                   // Image bubble container (WhatsApp style: fixed width)
                                                                   Container(
                                                                     constraints:
-                                                                        const BoxConstraints(
+                                                                        BoxConstraints(
                                                                       maxWidth:
                                                                           280.0, // Fixed width like WhatsApp
                                                                       maxHeight:
@@ -3040,43 +4387,84 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
                                                                     ?.video !=
                                                                 '')
                                                           Container(
-                                                            constraints: const BoxConstraints(
+                                                            constraints:
+                                                                BoxConstraints(
                                                               maxWidth: 280.0,
                                                               maxHeight: 400.0,
                                                             ),
-                                                            width: 280.0, // Fixed width like WhatsApp
-                                                            margin: const EdgeInsets.only(
+                                                            width:
+                                                                280.0, // Fixed width like WhatsApp
+                                                            margin:
+                                                                const EdgeInsets
+                                                                    .only(
                                                               bottom: 4.0,
                                                             ),
-                                                            decoration: BoxDecoration(
-                                                              color: const Color(0xFFE5E7EB),
-                                                              borderRadius: BorderRadius.only(
-                                                                topLeft: const Radius.circular(8.0),
-                                                                topRight: const Radius.circular(8.0),
-                                                                bottomLeft: const Radius.circular(8.0),
-                                                                bottomRight: Radius.circular((widget.message?.content != null &&
-                                                                        widget.message!.content.isNotEmpty &&
-                                                                        (widget.message?.attachmentUrl == null || widget.message?.attachmentUrl == ''))
+                                                            decoration:
+                                                                BoxDecoration(
+                                                              color: const Color(
+                                                                  0xFFE5E7EB),
+                                                              borderRadius:
+                                                                  BorderRadius
+                                                                      .only(
+                                                                topLeft: Radius
+                                                                    .circular(
+                                                                        8.0),
+                                                                topRight: Radius
+                                                                    .circular(
+                                                                        8.0),
+                                                                bottomLeft: Radius
+                                                                    .circular(
+                                                                        8.0),
+                                                                bottomRight: Radius.circular((widget.message?.content !=
+                                                                            null &&
+                                                                        widget
+                                                                            .message!
+                                                                            .content
+                                                                            .isNotEmpty &&
+                                                                        (widget.message?.attachmentUrl ==
+                                                                                null ||
+                                                                            widget.message?.attachmentUrl ==
+                                                                                ''))
                                                                     ? 0.0
                                                                     : 8.0),
                                                               ),
                                                             ),
                                                             child: ClipRRect(
-                                                              borderRadius: BorderRadius.only(
-                                                                topLeft: const Radius.circular(8.0),
-                                                                topRight: const Radius.circular(8.0),
-                                                                bottomLeft: const Radius.circular(8.0),
-                                                                bottomRight: Radius.circular((widget.message?.content != null &&
-                                                                        widget.message!.content.isNotEmpty &&
-                                                                        (widget.message?.attachmentUrl == null || widget.message?.attachmentUrl == ''))
+                                                              borderRadius:
+                                                                  BorderRadius
+                                                                      .only(
+                                                                topLeft: Radius
+                                                                    .circular(
+                                                                        8.0),
+                                                                topRight: Radius
+                                                                    .circular(
+                                                                        8.0),
+                                                                bottomLeft: Radius
+                                                                    .circular(
+                                                                        8.0),
+                                                                bottomRight: Radius.circular((widget.message?.content !=
+                                                                            null &&
+                                                                        widget
+                                                                            .message!
+                                                                            .content
+                                                                            .isNotEmpty &&
+                                                                        (widget.message?.attachmentUrl ==
+                                                                                null ||
+                                                                            widget.message?.attachmentUrl ==
+                                                                                ''))
                                                                     ? 0.0
                                                                     : 8.0),
                                                               ),
-                                                              child: VideoMessageWidget(
-                                                                videoUrl: widget.message?.video ?? '',
+                                                              child:
+                                                                  VideoMessageWidget(
+                                                                videoUrl: widget
+                                                                        .message
+                                                                        ?.video ??
+                                                                    '',
                                                                 width: 280.0,
                                                                 height: 200.0,
-                                                                isOwnMessage: isMe,
+                                                                isOwnMessage:
+                                                                    isMe,
                                                               ),
                                                             ),
                                                           ),
@@ -3398,12 +4786,20 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
                                                                               .w400,
                                                                     ),
                                                               ),
-                                                              if (widget.message?.isPinned == true)
-                                                                const Padding(
-                                                                  padding: EdgeInsets.only(left: 4.0),
+                                                              if (widget.message
+                                                                      ?.isPinned ==
+                                                                  true)
+                                                                Padding(
+                                                                  padding:
+                                                                      const EdgeInsets
+                                                                          .only(
+                                                                          left:
+                                                                              4.0),
                                                                   child: Icon(
-                                                                    Icons.star_rounded,
-                                                                    color: Color(0xFFFFD700),
+                                                                    Icons
+                                                                        .star_rounded,
+                                                                    color: const Color(
+                                                                        0xFFFFD700),
                                                                     size: 14.0,
                                                                   ),
                                                                 ),
@@ -3625,10 +5021,10 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
       debugPrint('Saving single image: $fileName');
       await _downloadFile(imageUrl, fileName);
     } else if (widget.message?.images != null &&
-        widget.message!.images.isNotEmpty) {
+        widget.message!.images!.isNotEmpty) {
       // Save all images in the multiple images array
-      debugPrint('Saving ${widget.message!.images.length} images');
-      for (final imgUrl in widget.message!.images) {
+      debugPrint('Saving ${widget.message!.images!.length} images');
+      for (final imgUrl in widget.message!.images!) {
         if (imgUrl.isNotEmpty) {
           final fileName = _getFileNameFromUrl(imgUrl);
           debugPrint('Saving image: $fileName');
@@ -3931,7 +5327,7 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
           safeFileName =
               safeFileName.replaceAll('/', '_').replaceAll('\\', '_');
           safeFileName = safeFileName.split('/').last.split('\\').last;
-          
+
           // Ensure filename has extension
           if (!safeFileName.contains('.')) {
             // Try to detect from URL or default to generic
@@ -4055,7 +5451,8 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
             int counter = 1;
             while (await File('${directory.path}/$finalFileName').exists()) {
               final extension = fileName.split('.').last;
-              final nameWithoutExtension = fileName.replaceAll('.$extension', '');
+              final nameWithoutExtension =
+                  fileName.replaceAll('.$extension', '');
               finalFileName = '${nameWithoutExtension}_$counter.$extension';
               counter++;
             }
@@ -4124,7 +5521,18 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
   }
 }
 
-enum _MsgAction { react, copy, report, unsend, reply, edit, save, translate, pin, unpin }
+enum _MsgAction {
+  react,
+  copy,
+  report,
+  unsend,
+  reply,
+  edit,
+  save,
+  translate,
+  pin,
+  unpin
+}
 
 class _MenuRow extends StatelessWidget {
   final IconData icon;

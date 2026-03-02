@@ -12,7 +12,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:adaptive_platform_ui/adaptive_platform_ui.dart';
 
 class GmailMobileWidget extends StatefulWidget {
-  const GmailMobileWidget({super.key});
+  const GmailMobileWidget({Key? key}) : super(key: key);
 
   @override
   _GmailMobileWidgetState createState() => _GmailMobileWidgetState();
@@ -84,7 +84,7 @@ class _GmailMobileWidgetState extends State<GmailMobileWidget> {
         await _checkGmailConnection();
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
+            SnackBar(
               content: Text('Gmail connected successfully!'),
               backgroundColor: Colors.green,
             ),
@@ -92,7 +92,7 @@ class _GmailMobileWidgetState extends State<GmailMobileWidget> {
         }
       } else if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
+          SnackBar(
             content: Text('Failed to connect Gmail. Please try again.'),
             backgroundColor: Colors.red,
           ),
@@ -250,8 +250,8 @@ class _GmailMobileWidgetState extends State<GmailMobileWidget> {
         SnackBar(
           content: Row(
             children: [
-              const Icon(Icons.error_outline, color: Colors.white),
-              const SizedBox(width: 12),
+              Icon(Icons.error_outline, color: Colors.white),
+              SizedBox(width: 12),
               Expanded(child: Text(message)),
             ],
           ),
@@ -464,32 +464,32 @@ class _GmailMobileWidgetState extends State<GmailMobileWidget> {
   Color _getAvatarColor(String? from) {
     final initial = _getInitials(from);
     if (initial.isEmpty || initial == '?') {
-      return const Color(0xFF8E8E93);
+      return Color(0xFF8E8E93);
     }
 
     // Generate consistent color based on the first character
     final char = initial[0].toUpperCase();
     final colors = [
-      const Color(0xFF007AFF), // Blue
-      const Color(0xFF34C759), // Green
-      const Color(0xFFFF9500), // Orange
-      const Color(0xFFFF3B30), // Red
-      const Color(0xFFAF52DE), // Purple
-      const Color(0xFFFF2D55), // Pink
-      const Color(0xFF5AC8FA), // Light Blue
-      const Color(0xFFFFCC00), // Yellow
-      const Color(0xFF5856D6), // Indigo
-      const Color(0xFFFF9500), // Orange
-      const Color(0xFF00C7BE), // Teal
-      const Color(0xFFFF6B6B), // Coral
-      const Color(0xFF4ECDC4), // Turquoise
-      const Color(0xFF45B7D1), // Sky Blue
-      const Color(0xFF96CEB4), // Mint
-      const Color(0xFFFFEAA7), // Light Yellow
-      const Color(0xFFDDA0DD), // Plum
-      const Color(0xFF98D8C8), // Aqua
-      const Color(0xFFF7DC6F), // Gold
-      const Color(0xFFBB8FCE), // Lavender
+      Color(0xFF007AFF), // Blue
+      Color(0xFF34C759), // Green
+      Color(0xFFFF9500), // Orange
+      Color(0xFFFF3B30), // Red
+      Color(0xFFAF52DE), // Purple
+      Color(0xFFFF2D55), // Pink
+      Color(0xFF5AC8FA), // Light Blue
+      Color(0xFFFFCC00), // Yellow
+      Color(0xFF5856D6), // Indigo
+      Color(0xFFFF9500), // Orange
+      Color(0xFF00C7BE), // Teal
+      Color(0xFFFF6B6B), // Coral
+      Color(0xFF4ECDC4), // Turquoise
+      Color(0xFF45B7D1), // Sky Blue
+      Color(0xFF96CEB4), // Mint
+      Color(0xFFFFEAA7), // Light Yellow
+      Color(0xFFDDA0DD), // Plum
+      Color(0xFF98D8C8), // Aqua
+      Color(0xFFF7DC6F), // Gold
+      Color(0xFFBB8FCE), // Lavender
     ];
 
     // Use character code to get consistent color
@@ -529,17 +529,17 @@ class _GmailMobileWidgetState extends State<GmailMobileWidget> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Disconnect Gmail'),
+        title: Text('Disconnect Gmail'),
         content:
-            const Text('Are you sure you want to disconnect your Gmail account?'),
+            Text('Are you sure you want to disconnect your Gmail account?'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel'),
+            child: Text('Cancel'),
           ),
           TextButton(
             onPressed: () => Navigator.pop(context, true),
-            child: const Text('Disconnect', style: TextStyle(color: Colors.red)),
+            child: Text('Disconnect', style: TextStyle(color: Colors.red)),
           ),
         ],
       ),
@@ -565,7 +565,7 @@ class _GmailMobileWidgetState extends State<GmailMobileWidget> {
 
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
+            SnackBar(
               content: Text('Gmail disconnected successfully'),
               backgroundColor: Colors.green,
             ),
@@ -593,7 +593,7 @@ class _GmailMobileWidgetState extends State<GmailMobileWidget> {
           );
           if (success && mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
+              SnackBar(
                 content: Text('Email sent successfully!'),
                 backgroundColor: Colors.green,
               ),
@@ -628,7 +628,7 @@ class _GmailMobileWidgetState extends State<GmailMobileWidget> {
           );
           if (success && mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
+              SnackBar(
                 content: Text('Reply sent successfully!'),
                 backgroundColor: Colors.green,
               ),
@@ -653,7 +653,7 @@ class _GmailMobileWidgetState extends State<GmailMobileWidget> {
                 FirebaseFirestore.instance.collection('users').doc('dummy'))),
         builder: (context, snapshot) {
           if (!snapshot.hasData) {
-            return const Center(child: CircularProgressIndicator());
+            return Center(child: CircularProgressIndicator());
           }
 
           final userData = snapshot.data!;
@@ -676,14 +676,14 @@ class _GmailMobileWidgetState extends State<GmailMobileWidget> {
 
   Widget _buildNotConnectedState() {
     return Scaffold(
-      backgroundColor: const Color(0xFFF5F5F7),
+      backgroundColor: Color(0xFFF5F5F7),
       body: Column(
         children: [
           _buildIOSHeader(),
           Expanded(
             child: Center(
               child: Padding(
-                padding: const EdgeInsets.all(32),
+                padding: EdgeInsets.all(32),
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
@@ -693,8 +693,8 @@ class _GmailMobileWidgetState extends State<GmailMobileWidget> {
                       height: 100,
                       fit: BoxFit.contain,
                     ),
-                    const SizedBox(height: 32),
-                    const Text(
+                    SizedBox(height: 32),
+                    Text(
                       'Gmail Not Connected',
                       style: TextStyle(
                         fontFamily: 'SF Pro Text',
@@ -704,8 +704,8 @@ class _GmailMobileWidgetState extends State<GmailMobileWidget> {
                         letterSpacing: -0.5,
                       ),
                     ),
-                    const SizedBox(height: 12),
-                    const Text(
+                    SizedBox(height: 12),
+                    Text(
                       'Connect your Gmail account to access and manage your emails directly from Lona',
                       style: TextStyle(
                         fontFamily: 'SF Pro Text',
@@ -715,11 +715,11 @@ class _GmailMobileWidgetState extends State<GmailMobileWidget> {
                       ),
                       textAlign: TextAlign.center,
                     ),
-                    const SizedBox(height: 40),
+                    SizedBox(height: 40),
                     ElevatedButton.icon(
                       onPressed: _isConnecting ? null : _connectGmail,
                       icon: _isConnecting
-                          ? const SizedBox(
+                          ? SizedBox(
                               width: 20,
                               height: 20,
                               child: CircularProgressIndicator(
@@ -727,18 +727,18 @@ class _GmailMobileWidgetState extends State<GmailMobileWidget> {
                                 color: Colors.white,
                               ),
                             )
-                          : const Icon(Icons.email_outlined, size: 20),
+                          : Icon(Icons.email_outlined, size: 20),
                       label: Text(
                         _isConnecting ? 'Connecting...' : 'Connect Gmail',
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontFamily: 'SF Pro Text',
                           fontWeight: FontWeight.w600,
                         ),
                       ),
                       style: ElevatedButton.styleFrom(
                         padding:
-                            const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
-                        backgroundColor: const Color(0xFF007AFF),
+                            EdgeInsets.symmetric(horizontal: 32, vertical: 16),
+                        backgroundColor: Color(0xFF007AFF),
                         foregroundColor: Colors.white,
                         elevation: 0,
                         shape: RoundedRectangleBorder(
@@ -763,7 +763,7 @@ class _GmailMobileWidgetState extends State<GmailMobileWidget> {
         children: [
           // iOS-style header matching Connections/Chat style
           _buildIOSHeader(),
-          const SizedBox(height: 20),
+          SizedBox(height: 20),
           // Search bar with liquid glass (only when visible)
           if (_isSearchVisible) _buildSearchBar(),
           // Navigation tabs with blue gradient
@@ -777,10 +777,10 @@ class _GmailMobileWidgetState extends State<GmailMobileWidget> {
                         child: Column(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
-                            const Icon(Icons.inbox_outlined,
+                            Icon(Icons.inbox_outlined,
                                 size: 64, color: Color(0xFF8E8E93)),
-                            const SizedBox(height: 16),
-                            const Text(
+                            SizedBox(height: 16),
+                            Text(
                               'Your inbox is empty',
                               style: TextStyle(
                                 fontFamily: 'SF Pro Text',
@@ -789,12 +789,12 @@ class _GmailMobileWidgetState extends State<GmailMobileWidget> {
                                 fontWeight: FontWeight.w600,
                               ),
                             ),
-                            const SizedBox(height: 24),
+                            SizedBox(height: 24),
                             OutlinedButton.icon(
                               onPressed: () => _loadEmails(refresh: true),
                               icon:
-                                  const Icon(Icons.refresh, color: Color(0xFF007AFF)),
-                              label: const Text(
+                                  Icon(Icons.refresh, color: Color(0xFF007AFF)),
+                              label: Text(
                                 'Refresh',
                                 style: TextStyle(
                                   fontFamily: 'SF Pro Text',
@@ -803,7 +803,7 @@ class _GmailMobileWidgetState extends State<GmailMobileWidget> {
                                 ),
                               ),
                               style: OutlinedButton.styleFrom(
-                                side: const BorderSide(color: Color(0xFF007AFF)),
+                                side: BorderSide(color: Color(0xFF007AFF)),
                                 shape: RoundedRectangleBorder(
                                   borderRadius: BorderRadius.circular(12),
                                 ),
@@ -814,7 +814,7 @@ class _GmailMobileWidgetState extends State<GmailMobileWidget> {
                       )
                     : RefreshIndicator(
                         onRefresh: () => _loadEmails(refresh: true),
-                        color: const Color(0xFF007AFF),
+                        color: Color(0xFF007AFF),
                         child: ListView.builder(
                           controller: _scrollController,
                           padding: EdgeInsets.zero,
@@ -825,7 +825,7 @@ class _GmailMobileWidgetState extends State<GmailMobileWidget> {
                               if (_nextPageToken != null) {
                                 _loadEmails();
                               }
-                              return const Center(
+                              return Center(
                                 child: Padding(
                                   padding: EdgeInsets.all(16),
                                   child: CircularProgressIndicator(
@@ -851,12 +851,12 @@ class _GmailMobileWidgetState extends State<GmailMobileWidget> {
                                   BoxShadow(
                                     color: Colors.black.withOpacity(0.05),
                                     blurRadius: 10,
-                                    offset: const Offset(0, 2),
+                                    offset: Offset(0, 2),
                                   ),
                                 ],
                               ),
                               child: ListTile(
-                                contentPadding: const EdgeInsets.symmetric(
+                                contentPadding: EdgeInsets.symmetric(
                                   horizontal: 16,
                                   vertical: 12,
                                 ),
@@ -867,7 +867,7 @@ class _GmailMobileWidgetState extends State<GmailMobileWidget> {
                                   radius: 24,
                                   child: Text(
                                     _getInitials(email['from']),
-                                    style: const TextStyle(
+                                    style: TextStyle(
                                       fontFamily: 'SF Pro Text',
                                       color: Colors.white,
                                       fontWeight: FontWeight.w600,
@@ -881,8 +881,8 @@ class _GmailMobileWidgetState extends State<GmailMobileWidget> {
                                       Container(
                                         width: 8,
                                         height: 8,
-                                        margin: const EdgeInsets.only(right: 8),
-                                        decoration: const BoxDecoration(
+                                        margin: EdgeInsets.only(right: 8),
+                                        decoration: BoxDecoration(
                                           color: Color(0xFF007AFF),
                                           shape: BoxShape.circle,
                                         ),
@@ -896,7 +896,7 @@ class _GmailMobileWidgetState extends State<GmailMobileWidget> {
                                               ? FontWeight.w700
                                               : FontWeight.w600,
                                           fontSize: 17,
-                                          color: const Color(0xFF1D1D1F),
+                                          color: Color(0xFF1D1D1F),
                                           letterSpacing: -0.2,
                                         ),
                                       ),
@@ -906,14 +906,14 @@ class _GmailMobileWidgetState extends State<GmailMobileWidget> {
                                 subtitle: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
-                                    const SizedBox(height: 4),
+                                    SizedBox(height: 4),
                                     Row(
                                       children: [
                                         if (hasAttachment) ...[
-                                          const Icon(Icons.attach_file,
+                                          Icon(Icons.attach_file,
                                               size: 14,
                                               color: Color(0xFF8E8E93)),
-                                          const SizedBox(width: 4),
+                                          SizedBox(width: 4),
                                         ],
                                         Expanded(
                                           child: Text(
@@ -924,7 +924,7 @@ class _GmailMobileWidgetState extends State<GmailMobileWidget> {
                                                   ? FontWeight.w600
                                                   : FontWeight.w400,
                                               fontSize: 15,
-                                              color: const Color(0xFF1D1D1F),
+                                              color: Color(0xFF1D1D1F),
                                             ),
                                             maxLines: 1,
                                             overflow: TextOverflow.ellipsis,
@@ -932,10 +932,10 @@ class _GmailMobileWidgetState extends State<GmailMobileWidget> {
                                         ),
                                       ],
                                     ),
-                                    const SizedBox(height: 4),
+                                    SizedBox(height: 4),
                                     Text(
                                       email['snippet'] ?? '',
-                                      style: const TextStyle(
+                                      style: TextStyle(
                                         fontFamily: 'SF Pro Text',
                                         fontSize: 13,
                                         color: Color(0xFF8E8E93),
@@ -948,7 +948,7 @@ class _GmailMobileWidgetState extends State<GmailMobileWidget> {
                                 ),
                                 trailing: Text(
                                   _formatDate(email['date']),
-                                  style: const TextStyle(
+                                  style: TextStyle(
                                     fontFamily: 'SF Pro Text',
                                     fontSize: 13,
                                     color: Color(0xFF8E8E93),
@@ -966,9 +966,9 @@ class _GmailMobileWidgetState extends State<GmailMobileWidget> {
       ),
       floatingActionButton: FloatingActionButton(
         onPressed: _showComposeDialog,
-        backgroundColor: const Color(0xFF007AFF),
+        backgroundColor: Color(0xFF007AFF),
         elevation: 4,
-        child: const Icon(
+        child: Icon(
           Icons.edit_outlined,
           color: Colors.white,
           size: 24,
@@ -983,7 +983,7 @@ class _GmailMobileWidgetState extends State<GmailMobileWidget> {
       child: SafeArea(
         bottom: false,
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+          padding: EdgeInsets.fromLTRB(16, 16, 16, 0),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
@@ -1003,7 +1003,7 @@ class _GmailMobileWidgetState extends State<GmailMobileWidget> {
                   AdaptiveFloatingActionButton(
                     mini: true,
                     backgroundColor: Colors.white,
-                    foregroundColor: const Color(0xFF007AFF),
+                    foregroundColor: Color(0xFF007AFF),
                     onPressed: () {
                       setState(() {
                         _isSearchVisible = !_isSearchVisible;
@@ -1019,24 +1019,24 @@ class _GmailMobileWidgetState extends State<GmailMobileWidget> {
                       size: 20,
                     ),
                   ),
-                  const SizedBox(width: 8),
+                  SizedBox(width: 8),
                   AdaptiveFloatingActionButton(
                     mini: true,
                     backgroundColor: Colors.white,
-                    foregroundColor: const Color(0xFF007AFF),
+                    foregroundColor: Color(0xFF007AFF),
                     onPressed: () => _loadEmails(refresh: true),
-                    child: const Icon(
+                    child: Icon(
                       CupertinoIcons.arrow_clockwise,
                       size: 20,
                     ),
                   ),
-                  const SizedBox(width: 8),
+                  SizedBox(width: 8),
                   AdaptiveFloatingActionButton(
                     mini: true,
                     backgroundColor: Colors.white,
-                    foregroundColor: const Color(0xFF007AFF),
+                    foregroundColor: Color(0xFF007AFF),
                     onPressed: () => _showDisconnectMenu(),
-                    child: const Icon(
+                    child: Icon(
                       CupertinoIcons.ellipsis,
                       size: 20,
                     ),
@@ -1055,7 +1055,7 @@ class _GmailMobileWidgetState extends State<GmailMobileWidget> {
       context: context,
       backgroundColor: Colors.transparent,
       builder: (context) => Container(
-        decoration: const BoxDecoration(
+        decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
         ),
@@ -1065,15 +1065,15 @@ class _GmailMobileWidgetState extends State<GmailMobileWidget> {
             Container(
               width: 36,
               height: 5,
-              margin: const EdgeInsets.symmetric(vertical: 12),
+              margin: EdgeInsets.symmetric(vertical: 12),
               decoration: BoxDecoration(
-                color: const Color(0xFFD1D1D6),
+                color: Color(0xFFD1D1D6),
                 borderRadius: BorderRadius.circular(2.5),
               ),
             ),
             ListTile(
-              leading: const Icon(Icons.logout, color: Color(0xFFFF3B30)),
-              title: const Text(
+              leading: Icon(Icons.logout, color: Color(0xFFFF3B30)),
+              title: Text(
                 'Disconnect Gmail',
                 style: TextStyle(
                   fontFamily: 'SF Pro Text',
@@ -1087,7 +1087,7 @@ class _GmailMobileWidgetState extends State<GmailMobileWidget> {
                 _disconnectGmail();
               },
             ),
-            const SizedBox(height: 20),
+            SizedBox(height: 20),
           ],
         ),
       ),
@@ -1096,7 +1096,7 @@ class _GmailMobileWidgetState extends State<GmailMobileWidget> {
 
   Widget _buildSearchBar() {
     return Container(
-      margin: const EdgeInsets.fromLTRB(16, 8, 16, 12),
+      margin: EdgeInsets.fromLTRB(16, 8, 16, 12),
       child: ClipRRect(
         borderRadius: BorderRadius.circular(16),
         child: BackdropFilter(
@@ -1114,7 +1114,7 @@ class _GmailMobileWidgetState extends State<GmailMobileWidget> {
                 BoxShadow(
                   color: Colors.black.withOpacity(0.05),
                   blurRadius: 20,
-                  offset: const Offset(0, 4),
+                  offset: Offset(0, 4),
                 ),
               ],
             ),
@@ -1123,7 +1123,7 @@ class _GmailMobileWidgetState extends State<GmailMobileWidget> {
               onChanged: (value) => setState(() {}),
               decoration: InputDecoration(
                 hintText: 'Search emails...',
-                hintStyle: const TextStyle(
+                hintStyle: TextStyle(
                   fontFamily: 'SF Pro Text',
                   color: Color(0xFF8E8E93),
                   fontSize: 16,
@@ -1131,8 +1131,8 @@ class _GmailMobileWidgetState extends State<GmailMobileWidget> {
                 ),
                 border: InputBorder.none,
                 contentPadding:
-                    const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
-                prefixIcon: const Padding(
+                    EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+                prefixIcon: Padding(
                   padding: EdgeInsets.only(left: 16, right: 12),
                   child: Icon(
                     Icons.search_rounded,
@@ -1141,7 +1141,7 @@ class _GmailMobileWidgetState extends State<GmailMobileWidget> {
                   ),
                 ),
                 suffixIcon: Padding(
-                  padding: const EdgeInsets.only(right: 12),
+                  padding: EdgeInsets.only(right: 12),
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
@@ -1153,17 +1153,17 @@ class _GmailMobileWidgetState extends State<GmailMobileWidget> {
                             width: 32,
                             height: 32,
                             decoration: BoxDecoration(
-                              color: const Color(0xFF8E8E93).withOpacity(0.1),
+                              color: Color(0xFF8E8E93).withOpacity(0.1),
                               shape: BoxShape.circle,
                             ),
-                            child: const Icon(
+                            child: Icon(
                               Icons.close_rounded,
                               color: Color(0xFF8E8E93),
                               size: 18,
                             ),
                           ),
                         ),
-                      if (_searchController.text.isNotEmpty) const SizedBox(width: 8),
+                      if (_searchController.text.isNotEmpty) SizedBox(width: 8),
                       GestureDetector(
                         onTap: () {
                           setState(() {
@@ -1175,10 +1175,10 @@ class _GmailMobileWidgetState extends State<GmailMobileWidget> {
                           width: 32,
                           height: 32,
                           decoration: BoxDecoration(
-                            color: const Color(0xFF8E8E93).withOpacity(0.1),
+                            color: Color(0xFF8E8E93).withOpacity(0.1),
                             shape: BoxShape.circle,
                           ),
-                          child: const Icon(
+                          child: Icon(
                             Icons.arrow_downward_rounded,
                             color: Color(0xFF8E8E93),
                             size: 18,
@@ -1189,7 +1189,7 @@ class _GmailMobileWidgetState extends State<GmailMobileWidget> {
                   ),
                 ),
               ),
-              style: const TextStyle(
+              style: TextStyle(
                 fontFamily: 'SF Pro Text',
                 color: Color(0xFF1D1D1F),
                 fontSize: 16,
@@ -1204,7 +1204,7 @@ class _GmailMobileWidgetState extends State<GmailMobileWidget> {
 
   Widget _buildNavigationTabs() {
     return Container(
-      margin: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+      margin: EdgeInsets.fromLTRB(16, 12, 16, 0),
       child: ClipRRect(
         borderRadius: BorderRadius.circular(16),
         child: BackdropFilter(
@@ -1221,22 +1221,22 @@ class _GmailMobileWidgetState extends State<GmailMobileWidget> {
                 BoxShadow(
                   color: Colors.black.withOpacity(0.05),
                   blurRadius: 20,
-                  offset: const Offset(0, 4),
+                  offset: Offset(0, 4),
                 ),
                 BoxShadow(
                   color: Colors.white.withOpacity(0.8),
                   blurRadius: 6,
-                  offset: const Offset(0, -2),
+                  offset: Offset(0, -2),
                 ),
               ],
             ),
-            padding: const EdgeInsets.all(4),
+            padding: EdgeInsets.all(4),
             child: Row(
               children: [
                 Expanded(child: _buildTab('All', 0)),
-                const SizedBox(width: 4),
+                SizedBox(width: 4),
                 Expanded(child: _buildTab('Unread', 1)),
-                const SizedBox(width: 4),
+                SizedBox(width: 4),
                 Expanded(child: _buildTab('Read', 2)),
               ],
             ),
@@ -1257,12 +1257,12 @@ class _GmailMobileWidgetState extends State<GmailMobileWidget> {
         });
       },
       child: AnimatedContainer(
-        duration: const Duration(milliseconds: 300),
+        duration: Duration(milliseconds: 300),
         curve: Curves.easeInOutCubic,
         height: 36,
         decoration: BoxDecoration(
           gradient: isSelected
-              ? const LinearGradient(
+              ? LinearGradient(
                   colors: [
                     Color(0xFF5AC8FA),
                     Color(0xFF007AFF),
@@ -1276,20 +1276,20 @@ class _GmailMobileWidgetState extends State<GmailMobileWidget> {
           boxShadow: isSelected
               ? [
                   BoxShadow(
-                    color: const Color(0xFF5AC8FA).withOpacity(0.3),
+                    color: Color(0xFF5AC8FA).withOpacity(0.3),
                     blurRadius: 12,
-                    offset: const Offset(0, 4),
+                    offset: Offset(0, 4),
                   ),
                 ]
               : null,
         ),
         child: Center(
           child: AnimatedDefaultTextStyle(
-            duration: const Duration(milliseconds: 300),
+            duration: Duration(milliseconds: 300),
             curve: Curves.easeInOutCubic,
             style: TextStyle(
               fontFamily: 'SF Pro Text',
-              color: isSelected ? Colors.white : const Color(0xFF6B7280),
+              color: isSelected ? Colors.white : Color(0xFF6B7280),
               fontSize: 15,
               fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
               letterSpacing: -0.2,
@@ -1303,7 +1303,7 @@ class _GmailMobileWidgetState extends State<GmailMobileWidget> {
 
   Widget _buildEmailDetailView() {
     return Scaffold(
-      backgroundColor: const Color(0xFFF5F5F7),
+      backgroundColor: Color(0xFFF5F5F7),
       body: Column(
         children: [
           _buildEmailDetailHeader(),
@@ -1312,7 +1312,7 @@ class _GmailMobileWidgetState extends State<GmailMobileWidget> {
                 ? _buildEmailContentLoading()
                 : _selectedEmail != null
                     ? SingleChildScrollView(
-                        padding: const EdgeInsets.all(16),
+                        padding: EdgeInsets.all(16),
                         child: Container(
                           decoration: BoxDecoration(
                             color: Colors.white,
@@ -1321,18 +1321,18 @@ class _GmailMobileWidgetState extends State<GmailMobileWidget> {
                               BoxShadow(
                                 color: Colors.black.withOpacity(0.05),
                                 blurRadius: 10,
-                                offset: const Offset(0, 2),
+                                offset: Offset(0, 2),
                               ),
                             ],
                           ),
-                          padding: const EdgeInsets.all(20),
+                          padding: EdgeInsets.all(20),
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               // Subject
                               Text(
                                 _selectedEmail!['subject'] ?? '(No Subject)',
-                                style: const TextStyle(
+                                style: TextStyle(
                                   fontFamily: 'SF Pro Text',
                                   fontSize: 22,
                                   fontWeight: FontWeight.w700,
@@ -1340,7 +1340,7 @@ class _GmailMobileWidgetState extends State<GmailMobileWidget> {
                                   letterSpacing: -0.5,
                                 ),
                               ),
-                              const SizedBox(height: 20),
+                              SizedBox(height: 20),
                               // From
                               Row(
                                 children: [
@@ -1350,7 +1350,7 @@ class _GmailMobileWidgetState extends State<GmailMobileWidget> {
                                     radius: 24,
                                     child: Text(
                                       _getInitials(_selectedEmail!['from']),
-                                      style: const TextStyle(
+                                      style: TextStyle(
                                         fontFamily: 'SF Pro Text',
                                         color: Colors.white,
                                         fontWeight: FontWeight.w600,
@@ -1358,7 +1358,7 @@ class _GmailMobileWidgetState extends State<GmailMobileWidget> {
                                       ),
                                     ),
                                   ),
-                                  const SizedBox(width: 12),
+                                  SizedBox(width: 12),
                                   Expanded(
                                     child: Column(
                                       crossAxisAlignment:
@@ -1367,7 +1367,7 @@ class _GmailMobileWidgetState extends State<GmailMobileWidget> {
                                         Text(
                                           _parseEmailName(
                                               _selectedEmail!['from']),
-                                          style: const TextStyle(
+                                          style: TextStyle(
                                             fontFamily: 'SF Pro Text',
                                             fontWeight: FontWeight.w600,
                                             fontSize: 16,
@@ -1377,7 +1377,7 @@ class _GmailMobileWidgetState extends State<GmailMobileWidget> {
                                         Text(
                                           _parseEmailAddress(
                                               _selectedEmail!['from']),
-                                          style: const TextStyle(
+                                          style: TextStyle(
                                             fontFamily: 'SF Pro Text',
                                             fontSize: 13,
                                             color: Color(0xFF8E8E93),
@@ -1388,7 +1388,7 @@ class _GmailMobileWidgetState extends State<GmailMobileWidget> {
                                   ),
                                   Text(
                                     _formatDate(_selectedEmail!['date']),
-                                    style: const TextStyle(
+                                    style: TextStyle(
                                       fontFamily: 'SF Pro Text',
                                       fontSize: 13,
                                       color: Color(0xFF8E8E93),
@@ -1396,15 +1396,15 @@ class _GmailMobileWidgetState extends State<GmailMobileWidget> {
                                   ),
                                 ],
                               ),
-                              const SizedBox(height: 20),
-                              const Divider(color: Color(0xFFE5E5EA)),
-                              const SizedBox(height: 20),
+                              SizedBox(height: 20),
+                              Divider(color: Color(0xFFE5E5EA)),
+                              SizedBox(height: 20),
                               // Email body
                               HtmlWidget(
                                 _selectedEmail!['body'] ??
                                     _selectedEmail!['snippet'] ??
                                     '',
-                                textStyle: const TextStyle(
+                                textStyle: TextStyle(
                                   fontFamily: 'SF Pro Text',
                                   fontSize: 15,
                                   color: Color(0xFF1D1D1F),
@@ -1415,10 +1415,10 @@ class _GmailMobileWidgetState extends State<GmailMobileWidget> {
                               if (_selectedEmail!['attachments'] != null &&
                                   (_selectedEmail!['attachments'] as List)
                                       .isNotEmpty) ...[
-                                const SizedBox(height: 24),
-                                const Divider(color: Color(0xFFE5E5EA)),
-                                const SizedBox(height: 16),
-                                const Text(
+                                SizedBox(height: 24),
+                                Divider(color: Color(0xFFE5E5EA)),
+                                SizedBox(height: 16),
+                                Text(
                                   'Attachments',
                                   style: TextStyle(
                                     fontFamily: 'SF Pro Text',
@@ -1427,26 +1427,26 @@ class _GmailMobileWidgetState extends State<GmailMobileWidget> {
                                     color: Color(0xFF1D1D1F),
                                   ),
                                 ),
-                                const SizedBox(height: 12),
+                                SizedBox(height: 12),
                                 ...(_selectedEmail!['attachments'] as List)
                                     .map((attachment) {
                                   return Container(
-                                    margin: const EdgeInsets.only(bottom: 8),
-                                    padding: const EdgeInsets.all(12),
+                                    margin: EdgeInsets.only(bottom: 8),
+                                    padding: EdgeInsets.all(12),
                                     decoration: BoxDecoration(
-                                      color: const Color(0xFFF2F2F7),
+                                      color: Color(0xFFF2F2F7),
                                       borderRadius: BorderRadius.circular(12),
                                     ),
                                     child: Row(
                                       children: [
-                                        const Icon(Icons.attachment,
+                                        Icon(Icons.attachment,
                                             color: Color(0xFF007AFF), size: 20),
-                                        const SizedBox(width: 12),
+                                        SizedBox(width: 12),
                                         Expanded(
                                           child: Text(
                                             attachment['filename'] ??
                                                 'Attachment',
-                                            style: const TextStyle(
+                                            style: TextStyle(
                                               fontFamily: 'SF Pro Text',
                                               fontSize: 15,
                                               color: Color(0xFF1D1D1F),
@@ -1454,13 +1454,13 @@ class _GmailMobileWidgetState extends State<GmailMobileWidget> {
                                           ),
                                         ),
                                         IconButton(
-                                          icon: const Icon(Icons.download,
+                                          icon: Icon(Icons.download,
                                               color: Color(0xFF007AFF)),
                                           onPressed: () async {
                                             // TODO: Implement download
                                             ScaffoldMessenger.of(context)
                                                 .showSnackBar(
-                                              const SnackBar(
+                                              SnackBar(
                                                 content: Text(
                                                     'Download feature coming soon'),
                                                 backgroundColor:
@@ -1472,13 +1472,13 @@ class _GmailMobileWidgetState extends State<GmailMobileWidget> {
                                       ],
                                     ),
                                   );
-                                }),
+                                }).toList(),
                               ],
                             ],
                           ),
                         ),
                       )
-                    : const Center(
+                    : Center(
                         child: Text(
                           'No email selected',
                           style: TextStyle(
@@ -1497,7 +1497,7 @@ class _GmailMobileWidgetState extends State<GmailMobileWidget> {
     return Container(
       decoration: BoxDecoration(
         color: Colors.white,
-        border: const Border(
+        border: Border(
           bottom: BorderSide(
             color: Color(0xFFE5E7EB),
             width: 0.5,
@@ -1507,14 +1507,14 @@ class _GmailMobileWidgetState extends State<GmailMobileWidget> {
           BoxShadow(
             color: Colors.black.withOpacity(0.05),
             blurRadius: 10,
-            offset: const Offset(0, 1),
+            offset: Offset(0, 1),
           ),
         ],
       ),
       child: SafeArea(
         child: Container(
           height: 44,
-          padding: const EdgeInsets.symmetric(horizontal: 16),
+          padding: EdgeInsets.symmetric(horizontal: 16),
           child: Row(
             children: [
               // Back button
@@ -1531,14 +1531,14 @@ class _GmailMobileWidgetState extends State<GmailMobileWidget> {
                     color: Colors.transparent,
                     borderRadius: BorderRadius.circular(18),
                   ),
-                  child: const Icon(
+                  child: Icon(
                     Icons.arrow_back_ios,
                     color: Color(0xFF007AFF),
                     size: 18,
                   ),
                 ),
               ),
-              const Spacer(),
+              Spacer(),
               // Reply button
               if (_selectedEmail != null)
                 GestureDetector(
@@ -1550,7 +1550,7 @@ class _GmailMobileWidgetState extends State<GmailMobileWidget> {
                       color: Colors.transparent,
                       borderRadius: BorderRadius.circular(18),
                     ),
-                    child: const Icon(
+                    child: Icon(
                       Icons.reply,
                       color: Color(0xFF007AFF),
                       size: 20,
@@ -1567,7 +1567,7 @@ class _GmailMobileWidgetState extends State<GmailMobileWidget> {
   Widget _buildLoadingExperience() {
     return TweenAnimationBuilder<double>(
       tween: Tween(begin: 0.0, end: 1.0),
-      duration: const Duration(milliseconds: 1200),
+      duration: Duration(milliseconds: 1200),
       curve: Curves.easeInOut,
       builder: (context, value, child) {
         return Container(
@@ -1576,9 +1576,9 @@ class _GmailMobileWidgetState extends State<GmailMobileWidget> {
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
               colors: [
-                const Color(0xFFF5F5F7),
-                const Color(0xFFF5F5F7),
-                const Color(0xFFF5F5F7).withOpacity(0.95),
+                Color(0xFFF5F5F7),
+                Color(0xFFF5F5F7),
+                Color(0xFFF5F5F7).withOpacity(0.95),
               ],
               stops: [0.0, 0.5 * value, 1.0],
             ),
@@ -1588,14 +1588,14 @@ class _GmailMobileWidgetState extends State<GmailMobileWidget> {
             children: [
               // Animated Gmail Icon with Pulsing Effect
               _PulsingGmailIcon(),
-              const SizedBox(height: 40),
+              SizedBox(height: 40),
               // Animated Text
               _AnimatedLoadingText(),
-              const SizedBox(height: 60),
+              SizedBox(height: 60),
               // Shimmer Email Skeleton Cards
               Expanded(
                 child: ListView.builder(
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  padding: EdgeInsets.symmetric(horizontal: 16),
                   itemCount: 5,
                   itemBuilder: (context, index) {
                     return TweenAnimationBuilder<double>(
@@ -1625,7 +1625,7 @@ class _GmailMobileWidgetState extends State<GmailMobileWidget> {
 
   Widget _buildEmailContentLoading() {
     return SingleChildScrollView(
-      padding: const EdgeInsets.all(24),
+      padding: EdgeInsets.all(24),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -1633,16 +1633,16 @@ class _GmailMobileWidgetState extends State<GmailMobileWidget> {
           Center(
             child: _PulsingEmailIcon(),
           ),
-          const SizedBox(height: 32),
+          SizedBox(height: 32),
           // Shimmer header with staggered animation
           TweenAnimationBuilder<double>(
             tween: Tween(begin: 0.0, end: 1.0),
-            duration: const Duration(milliseconds: 600),
+            duration: Duration(milliseconds: 600),
             curve: Curves.easeOut,
             builder: (context, value, child) {
               return Opacity(
                 opacity: value,
-                child: const Column(
+                child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     _ShimmerBox(
@@ -1667,18 +1667,18 @@ class _GmailMobileWidgetState extends State<GmailMobileWidget> {
               );
             },
           ),
-          const SizedBox(height: 32),
-          const Divider(color: Color(0xFFE5E5EA)),
-          const SizedBox(height: 24),
+          SizedBox(height: 32),
+          Divider(color: Color(0xFFE5E5EA)),
+          SizedBox(height: 24),
           // Shimmer body with staggered animation
           TweenAnimationBuilder<double>(
             tween: Tween(begin: 0.0, end: 1.0),
-            duration: const Duration(milliseconds: 800),
+            duration: Duration(milliseconds: 800),
             curve: Curves.easeOut,
             builder: (context, value, child) {
               return Opacity(
                 opacity: value,
-                child: const Column(
+                child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     _ShimmerBox(
@@ -1743,7 +1743,7 @@ class _AnimatedLoadingTextState extends State<_AnimatedLoadingText> {
   }
 
   void _startAnimation() {
-    Future.delayed(const Duration(milliseconds: 2000), () {
+    Future.delayed(Duration(milliseconds: 2000), () {
       if (mounted) {
         setState(() {
           _currentIndex = (_currentIndex + 1) % _loadingMessages.length;
@@ -1756,13 +1756,13 @@ class _AnimatedLoadingTextState extends State<_AnimatedLoadingText> {
   @override
   Widget build(BuildContext context) {
     return AnimatedSwitcher(
-      duration: const Duration(milliseconds: 500),
+      duration: Duration(milliseconds: 500),
       transitionBuilder: (child, animation) {
         return FadeTransition(
           opacity: animation,
           child: SlideTransition(
             position: Tween<Offset>(
-              begin: const Offset(0.0, 0.3),
+              begin: Offset(0.0, 0.3),
               end: Offset.zero,
             ).animate(animation),
             child: child,
@@ -1772,7 +1772,7 @@ class _AnimatedLoadingTextState extends State<_AnimatedLoadingText> {
       child: Text(
         _loadingMessages[_currentIndex],
         key: ValueKey(_currentIndex),
-        style: const TextStyle(
+        style: TextStyle(
           fontFamily: 'SF Pro Text',
           fontSize: 18,
           fontWeight: FontWeight.w500,
@@ -1803,7 +1803,7 @@ class _ShimmerEmailCardState extends State<_ShimmerEmailCard>
     super.initState();
     _controller = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 1500),
+      duration: Duration(milliseconds: 1500),
     );
     Future.delayed(widget.delay, () {
       if (mounted) {
@@ -1821,24 +1821,24 @@ class _ShimmerEmailCardState extends State<_ShimmerEmailCard>
   @override
   Widget build(BuildContext context) {
     return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(16),
+      margin: EdgeInsets.only(bottom: 12),
+      padding: EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(12),
         border: Border.all(
-          color: const Color(0xFFE5E5EA).withOpacity(0.5),
+          color: Color(0xFFE5E5EA).withOpacity(0.5),
           width: 1,
         ),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withOpacity(0.05),
             blurRadius: 10,
-            offset: const Offset(0, 2),
+            offset: Offset(0, 2),
           ),
         ],
       ),
-      child: const Row(
+      child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           // Avatar shimmer
@@ -1916,7 +1916,7 @@ class _ShimmerBoxState extends State<_ShimmerBox>
     super.initState();
     _controller = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 1500),
+      duration: Duration(milliseconds: 1500),
     )..repeat();
   }
 
@@ -1940,11 +1940,11 @@ class _ShimmerBoxState extends State<_ShimmerBox>
               begin: Alignment(-1.0 - _controller.value * 2, 0.0),
               end: Alignment(1.0 - _controller.value * 2, 0.0),
               colors: [
-                const Color(0xFFE5E5EA).withOpacity(0.3),
-                const Color(0xFFD1D1D6).withOpacity(0.5),
-                const Color(0xFFE5E5EA).withOpacity(0.3),
+                Color(0xFFE5E5EA).withOpacity(0.3),
+                Color(0xFFD1D1D6).withOpacity(0.5),
+                Color(0xFFE5E5EA).withOpacity(0.3),
               ],
-              stops: const [0.0, 0.5, 1.0],
+              stops: [0.0, 0.5, 1.0],
             ),
           ),
         );
@@ -1973,7 +1973,7 @@ class _PulsingGmailIconState extends State<_PulsingGmailIcon>
     // Scale animation for initial entrance
     _scaleController = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 1500),
+      duration: Duration(milliseconds: 1500),
     );
     _scaleAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
       CurvedAnimation(
@@ -1985,7 +1985,7 @@ class _PulsingGmailIconState extends State<_PulsingGmailIcon>
     // Pulse animation for continuous effect
     _pulseController = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 2000),
+      duration: Duration(milliseconds: 2000),
     );
     _pulseAnimation = Tween<double>(begin: 1.0, end: 1.15).animate(
       CurvedAnimation(
@@ -2021,15 +2021,15 @@ class _PulsingGmailIconState extends State<_PulsingGmailIcon>
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
                 colors: [
-                  const Color(0xFFE5E5EA)
+                  Color(0xFFE5E5EA)
                       .withOpacity(0.3 + (_pulseAnimation.value - 1.0) * 0.1),
-                  const Color(0xFFD1D1D6)
+                  Color(0xFFD1D1D6)
                       .withOpacity(0.3 + (_pulseAnimation.value - 1.0) * 0.1),
                 ],
               ),
               boxShadow: [
                 BoxShadow(
-                  color: const Color(0xFF007AFF)
+                  color: Color(0xFF007AFF)
                       .withOpacity(0.3 * _pulseAnimation.value),
                   blurRadius: 20 * _pulseAnimation.value,
                   spreadRadius: 5 * _pulseAnimation.value,
@@ -2071,7 +2071,7 @@ class _PulsingEmailIconState extends State<_PulsingEmailIcon>
     // Scale animation for initial entrance
     _scaleController = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 1200),
+      duration: Duration(milliseconds: 1200),
     );
     _scaleAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
       CurvedAnimation(
@@ -2083,7 +2083,7 @@ class _PulsingEmailIconState extends State<_PulsingEmailIcon>
     // Pulse animation for continuous effect
     _pulseController = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 1800),
+      duration: Duration(milliseconds: 1800),
     );
     _pulseAnimation = Tween<double>(begin: 1.0, end: 1.12).animate(
       CurvedAnimation(
@@ -2119,22 +2119,22 @@ class _PulsingEmailIconState extends State<_PulsingEmailIcon>
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
                 colors: [
-                  const Color(0xFF007AFF)
+                  Color(0xFF007AFF)
                       .withOpacity(0.2 + (_pulseAnimation.value - 1.0) * 0.1),
-                  const Color(0xFF5AC8FA)
+                  Color(0xFF5AC8FA)
                       .withOpacity(0.15 + (_pulseAnimation.value - 1.0) * 0.1),
                 ],
               ),
               boxShadow: [
                 BoxShadow(
-                  color: const Color(0xFF007AFF)
+                  color: Color(0xFF007AFF)
                       .withOpacity(0.3 * _pulseAnimation.value),
                   blurRadius: 15 * _pulseAnimation.value,
                   spreadRadius: 3 * _pulseAnimation.value,
                 ),
               ],
             ),
-            child: const Center(
+            child: Center(
               child: Icon(
                 Icons.email_rounded,
                 size: 36,
@@ -2155,12 +2155,12 @@ class _ComposeEmailSheet extends StatefulWidget {
   final Function(String, String, String, List<PlatformFile>?) onSend;
 
   const _ComposeEmailSheet({
-    super.key,
+    Key? key,
     this.to,
     this.subject,
     this.isReply = false,
     required this.onSend,
-  });
+  }) : super(key: key);
 
   @override
   _ComposeEmailSheetState createState() => _ComposeEmailSheetState();
@@ -2170,7 +2170,7 @@ class _ComposeEmailSheetState extends State<_ComposeEmailSheet> {
   final _toController = TextEditingController();
   final _subjectController = TextEditingController();
   final _bodyController = TextEditingController();
-  final List<PlatformFile> _attachments = [];
+  List<PlatformFile> _attachments = [];
   bool _isSending = false;
 
   @override
@@ -2200,14 +2200,14 @@ class _ComposeEmailSheetState extends State<_ComposeEmailSheet> {
   Future<void> _sendEmail() async {
     if (_toController.text.trim().isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please enter a recipient')),
+        SnackBar(content: Text('Please enter a recipient')),
       );
       return;
     }
 
     if (_subjectController.text.trim().isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please enter a subject')),
+        SnackBar(content: Text('Please enter a subject')),
       );
       return;
     }
@@ -2232,7 +2232,7 @@ class _ComposeEmailSheetState extends State<_ComposeEmailSheet> {
   Widget build(BuildContext context) {
     return Container(
       height: MediaQuery.of(context).size.height * 0.9,
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
@@ -2240,7 +2240,7 @@ class _ComposeEmailSheetState extends State<_ComposeEmailSheet> {
         children: [
           // Header
           Container(
-            padding: const EdgeInsets.all(16),
+            padding: EdgeInsets.all(16),
             decoration: BoxDecoration(
               border: Border(bottom: BorderSide(color: Colors.grey.shade300)),
             ),
@@ -2248,23 +2248,23 @@ class _ComposeEmailSheetState extends State<_ComposeEmailSheet> {
               children: [
                 TextButton(
                   onPressed: () => Navigator.pop(context),
-                  child: const Text('Cancel'),
+                  child: Text('Cancel'),
                 ),
-                const Spacer(),
+                Spacer(),
                 Text(
                   widget.isReply ? 'Reply' : 'Compose',
-                  style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                 ),
-                const Spacer(),
+                Spacer(),
                 TextButton(
                   onPressed: _isSending ? null : _sendEmail,
                   child: _isSending
-                      ? const SizedBox(
+                      ? SizedBox(
                           width: 20,
                           height: 20,
                           child: CircularProgressIndicator(strokeWidth: 2),
                         )
-                      : const Text('Send'),
+                      : Text('Send'),
                 ),
               ],
             ),
@@ -2272,27 +2272,27 @@ class _ComposeEmailSheetState extends State<_ComposeEmailSheet> {
           // Form
           Expanded(
             child: SingleChildScrollView(
-              padding: const EdgeInsets.all(16),
+              padding: EdgeInsets.all(16),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   TextField(
                     controller: _toController,
-                    decoration: const InputDecoration(
+                    decoration: InputDecoration(
                       labelText: 'To',
                       border: OutlineInputBorder(),
                     ),
                     enabled: !widget.isReply,
                   ),
-                  const SizedBox(height: 16),
+                  SizedBox(height: 16),
                   TextField(
                     controller: _subjectController,
-                    decoration: const InputDecoration(
+                    decoration: InputDecoration(
                       labelText: 'Subject',
                       border: OutlineInputBorder(),
                     ),
                   ),
-                  const SizedBox(height: 16),
+                  SizedBox(height: 16),
                   // Attachments
                   if (_attachments.isNotEmpty) ...[
                     Wrap(
@@ -2308,17 +2308,17 @@ class _ComposeEmailSheetState extends State<_ComposeEmailSheet> {
                         );
                       }).toList(),
                     ),
-                    const SizedBox(height: 16),
+                    SizedBox(height: 16),
                   ],
                   TextButton.icon(
                     onPressed: _pickAttachments,
-                    icon: const Icon(Icons.attach_file),
-                    label: const Text('Attach files'),
+                    icon: Icon(Icons.attach_file),
+                    label: Text('Attach files'),
                   ),
-                  const SizedBox(height: 16),
+                  SizedBox(height: 16),
                   TextField(
                     controller: _bodyController,
-                    decoration: const InputDecoration(
+                    decoration: InputDecoration(
                       labelText: 'Message',
                       border: OutlineInputBorder(),
                       alignLabelWithHint: true,

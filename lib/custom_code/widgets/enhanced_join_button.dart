@@ -91,9 +91,9 @@ class _EnhancedJoinButtonState extends State<EnhancedJoinButton> {
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: const Text(
+          content: Text(
             'Successfully joined event!',
-            style: TextStyle(color: Colors.white),
+            style: const TextStyle(color: Colors.white),
           ),
           backgroundColor: FlutterFlowTheme.of(context).success,
           duration: const Duration(seconds: 3),

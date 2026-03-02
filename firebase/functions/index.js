@@ -41,6 +41,16 @@ exports.calendarCreateEvent = require('./gmailIntegration').calendarCreateEvent;
 exports.calendarUpdateEvent = require('./gmailIntegration').calendarUpdateEvent;
 exports.calendarDeleteEvent = require('./gmailIntegration').calendarDeleteEvent;
 
+// Fireflies.ai – API key stored and used only on server
+exports.firefliesConnect = require('./fireflies').firefliesConnect;
+exports.firefliesGetTranscripts = require('./fireflies').firefliesGetTranscripts;
+exports.firefliesDisconnect = require('./fireflies').firefliesDisconnect;
+exports.firefliesGetConnectionStatus = require('./fireflies').firefliesGetConnectionStatus;
+exports.firefliesFetchAndStoreTranscript = require('./fireflies').firefliesFetchAndStoreTranscript;
+
+// Manual transcript: OpenAI summary + action items → manualTranscripts
+exports.manualTranscriptProcess = require('./manualTranscript').manualTranscriptProcess;
+
 const kPushNotificationRuntimeOpts = {
   timeoutSeconds: 540,
   memory: "2GB",

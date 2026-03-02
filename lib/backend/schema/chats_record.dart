@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:collection/collection.dart';
 
 import '/backend/schema/util/firestore_util.dart';
+import '/backend/schema/util/schema_util.dart';
 import '/backend/schema/enums/enums.dart';
 
 import 'index.dart';
@@ -126,6 +127,11 @@ class ChatsRecord extends FirestoreRecord {
   bool get isServiceChat => _isServiceChat ?? false;
   bool hasIsServiceChat() => _isServiceChat != null;
 
+  // "manual_meeting_transcription" field.
+  String? _manualMeetingTranscription;
+  String get manualMeetingTranscription => _manualMeetingTranscription ?? '';
+  bool hasManualMeetingTranscription() => _manualMeetingTranscription != null;
+
   void _initializeFields() {
     _title = snapshotData['title'] as String?;
     _isGroup = snapshotData['is_group'] as bool?;
@@ -151,6 +157,8 @@ class ChatsRecord extends FirestoreRecord {
     _lastSeen = snapshotData['last_seen'] as DocumentReference?;
     _workspaceRef = snapshotData['workspace_ref'] as DocumentReference?;
     _isServiceChat = snapshotData['is_service_chat'] as bool?;
+    _manualMeetingTranscription =
+        snapshotData['manual_meeting_transcription'] as String?;
   }
 
   static CollectionReference get collection =>
@@ -205,6 +213,7 @@ Map<String, dynamic> createChatsRecordData({
   DocumentReference? lastSeen,
   DocumentReference? workspaceRef,
   bool? isServiceChat,
+  String? manualMeetingTranscription,
 }) {
   final firestoreData = mapToFirestore(
     <String, dynamic>{
@@ -226,6 +235,7 @@ Map<String, dynamic> createChatsRecordData({
       'last_seen': lastSeen,
       'workspace_ref': workspaceRef,
       'is_service_chat': isServiceChat,
+      'manual_meeting_transcription': manualMeetingTranscription,
     }.withoutNulls,
   );
 

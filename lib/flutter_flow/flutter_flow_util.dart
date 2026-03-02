@@ -485,12 +485,12 @@ void showSnackbar(
       content: Row(
         children: [
           if (loading)
-            const Padding(
-              padding: EdgeInsetsDirectional.only(end: 10.0),
+            Padding(
+              padding: const EdgeInsetsDirectional.only(end: 10.0),
               child: SizedBox(
                 height: 20,
                 width: 20,
-                child: CircularProgressIndicator(
+                child: const CircularProgressIndicator(
                   color: Colors.white,
                 ),
               ),

@@ -60,7 +60,7 @@ List<T>? getStructList<T>(
         ? null
         : value
             .whereType<Map<String, dynamic>>()
-            .map((e) => structBuilder(e))
+            .map((e) => structBuilder(e as Map<String, dynamic>))
             .toList();
 
 List<T>? getEnumList<T>(dynamic value) => value is! List

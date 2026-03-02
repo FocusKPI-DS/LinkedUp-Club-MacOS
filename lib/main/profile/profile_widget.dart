@@ -1242,7 +1242,7 @@ class _ProfileWidgetState extends State<ProfileWidget>
 
                                 // DEBUG: Check currentUserReference
                                 print(
-                                    '🔍 DEBUG: currentUserReference = $currentUserReference');
+                                    '🔍 DEBUG: currentUserReference = ${currentUserReference}');
                                 print(
                                     '🔍 DEBUG: User ID = ${currentUserReference?.id}');
 

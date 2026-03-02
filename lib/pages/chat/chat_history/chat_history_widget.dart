@@ -18,10 +18,12 @@ class ChatHistoryWidget extends StatefulWidget {
     super.key,
     required this.chatDoc,
     this.showAppBar = true,
+    this.onMessageSelected,
   });
 
   final ChatsRecord chatDoc;
   final bool showAppBar;
+  final Function(String)? onMessageSelected;
 
   static String routeName = 'ChatHistory';
   static String routePath = '/chatHistory';
@@ -63,8 +65,12 @@ class _ChatHistoryWidgetState extends State<ChatHistoryWidget> {
       } else if (filter == 'Video') {
         typeMatch = m.messageType == MessageType.video;
       } else if (filter == 'File') {
-         // Assuming MessageType.file exists, or check attachmentUrl
-        typeMatch = m.messageType == MessageType.file || (m.attachmentUrl.isNotEmpty && m.messageType != MessageType.image && m.messageType != MessageType.video);
+        // Assuming MessageType.file exists, or check attachmentUrl
+        typeMatch = m.messageType == MessageType.file ||
+            (m.attachmentUrl != null &&
+                m.attachmentUrl!.isNotEmpty &&
+                m.messageType != MessageType.image &&
+                m.messageType != MessageType.video);
       } else if (filter == 'Link') {
         typeMatch = m.content.contains('http');
       } else if (filter == 'Pinned') {
@@ -77,10 +83,10 @@ class _ChatHistoryWidgetState extends State<ChatHistoryWidget> {
       if (query.isNotEmpty) {
         if (m.messageType == MessageType.text) {
           return m.content.toLowerCase().contains(query);
-        } else if (filter == 'File') {
-             // Basic check if filename might be in content or just allow all files if query is present?
-             // Let's search content as it might contain filename
-             return m.content.toLowerCase().contains(query);
+        } else if (filter == 'File' && m.attachmentUrl != null) {
+          // Basic check if filename might be in content or just allow all files if query is present?
+          // Let's search content as it might contain filename
+          return m.content.toLowerCase().contains(query);
         }
         return false;
       }
@@ -100,7 +106,8 @@ class _ChatHistoryWidgetState extends State<ChatHistoryWidget> {
         backgroundColor: FlutterFlowTheme.of(context).primaryBackground,
         appBar: widget.showAppBar
             ? AppBar(
-                backgroundColor: FlutterFlowTheme.of(context).secondaryBackground,
+                backgroundColor:
+                    FlutterFlowTheme.of(context).secondaryBackground,
                 automaticallyImplyLeading: false,
                 leading: FlutterFlowIconButton(
                   borderColor: Colors.transparent,
@@ -136,7 +143,8 @@ class _ChatHistoryWidgetState extends State<ChatHistoryWidget> {
               // Search Bar Area
               Container(
                 color: FlutterFlowTheme.of(context).secondaryBackground,
-                padding: const EdgeInsetsDirectional.fromSTEB(16.0, 0.0, 16.0, 12.0),
+                padding:
+                    const EdgeInsetsDirectional.fromSTEB(16.0, 0.0, 16.0, 12.0),
                 child: TextFormField(
                   controller: _model.textController,
                   focusNode: _model.textFieldFocusNode,
@@ -183,27 +191,27 @@ class _ChatHistoryWidgetState extends State<ChatHistoryWidget> {
                   cursorColor: FlutterFlowTheme.of(context).primary,
                 ),
               ),
-              
+
               // Filter Tabs
               Container(
-                 color: FlutterFlowTheme.of(context).secondaryBackground,
-                 width: double.infinity,
-                 padding: const EdgeInsets.only(bottom: 12),
-                 child: SingleChildScrollView(
+                color: FlutterFlowTheme.of(context).secondaryBackground,
+                width: double.infinity,
+                padding: EdgeInsets.only(bottom: 12),
+                child: SingleChildScrollView(
                   scrollDirection: Axis.horizontal,
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  padding: EdgeInsets.symmetric(horizontal: 16),
                   child: Row(
                     children: [
                       _buildFilterChip('All'),
-                      const SizedBox(width: 8),
+                      SizedBox(width: 8),
                       _buildFilterChip('Image'),
-                      const SizedBox(width: 8),
+                      SizedBox(width: 8),
                       _buildFilterChip('Video'),
-                      const SizedBox(width: 8),
+                      SizedBox(width: 8),
                       _buildFilterChip('File'),
-                      const SizedBox(width: 8),
+                      SizedBox(width: 8),
                       _buildFilterChip('Link'),
-                      const SizedBox(width: 8),
+                      SizedBox(width: 8),
                       _buildFilterChip('Pinned'),
                     ],
                   ),
@@ -215,8 +223,8 @@ class _ChatHistoryWidgetState extends State<ChatHistoryWidget> {
                 child: StreamBuilder<List<MessagesRecord>>(
                   stream: queryMessagesRecord(
                     parent: widget.chatDoc.reference,
-                    queryBuilder: (messagesRecord) => messagesRecord
-                        .orderBy('created_at', descending: true),
+                    queryBuilder: (messagesRecord) =>
+                        messagesRecord.orderBy('created_at', descending: true),
                   ),
                   builder: (context, snapshot) {
                     if (!snapshot.hasData) {
@@ -230,36 +238,46 @@ class _ChatHistoryWidgetState extends State<ChatHistoryWidget> {
                         ),
                       );
                     }
-                    
+
                     final allMessages = snapshot.data!;
                     final filteredMessages = _filterMessages(allMessages);
-                    
+
                     if (filteredMessages.isEmpty) {
-                       return Center(
-                         child: Column(
-                           mainAxisSize: MainAxisSize.min,
-                           children: [
-                             Icon(Icons.search_off_rounded, size: 64, color: FlutterFlowTheme.of(context).secondaryText),
-                             const SizedBox(height: 12),
-                             Text(
-                               'No results found',
-                               style: FlutterFlowTheme.of(context).bodyMedium.override(
-                                 fontFamily: 'Inter',
-                                 color: FlutterFlowTheme.of(context).secondaryText,
-                               ),
-                             ),
-                           ],
-                         ),
-                       );
+                      return Center(
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(Icons.search_off_rounded,
+                                size: 64,
+                                color:
+                                    FlutterFlowTheme.of(context).secondaryText),
+                            SizedBox(height: 12),
+                            Text(
+                              'No results found',
+                              style: FlutterFlowTheme.of(context)
+                                  .bodyMedium
+                                  .override(
+                                    fontFamily: 'Inter',
+                                    color: FlutterFlowTheme.of(context)
+                                        .secondaryText,
+                                  ),
+                            ),
+                          ],
+                        ),
+                      );
                     }
 
                     return ListView.separated(
-                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      padding: EdgeInsets.symmetric(vertical: 12),
                       itemCount: filteredMessages.length,
-                      separatorBuilder: (_, __) => Divider(height: 1, color: FlutterFlowTheme.of(context).alternate.withOpacity(0.5)),
+                      separatorBuilder: (_, __) => Divider(
+                          height: 1,
+                          color: FlutterFlowTheme.of(context)
+                              .alternate
+                              .withOpacity(0.5)),
                       itemBuilder: (context, index) {
-                         final message = filteredMessages[index];
-                         return _buildMessageItem(message);
+                        final message = filteredMessages[index];
+                        return _buildMessageItem(message);
                       },
                     );
                   },
@@ -281,28 +299,28 @@ class _ChatHistoryWidgetState extends State<ChatHistoryWidget> {
         });
       },
       child: AnimatedContainer(
-        duration: const Duration(milliseconds: 200),
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        duration: Duration(milliseconds: 200),
+        padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
         decoration: BoxDecoration(
-          color: isSelected 
-              ? FlutterFlowTheme.of(context).primary.withOpacity(0.1) 
+          color: isSelected
+              ? FlutterFlowTheme.of(context).primary.withOpacity(0.1)
               : FlutterFlowTheme.of(context).primaryBackground,
           borderRadius: BorderRadius.circular(20),
           border: Border.all(
-            color: isSelected 
-                ? FlutterFlowTheme.of(context).primary 
+            color: isSelected
+                ? FlutterFlowTheme.of(context).primary
                 : FlutterFlowTheme.of(context).alternate,
           ),
         ),
         child: Text(
           label,
           style: FlutterFlowTheme.of(context).bodyMedium.override(
-            fontFamily: 'Inter',
-            color: isSelected 
-                ? FlutterFlowTheme.of(context).primary 
-                : FlutterFlowTheme.of(context).secondaryText,
-            fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
-          ),
+                fontFamily: 'Inter',
+                color: isSelected
+                    ? FlutterFlowTheme.of(context).primary
+                    : FlutterFlowTheme.of(context).secondaryText,
+                fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+              ),
         ),
       ),
     );
@@ -311,7 +329,11 @@ class _ChatHistoryWidgetState extends State<ChatHistoryWidget> {
   Widget _buildMessageItem(MessagesRecord message) {
     return InkWell(
       onTap: () {
-        context.pop(message.reference.id);
+        if (widget.onMessageSelected != null) {
+          widget.onMessageSelected!(message.reference.id);
+        } else {
+          context.pop(message.reference.id);
+        }
       },
       child: Padding(
         padding: const EdgeInsetsDirectional.fromSTEB(16.0, 12.0, 16.0, 12.0),
@@ -320,28 +342,32 @@ class _ChatHistoryWidgetState extends State<ChatHistoryWidget> {
           children: [
             // Avatar
             Container(
-               width: 40,
-               height: 40,
-               clipBehavior: Clip.antiAlias,
-               decoration: BoxDecoration(
-                 shape: BoxShape.circle,
-                 border: Border.all(color: FlutterFlowTheme.of(context).alternate, width: 1),
-               ),
-               child: StreamBuilder<UsersRecord>(
-                 stream: UsersRecord.getDocument(message.senderRef!),
-                 builder: (context, snapshot) {
-                   if (!snapshot.hasData) return Container(color: FlutterFlowTheme.of(context).alternate);
-                   return CachedNetworkImage(
-                     imageUrl: snapshot.data!.photoUrl,
-                     fit: BoxFit.cover,
-                     placeholder: (context, url) => Container(color: FlutterFlowTheme.of(context).alternate),
-                     errorWidget: (context, url, error) => const Icon(Icons.person),
-                   );
-                 },
-               ),
+              width: 40,
+              height: 40,
+              clipBehavior: Clip.antiAlias,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                border: Border.all(
+                    color: FlutterFlowTheme.of(context).alternate, width: 1),
+              ),
+              child: StreamBuilder<UsersRecord>(
+                stream: UsersRecord.getDocument(message.senderRef!),
+                builder: (context, snapshot) {
+                  if (!snapshot.hasData)
+                    return Container(
+                        color: FlutterFlowTheme.of(context).alternate);
+                  return CachedNetworkImage(
+                    imageUrl: snapshot.data!.photoUrl,
+                    fit: BoxFit.cover,
+                    placeholder: (context, url) => Container(
+                        color: FlutterFlowTheme.of(context).alternate),
+                    errorWidget: (context, url, error) => Icon(Icons.person),
+                  );
+                },
+              ),
             ),
-            const SizedBox(width: 12),
-            
+            SizedBox(width: 12),
+
             // Content
             Expanded(
               child: Column(
@@ -352,144 +378,159 @@ class _ChatHistoryWidgetState extends State<ChatHistoryWidget> {
                     children: [
                       Expanded(
                         child: StreamBuilder<UsersRecord>(
-                           stream: UsersRecord.getDocument(message.senderRef!),
-                           builder: (context, snapshot) {
-                             if (!snapshot.hasData) return const Text('...');
-                             return Text(
-                               snapshot.data!.displayName,
-                               style: FlutterFlowTheme.of(context).bodyMedium.override(
-                                 fontFamily: 'Inter',
-                                 color: FlutterFlowTheme.of(context).secondaryText,
-                                 fontSize: 13,
-                               ),
-                               maxLines: 1,
-                               overflow: TextOverflow.ellipsis,
-                              );
-                           },
+                          stream: UsersRecord.getDocument(message.senderRef!),
+                          builder: (context, snapshot) {
+                            if (!snapshot.hasData) return Text('...');
+                            return Text(
+                              snapshot.data!.displayName,
+                              style: FlutterFlowTheme.of(context)
+                                  .bodyMedium
+                                  .override(
+                                    fontFamily: 'Inter',
+                                    color: FlutterFlowTheme.of(context)
+                                        .secondaryText,
+                                    fontSize: 13,
+                                  ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            );
+                          },
                         ),
                       ),
-                      const SizedBox(width: 8),
+                      SizedBox(width: 8),
                       Text(
                         dateTimeFormat('relative', message.createdAt),
                         style: FlutterFlowTheme.of(context).bodySmall.override(
-                          fontFamily: 'Inter',
-                          color: FlutterFlowTheme.of(context).secondaryText,
-                          fontSize: 11,
-                        ),
+                              fontFamily: 'Inter',
+                              color: FlutterFlowTheme.of(context).secondaryText,
+                              fontSize: 11,
+                            ),
                       ),
                     ],
                   ),
-                  const SizedBox(height: 4),
-                  
+                  SizedBox(height: 4),
+
                   // Message Content
                   if (message.messageType == MessageType.text)
                     _buildHighlightedText(message.content)
                   else if (message.messageType == MessageType.image)
-                    Builder(
-                      builder: (context) {
-                        String imageUrl = message.image;
-                        if ((imageUrl.isEmpty) && 
-                            message.images.isNotEmpty) {
-                          imageUrl = message.images.first;
-                        }
-                        return Padding(
-                          padding: const EdgeInsets.only(top: 4),
-                          child: InkWell(
-                            onTap: () async {
-                              await Navigator.push(
-                                context,
-                                PageTransition(
-                                  type: PageTransitionType.fade,
-                                  child: FlutterFlowExpandedImageView(
-                                    image: CachedNetworkImage(
-                                      fadeInDuration: const Duration(milliseconds: 300),
-                                      fadeOutDuration: const Duration(milliseconds: 300),
-                                      imageUrl: valueOrDefault<String>(
-                                        imageUrl,
-                                        message.attachmentUrl ?? '',
-                                      ),
-                                      fit: BoxFit.contain,
-                                    ),
-                                    allowRotation: false,
-                                    tag: valueOrDefault<String>(
-                                      imageUrl,
-                                      message.attachmentUrl ?? 'image_${message.reference.id}',
-                                    ),
-                                    useHeroAnimation: true,
+                    Builder(builder: (context) {
+                      String imageUrl = message.image;
+                      if ((imageUrl == null || imageUrl.isEmpty) &&
+                          message.images != null &&
+                          message.images.isNotEmpty) {
+                        imageUrl = message.images.first;
+                      }
+                      return Padding(
+                        padding: EdgeInsets.only(top: 4),
+                        child: InkWell(
+                          onTap: () async {
+                            await Navigator.push(
+                              context,
+                              PageTransition(
+                                type: PageTransitionType.fade,
+                                child: FlutterFlowExpandedImageView(
+                                  image: CachedNetworkImage(
+                                    fadeInDuration:
+                                        const Duration(milliseconds: 300),
+                                    fadeOutDuration:
+                                        const Duration(milliseconds: 300),
                                     imageUrl: valueOrDefault<String>(
                                       imageUrl,
                                       message.attachmentUrl ?? '',
                                     ),
+                                    fit: BoxFit.contain,
                                   ),
-                                ),
-                              );
-                            },
-                            child: Hero(
-                              tag: valueOrDefault<String>(
-                                imageUrl,
-                                message.attachmentUrl ?? 'image_${message.reference.id}',
-                              ),
-                              transitionOnUserGestures: true,
-                              child: ClipRRect(
-                                borderRadius: BorderRadius.circular(8),
-                                child: CachedNetworkImage(
+                                  allowRotation: false,
+                                  tag: valueOrDefault<String>(
+                                    imageUrl,
+                                    message.attachmentUrl ??
+                                        'image_${message.reference.id}',
+                                  ),
+                                  useHeroAnimation: true,
                                   imageUrl: valueOrDefault<String>(
                                     imageUrl,
                                     message.attachmentUrl ?? '',
                                   ),
+                                ),
+                              ),
+                            );
+                          },
+                          child: Hero(
+                            tag: valueOrDefault<String>(
+                              imageUrl,
+                              message.attachmentUrl ??
+                                  'image_${message.reference.id}',
+                            ),
+                            transitionOnUserGestures: true,
+                            child: ClipRRect(
+                              borderRadius: BorderRadius.circular(8),
+                              child: CachedNetworkImage(
+                                imageUrl: valueOrDefault<String>(
+                                  imageUrl,
+                                  message.attachmentUrl ?? '',
+                                ),
+                                width: 120,
+                                height: 120,
+                                fit: BoxFit.cover,
+                                errorWidget: (context, url, error) => Container(
                                   width: 120,
                                   height: 120,
-                                  fit: BoxFit.cover,
-                                  errorWidget: (context, url, error) => Container(
-                                    width: 120,
-                                    height: 120,
-                                    color: FlutterFlowTheme.of(context).alternate,
-                                    child: Icon(Icons.broken_image, 
-                                      color: FlutterFlowTheme.of(context).secondaryText),
-                                  ),
+                                  color: FlutterFlowTheme.of(context).alternate,
+                                  child: Icon(Icons.broken_image,
+                                      color: FlutterFlowTheme.of(context)
+                                          .secondaryText),
                                 ),
                               ),
                             ),
                           ),
-                        );
-                      }
-                    )
+                        ),
+                      );
+                    })
                   else if (message.messageType == MessageType.video)
                     Row(
                       children: [
-                        Icon(Icons.videocam_rounded, size: 20, color: FlutterFlowTheme.of(context).primary),
-                        const SizedBox(width: 6),
-                        Text('Video Message', style: FlutterFlowTheme.of(context).bodyMedium),
+                        Icon(Icons.videocam_rounded,
+                            size: 20,
+                            color: FlutterFlowTheme.of(context).primary),
+                        SizedBox(width: 6),
+                        Text('Video Message',
+                            style: FlutterFlowTheme.of(context).bodyMedium),
                       ],
                     )
                   else if (message.messageType == MessageType.file)
                     Container(
-                      padding: const EdgeInsets.all(8),
+                      padding: EdgeInsets.all(8),
                       decoration: BoxDecoration(
-                        color: FlutterFlowTheme.of(context).alternate.withOpacity(0.3),
+                        color: FlutterFlowTheme.of(context)
+                            .alternate
+                            .withOpacity(0.3),
                         borderRadius: BorderRadius.circular(8),
                       ),
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          Icon(Icons.insert_drive_file_rounded, size: 20, color: FlutterFlowTheme.of(context).primaryText),
-                          const SizedBox(width: 6),
-                          Text('File: ${message.content}', style: FlutterFlowTheme.of(context).bodyMedium),
+                          Icon(Icons.insert_drive_file_rounded,
+                              size: 20,
+                              color: FlutterFlowTheme.of(context).primaryText),
+                          SizedBox(width: 6),
+                          Text('File: ${message.content}',
+                              style: FlutterFlowTheme.of(context).bodyMedium),
                         ],
                       ),
                     )
                   else if (message.content.contains('http'))
-                     // Link handling could be better but this is a start
-                     Text(
-                       message.content,
-                       style: FlutterFlowTheme.of(context).bodyMedium.override(
-                         fontFamily: 'Inter',
-                         color: Colors.blue,
-                         decoration: TextDecoration.underline,
-                       ),
-                     )
+                    // Link handling could be better but this is a start
+                    Text(
+                      message.content,
+                      style: FlutterFlowTheme.of(context).bodyMedium.override(
+                            fontFamily: 'Inter',
+                            color: Colors.blue,
+                            decoration: TextDecoration.underline,
+                          ),
+                    )
                   else
-                     Text(message.content),
+                    Text(message.content),
                 ],
               ),
             ),
@@ -512,11 +553,11 @@ class _ChatHistoryWidgetState extends State<ChatHistoryWidget> {
     final lowerText = text.toLowerCase();
     final int startIndex = lowerText.indexOf(query);
     if (startIndex == -1) {
-       return Text(text, style: FlutterFlowTheme.of(context).bodyMedium);
+      return Text(text, style: FlutterFlowTheme.of(context).bodyMedium);
     }
-    
+
     final int endIndex = startIndex + query.length;
-    
+
     return RichText(
       text: TextSpan(
         children: [
