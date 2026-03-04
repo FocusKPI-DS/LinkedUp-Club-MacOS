@@ -1,0 +1,98 @@
+{
+  "project_info": {
+    "project_number": "548534727055",
+    "project_id": "linkedup-c3e29",
+    "storage_bucket": "linkedup-c3e29.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:548534727055:android:f3f3d5491d9b0fb8bb5bfa",
+        "android_client_info": {
+          "package_name": "com.focuskpi.linkedup"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "548534727055-042f43gm4l2jhs3qf4t69m4g4g6mnjjc.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCNTcPxtfJOLI8PYFzNHvblEIWBnL2Ovlo"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "548534727055-042f43gm4l2jhs3qf4t69m4g4g6mnjjc.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "548534727055-5ml6vjhqfqo1oqc60mc2blp0di4uff8h.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.linkedup"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:548534727055:android:3f69764770ba6ccabb5bfa",
+        "android_client_info": {
+          "package_name": "com.linkedup"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "548534727055-cvurvl4svlrljksn7f1vngpvsvo6ksku.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.linkedup",
+            "certificate_hash": "7cda183f259eeca2fb06f51bff89388395dd6f08"
+          }
+        },
+        {
+          "client_id": "548534727055-dcm64uqems1fcedo2nriq0qs03fu3n23.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.linkedup",
+            "certificate_hash": "9bbb3186b2189ef16d8f272bdab59362c395cbb4"
+          }
+        },
+        {
+          "client_id": "548534727055-042f43gm4l2jhs3qf4t69m4g4g6mnjjc.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCNTcPxtfJOLI8PYFzNHvblEIWBnL2Ovlo"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "548534727055-042f43gm4l2jhs3qf4t69m4g4g6mnjjc.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "548534727055-5ml6vjhqfqo1oqc60mc2blp0di4uff8h.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.linkedup"
+              }
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
