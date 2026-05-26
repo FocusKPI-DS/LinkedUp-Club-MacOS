@@ -1,0 +1,10 @@
+{
+  "name": "sendDailyEventEngagement",
+  "version": "1.0.0",
+  "dependencies": {
+    "firebase-functions": "^4.4.1",
+    "firebase-admin": "^11.11.0",
+    "axios": "1.8.2",
+    "crypto": "^1.0.1"
+  }
+}

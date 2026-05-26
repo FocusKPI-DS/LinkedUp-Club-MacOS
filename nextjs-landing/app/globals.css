@@ -1,0 +1,32 @@
+/* Design System Tokens */
+:root {
+  /* Colors */
+  --bg: #f7f9ff;
+  --bg-dark: #0b1020;
+  --brand-1: #3b82f6;
+  --brand-2: #1e40af;
+  --ink: #0f172a;
+  --ink-2: #475569;
+  
+  /* Gradient - Blue to Blue */
+  --gradient-brand: linear-gradient(135deg, #60a5fa 0%, #1e40af 100%);
+  
+  /* Radii */
+  --radius: 16px;
+  --radius-lg: 24px;
+  
+  /* Shadows */
+  --shadow-md: 0 10px 30px -12px rgba(2, 6, 23, 0.18);
+  
+  /* Blur */
+  --blur-card: blur(6px);
+  
+  /* Spacing - Section paddings */
+  --section-padding-desktop: 96px;
+  --section-padding-tablet: 64px;
+  --section-padding-mobile: 48px;
+  
+  /* Max width */
+  --max-width: 1180px;
+}
+

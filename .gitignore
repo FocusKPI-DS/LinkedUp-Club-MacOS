@@ -1,0 +1,29 @@
+# Flutter/Dart specific
+.dart_tool/
+.packages
+build/
+.flutter-plugins
+.flutter-plugins-dependencies
+
+# Node
+node_modules/
+
+# Build artifacts
+*.dmg
+
+# Agent
+.agent/
+
+# IDE
+.vscode/
+.idea/
+*.iml
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Firebase Service Account Keys (SENSITIVE!)
+firebase/functions/serviceAccountKey.json
+firebase/functions/linkedup-c3e29-firebase-adminsdk-*.json
+*-firebase-adminsdk-*.json
