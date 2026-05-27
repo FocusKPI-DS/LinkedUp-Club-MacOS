@@ -1,8 +1,8 @@
 import './globals.css'
 
 export const metadata = {
-  title: 'Lona - Under Construction',
-  description: 'Lona is under construction',
+  title: 'Lona - AI Workspace for Modern Teams',
+  description: 'One inbox. One task list. One AI PM. Download Lona for macOS or use the web app.',
 }
 
 export default function RootLayout({
