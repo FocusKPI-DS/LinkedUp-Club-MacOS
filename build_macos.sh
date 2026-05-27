@@ -190,6 +190,16 @@ print_success "App bundle: $APP_PATH"
 if [ "$DO_SIGN" = true ]; then
   print_step "Code Signing with Developer ID"
   
+  # Embed provisioning profile
+  PROFILE="$SCRIPT_DIR/macos/Runner/embedded.provisionprofile"
+  if [ -f "$PROFILE" ]; then
+    cp "$PROFILE" "$APP_PATH/Contents/embedded.provisionprofile"
+    print_success "Provisioning profile embedded"
+  else
+    print_warning "No provisioning profile found at $PROFILE"
+    print_warning "Some features (keychain, push) may not work"
+  fi
+
   # Sign all embedded frameworks and dylibs first
   find "$APP_PATH" -name "*.framework" -o -name "*.dylib" | while read -r lib; do
     codesign --deep --force --options runtime \
@@ -203,7 +213,7 @@ if [ "$DO_SIGN" = true ]; then
   codesign --deep --force --options runtime \
     --sign "$SIGN_IDENTITY_FULL" \
     --timestamp \
-    --entitlements "$SCRIPT_DIR/macos/Runner/Release-NoSandbox.entitlements" \
+    --entitlements "$SCRIPT_DIR/macos/Runner/Release-DirectDistribution.entitlements" \
     "$APP_PATH"
   print_success "Signed app bundle"
 
