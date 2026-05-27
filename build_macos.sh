@@ -203,7 +203,7 @@ if [ "$DO_SIGN" = true ]; then
   codesign --deep --force --options runtime \
     --sign "$SIGN_IDENTITY_FULL" \
     --timestamp \
-    --entitlements "$SCRIPT_DIR/macos/Runner/Release.entitlements" \
+    --entitlements "$SCRIPT_DIR/macos/Runner/Release-DirectDistribution.entitlements" \
     "$APP_PATH"
   print_success "Signed app bundle"
 
