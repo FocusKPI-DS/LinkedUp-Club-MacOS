@@ -174,7 +174,7 @@ export default function Home() {
                   </svg>
                   <div className={styles.downloadButtonContent}>
                     <span className={styles.downloadButtonLabel}>Download for macOS</span>
-                    <span className={styles.downloadButtonMeta}>v1.9.24 · macOS 11.0+ · Universal</span>
+                    <span className={styles.downloadButtonMeta}>v1.9.25 · macOS 11.0+ · Universal</span>
                   </div>
                 </a>
               )}
