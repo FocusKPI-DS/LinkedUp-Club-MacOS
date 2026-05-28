@@ -773,13 +773,15 @@ class _LoginWidgetState extends State<LoginWidget>
                                         }
 
                                         await actions.setupAppBadgeListener();
-                                        await action_blocks
+                                        final needsOnboarding = await action_blocks
                                             .checkOnboarding(context);
                                         await actions.closekeyboard();
 
-                                        context.goNamedAuth(
-                                            HomeWidget.routeName,
-                                            context.mounted);
+                                        if (!needsOnboarding) {
+                                          context.goNamedAuth(
+                                              HomeWidget.routeName,
+                                              context.mounted);
+                                        }
                                       },
                                       text: 'Sign In',
                                       options: FFButtonOptions(
