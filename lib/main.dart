@@ -14,6 +14,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 
 // Import for macOS camera delegate
 import 'package:image_picker_platform_interface/image_picker_platform_interface.dart';
@@ -673,8 +674,8 @@ class _MyAppState extends State<MyApp> {
       }
     }
 
-    // Check for app updates after initialization (only on iOS)
-    if (!kIsWeb && Platform.isIOS) {
+    // Check for app updates after initialization (iOS and macOS)
+    if (!kIsWeb && (Platform.isIOS || Platform.isMacOS)) {
       _checkForAppUpdate();
     }
   }
@@ -682,25 +683,19 @@ class _MyAppState extends State<MyApp> {
   /// Check for app updates and show alert if update is available
   Future<void> _checkForAppUpdate() async {
     try {
-      // Wait a bit for the app to fully render before checking
-      await Future.delayed(const Duration(seconds: 2));
+      // Wait for the app to fully render
+      await Future.delayed(const Duration(seconds: 3));
 
       final hasUpdate = await AppUpdateService.checkForUpdate();
       if (hasUpdate == true && mounted) {
-        // Use post-frame callback to ensure context is available
         WidgetsBinding.instance.addPostFrameCallback((_) {
-          // Get context from navigator key (imported from nav.dart)
           final context = appNavigatorKey.currentContext;
           if (context != null && mounted) {
-            _showUpdateDialog(context);
-          } else {
-            // If context is not available yet, wait a bit and try again
-            Future.delayed(const Duration(seconds: 1), () {
-              final retryContext = appNavigatorKey.currentContext;
-              if (retryContext != null && mounted) {
-                _showUpdateDialog(retryContext);
-              }
-            });
+            if (!kIsWeb && Platform.isMacOS) {
+              _showMacUpdateDialog(context);
+            } else {
+              _showUpdateDialog(context);
+            }
           }
         });
       }
@@ -709,7 +704,104 @@ class _MyAppState extends State<MyApp> {
     }
   }
 
-  /// Show update alert dialog
+  /// Show update dialog for macOS (GitHub Releases)
+  Future<void> _showMacUpdateDialog(BuildContext context) async {
+    try {
+      // Fetch release details for the dialog
+      final releaseInfo = await AppUpdateService.fetchGitHubLatestRelease();
+      if (releaseInfo == null || !mounted) return;
+
+      final version = releaseInfo['version'] ?? '';
+      final downloadUrl = releaseInfo['downloadUrl'] ?? '';
+      final releaseNotes = releaseInfo['releaseNotes'] ?? '';
+
+      // Get current version for display
+      final packageInfo = await PackageInfo.fromPlatform();
+      final currentVersion = packageInfo.version;
+
+      if (!mounted) return;
+
+      await showCupertinoDialog(
+        context: context,
+        barrierDismissible: true,
+        builder: (dialogCtx) => CupertinoAlertDialog(
+          title: Row(
+            mainAxisSize: MainAxisSize.min,
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(Icons.system_update_rounded,
+                  color: Color(0xFF3B82F6), size: 22),
+              SizedBox(width: 8),
+              Text('Update Available'),
+            ],
+          ),
+          content: Padding(
+            padding: EdgeInsets.only(top: 12),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  'Lona v$version is available.\nYou are currently on v$currentVersion.',
+                  style: TextStyle(
+                    fontSize: 14,
+                    height: 1.5,
+                  ),
+                ),
+                if (releaseNotes.isNotEmpty) ...[
+                  SizedBox(height: 12),
+                  Container(
+                    constraints: BoxConstraints(maxHeight: 120),
+                    child: SingleChildScrollView(
+                      child: Text(
+                        releaseNotes,
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: CupertinoColors.secondaryLabel,
+                          height: 1.4,
+                        ),
+                        textAlign: TextAlign.left,
+                      ),
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+          actions: [
+            CupertinoDialogAction(
+              child: Text('Skip This Version'),
+              onPressed: () {
+                AppUpdateService.skipVersion(version);
+                Navigator.pop(dialogCtx);
+              },
+            ),
+            CupertinoDialogAction(
+              child: Text('Later'),
+              onPressed: () => Navigator.pop(dialogCtx),
+            ),
+            CupertinoDialogAction(
+              isDefaultAction: true,
+              child: Text('Download Update'),
+              onPressed: () async {
+                Navigator.pop(dialogCtx);
+                if (downloadUrl.isNotEmpty) {
+                  final uri = Uri.parse(downloadUrl);
+                  if (await canLaunchUrl(uri)) {
+                    await launchUrl(uri,
+                        mode: LaunchMode.externalApplication);
+                  }
+                }
+              },
+            ),
+          ],
+        ),
+      );
+    } catch (e) {
+      print('Error showing macOS update dialog: $e');
+    }
+  }
+
+  /// Show update alert dialog for iOS (App Store)
   Future<void> _showUpdateDialog(BuildContext context) async {
     try {
       await AdaptiveAlertDialog.show(
@@ -722,15 +814,12 @@ class _MyAppState extends State<MyApp> {
           AlertAction(
             title: 'Later',
             style: AlertActionStyle.cancel,
-            onPressed: () {
-              // User chose to update later
-            },
+            onPressed: () {},
           ),
           AlertAction(
             title: 'Update',
             style: AlertActionStyle.primary,
             onPressed: () async {
-              // Open App Store
               final appStoreUrl = AppUpdateService.getAppStoreUrl();
               final uri = Uri.parse(appStoreUrl);
               if (await canLaunchUrl(uri)) {
