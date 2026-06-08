@@ -1,0 +1,62 @@
+name: Windows MSI Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-windows-msi:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Create env.json for OAuth defines
+        shell: pwsh
+        run: |
+          $clientId = "${{ secrets.GOOGLE_DESKTOP_OAUTH_CLIENT_ID }}"
+          $clientSecret = "${{ secrets.GOOGLE_DESKTOP_OAUTH_CLIENT_SECRET }}"
+          if (-not $clientId -or -not $clientSecret) {
+            Write-Error "Set GOOGLE_DESKTOP_OAUTH_CLIENT_ID and GOOGLE_DESKTOP_OAUTH_CLIENT_SECRET repo secrets."
+            exit 1
+          }
+          @{
+            GOOGLE_DESKTOP_OAUTH_CLIENT_ID = $clientId
+            GOOGLE_DESKTOP_OAUTH_CLIENT_SECRET = $clientSecret
+          } | ConvertTo-Json | Set-Content -Path env.json -Encoding UTF8
+
+      - name: Install WiX Toolset
+        shell: pwsh
+        run: |
+          winget install WiXToolset.WiXToolset --accept-package-agreements --accept-source-agreements
+          $wixBin = "${env:ProgramFiles(x86)}\WiX Toolset v3.14\bin"
+          if (-not (Test-Path $wixBin)) {
+            throw "WiX bin not found at $wixBin"
+          }
+          echo "$wixBin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+
+      - name: Build Flutter Windows release and MSI
+        shell: pwsh
+        run: |
+          flutter pub get
+          powershell -ExecutionPolicy Bypass -File tool/build_msi.ps1
+
+      - name: Upload to GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/*.msi
+            dist/lona-windows.json
+          generate_release_notes: true
+          prerelease: ${{ contains(github.ref_name, '251') || contains(github.ref_name, 'beta') || contains(github.ref_name, 'test') }}

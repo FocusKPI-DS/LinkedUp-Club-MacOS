@@ -51,6 +51,7 @@ import 'package:branchio_dynamic_linking_akp5u6/library_values.dart'
 import 'package:linkedup/backend/schema/structs/index.dart';
 import 'package:linkedup/custom_code/services/web_notification_service.dart';
 import 'package:linkedup/custom_code/services/app_update_service.dart';
+import 'package:linkedup/custom_code/widgets/app_update_dialog.dart';
 import 'package:linkedup/utils/qurio_embedded.dart';
 import 'package:adaptive_platform_ui/adaptive_platform_ui.dart';
 import 'package:share_plus/share_plus.dart';
@@ -619,6 +620,8 @@ class _MyAppState extends State<MyApp> {
           .map((e) => getRoute(e))
           .toList();
   late Stream<BaseAuthUser> userStream;
+  Timer? _windowsUpdateCheckTimer;
+  bool _updateDialogShowing = false;
 
   final authUserSub = authenticatedUserStream.listen((user) {
     // Trigger Gmail prefetch when user is authenticated
@@ -665,6 +668,7 @@ class _MyAppState extends State<MyApp> {
 
   @override
   void dispose() {
+    _windowsUpdateCheckTimer?.cancel();
     authUserSub.cancel();
     // fcmTokenSub.cancel(); // Commented out since fcmTokenSub is disabled
     super.dispose();
@@ -700,130 +704,53 @@ class _MyAppState extends State<MyApp> {
       }
     }
 
-    // Check for app updates after initialization (iOS and macOS)
-    if (!kIsWeb && (Platform.isIOS || Platform.isMacOS)) {
+    // Check for app updates after initialization
+    if (!kIsWeb &&
+        (Platform.isIOS || Platform.isMacOS || Platform.isWindows)) {
       _checkForAppUpdate();
+    }
+
+    // Windows: poll GitHub releases every minute while testing
+    if (!kIsWeb && Platform.isWindows) {
+      _windowsUpdateCheckTimer = Timer.periodic(
+        AppUpdateService.checkInterval,
+        (_) => _checkForAppUpdate(immediate: true),
+      );
     }
   }
 
   /// Check for app updates and show alert if update is available
-  Future<void> _checkForAppUpdate() async {
+  Future<void> _checkForAppUpdate({
+    bool force = false,
+    bool immediate = false,
+  }) async {
+    if (_updateDialogShowing) return;
     try {
-      // Wait for the app to fully render
-      await Future.delayed(const Duration(seconds: 3));
+      if (!force && !immediate) {
+        await Future.delayed(const Duration(seconds: 3));
+      }
 
-      final hasUpdate = await AppUpdateService.checkForUpdate();
+      final hasUpdate = await AppUpdateService.checkForUpdate(force: force);
       if (hasUpdate == true && mounted) {
         WidgetsBinding.instance.addPostFrameCallback((_) {
           final context = appNavigatorKey.currentContext;
-          if (context != null && mounted) {
-            if (!kIsWeb && Platform.isMacOS) {
-              _showMacUpdateDialog(context);
-            } else {
-              _showUpdateDialog(context);
-            }
+          if (context == null || !mounted || _updateDialogShowing) return;
+          _updateDialogShowing = true;
+          Future<void> dialogFuture;
+          if (Platform.isMacOS) {
+            dialogFuture = AppUpdateDialog.showMac(context);
+          } else if (Platform.isWindows) {
+            dialogFuture = AppUpdateDialog.showWindows(context);
+          } else {
+            dialogFuture = _showUpdateDialog(context);
           }
+          dialogFuture.whenComplete(() {
+            _updateDialogShowing = false;
+          });
         });
       }
     } catch (e) {
       print('Error checking for app update: $e');
-    }
-  }
-
-  /// Show update dialog for macOS (GitHub Releases)
-  Future<void> _showMacUpdateDialog(BuildContext context) async {
-    try {
-      // Fetch release details for the dialog
-      final releaseInfo = await AppUpdateService.fetchGitHubLatestRelease();
-      if (releaseInfo == null || !mounted) return;
-
-      final version = releaseInfo['version'] ?? '';
-      final downloadUrl = releaseInfo['downloadUrl'] ?? '';
-      final releaseNotes = releaseInfo['releaseNotes'] ?? '';
-
-      // Get current version for display
-      final packageInfo = await PackageInfo.fromPlatform();
-      final currentVersion = packageInfo.version;
-
-      if (!mounted) return;
-
-      await showCupertinoDialog(
-        context: context,
-        barrierDismissible: true,
-        builder: (dialogCtx) => CupertinoAlertDialog(
-          title: Row(
-            mainAxisSize: MainAxisSize.min,
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(Icons.system_update_rounded,
-                  color: Color(0xFF3B82F6), size: 22),
-              SizedBox(width: 8),
-              Text('Update Available'),
-            ],
-          ),
-          content: Padding(
-            padding: EdgeInsets.only(top: 12),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  'Lona v$version is available.\nYou are currently on v$currentVersion.',
-                  style: TextStyle(
-                    fontSize: 14,
-                    height: 1.5,
-                  ),
-                ),
-                if (releaseNotes.isNotEmpty) ...[
-                  SizedBox(height: 12),
-                  Container(
-                    constraints: BoxConstraints(maxHeight: 120),
-                    child: SingleChildScrollView(
-                      child: Text(
-                        releaseNotes,
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: CupertinoColors.secondaryLabel,
-                          height: 1.4,
-                        ),
-                        textAlign: TextAlign.left,
-                      ),
-                    ),
-                  ),
-                ],
-              ],
-            ),
-          ),
-          actions: [
-            CupertinoDialogAction(
-              child: Text('Skip This Version'),
-              onPressed: () {
-                AppUpdateService.skipVersion(version);
-                Navigator.pop(dialogCtx);
-              },
-            ),
-            CupertinoDialogAction(
-              child: Text('Later'),
-              onPressed: () => Navigator.pop(dialogCtx),
-            ),
-            CupertinoDialogAction(
-              isDefaultAction: true,
-              child: Text('Download Update'),
-              onPressed: () async {
-                Navigator.pop(dialogCtx);
-                if (downloadUrl.isNotEmpty) {
-                  final uri = Uri.parse(downloadUrl);
-                  if (await canLaunchUrl(uri)) {
-                    await launchUrl(uri,
-                        mode: LaunchMode.externalApplication);
-                  }
-                }
-              },
-            ),
-          ],
-        ),
-      );
-    } catch (e) {
-      print('Error showing macOS update dialog: $e');
     }
   }
 
@@ -2227,11 +2154,11 @@ class _AppUpdateButtonState extends State<_AppUpdateButton> {
     _checkForUpdate();
   }
 
-  Future<void> _checkForUpdate() async {
+  Future<void> _checkForUpdate({bool force = false}) async {
     if (_isChecking) return;
     _isChecking = true;
     try {
-      final result = await AppUpdateService.checkForUpdate();
+      final result = await AppUpdateService.checkForUpdate(force: force);
       if (mounted && result == true) {
         setState(() => _updateAvailable = true);
       }
@@ -2239,10 +2166,18 @@ class _AppUpdateButtonState extends State<_AppUpdateButton> {
     _isChecking = false;
   }
 
-  void _openAppStore() async {
-    final url = Uri.parse(AppUpdateService.getAppStoreUrl());
-    if (await canLaunchUrl(url)) {
-      await launchUrl(url);
+  void _openUpdateFlow() async {
+    final context = appNavigatorKey.currentContext;
+    if (context == null) return;
+    if (!kIsWeb && Platform.isMacOS) {
+      await AppUpdateDialog.showMac(context);
+    } else if (!kIsWeb && Platform.isWindows) {
+      await AppUpdateDialog.showWindows(context);
+    } else {
+      final url = Uri.parse(AppUpdateService.getAppStoreUrl());
+      if (await canLaunchUrl(url)) {
+        await launchUrl(url);
+      }
     }
   }
 
@@ -2259,10 +2194,10 @@ class _AppUpdateButtonState extends State<_AppUpdateButton> {
           child: GestureDetector(
             onTap: () {
               if (_updateAvailable) {
-                _openAppStore();
+                _openUpdateFlow();
               } else {
-                // Re-check manually
-                _checkForUpdate().then((_) {
+                // Re-check manually (bypass rate limit)
+                _checkForUpdate(force: true).then((_) {
                   if (mounted && !_updateAvailable) {
                     ScaffoldMessenger.of(context).showSnackBar(
                       SnackBar(
