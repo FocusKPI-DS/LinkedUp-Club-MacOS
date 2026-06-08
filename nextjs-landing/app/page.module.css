@@ -947,7 +947,7 @@
 .downloadButton {
   background: white;
   color: var(--ink);
-  padding: 1rem 2rem;
+  padding: 1rem 1.5rem;
   border-radius: var(--radius);
   text-decoration: none;
   font-weight: 600;
@@ -956,8 +956,8 @@
   border: 2px solid rgba(59, 130, 246, 0.2);
   display: flex;
   align-items: center;
-  justify-content: center;
-  gap: 0.75rem;
+  justify-content: flex-start;
+  gap: 1rem;
   box-shadow: 0 2px 8px rgba(15, 23, 42, 0.08);
   cursor: pointer;
 }
@@ -974,10 +974,42 @@
   outline-offset: 2px;
 }
 
-.downloadButtonIcon {
-  width: 20px;
-  height: 20px;
+.downloadButtonPrimary {
+  background: var(--gradient-brand);
+  color: white;
+  border-color: transparent;
+  box-shadow: 0 4px 16px rgba(59, 130, 246, 0.3);
+}
+
+.downloadButtonPrimary:hover {
+  box-shadow: 0 10px 30px rgba(59, 130, 246, 0.4);
+  background: var(--gradient-brand);
+  border-color: transparent;
+}
+
+.downloadButtonContent {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.2rem;
+}
+
+.downloadButtonLabel {
+  font-size: 1rem;
+  font-weight: 600;
+  line-height: 1.2;
+}
+
+.downloadButtonMeta {
+  font-size: 0.75rem;
   opacity: 0.7;
+  font-weight: 400;
+}
+
+.downloadButtonIcon {
+  width: 24px;
+  height: 24px;
+  flex-shrink: 0;
 }
 
 .downloadTagline {

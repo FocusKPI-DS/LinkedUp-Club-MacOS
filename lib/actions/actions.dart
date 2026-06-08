@@ -4,18 +4,21 @@ import '/auth/onboarding_gate.dart';
 import '/flutter_flow/flutter_flow_util.dart';
 import '/index.dart';
 import 'dart:async';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 
-Future checkOnboarding(BuildContext context) async {
+/// Returns true when onboarding was shown, false when user can go home.
+Future<bool> checkOnboarding(BuildContext context) async {
   if (await resolveOnboardingComplete()) {
     unawaited(markOnboardingCompleteIfFilledProfile());
     if (context.mounted) {
       context.go('/');
     }
-  } else if (context.mounted) {
+    return false;
+  }
+  if (context.mounted) {
     context.pushNamed(OnboardingProfileWidget.routeName);
   }
+  return true;
 }
 
 Future homeCheck(BuildContext context) async {
