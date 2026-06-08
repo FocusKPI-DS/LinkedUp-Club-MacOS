@@ -4,9 +4,11 @@
 # Usage:
 #   powershell -ExecutionPolicy Bypass -File .\tool\build_msi.ps1
 #   powershell -ExecutionPolicy Bypass -File .\tool\build_msi.ps1 -SkipFlutterBuild
+#   powershell -ExecutionPolicy Bypass -File .\tool\build_msi.ps1 -ReleaseNotes "Test release with silent updater"
 
 param(
-  [switch]$SkipFlutterBuild
+  [switch]$SkipFlutterBuild,
+  [string]$ReleaseNotes = ""
 )
 
 $ErrorActionPreference = "Stop"
@@ -152,13 +154,19 @@ if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 $appVersion = Get-PubspecAppVersion
 $buildNumber = Get-PubspecBuildNumber
 $manifestPath = Join-Path $distDir "lona-windows.json"
-$manifest = @{
+$notes = if ($ReleaseNotes.Trim()) {
+  $ReleaseNotes.Trim()
+} else {
+  "Lona Windows $appVersion (build $buildNumber)"
+}
+$manifest = [ordered]@{
   version      = $appVersion
   buildNumber  = $buildNumber
   msiFileName  = $msiName
-  releaseNotes = "Lona Windows $appVersion (build $buildNumber)"
-} | ConvertTo-Json -Compress
-Set-Content -Path $manifestPath -Value $manifest -Encoding UTF8
+  releaseNotes = $notes
+}
+$manifestJson = $manifest | ConvertTo-Json -Depth 3
+Set-Content -Path $manifestPath -Value $manifestJson -Encoding UTF8
 
 Write-Host ""
 Write-Host "MSI ready:" -ForegroundColor Green
