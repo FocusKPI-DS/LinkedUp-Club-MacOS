@@ -41,7 +41,7 @@ target_link_libraries(${BINARY_NAME} PRIVATE "gdiplus.lib")
 target_link_libraries(${BINARY_NAME} PRIVATE "ole32.lib")
 target_include_directories(${BINARY_NAME} PRIVATE "${CMAKE_SOURCE_DIR}")
 
-# Stop a running linkedup.exe before link — avoids LNK1168 (exe locked during flutter run rebuild).
+# Stop a running lona.exe before link — avoids LNK1168 (exe locked during flutter run rebuild).
 add_custom_command(
   TARGET ${BINARY_NAME}
   PRE_LINK

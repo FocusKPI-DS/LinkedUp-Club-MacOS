@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '/utils/debug_log.dart';
 import 'package:intl/intl.dart';
 
 import '/backend/backend.dart';
@@ -29,7 +30,7 @@ class RecentNewsAnnouncements extends StatelessWidget {
     }
 
     if (snapshot.hasError) {
-      print('Error loading news: ${snapshot.error}');
+      debugLog('Error loading news: ${snapshot.error}');
       return Container(
         height: 200,
         decoration: BoxDecoration(

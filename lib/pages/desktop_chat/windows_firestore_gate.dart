@@ -1,4 +1,5 @@
 import 'dart:async';
+import '/utils/debug_log.dart';
 import 'dart:io';
 
 import 'package:flutter/foundation.dart' show kIsWeb;
@@ -27,8 +28,7 @@ class WindowsFirestoreGate {
     _chain = prev.then((_) async {
       try {
         if (label != null) {
-          // ignore: avoid_print
-          print('[WindowsFirestoreGate] → $label');
+          debugLog('[WindowsFirestoreGate] → $label');
         }
         await Future<void>.delayed(const Duration(milliseconds: 40));
         final result = await action();

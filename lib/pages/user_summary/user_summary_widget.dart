@@ -1,4 +1,5 @@
 import '/auth/firebase_auth/auth_util.dart';
+import '/utils/debug_log.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 import '/backend/backend.dart';
@@ -91,7 +92,7 @@ class _UserSummaryWidgetState extends State<UserSummaryWidget> {
       }
     } catch (e) {
       // Silent fail - not critical
-      print('Email sync check: $e');
+      debugLog('Email sync check: $e');
     }
   }
 
@@ -335,7 +336,7 @@ class _UserSummaryWidgetState extends State<UserSummaryWidget> {
         _showSuccessMessage('Connection request sent to ${user.displayName}');
       }
     } catch (e) {
-      print('Error sending connection request: $e');
+      debugLog('Error sending connection request: $e');
       if (mounted) {
         // Check if it's a permission error and provide specific guidance
         if (e.toString().contains('permission-denied')) {
@@ -386,7 +387,7 @@ class _UserSummaryWidgetState extends State<UserSummaryWidget> {
         _showSuccessMessage('Connection request cancelled');
       }
     } catch (e) {
-      print('Error cancelling connection request: $e');
+      debugLog('Error cancelling connection request: $e');
       if (mounted) {
         if (e.toString().contains('permission-denied')) {
           _showErrorMessage(
@@ -456,7 +457,7 @@ class _UserSummaryWidgetState extends State<UserSummaryWidget> {
         _showSuccessMessage('Connection request accepted!');
       }
     } catch (e) {
-      print('Error accepting connection request: $e');
+      debugLog('Error accepting connection request: $e');
       if (mounted) {
         if (e.toString().contains('permission-denied')) {
           _showErrorMessage(
@@ -500,7 +501,7 @@ class _UserSummaryWidgetState extends State<UserSummaryWidget> {
         _showSuccessMessage('Connection request declined');
       }
     } catch (e) {
-      print('Error declining connection request: $e');
+      debugLog('Error declining connection request: $e');
       if (mounted) {
         _showErrorMessage(
           'Failed to decline connection request. Please check your internet connection and try again.',
@@ -1209,7 +1210,7 @@ class _UserSummaryWidgetState extends State<UserSummaryWidget> {
       } catch (e) {
         // If we can't update the other user's document, that's okay
         // The connection is still removed from our side
-        print('Note: Could not update other user\'s friends list: $e');
+        debugLog('Note: Could not update other user\'s friends list: $e');
       }
 
       if (mounted) {
@@ -1222,7 +1223,7 @@ class _UserSummaryWidgetState extends State<UserSummaryWidget> {
         });
       }
     } catch (e) {
-      print('Error removing connection: $e');
+      debugLog('Error removing connection: $e');
       if (mounted) {
         if (e.toString().contains('permission-denied')) {
           _showErrorMessage(
@@ -1298,11 +1299,11 @@ class _UserSummaryWidgetState extends State<UserSummaryWidget> {
               [currentUserReference!],
             );
           } catch (e) {
-            print('Note: Could not update other user\'s friends list: $e');
+            debugLog('Note: Could not update other user\'s friends list: $e');
             // Continue anyway
           }
         } catch (e) {
-          print('Error removing connection during block: $e');
+          debugLog('Error removing connection during block: $e');
           // Continue with other operations
         }
       }
@@ -1322,7 +1323,7 @@ class _UserSummaryWidgetState extends State<UserSummaryWidget> {
               [currentUserReference!],
             );
           } catch (e) {
-            print('Note: Could not update other user\'s friend requests: $e');
+            debugLog('Note: Could not update other user\'s friend requests: $e');
           }
         }
 
@@ -1335,7 +1336,7 @@ class _UserSummaryWidgetState extends State<UserSummaryWidget> {
         }
         requestsCleared = true;
       } catch (e) {
-        print('Error clearing requests during block: $e');
+        debugLog('Error clearing requests during block: $e');
         // Continue anyway
       }
 
@@ -1358,7 +1359,7 @@ class _UserSummaryWidgetState extends State<UserSummaryWidget> {
           blockRecordCreated = true;
         }
       } catch (e) {
-        print('Error creating block record (permission issue expected): $e');
+        debugLog('Error creating block record (permission issue expected): $e');
         // This is expected to fail due to permissions, but we continue
         // The connection removal and request clearing still happened
         blockRecordCreated = false;
@@ -1390,7 +1391,7 @@ class _UserSummaryWidgetState extends State<UserSummaryWidget> {
         }
       }
     } catch (e) {
-      print('Unexpected error during block operation: $e');
+      debugLog('Unexpected error during block operation: $e');
       if (mounted) {
         // Only show error if nothing useful happened
         if (!connectionRemoved && !requestsCleared && !blockRecordCreated) {
@@ -1416,7 +1417,7 @@ class _UserSummaryWidgetState extends State<UserSummaryWidget> {
 
   void _selectChatInDesktop(ChatsRecord chat, {int retryCount = 0}) {
     if (retryCount > 20) {
-      print('Failed to select chat after 20 retries');
+      debugLog('Failed to select chat after 20 retries');
       return;
     }
 
@@ -1441,7 +1442,7 @@ class _UserSummaryWidgetState extends State<UserSummaryWidget> {
           });
           return;
         }
-        print('ChatController not found after 10 retries: $e');
+        debugLog('ChatController not found after 10 retries: $e');
         return;
       }
 
@@ -1454,7 +1455,7 @@ class _UserSummaryWidgetState extends State<UserSummaryWidget> {
         );
         // Use the chat from the list to ensure consistency with what's displayed
         chatToSelect = chatInList;
-        print('Found chat in controller list, using that instance');
+        debugLog('Found chat in controller list, using that instance');
       } catch (e) {
         // Chat not in list yet - might be a new chat that hasn't loaded
         if (retryCount < 5) {
@@ -1464,12 +1465,12 @@ class _UserSummaryWidgetState extends State<UserSummaryWidget> {
           return;
         }
         // After 5 retries, use the chat we have
-        print('Chat not in list after 5 retries, using provided chat instance');
+        debugLog('Chat not in list after 5 retries, using provided chat instance');
       }
 
       // Select the chat - this matches exactly what happens when clicking from the list
       chatController.selectChat(chatToSelect);
-      print('Successfully selected chat: ${chatToSelect.reference.id}');
+      debugLog('Successfully selected chat: ${chatToSelect.reference.id}');
 
       // Verify selection worked and wait a bit for UI to update
       Future.delayed(Duration(milliseconds: 100), () {
@@ -1484,7 +1485,7 @@ class _UserSummaryWidgetState extends State<UserSummaryWidget> {
         }
       });
     } catch (e) {
-      print('Error selecting chat (retry $retryCount): $e');
+      debugLog('Error selecting chat (retry $retryCount): $e');
       // Controller might not be initialized yet, try again after a delay
       Future.delayed(Duration(milliseconds: 400 * (retryCount + 1)), () {
         _selectChatInDesktop(chat, retryCount: retryCount + 1);
@@ -1703,7 +1704,7 @@ class _UserSummaryWidgetState extends State<UserSummaryWidget> {
                 navigator.pop(); // Close loading dialog using stored navigator
               }
             } catch (e) {
-              print('Error closing dialog: $e');
+              debugLog('Error closing dialog: $e');
             }
 
             await _showAdaptiveDialog(
@@ -1792,7 +1793,7 @@ class _UserSummaryWidgetState extends State<UserSummaryWidget> {
 
       return downloadUrl;
     } catch (e) {
-      print('Firebase Storage upload error: $e');
+      debugLog('Firebase Storage upload error: $e');
       if (e is FirebaseException) {
         throw Exception('Firebase Storage error: ${e.code} - ${e.message}');
       }
@@ -1891,7 +1892,7 @@ class _UserSummaryWidgetState extends State<UserSummaryWidget> {
                 navigator.pop(); // Close loading dialog using stored navigator
               }
             } catch (e) {
-              print('Error closing dialog: $e');
+              debugLog('Error closing dialog: $e');
             }
 
             await _showAdaptiveDialog(

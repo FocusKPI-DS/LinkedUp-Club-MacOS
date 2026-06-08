@@ -1,4 +1,5 @@
 import 'package:flutter/cupertino.dart';
+import '/utils/debug_log.dart';
 import 'package:flutter/material.dart' as material;
 import 'package:flutter/foundation.dart';
 import 'package:intl/intl.dart';
@@ -64,11 +65,11 @@ class _SummerAITodosState extends State<SummerAITodos> {
         setState(() {
           _userGroupChatIds = groupIds;
         });
-        print(
+        debugLog(
             '🔍 Loaded ${groupIds.length} groups for user. Group IDs: ${groupIds.toList()}');
       }
     } catch (error) {
-      print('❌ Error loading user groups: $error');
+      debugLog('❌ Error loading user groups: $error');
     }
   }
 
@@ -91,11 +92,11 @@ class _SummerAITodosState extends State<SummerAITodos> {
     ).listen((chats) {
       setState(() {
         _userGroupChatIds = chats.map((c) => c.reference.id).toSet();
-        print(
+        debugLog(
             '🔍 Loaded ${chats.length} groups for user. Group IDs: ${_userGroupChatIds?.toList()}');
       });
     }, onError: (error) {
-      print('❌ Error loading user groups: $error');
+      debugLog('❌ Error loading user groups: $error');
     });
   }
 
@@ -120,7 +121,7 @@ class _SummerAITodosState extends State<SummerAITodos> {
 
         // Handle errors gracefully - return empty state to not block the app
         if (snapshot.hasError) {
-          print('Error loading action items: ${snapshot.error}');
+          debugLog('Error loading action items: ${snapshot.error}');
           return _buildEmptyState(context, filter: _selectedFilter);
         }
 
@@ -136,7 +137,7 @@ class _SummerAITodosState extends State<SummerAITodos> {
             return _buildEmptyState(context, filter: _selectedFilter);
           }
         } catch (e) {
-          print('Error processing action items: $e');
+          debugLog('Error processing action items: $e');
           return _buildEmptyState(context, filter: _selectedFilter);
         }
 
@@ -1013,7 +1014,7 @@ class _SummerAITodosState extends State<SummerAITodos> {
         }
       }
     } catch (e) {
-      print('Error updating task: $e');
+      debugLog('Error updating task: $e');
       if (mounted && isCompleting) {
         setState(() {
           _completingTasks.remove(taskId);

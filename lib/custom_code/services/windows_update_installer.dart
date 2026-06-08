@@ -4,7 +4,7 @@ import 'package:path_provider/path_provider.dart';
 
 /// Downloads and silently applies a Windows MSI, then relaunches Lona.
 class WindowsUpdateInstaller {
-  static const defaultExePath = r'C:\Program Files\Lona\linkedup.exe';
+  static const defaultExePath = r'C:\Program Files\Lona\lona.exe';
 
   /// Download [msiUrl] to a temp file. Returns the local path.
   static Future<String> downloadMsi(

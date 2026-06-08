@@ -90,12 +90,12 @@ BEGIN
         BLOCK "040904e4"
         BEGIN
             VALUE "CompanyName", "com.focuskpi" "\0"
-            VALUE "FileDescription", "linkedup" "\0"
+            VALUE "FileDescription", "Lona" "\0"
             VALUE "FileVersion", VERSION_AS_STRING "\0"
-            VALUE "InternalName", "linkedup" "\0"
+            VALUE "InternalName", "lona" "\0"
             VALUE "LegalCopyright", "Copyright (C) 2026 com.focuskpi. All rights reserved." "\0"
-            VALUE "OriginalFilename", "linkedup.exe" "\0"
-            VALUE "ProductName", "linkedup" "\0"
+            VALUE "OriginalFilename", "lona.exe" "\0"
+            VALUE "ProductName", "Lona" "\0"
             VALUE "ProductVersion", VERSION_AS_STRING "\0"
         END
     END

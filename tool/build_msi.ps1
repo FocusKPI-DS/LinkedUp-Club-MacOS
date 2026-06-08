@@ -98,7 +98,7 @@ if (-not $SkipFlutterBuild) {
   if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 }
 
-if (-not (Test-Path (Join-Path $releaseDir "linkedup.exe"))) {
+if (-not (Test-Path (Join-Path $releaseDir "lona.exe"))) {
   throw "Release build not found at $releaseDir - run flutter build windows --release first."
 }
 
@@ -166,7 +166,7 @@ $manifest = [ordered]@{
   releaseNotes = $notes
 }
 $manifestJson = $manifest | ConvertTo-Json -Depth 3
-Set-Content -Path $manifestPath -Value $manifestJson -Encoding UTF8
+[System.IO.File]::WriteAllText($manifestPath, $manifestJson, [System.Text.UTF8Encoding]::new($false))
 
 Write-Host ""
 Write-Host "MSI ready:" -ForegroundColor Green

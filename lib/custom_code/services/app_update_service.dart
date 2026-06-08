@@ -1,6 +1,7 @@
 import 'dart:io' show Platform;
 
 import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:linkedup/utils/debug_log.dart';
 import 'package:http/http.dart' as http;
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -9,7 +10,7 @@ import 'dart:convert';
 /// Checks GitHub Releases for updates and applies them per platform.
 /// - iOS: App Store
 /// - macOS: latest release DMG
-/// - Windows: [lona-windows.json] manifest + MSI (includes pre-releases)
+/// - Windows: [lona-windows.json] manifest + MSI
 class AppUpdateService {
   static const String _appStoreId = '6747595642';
   static const String _appStoreUrl =
@@ -25,10 +26,10 @@ class AppUpdateService {
   /// Cached release info from the most recent successful check.
   static Map<String, String>? pendingReleaseInfo;
 
-  /// How often to poll for updates. Windows uses 1 minute while testing.
+  /// How often to poll for updates.
   static Duration get checkInterval {
     if (!kIsWeb && Platform.isWindows) {
-      return const Duration(minutes: 1);
+      return const Duration(hours: 1);
     }
     return const Duration(hours: 4);
   }
@@ -60,12 +61,16 @@ class AppUpdateService {
         final info = await fetchWindowsReleaseInfo();
         if (info == null) return null;
         pendingReleaseInfo = info;
-        return _evaluateVersion(info['version'] ?? '', currentVersion);
+        return _evaluateWindowsUpdate(
+          info,
+          currentVersion,
+          packageInfo.buildNumber,
+        );
       }
 
       return null;
     } catch (e) {
-      print('AppUpdateService.checkForUpdate error: $e');
+      debugLog('AppUpdateService.checkForUpdate error: $e');
       return null;
     }
   }
@@ -81,11 +86,58 @@ class AppUpdateService {
     await _recordCheck();
     final newer = _isVersionNewer(latestVersion, currentVersion);
     if (newer) {
-      print(
+      debugLog(
         'AppUpdateService: update available ($currentVersion -> $latestVersion)',
       );
     }
     return newer;
+  }
+
+  static Future<bool?> _evaluateWindowsUpdate(
+    Map<String, String> info,
+    String currentVersion,
+    String currentBuild,
+  ) async {
+    final latestVersion = info['version'] ?? '';
+    final latestBuild = info['buildNumber'] ?? '';
+    if (latestVersion.isEmpty) return false;
+
+    final prefs = await SharedPreferences.getInstance();
+    final skipped = prefs.getString(_skippedVersionKey);
+    if (skipped == latestVersion ||
+        (latestBuild.isNotEmpty && skipped == '$latestVersion+$latestBuild')) {
+      return false;
+    }
+
+    await _recordCheck();
+    final newer = _isUpdateNewer(
+      latestVersion: latestVersion,
+      latestBuild: latestBuild,
+      currentVersion: currentVersion,
+      currentBuild: currentBuild,
+    );
+    if (newer) {
+      debugLog(
+        'AppUpdateService: update available '
+        '($currentVersion+$currentBuild -> $latestVersion+$latestBuild)',
+      );
+    }
+    return newer;
+  }
+
+  static bool _isUpdateNewer({
+    required String latestVersion,
+    required String latestBuild,
+    required String currentVersion,
+    required String currentBuild,
+  }) {
+    if (_isVersionNewer(latestVersion, currentVersion)) return true;
+    if (_isVersionNewer(currentVersion, latestVersion)) return false;
+
+    if (latestBuild.isEmpty || currentBuild.isEmpty) return false;
+    final latest = int.tryParse(latestBuild) ?? 0;
+    final current = int.tryParse(currentBuild) ?? 0;
+    return latest > current;
   }
 
   /// macOS: latest non-prerelease GitHub release with a DMG asset.
@@ -105,13 +157,12 @@ class AppUpdateService {
       final data = json.decode(response.body) as Map<String, dynamic>;
       return _releaseMapFromGitHubJson(data, assetExtension: assetExtension);
     } catch (e) {
-      print('Error fetching GitHub release: $e');
+      debugLog('Error fetching GitHub release: $e');
     }
     return null;
   }
 
   /// Windows: newest GitHub release that ships [lona-windows.json] + an MSI.
-  /// Includes pre-releases so krishna-dev test tags are picked up.
   static Future<Map<String, String>?> fetchWindowsReleaseInfo() async {
     try {
       final url = Uri.parse(
@@ -123,7 +174,7 @@ class AppUpdateService {
       ).timeout(const Duration(seconds: 15));
 
       if (response.statusCode != 200) {
-        print(
+        debugLog(
           'Windows update: releases API returned ${response.statusCode}',
         );
         return null;
@@ -160,15 +211,13 @@ class AppUpdateService {
         if (downloadUrl.isEmpty) continue;
 
         final tagName = release['tag_name'] as String? ?? '';
-        final body = release['body'] as String? ?? '';
         final htmlUrl = release['html_url'] as String? ?? '';
-        final releaseNotes =
-            manifest['releaseNotes']?.toString().trim().isNotEmpty == true
-                ? manifest['releaseNotes'].toString()
-                : body;
+        final buildNumber = manifest['buildNumber']?.toString() ?? '';
+        final releaseNotes = manifest['releaseNotes']?.toString() ?? '';
 
         return {
           'version': version,
+          'buildNumber': buildNumber,
           'downloadUrl': downloadUrl,
           'releaseNotes': releaseNotes,
           'htmlUrl': htmlUrl,
@@ -176,26 +225,8 @@ class AppUpdateService {
           'msiFileName': msiFileName,
         };
       }
-
-      // Fallback: newest release with an MSI, version from tag name.
-      for (final raw in releases) {
-        final release = raw as Map<String, dynamic>;
-        final assets = release['assets'] as List<dynamic>? ?? [];
-        final msiAsset = _findAssetByExtension(assets, '.msi');
-        if (msiAsset == null) continue;
-
-        final tagName = release['tag_name'] as String? ?? '';
-        return {
-          'version': tagName.replaceFirst(RegExp('^v'), ''),
-          'downloadUrl': msiAsset['browser_download_url'] as String? ?? '',
-          'releaseNotes': release['body'] as String? ?? '',
-          'htmlUrl': release['html_url'] as String? ?? '',
-          'tagName': tagName,
-          'msiFileName': msiAsset['name'] as String? ?? '',
-        };
-      }
     } catch (e) {
-      print('Error fetching Windows release info: $e');
+      debugLog('Error fetching Windows release info: $e');
     }
     return null;
   }
@@ -234,9 +265,10 @@ class AppUpdateService {
             const Duration(seconds: 15),
           );
       if (response.statusCode != 200) return null;
-      return json.decode(response.body) as Map<String, dynamic>;
+      final body = response.body.replaceFirst('\uFEFF', '');
+      return json.decode(body) as Map<String, dynamic>;
     } catch (e) {
-      print('Error fetching manifest $url: $e');
+      debugLog('Error fetching manifest $url: $e');
       return null;
     }
   }
@@ -287,7 +319,7 @@ class AppUpdateService {
         }
       }
     } catch (e) {
-      print('Error fetching app version from App Store: $e');
+      debugLog('Error fetching app version from App Store: $e');
     }
     return null;
   }

@@ -1,4 +1,5 @@
 import 'dart:convert';
+import '/utils/debug_log.dart';
 import 'dart:io';
 
 import 'package:firebase_auth/firebase_auth.dart';
@@ -87,11 +88,11 @@ Future<gsiap.GoogleSignInCredentials?> _windowsGoogleOAuthCredentials(
       cached.idToken != null &&
       cached.idToken!.isNotEmpty &&
       !_isGoogleIdTokenExpired(cached.idToken)) {
-    debugPrint('Windows Google Sign-In: reusing cached id_token');
+    debugLog('Windows Google Sign-In: reusing cached id_token');
     return cached;
   }
 
-  debugPrint('Windows Google Sign-In: opening browser for fresh OAuth');
+  debugLog('Windows Google Sign-In: opening browser for fresh OAuth');
   await googleSignIn.signOut();
   return googleSignIn.signInOnline();
 }
@@ -105,7 +106,7 @@ Future<UserCredential?> _googleSignInWindows() async {
   }
 
   if (kGoogleDesktopOAuthClientId != kFirebaseProjectWebOAuthClientId) {
-    debugPrint(
+    debugLog(
       '⚠️ GOOGLE_DESKTOP_OAUTH_CLIENT_ID in env.json does not match the Firebase '
       'web client ($kFirebaseProjectWebOAuthClientId). Sign-in may fail.',
     );
@@ -126,7 +127,7 @@ Future<UserCredential?> _googleSignInWindows() async {
     );
   }
 
-  debugPrint(
+  debugLog(
     'Windows Google OAuth ok (id_token aud check next via Firebase)...',
   );
 
@@ -137,10 +138,10 @@ Future<UserCredential?> _googleSignInWindows() async {
   try {
     return await FirebaseAuth.instance.signInWithCredential(credential);
   } on FirebaseAuthException catch (e) {
-    debugPrint('Firebase Google sign-in failed: ${e.code} ${e.message}');
+    debugLog('Firebase Google sign-in failed: ${e.code} ${e.message}');
     if (e.code == 'invalid-credential') {
       // Stale cache may have slipped through — force one online retry.
-      debugPrint('Retrying Windows Google Sign-In with fresh browser OAuth...');
+      debugLog('Retrying Windows Google Sign-In with fresh browser OAuth...');
       await googleSignIn.signOut();
       final fresh = await googleSignIn.signInOnline();
       if (fresh?.idToken != null && fresh!.idToken!.isNotEmpty) {
@@ -167,7 +168,7 @@ Future<UserCredential?> googleSignInFunc() async {
     try {
       return await _googleSignInWindows();
     } catch (e) {
-      print('Windows Google Sign-In error: $e');
+      debugLog('Windows Google Sign-In error: $e');
       rethrow;
     }
   }
@@ -178,7 +179,7 @@ Future<UserCredential?> googleSignInFunc() async {
       // Do NOT sign out before sign-in on macOS — it can clear state needed for
       // the OAuth callback and cause signIn() to fail after the user returns from the browser.
       // Single attempt only; no retries (retries were forcing the user through the flow 3 times).
-      print('Attempting Google Sign-In on macOS...');
+      debugLog('Attempting Google Sign-In on macOS...');
 
       final GoogleSignInAccount? googleUser = await _googleSignIn.signIn();
 
@@ -200,19 +201,19 @@ Future<UserCredential?> googleSignInFunc() async {
       // Sign in to Firebase with the Google credential
       return await FirebaseAuth.instance.signInWithCredential(credential);
     } catch (e) {
-      print('macOS Google Sign-In error: $e');
+      debugLog('macOS Google Sign-In error: $e');
       // If it's a keychain error, provide more helpful error message
       if (e.toString().contains('keychain') ||
           e.toString().contains('GIDSignIn') ||
           e.toString().contains('com.google.GIDSignIn')) {
-        print('Keychain/GIDSignIn error detected. This may be due to:');
-        print(
+        debugLog('Keychain/GIDSignIn error detected. This may be due to:');
+        debugLog(
             '1. App not properly signed with development/provisioning profile');
-        print('2. Keychain access groups not properly configured');
-        print('3. First-time keychain access permissions');
-        print(
+        debugLog('2. Keychain access groups not properly configured');
+        debugLog('3. First-time keychain access permissions');
+        debugLog(
             '4. Potential conflict with Gmail OAuth - try signing out and back in');
-        print('5. Corrupted keychain state - try restarting the app');
+        debugLog('5. Corrupted keychain state - try restarting the app');
         // Still rethrow so UI can handle it
       }
       rethrow;
@@ -227,7 +228,7 @@ Future<UserCredential?> googleSignInFunc() async {
       await signOutWithGoogle();
     } catch (e) {
       // Ignore errors from sign out - it might fail if not signed in
-      print('Sign out before sign-in (this is normal): $e');
+      debugLog('Sign out before sign-in (this is normal): $e');
     }
 
     // Always show account picker - don't use silent sign-in
@@ -239,7 +240,7 @@ Future<UserCredential?> googleSignInFunc() async {
         idToken: auth.idToken, accessToken: auth.accessToken);
     return await FirebaseAuth.instance.signInWithCredential(credential);
   } catch (e) {
-    print('Google Sign-In error: $e');
+    debugLog('Google Sign-In error: $e');
     // Re-throw to let the UI handle the error
     rethrow;
   }
@@ -250,7 +251,7 @@ Future signOutWithGoogle() async {
     try {
       await _getWindowsGoogleSignIn().signOut();
     } catch (e) {
-      print('Windows Google sign out error: $e');
+      debugLog('Windows Google sign out error: $e');
     }
     return;
   }
@@ -259,7 +260,7 @@ Future signOutWithGoogle() async {
     await _googleSignIn.signOut();
   } catch (e) {
     // If sign out fails, reset the instance anyway
-    print('Sign out error (will reset instance): $e');
+    debugLog('Sign out error (will reset instance): $e');
     _resetGoogleSignInInstance();
     rethrow;
   }

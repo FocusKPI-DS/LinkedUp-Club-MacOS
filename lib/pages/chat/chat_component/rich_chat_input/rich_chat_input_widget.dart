@@ -1,4 +1,5 @@
 import 'package:flutter/cupertino.dart';
+import '/utils/debug_log.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
@@ -176,15 +177,15 @@ class _RichChatInputWidgetState extends State<RichChatInputWidget> {
     try {
       _sttAvailable = await _speech.initialize(
         onStatus: (status) {
-          debugPrint('🎤 STT status: $status');
+          debugLog('🎤 STT status: $status');
         },
         onError: (errorNotification) {
-          debugPrint('🎤 STT Error: $errorNotification');
+          debugLog('🎤 STT Error: $errorNotification');
         },
       );
-      debugPrint('🎤 STT initialized: _sttAvailable=$_sttAvailable');
+      debugLog('🎤 STT initialized: _sttAvailable=$_sttAvailable');
     } catch (e) {
-      debugPrint('🎤 STT init failed (non-fatal): $e');
+      debugLog('🎤 STT init failed (non-fatal): $e');
       _sttAvailable = false;
     }
   }
@@ -262,7 +263,7 @@ class _RichChatInputWidgetState extends State<RichChatInputWidget> {
   void _handleSend({bool fromHardwareKeyboard = false}) {
     // Check traditional web IME plugin
     if (_imeHandler.isComposing) {
-      print('DEBUG: _handleSend blocked - Web IME is composing');
+      debugLog('DEBUG: _handleSend blocked - Web IME is composing');
       return;
     }
 
@@ -285,7 +286,7 @@ class _RichChatInputWidgetState extends State<RichChatInputWidget> {
 
     if (markdown.trim().isEmpty && !widget.hasAttachments) return;
 
-    print('DEBUG: _handleSend executing - sending message');
+    debugLog('DEBUG: _handleSend executing - sending message');
     widget.onSend(markdown);
 
     // Clear the input field after sending
@@ -351,7 +352,7 @@ class _RichChatInputWidgetState extends State<RichChatInputWidget> {
             const RecordConfig(encoder: AudioEncoder.opus, numChannels: 1),
             path: '',  // path is ignored on web
           );
-          print('🎙️ [web] Recording started with start() mode');
+          debugLog('🎙️ [web] Recording started with start() mode');
         } else {
           // Native: record to file
           final directory = await getTemporaryDirectory();
@@ -379,11 +380,11 @@ class _RichChatInputWidgetState extends State<RichChatInputWidget> {
           _showVoiceReady = false;
         });
       } else {
-        print('❌ [_startRecording] Microphone permission denied');
+        debugLog('❌ [_startRecording] Microphone permission denied');
       }
     } catch (e, stack) {
-      print('❌ Error starting record: $e');
-      print('   Stack: $stack');
+      debugLog('❌ Error starting record: $e');
+      debugLog('   Stack: $stack');
     }
   }
 
@@ -394,12 +395,12 @@ class _RichChatInputWidgetState extends State<RichChatInputWidget> {
       if (kIsWeb) {
         // Web: stop() returns a blob URL, fetch byte data from it
         final blobUrl = await _recorder.stop();
-        print('🎙️ [web-stop] Got blob URL: $blobUrl');
+        debugLog('🎙️ [web-stop] Got blob URL: $blobUrl');
         if (blobUrl != null && blobUrl.isNotEmpty) {
           _recordedBytes = await fetchBlobUrlBytes(blobUrl);
-          print('🎙️ [web-stop] Fetched ${_recordedBytes!.length} bytes from blob');
+          debugLog('🎙️ [web-stop] Fetched ${_recordedBytes!.length} bytes from blob');
         } else {
-          print('❌ [web-stop] No blob URL returned from stop()');
+          debugLog('❌ [web-stop] No blob URL returned from stop()');
         }
       } else {
         await _recorder.stop();
@@ -413,8 +414,8 @@ class _RichChatInputWidgetState extends State<RichChatInputWidget> {
         });
       }
     } catch (e, stack) {
-      print('❌ Error stopping record: $e');
-      print('   Stack: $stack');
+      debugLog('❌ Error stopping record: $e');
+      debugLog('   Stack: $stack');
     }
   }
 
@@ -448,21 +449,21 @@ class _RichChatInputWidgetState extends State<RichChatInputWidget> {
 
 
   void _sendVoiceRecording() async {
-    print('🎙️ [_sendVoiceRecording] START: _isRecording=$_isRecording, _hasRecorded=$_hasRecorded, _recordedFilePath=$_recordedFilePath, _recordDuration=$_recordDuration');
+    debugLog('🎙️ [_sendVoiceRecording] START: _isRecording=$_isRecording, _hasRecorded=$_hasRecorded, _recordedFilePath=$_recordedFilePath, _recordDuration=$_recordDuration');
     
     if (_isRecording) {
       await _stopRecording();
-      print('🎙️ [_sendVoiceRecording] After stop: _isRecording=$_isRecording, _hasRecorded=$_hasRecorded, _recordedFilePath=$_recordedFilePath');
+      debugLog('🎙️ [_sendVoiceRecording] After stop: _isRecording=$_isRecording, _hasRecorded=$_hasRecorded, _recordedFilePath=$_recordedFilePath');
     }
     
     if (_hasRecorded && widget.onVoiceSend != null) {
       if (kIsWeb) {
         // Web: send bytes directly
         if (_recordedBytes != null && _recordedBytes!.isNotEmpty) {
-          print('🎙️ [_sendVoiceRecording] Web: sending ${_recordedBytes!.length} bytes');
+          debugLog('🎙️ [_sendVoiceRecording] Web: sending ${_recordedBytes!.length} bytes');
           await widget.onVoiceSend!(null, Duration(seconds: _recordDuration), audioBytes: _recordedBytes);
         } else {
-          print('❌ [_sendVoiceRecording] Web: recorded bytes are empty!');
+          debugLog('❌ [_sendVoiceRecording] Web: recorded bytes are empty!');
         }
       } else {
         // Native: send file path
@@ -470,19 +471,19 @@ class _RichChatInputWidgetState extends State<RichChatInputWidget> {
           final file = File(_recordedFilePath!);
           final exists = await file.exists();
           final size = exists ? await file.length() : 0;
-          print('🎙️ [_sendVoiceRecording] File exists=$exists, size=$size bytes');
+          debugLog('🎙️ [_sendVoiceRecording] File exists=$exists, size=$size bytes');
           
           if (exists && size > 0) {
             await widget.onVoiceSend!(_recordedFilePath!, Duration(seconds: _recordDuration));
           } else {
-            print('❌ [_sendVoiceRecording] File is empty or does not exist!');
+            debugLog('❌ [_sendVoiceRecording] File is empty or does not exist!');
           }
         }
       }
       _cancelRecording();
       setState(() => _showVoiceReady = false);
     } else {
-      print('❌ [_sendVoiceRecording] Cannot send: _hasRecorded=$_hasRecorded, onVoiceSend=${widget.onVoiceSend != null}');
+      debugLog('❌ [_sendVoiceRecording] Cannot send: _hasRecorded=$_hasRecorded, onVoiceSend=${widget.onVoiceSend != null}');
     }
   }
 
@@ -743,9 +744,9 @@ class _RichChatInputWidgetState extends State<RichChatInputWidget> {
   }
 
   Future<void> _handlePasteShortcut() async {
-    debugPrint('📋 [paste] Ctrl+V in message input');
+    debugLog('📋 [paste] Ctrl+V in message input');
     final handled = await widget.onTryPasteImage!();
-    debugPrint('📋 [paste] attachment handled=$handled');
+    debugLog('📋 [paste] attachment handled=$handled');
     if (handled || !mounted) return;
 
     final data = await Clipboard.getData(Clipboard.kTextPlain);

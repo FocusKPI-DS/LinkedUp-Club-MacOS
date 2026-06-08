@@ -1,5 +1,6 @@
 import 'dart:io' show Platform;
 
+import '/utils/debug_log.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:intl/intl.dart';
@@ -113,7 +114,7 @@ class _TodaysCalendarEventsState extends State<TodaysCalendarEvents> {
       final List<dynamic> eventsList = json.decode(cachedEventsJson);
       return eventsList.map((e) => Map<String, dynamic>.from(e)).toList();
     } catch (e) {
-      print('Error loading cached events: $e');
+      debugLog('Error loading cached events: $e');
       return null;
     }
   }
@@ -130,7 +131,7 @@ class _TodaysCalendarEventsState extends State<TodaysCalendarEvents> {
       await prefs.setString(_cacheTimestampKey, now.toIso8601String());
       await prefs.setString(_cacheDateKey, todayStr);
     } catch (e) {
-      print('Error saving events to cache: $e');
+      debugLog('Error saving events to cache: $e');
     }
   }
 

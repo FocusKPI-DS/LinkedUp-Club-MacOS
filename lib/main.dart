@@ -52,6 +52,7 @@ import 'package:linkedup/backend/schema/structs/index.dart';
 import 'package:linkedup/custom_code/services/web_notification_service.dart';
 import 'package:linkedup/custom_code/services/app_update_service.dart';
 import 'package:linkedup/custom_code/widgets/app_update_dialog.dart';
+import 'package:linkedup/utils/debug_log.dart';
 import 'package:linkedup/utils/qurio_embedded.dart';
 import 'package:adaptive_platform_ui/adaptive_platform_ui.dart';
 import 'package:share_plus/share_plus.dart';
@@ -62,14 +63,14 @@ void main() async {
 
   FlutterError.onError = (details) {
     FlutterError.presentError(details);
-    debugPrint('FlutterError: ${details.exceptionAsString()}');
+    debugLog('FlutterError: ${details.exceptionAsString()}');
     if (details.stack != null) {
-      debugPrint('${details.stack}');
+      debugLog('${details.stack}');
     }
   };
   PlatformDispatcher.instance.onError = (error, stack) {
-    debugPrint('Uncaught error: $error');
-    debugPrint('$stack');
+    debugLog('Uncaught error: $error');
+    debugLog('$stack');
     return true;
   };
 
@@ -163,8 +164,8 @@ void main() async {
     ));
   } catch (e, stackTrace) {
     // Error during app initialization
-    debugPrint('App initialization error: $e');
-    debugPrint('$stackTrace');
+    debugLog('App initialization error: $e');
+    debugLog('$stackTrace');
     // Run app with minimal configuration if initialization fails
     runApp(MaterialApp(
       home: Scaffold(
@@ -246,12 +247,12 @@ void _initializePushNotificationsAsync() async {
     try {
       // Listen for foreground FCM messages (when tab is open)
       FirebaseMessaging.onMessage.listen((RemoteMessage message) async {
-        print('🔔 [WEB] FOREGROUND FCM NOTIFICATION RECEIVED!');
-        print('   Title: ${message.notification?.title}');
-        print('   Body: ${message.notification?.body}');
-        print('   Data Keys: ${message.data.keys.toList()}');
-        print('   Raw Data: ${message.data}');
-        print('   Sender Ref: ${message.data['sender_ref']}');
+        debugLog('🔔 [WEB] FOREGROUND FCM NOTIFICATION RECEIVED!');
+        debugLog('   Title: ${message.notification?.title}');
+        debugLog('   Body: ${message.notification?.body}');
+        debugLog('   Data Keys: ${message.data.keys.toList()}');
+        debugLog('   Raw Data: ${message.data}');
+        debugLog('   Sender Ref: ${message.data['sender_ref']}');
 
         // Check if sender is blocked
         if (currentUserReference != null) {
@@ -296,7 +297,7 @@ void _initializePushNotificationsAsync() async {
                   }
                 }
               } catch (e) {
-                print('⚠️ Error parsing parameterData: $e');
+                debugLog('⚠️ Error parsing parameterData: $e');
               }
             }
 
@@ -314,13 +315,13 @@ void _initializePushNotificationsAsync() async {
               });
 
               if (isBlocked) {
-                print(
+                debugLog(
                     '🚫 [WEB] Notification suppressed: Sender $senderId is blocked');
                 return;
               }
             }
           } catch (e) {
-            print('⚠️ Error checking blocked status for notification: $e');
+            debugLog('⚠️ Error checking blocked status for notification: $e');
           }
         }
 
@@ -334,20 +335,20 @@ void _initializePushNotificationsAsync() async {
 
       // Listen for notification taps
       FirebaseMessaging.onMessageOpenedApp.listen((RemoteMessage message) {
-        print('🔔 [WEB] FCM notification tapped!');
-        print('   Title: ${message.notification?.title}');
-        print('   Data: ${message.data}');
+        debugLog('🔔 [WEB] FCM notification tapped!');
+        debugLog('   Title: ${message.notification?.title}');
+        debugLog('   Data: ${message.data}');
       });
 
       // Listen for token refresh
       FirebaseMessaging.instance.onTokenRefresh.listen((newToken) {
-        print('🔄 [WEB] FCM token refreshed: ${newToken.substring(0, 10)}...');
+        debugLog('🔄 [WEB] FCM token refreshed: ${newToken.substring(0, 10)}...');
       });
 
-      print('✅ Web FCM notification handlers initialized');
+      debugLog('✅ Web FCM notification handlers initialized');
     } catch (e) {
-      print('❌ Web FCM notification setup failed: $e');
-      print('   Stack trace: ${StackTrace.current}');
+      debugLog('❌ Web FCM notification setup failed: $e');
+      debugLog('   Stack trace: ${StackTrace.current}');
     }
   }
   // Handle macOS/iOS platforms
@@ -382,17 +383,17 @@ void _initializePushNotificationsAsync() async {
           const platform = MethodChannel('com.linkedup.notifications');
           platform.setMethodCallHandler((call) async {
             if (call.method == 'onNotificationTapped') {
-              print('📱 [FLUTTER] Received notification tap from iOS native');
+              debugLog('📱 [FLUTTER] Received notification tap from iOS native');
               final data = call.arguments as Map<dynamic, dynamic>?;
               if (data != null) {
-                print('   Data received: $data');
+                debugLog('   Data received: $data');
                 // Convert data to String keys
                 final messageData = <String, dynamic>{};
                 for (final entry in data.entries) {
                   messageData[entry.key.toString()] = entry.value;
                 }
-                print('   Converted data: $messageData');
-                print('   initialPageName: ${messageData['initialPageName']}');
+                debugLog('   Converted data: $messageData');
+                debugLog('   initialPageName: ${messageData['initialPageName']}');
 
                 // Create a RemoteMessage manually
                 final message = RemoteMessage(
@@ -400,15 +401,15 @@ void _initializePushNotificationsAsync() async {
                       messageData['google.c.a.e'] as String?,
                   data: messageData,
                 );
-                print(
+                debugLog(
                     '   Created RemoteMessage, calling handleNotificationNavigation...');
                 await handleNotificationNavigation(message);
               } else {
-                print('   ⚠️ No data received from iOS');
+                debugLog('   ⚠️ No data received from iOS');
               }
             }
           });
-          print('✅ Method channel handler set up for iOS notification taps');
+          debugLog('✅ Method channel handler set up for iOS notification taps');
 
           // Register for remote notifications after permission is granted
           try {
@@ -433,33 +434,33 @@ void _initializePushNotificationsAsync() async {
               try {
                 if (retries > 0) {
                   await Future.delayed(const Duration(seconds: 2));
-                  print(
+                  debugLog(
                       '🔄 Retry ${retries + 1}/$maxRetries getting FCM token...');
                 }
                 fcmToken = await messaging.getToken();
               } catch (e) {
-                print(
+                debugLog(
                     '⚠️ Error getting FCM token (attempt ${retries + 1}): $e');
               }
               retries++;
             }
 
             if (fcmToken != null) {
-              print(
+              debugLog(
                   '✅ FCM Token obtained: ${fcmToken.substring(0, min(10, fcmToken.length))}...');
               if (currentUserReference != null) {
                 try {
                   await actions.ensureFcmToken(currentUserReference!);
                 } catch (e) {
-                  print('⚠️ Failed to save FCM token: $e');
+                  debugLog('⚠️ Failed to save FCM token: $e');
                 }
               }
             } else {
-              print('❌ Failed to get FCM token after $maxRetries attempts');
+              debugLog('❌ Failed to get FCM token after $maxRetries attempts');
             }
           } catch (e) {
-            print('⚠️ iOS: Token check failed: $e');
-            print(
+            debugLog('⚠️ iOS: Token check failed: $e');
+            debugLog(
                 '   Note: Native iOS logs appear in Xcode console, not Flutter console');
           }
         }
@@ -470,22 +471,22 @@ void _initializePushNotificationsAsync() async {
         });
 
         // Listen for notification taps (when app is opened from notification)
-        print('🔍 Setting up onMessageOpenedApp listener...');
+        debugLog('🔍 Setting up onMessageOpenedApp listener...');
         FirebaseMessaging.onMessageOpenedApp.listen((RemoteMessage message) {
-          print('📱 [MAIN] Notification tapped - navigating...');
-          print('   Message ID: ${message.messageId}');
-          print('   Data: ${message.data}');
-          print('   Data keys: ${message.data.keys}');
-          print('   initialPageName: ${message.data['initialPageName']}');
-          print('   parameterData: ${message.data['parameterData']}');
+          debugLog('📱 [MAIN] Notification tapped - navigating...');
+          debugLog('   Message ID: ${message.messageId}');
+          debugLog('   Data: ${message.data}');
+          debugLog('   Data keys: ${message.data.keys}');
+          debugLog('   initialPageName: ${message.data['initialPageName']}');
+          debugLog('   parameterData: ${message.data['parameterData']}');
           handleNotificationNavigation(message);
         });
-        print('✅ onMessageOpenedApp listener registered');
+        debugLog('✅ onMessageOpenedApp listener registered');
 
         // Check if app was opened from a notification (when app was terminated)
         final initialMessage = await messaging.getInitialMessage();
         if (initialMessage != null) {
-          print('📱 App opened from notification (terminated) - navigating...');
+          debugLog('📱 App opened from notification (terminated) - navigating...');
           // Wait for app to finish initializing, then navigate
           WidgetsBinding.instance.addPostFrameCallback((_) async {
             await Future.delayed(const Duration(milliseconds: 500));
@@ -501,18 +502,18 @@ void _initializePushNotificationsAsync() async {
               try {
                 await actions.ensureFcmToken(currentUserReference!);
               } catch (e) {
-                print('⚠️ Failed to save refreshed FCM token: $e');
+                debugLog('⚠️ Failed to save refreshed FCM token: $e');
               }
             });
           }
         });
       } else {
-        print(
+        debugLog(
             '❌ Notifications NOT authorized! Status: ${settings.authorizationStatus}');
       }
     } catch (e) {
-      print('❌ Push notification setup failed: $e');
-      print('   Stack trace: ${StackTrace.current}');
+      debugLog('❌ Push notification setup failed: $e');
+      debugLog('   Stack trace: ${StackTrace.current}');
     }
   }
 }
@@ -639,7 +640,7 @@ class _MyAppState extends State<MyApp> {
             await actions.ensureFcmToken(currentUserReference!);
           }
         } catch (e) {
-          print('⚠️ Failed to ensure FCM token after login: $e');
+          debugLog('⚠️ Failed to ensure FCM token after login: $e');
         }
       });
     }
@@ -750,7 +751,7 @@ class _MyAppState extends State<MyApp> {
         });
       }
     } catch (e) {
-      print('Error checking for app update: $e');
+      debugLog('Error checking for app update: $e');
     }
   }
 
@@ -783,7 +784,7 @@ class _MyAppState extends State<MyApp> {
         ],
       );
     } catch (e) {
-      print('Error showing update dialog: $e');
+      debugLog('Error showing update dialog: $e');
     }
   }
 
@@ -1718,7 +1719,7 @@ class _NavBarPageState extends State<NavBarPage> with WidgetsBindingObserver {
               right: 16,
               child: GestureDetector(
                 onTap: () {
-                  print('🔘 Invite button tapped!');
+                  debugLog('🔘 Invite button tapped!');
                   _showInviteDialog(context);
                 },
                 behavior: HitTestBehavior.opaque,
@@ -1753,7 +1754,7 @@ class _NavBarPageState extends State<NavBarPage> with WidgetsBindingObserver {
   }
 
   void _showInviteDialog(BuildContext context) async {
-    print('🔘 Invite button tapped!');
+    debugLog('🔘 Invite button tapped!');
     try {
       // Show iOS 26+ adaptive dialog with invite options (iOS 26+ liquid glass effect)
       await AdaptiveAlertDialog.show(
@@ -1767,21 +1768,21 @@ class _NavBarPageState extends State<NavBarPage> with WidgetsBindingObserver {
             title: 'Cancel',
             style: AlertActionStyle.cancel,
             onPressed: () {
-              print('❌ Cancel pressed');
+              debugLog('❌ Cancel pressed');
             },
           ),
           AlertAction(
             title: 'Share',
             style: AlertActionStyle.primary,
             onPressed: () {
-              print('✅ Share pressed');
+              debugLog('✅ Share pressed');
               _shareInviteMessage(context);
             },
           ),
         ],
       );
     } catch (e) {
-      print('❌ Error showing invite dialog: $e');
+      debugLog('❌ Error showing invite dialog: $e');
     }
   }
 

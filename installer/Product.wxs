@@ -31,6 +31,7 @@
 
     <Feature Id="ProductFeature" Title="Lona" Level="1">
       <ComponentGroupRef Id="AppHarvest" />
+      <ComponentRef Id="LegacyLinkedUpCleanup" />
       <ComponentRef Id="ApplicationShortcuts" />
       <ComponentRef Id="DesktopShortcut" />
     </Feature>
@@ -38,7 +39,7 @@
     <Property Id="INSTALLDESKTOPSHORTCUT" Value="1" />
     <Property Id="WIXUI_EXITDIALOGOPTIONALCHECKBOXTEXT" Value="Launch Lona" />
     <Property Id="WIXUI_EXITDIALOGOPTIONALCHECKBOX" Value="1" />
-    <Property Id="WixShellExecTarget" Value="[#linkedup.exe]" />
+    <Property Id="WixShellExecTarget" Value="[#lona.exe]" />
 
     <CustomAction
       Id="LaunchApplication"
@@ -84,13 +85,27 @@
       <Directory Id="DesktopFolder" Name="Desktop" />
     </Directory>
 
+    <!-- Remove pre-rename executable when upgrading from linkedup.exe → lona.exe -->
+    <DirectoryRef Id="INSTALLFOLDER">
+      <Component Id="LegacyLinkedUpCleanup" Guid="D4E5F6A7-B8C9-4D0E-1F2A-3B4C5D6E7F8A">
+        <RemoveFile Id="RemoveLegacyLinkedUpExe" Name="linkedup.exe" On="both" />
+        <RegistryValue
+          Root="HKLM"
+          Key="Software\FocusKPI\Lona"
+          Name="LegacyLinkedUpRemoved"
+          Type="integer"
+          Value="1"
+          KeyPath="yes" />
+      </Component>
+    </DirectoryRef>
+
     <DirectoryRef Id="ApplicationProgramsFolder">
       <Component Id="ApplicationShortcuts" Guid="B8C9D0E1-F2A3-4B5C-9D0E-1F2A3B4C5D6E">
         <Shortcut
           Id="ApplicationStartMenuShortcut"
           Name="Lona"
           Description="Lona"
-          Target="[#linkedup.exe]"
+          Target="[#lona.exe]"
           WorkingDirectory="INSTALLFOLDER"
           Icon="LonaIcon.ico"
           IconIndex="0" />
@@ -112,7 +127,7 @@
           Id="DesktopShortcutLink"
           Name="Lona"
           Description="Lona"
-          Target="[#linkedup.exe]"
+          Target="[#lona.exe]"
           WorkingDirectory="INSTALLFOLDER"
           Icon="LonaIcon.ico"
           IconIndex="0" />

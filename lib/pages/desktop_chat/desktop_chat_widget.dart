@@ -1,4 +1,5 @@
 import '/auth/firebase_auth/auth_util.dart';
+import '/utils/debug_log.dart';
 import '/backend/backend.dart';
 import '/backend/schema/enums/enums.dart';
 import '/components/invite_friends_button_widget.dart';
@@ -121,7 +122,8 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
       chatReference: chat,
       activeSelectionId: ValueNotifier(null),
       onMessageAction: _handleDesktopMessageAction,
-      onMessagesMutated: () => chatController.refreshChats(),
+      onSidebarPreviewUpdate: chatController.applyLocalChatLastMessageFromPatch,
+      onMessagesMutated: () => chatController.refreshChats(force: true),
       isSelectionMode: _isSelectionMode,
       selectedMessages: _selectedMessages,
       onMessageToggled: _toggleMessageSelection,
@@ -214,7 +216,7 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
             _model.showTasksPanel = false;
             // Set the selected chat
             _model.selectedChat = selectedChat;
-            print(
+            debugLog(
                 'DesktopChat: Synced selectedChat to model: ${selectedChat.reference.id}');
             _onWindowsThreadOpened();
           } else {
@@ -229,7 +231,7 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
     // Initialize presence system after a delay to ensure user is loaded
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (DesktopSafeUserBuilder.useOnceFetch) {
-        print('🪟 [DesktopChat] Windows chat tab opened (poll mode, no list streams)');
+        debugLog('🪟 [DesktopChat] Windows chat tab opened (poll mode, no list streams)');
       }
       Future.delayed(Duration(milliseconds: 500), () {
         if (!DesktopSafeUserBuilder.useOnceFetch) {
@@ -259,7 +261,7 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
             });
           }
         } catch (e) {
-          print('Error polling chat folders: $e');
+          debugLog('Error polling chat folders: $e');
         }
       }
 
@@ -1590,7 +1592,10 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
                         chatReference: _model.searchPreviewChat,
                         activeSelectionId: ValueNotifier(null),
                         onMessageAction: _handleDesktopMessageAction,
-                        onMessagesMutated: () => chatController.refreshChats(),
+                        onSidebarPreviewUpdate:
+                            chatController.applyLocalChatLastMessageFromPatch,
+                        onMessagesMutated: () =>
+                            chatController.refreshChats(force: true),
                         isSelectionMode: false,
                         selectedMessages: {},
                         onMessageToggled: (_) {},
@@ -2585,7 +2590,7 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
             'updated_at': getCurrentTimestamp,
           });
         } catch (e) {
-          print('❌ Error adding chats to folder: $e');
+          debugLog('❌ Error adding chats to folder: $e');
         }
       },
     );
@@ -2924,12 +2929,12 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
 
   Future<void> _createFolder(String name, {List<String>? selectedChatIds}) async {
     if (currentUserReference == null) {
-      print('❌ _createFolder: currentUserReference is null');
+      debugLog('❌ _createFolder: currentUserReference is null');
       return;
     }
     try {
       final nextOrder = _model.chatFolders.length;
-      print('📁 Creating folder "$name"');
+      debugLog('📁 Creating folder "$name"');
       await fsCreateChatFolderDocument(
         userRef: currentUserReference!,
         data: {
@@ -2941,10 +2946,10 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
           'updated_at': getCurrentTimestamp,
         },
       );
-      print('✅ Folder "$name" created successfully with ${selectedChatIds?.length ?? 0} groups');
+      debugLog('✅ Folder "$name" created successfully with ${selectedChatIds?.length ?? 0} groups');
     } catch (e, stack) {
-      print('❌ Error creating folder: $e');
-      print(stack);
+      debugLog('❌ Error creating folder: $e');
+      debugLog(stack);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -6808,7 +6813,7 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
   Widget _buildAnnouncementBanner(ChatsRecord chat) {
     Widget buildBanner(List<AnnouncementsRecord> items, {Object? error}) {
       if (error != null) {
-        print('❌ [AnnouncementBanner] Stream error: $error');
+        debugLog('❌ [AnnouncementBanner] Stream error: $error');
         return const SizedBox.shrink();
       }
       if (items.isEmpty) {
@@ -7290,7 +7295,7 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
         );
       }
     } catch (e) {
-      print('Error generating summary: $e');
+      debugLog('Error generating summary: $e');
 
       String errorMessage = 'Failed to generate summary. Please try again.';
 

@@ -1,4 +1,5 @@
 import 'package:translator/translator.dart';
+import '/utils/debug_log.dart';
 import 'wechat_voice_bubble.dart';
 import 'dart:convert';
 import '/pages/chat/forwarded_history_viewer/forwarded_history_viewer_widget.dart';
@@ -150,7 +151,7 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
         _isTranslating = false;
       });
     } catch (e) {
-      print('Translation error: $e');
+      debugLog('Translation error: $e');
       setState(() => _isTranslating = false);
     }
   }
@@ -2683,7 +2684,7 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
         ),
       );
     } catch (e) {
-      print('Error parsing forwarded history: $e');
+      debugLog('Error parsing forwarded history: $e');
       return const Text('Error loading history');
     }
   }
@@ -5089,25 +5090,25 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
       // Ensure parent directory exists before writing
       final parentDir = file.parent;
       if (!await parentDir.exists()) {
-        debugPrint('Creating directory: ${parentDir.path}');
+        debugLog('Creating directory: ${parentDir.path}');
         await parentDir.create(recursive: true);
       }
 
       // Download and save
-      debugPrint('Downloading from URL: $url');
+      debugLog('Downloading from URL: $url');
       final res = await http.get(Uri.parse(url));
-      debugPrint('Download response status: ${res.statusCode}');
+      debugLog('Download response status: ${res.statusCode}');
 
       if (res.statusCode == 200) {
-        debugPrint('Saving file to: $path');
+        debugLog('Saving file to: $path');
         await file.writeAsBytes(res.bodyBytes);
-        debugPrint('File saved successfully!');
+        debugLog('File saved successfully!');
 
         // Reveal in Finder
-        debugPrint('Revealing file in Finder...');
+        debugLog('Revealing file in Finder...');
         try {
           await Process.run('open', ['-R', path]);
-          debugPrint('Download complete!');
+          debugLog('Download complete!');
 
           _showSnackBar(
             SnackBar(
@@ -5117,7 +5118,7 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
             ),
           );
         } catch (e) {
-          debugPrint('Error revealing file in Finder: $e');
+          debugLog('Error revealing file in Finder: $e');
           _showSnackBar(
             SnackBar(
               content: Text('File saved to: $path'),
@@ -5127,7 +5128,7 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
           );
         }
       } else {
-        debugPrint('Download failed with status: ${res.statusCode}');
+        debugLog('Download failed with status: ${res.statusCode}');
         _showSnackBar(
           SnackBar(
             content: Text('Failed to download file. Status: ${res.statusCode}'),
@@ -5137,7 +5138,7 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
         );
       }
     } catch (e) {
-      debugPrint('Error saving file: $e');
+      debugLog('Error saving file: $e');
       _showSnackBar(
         SnackBar(
           content: Text('Error saving file: $e'),
@@ -5150,9 +5151,9 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
 
   // Save image from message
   Future<void> _saveImage() async {
-    debugPrint('========================================');
-    debugPrint('=== SAVE IMAGE FROM MENU ===');
-    debugPrint('========================================');
+    debugLog('========================================');
+    debugLog('=== SAVE IMAGE FROM MENU ===');
+    debugLog('========================================');
 
     // Try single image first
     final imageUrl = valueOrDefault<String>(
@@ -5162,21 +5163,21 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
 
     if (imageUrl.isNotEmpty) {
       final fileName = _getFileNameFromUrl(imageUrl);
-      debugPrint('Saving single image: $fileName');
+      debugLog('Saving single image: $fileName');
       await _downloadFile(imageUrl, fileName);
     } else if (widget.message?.images != null &&
         widget.message!.images!.isNotEmpty) {
       // Save all images in the multiple images array
-      debugPrint('Saving ${widget.message!.images!.length} images');
+      debugLog('Saving ${widget.message!.images!.length} images');
       for (final imgUrl in widget.message!.images!) {
         if (imgUrl.isNotEmpty) {
           final fileName = _getFileNameFromUrl(imgUrl);
-          debugPrint('Saving image: $fileName');
+          debugLog('Saving image: $fileName');
           await _downloadFile(imgUrl, fileName);
         }
       }
     } else {
-      debugPrint('No images found in message!');
+      debugLog('No images found in message!');
       _showSnackBar(
         const SnackBar(
           content: Text('No images found in this message'),
@@ -5188,9 +5189,9 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
 
   // Save video from message
   Future<void> _saveVideo() async {
-    debugPrint('========================================');
-    debugPrint('=== SAVE VIDEO FROM MENU ===');
-    debugPrint('========================================');
+    debugLog('========================================');
+    debugLog('=== SAVE VIDEO FROM MENU ===');
+    debugLog('========================================');
 
     final videoUrl = valueOrDefault<String>(
       widget.message?.video,
@@ -5210,10 +5211,10 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
         // If it has an extension but not a video extension, add .mp4
         fileName = '${fileName.split('.').first}.mp4';
       }
-      debugPrint('Saving video: $fileName');
+      debugLog('Saving video: $fileName');
       await _downloadFile(videoUrl, fileName);
     } else {
-      debugPrint('No video found in message!');
+      debugLog('No video found in message!');
       _showSnackBar(
         const SnackBar(
           content: Text('No video found in this message'),
@@ -5224,12 +5225,12 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
   }
 
   Future<void> _downloadFile(String url, String fileName) async {
-    debugPrint('_downloadFile called with URL: $url, fileName: $fileName');
+    debugLog('_downloadFile called with URL: $url, fileName: $fileName');
 
     try {
       // Handle web platform FIRST
       if (kIsWeb) {
-        debugPrint('Platform is Web, starting download...');
+        debugLog('Platform is Web, starting download...');
         try {
           _showSnackBar(
             SnackBar(
@@ -5296,7 +5297,7 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
             ),
           );
         } catch (e) {
-          debugPrint('Error downloading file on web: $e');
+          debugLog('Error downloading file on web: $e');
           _hideSnackBar();
           _showSnackBar(
             SnackBar(
@@ -5312,7 +5313,7 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
       // Native platforms only below this point
       // macOS - Handle separately to avoid any fallthrough
       if (Platform.isMacOS) {
-        debugPrint('Platform is macOS, starting download...');
+        debugLog('Platform is macOS, starting download...');
         try {
           // Sanitize filename
           String safeFileName = fileName;
@@ -5324,9 +5325,9 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
           }
 
           // Download the file first
-          debugPrint('Downloading from URL: $url');
+          debugLog('Downloading from URL: $url');
           final response = await http.get(Uri.parse(url));
-          debugPrint('Download response status: ${response.statusCode}');
+          debugLog('Download response status: ${response.statusCode}');
 
           if (response.statusCode != 200) {
             throw Exception('Failed to download file: ${response.statusCode}');
@@ -5363,20 +5364,20 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
             try {
               final file = File(result);
               await file.writeAsBytes(response.bodyBytes);
-              debugPrint('File saved successfully to: $result');
+              debugLog('File saved successfully to: $result');
 
               // Reveal in Finder
               try {
                 await Process.run('open', ['-R', result]);
-                debugPrint('Download complete!');
+                debugLog('Download complete!');
 
                 _showSuccessPopup('Downloaded');
               } catch (e) {
-                debugPrint('Error revealing file in Finder: $e');
+                debugLog('Error revealing file in Finder: $e');
                 _showSuccessPopup('File saved');
               }
             } catch (e) {
-              debugPrint('Error saving file: $e');
+              debugLog('Error saving file: $e');
               _showSnackBar(
                 SnackBar(
                   content: Text('Error saving file: $e'),
@@ -5386,10 +5387,10 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
               );
             }
           } else {
-            debugPrint('User cancelled file save dialog');
+            debugLog('User cancelled file save dialog');
           }
         } catch (e) {
-          debugPrint('Error during download: $e');
+          debugLog('Error during download: $e');
           _showSnackBar(
             SnackBar(
               content: Text('Error downloading file: $e'),
@@ -5538,13 +5539,13 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
           );
 
           if (result != null && result.isNotEmpty) {
-            debugPrint('File saved successfully to: $result');
+            debugLog('File saved successfully to: $result');
             _showSuccessPopup('Downloaded');
           } else {
-            debugPrint('User cancelled file save dialog');
+            debugLog('User cancelled file save dialog');
           }
         } catch (e) {
-          debugPrint('Error during download: $e');
+          debugLog('Error during download: $e');
           _showSnackBar(
             SnackBar(
               content: Text('Error downloading file: $e'),

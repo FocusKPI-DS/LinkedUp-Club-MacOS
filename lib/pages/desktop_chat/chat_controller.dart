@@ -1,4 +1,5 @@
 import '/auth/firebase_auth/auth_util.dart';
+import '/utils/debug_log.dart';
 import '/backend/backend.dart';
 import '/custom_code/services/web_notification_service.dart';
 import 'package:get/get.dart';
@@ -149,14 +150,14 @@ class ChatController extends GetxController {
     _chatsSubscription = null;
     _serviceChatsSubscription = null;
     _blockedUsersSubscription = null;
-    print('⏸️ [ChatController] Paused list listeners (thread open)');
+    debugLog('⏸️ [ChatController] Paused list listeners (thread open)');
   }
 
   Future<void> resumeListListeners() async {
     if (!_listListenersPaused || kIsWeb) return;
     if (!Platform.isWindows && !Platform.isLinux) return;
     _listListenersPaused = false;
-    print('▶️ [ChatController] Resuming list listeners');
+    debugLog('▶️ [ChatController] Resuming list listeners');
     await loadChats(staggerSubscriptions: true);
   }
 
@@ -249,7 +250,7 @@ class ChatController extends GetxController {
 
       // Listen to blocked users for real-time filtering (native plugin only)
       if (!useWindowsFirestoreRest) {
-        print(
+        debugLog(
             'Debug: Initializing blocked user listener in ChatController. CurrentUserRef: $currentUserReference');
         _blockedUsersSubscription = BlockedUsersRecord.collection
             .where('blocker_user', isEqualTo: currentUserReference)
@@ -260,11 +261,11 @@ class ChatController extends GetxController {
                   BlockedUsersRecord.fromSnapshot(doc).blockedUser?.id)
               .whereType<String>()
               .toSet();
-          print(
+          debugLog(
               'Debug: ChatController updated blocked IDs to: $blockedUserIds');
           chats.refresh();
         }, onError: (e) {
-          print('Debug: Error in ChatController blocked user listener: $e');
+          debugLog('Debug: Error in ChatController blocked user listener: $e');
         });
       }
     } catch (e) {
@@ -357,7 +358,7 @@ class ChatController extends GetxController {
             // Don't await to avoid blocking the UI update
             if (!useWindowsFirestoreRest) {
               markMessagesAsSeen(chat).catchError((e) {
-                print('⚠️ Error auto-marking open chat as seen: $e');
+                debugLog('⚠️ Error auto-marking open chat as seen: $e');
               });
             }
           }
@@ -412,7 +413,7 @@ class ChatController extends GetxController {
 
     // DIAGNOSTIC: Log when chats update to track preview data freshness
     for (final c in combinedChats.take(5)) {
-      print('📋 [ChatController] chatId=${c.reference.id} lastMessage="${c.lastMessage}" lastMsgAt=${c.lastMessageAt}');
+      debugLog('📋 [ChatController] chatId=${c.reference.id} lastMessage="${c.lastMessage}" lastMsgAt=${c.lastMessageAt}');
     }
 
     // Populate user display name cache so search can match member names
@@ -424,7 +425,7 @@ class ChatController extends GetxController {
       final pending = pendingNotificationChat!;
       pendingNotificationChat = null;
       selectChat(pending);
-      print('✅ [ChatController] Auto-selected pending notification chat: ${pending.reference.id}');
+      debugLog('✅ [ChatController] Auto-selected pending notification chat: ${pending.reference.id}');
     }
   }
 
@@ -694,11 +695,11 @@ class ChatController extends GetxController {
             'marked_unread_by': FieldValue.arrayRemove([currentUserReference!]),
           }).then((_) {
             // Stream will auto-update from Firestore, no need to reload
-            print('✅ Marked chat ${chat.reference.id} as seen in Firestore');
+            debugLog('✅ Marked chat ${chat.reference.id} as seen in Firestore');
           }).catchError((e) {
             // If Firestore update fails, we don't necessarily need to remove from local state
             // because the local 'seen' is still valid for the current UI session.
-            print('❌ Error marking messages as seen: $e');
+            debugLog('❌ Error marking messages as seen: $e');
           });
         }
       } else {
@@ -708,12 +709,12 @@ class ChatController extends GetxController {
           chat.reference.update({
             'marked_unread_by': FieldValue.arrayRemove([currentUserReference!]),
           }).catchError((e) {
-            print('❌ Error removing from marked_unread_by: $e');
+            debugLog('❌ Error removing from marked_unread_by: $e');
           });
         }
       }
     } catch (e) {
-      print('❌ Error marking messages as seen: $e');
+      debugLog('❌ Error marking messages as seen: $e');
     }
   }
 
@@ -747,9 +748,9 @@ class ChatController extends GetxController {
       if (patch.isEmpty) return;
 
       await fsPatchDocument(chat.reference, patch);
-      print('✅ [REST] Marked chat ${chat.reference.id} as seen');
+      debugLog('✅ [REST] Marked chat ${chat.reference.id} as seen');
     } catch (e) {
-      print('❌ [REST] Error marking chat as seen: $e');
+      debugLog('❌ [REST] Error marking chat as seen: $e');
     }
   }
 
@@ -795,7 +796,7 @@ class ChatController extends GetxController {
             // Commit batch if we reach the limit
             if (updateCount >= maxBatchSize) {
               await batch.commit();
-              print(
+              debugLog(
                   '✅ Marked $updateCount messages as read in chat ${chat.reference.id} (batch)');
               // Note: We can't create a new batch in the same function easily,
               // so for now we'll just commit what we have. If there are more than 500,
@@ -809,16 +810,16 @@ class ChatController extends GetxController {
       // Commit batch update if there are changes
       if (updateCount > 0 && updateCount < maxBatchSize) {
         await batch.commit();
-        print(
+        debugLog(
             '✅ Marked $updateCount messages as read in chat ${chat.reference.id}');
       } else if (updateCount >= maxBatchSize) {
         // If we hit the limit, we'd need to process remaining messages
         // For now, log it - in production you might want to implement pagination
-        print(
+        debugLog(
             '⚠️ Marked $updateCount messages as read (hit batch limit, may need to process more)');
       }
     } catch (e) {
-      print('❌ Error marking individual messages as read: $e');
+      debugLog('❌ Error marking individual messages as read: $e');
     }
   }
 
@@ -1006,7 +1007,7 @@ class ChatController extends GetxController {
         }
       }
     } catch (e) {
-      print('⚠️ Error populating user name cache: $e');
+      debugLog('⚠️ Error populating user name cache: $e');
     }
   }
 
@@ -1159,6 +1160,40 @@ class ChatController extends GetxController {
     chats.refresh();
   }
 
+  /// Instant sidebar preview after send/edit while chat list polling is paused.
+  void applyLocalChatLastMessageFromPatch(
+    DocumentReference chatRef,
+    Map<String, dynamic> patch,
+  ) {
+    if (isClosed) return;
+
+    ChatsRecord patchRecord(ChatsRecord chat) {
+      if (chat.reference.path != chatRef.path) return chat;
+      final data = Map<String, dynamic>.from(chat.snapshotData);
+      for (final entry in patch.entries) {
+        data[entry.key] = entry.value;
+      }
+      return ChatsRecord.getDocumentFromData(data, chat.reference);
+    }
+
+    final updated = chats.map(patchRecord).toList();
+    updated.sort((a, b) {
+      final aTime = a.lastMessageAt ?? a.createdAt;
+      final bTime = b.lastMessageAt ?? b.createdAt;
+      if (aTime == null && bTime == null) return 0;
+      if (aTime == null) return 1;
+      if (bTime == null) return -1;
+      return bTime.compareTo(aTime);
+    });
+
+    chats.value = updated;
+    final selected = selectedChat.value;
+    if (selected != null && selected.reference.path == chatRef.path) {
+      selectedChat.value = patchRecord(selected);
+    }
+    chats.refresh();
+  }
+
   Future<void> _loadChatsDesktopPoll() async {
     if (_listListenersPaused || isClosed) return;
     await _fetchChatsDesktopOnce();
@@ -1218,7 +1253,7 @@ class ChatController extends GetxController {
           }
           _cachedServiceChats = serviceChats;
         } catch (e) {
-          print('⚠️ [ChatController] service chats load: $e');
+          debugLog('⚠️ [ChatController] service chats load: $e');
         }
       }
 
@@ -1233,7 +1268,7 @@ class ChatController extends GetxController {
       }
 
       chatState.value = ChatState.success;
-      print(
+      debugLog(
         '✅ [ChatController] desktop list ready: ${regularChats.length} chats',
       );
 
@@ -1245,7 +1280,7 @@ class ChatController extends GetxController {
       errorMessage.value = 'Error loading chats: $e';
       chatState.value = ChatState.error;
       desktopSidebarReady.value = true;
-      print('❌ [ChatController] desktop poll failed: $e');
+      debugLog('❌ [ChatController] desktop poll failed: $e');
     }
   }
 
@@ -1294,7 +1329,7 @@ class ChatController extends GetxController {
           try {
             await getOrCreateUserFuture(ref);
           } catch (e) {
-            print('⚠️ [ChatController] skip user prefetch ${ref.path}: $e');
+            debugLog('⚠️ [ChatController] skip user prefetch ${ref.path}: $e');
           }
         }),
       );

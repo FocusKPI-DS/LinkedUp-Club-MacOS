@@ -1,4 +1,5 @@
 import '/backend/backend.dart';
+import '/utils/debug_log.dart';
 import '/custom_code/actions/ai_translation_service.dart';
 import '/auth/firebase_auth/auth_util.dart';
 import '/flutter_flow/flutter_flow_util.dart';
@@ -37,6 +38,7 @@ class ChatThreadComponentWidget extends StatefulWidget {
     this.onTranslateMessage,
     this.onMessageAction,
     this.onMessagesMutated,
+    this.onSidebarPreviewUpdate,
     this.activeSelectionId,
     this.isSelectionMode = false,
     this.selectedMessages,
@@ -49,6 +51,10 @@ class ChatThreadComponentWidget extends StatefulWidget {
   final Function(MessagesRecord)? onTranslateMessage;
   final Function(String, MessagesRecord)? onMessageAction;
   final VoidCallback? onMessagesMutated;
+  final void Function(
+    DocumentReference chatRef,
+    Map<String, dynamic> patch,
+  )? onSidebarPreviewUpdate;
   final ValueNotifier<String?>? activeSelectionId;
   final bool isSelectionMode;
   final Set<MessagesRecord>? selectedMessages;
@@ -424,7 +430,7 @@ class ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget> {
         });
       }
     } catch (e) {
-      print('❌ [desktop-messages] fetch failed: $e');
+      debugLog('❌ [desktop-messages] fetch failed: $e');
     } finally {
       _desktopMessagesLoading = false;
     }
@@ -469,7 +475,7 @@ class ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget> {
         _desktopHasMoreOlder = older.length >= _desktopPageSize;
       });
     } catch (e) {
-      print('❌ [desktop-messages] load older failed: $e');
+      debugLog('❌ [desktop-messages] load older failed: $e');
     } finally {
       _desktopLoadingOlder = false;
       if (mounted) safeSetState(() {});
@@ -522,7 +528,7 @@ class ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget> {
 
       setState(() => _desktopMessages = merged);
     } catch (e) {
-      print('❌ [desktop-messages] sync failed: $e');
+      debugLog('❌ [desktop-messages] sync failed: $e');
     }
   }
 
@@ -531,6 +537,12 @@ class ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget> {
       unawaited(_syncDesktopMessages());
     }
     widget.onMessagesMutated?.call();
+  }
+
+  void _notifySidebarPreview(Map<String, dynamic> patch) {
+    final chatRef = widget.chatReference?.reference;
+    if (chatRef == null) return;
+    widget.onSidebarPreviewUpdate?.call(chatRef, patch);
   }
 
   Future<void> _pollDesktopMessagesTail() async {
@@ -579,7 +591,7 @@ class ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget> {
         return await _tryPasteImageFromClipboardDesktop();
       }
     } catch (e) {
-      print('📋 [paste] Error: $e');
+      debugLog('📋 [paste] Error: $e');
     }
     return false;
   }
@@ -598,7 +610,7 @@ class ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget> {
             fileName: fileName,
             filePath: path,
           );
-          print('📋 [paste] Added file from clipboard: $fileName (${bytes.length} bytes)');
+          debugLog('📋 [paste] Added file from clipboard: $fileName (${bytes.length} bytes)');
         }
       }
       safeSetState(() {});
@@ -616,7 +628,7 @@ class ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget> {
       final fileName =
           'paste_${DateTime.now().millisecondsSinceEpoch}.png';
       _addPasteAttachment(bytes: imageData, fileName: fileName);
-      print('📋 [paste] Added image from clipboard: $fileName (${imageData.length} bytes)');
+      debugLog('📋 [paste] Added image from clipboard: $fileName (${imageData.length} bytes)');
       safeSetState(() {});
       return true;
     }
@@ -634,7 +646,7 @@ class ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget> {
         fileName: item.fileName,
         filePath: item.filePath,
       );
-      print('📋 [paste] Added from clipboard: ${item.fileName} (${item.bytes.length} bytes)');
+      debugLog('📋 [paste] Added from clipboard: ${item.fileName} (${item.bytes.length} bytes)');
     }
     safeSetState(() {});
     return true;
@@ -668,7 +680,7 @@ class ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget> {
       } catch (_) {}
     }
     if (mounted) {
-      print('📋 [_loadMembers] Loaded ${users.length} members for chat ${widget.chatReference!.reference.id}, total members in doc: ${members.length}');
+      debugLog('📋 [_loadMembers] Loaded ${users.length} members for chat ${widget.chatReference!.reference.id}, total members in doc: ${members.length}');
       setState(() => _memberUsers = users);
     }
   }
@@ -851,7 +863,7 @@ class ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget> {
 
     final hasText = content.trim().isNotEmpty;
     final hasAttachments = _model.pendingAttachments.isNotEmpty;
-    print('📤 [send] _handleSendMessage called: hasText=$hasText, hasAttachments=$hasAttachments, content="${content.length > 50 ? content.substring(0, 50) : content}", targetChat=$targetChatId');
+    debugLog('📤 [send] _handleSendMessage called: hasText=$hasText, hasAttachments=$hasAttachments, content="${content.length > 50 ? content.substring(0, 50) : content}", targetChat=$targetChatId');
     if (!hasText && !hasAttachments) return;
 
     // Handle edit mode: update existing message instead of creating new
@@ -883,9 +895,9 @@ class ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget> {
           'is_edited': true,
           'edited_at': getCurrentTimestamp,
         });
-        print('✏️ [edit] Message updated: ${editMsg.reference.id}');
+        debugLog('✏️ [edit] Message updated: ${editMsg.reference.id}');
       } catch (e) {
-        print('❌ [edit] Error updating message: $e');
+        debugLog('❌ [edit] Error updating message: $e');
       }
       _model.editingMessage = null;
       safeSetState(() {});
@@ -903,7 +915,7 @@ class ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget> {
       try {
         processedContent = await translateOutgoingMessage(processedContent);
       } catch (e) {
-        print('⚠️ [send] Outgoing translation failed (sending original): $e');
+        debugLog('⚠️ [send] Outgoing translation failed (sending original): $e');
       }
     }
 
@@ -921,22 +933,22 @@ class ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget> {
           try {
             // Safety check: abort if user has switched to a different chat
             if (widget.chatReference?.reference.id != targetChatId) {
-              print('⚠️ [send] Chat switched during upload — aborting send to $targetChatId');
+              debugLog('⚠️ [send] Chat switched during upload — aborting send to $targetChatId');
               return;
             }
 
-            print('⬆️ [upload] Starting upload: ${att.fileName} (${att.file.bytes.length} bytes)');
+            debugLog('⬆️ [upload] Starting upload: ${att.fileName} (${att.file.bytes.length} bytes)');
             final downloadUrl = await uploadData(att.file.storagePath, att.file.bytes)
                 .timeout(const Duration(seconds: 60));
-            print('⬆️ [upload] Upload complete: $downloadUrl');
+            debugLog('⬆️ [upload] Upload complete: $downloadUrl');
             if (downloadUrl == null) {
-              print('❌ Failed to upload file: ${att.fileName}');
+              debugLog('❌ Failed to upload file: ${att.fileName}');
               continue;
             }
 
             // Safety check again after upload completes
             if (widget.chatReference?.reference.id != targetChatId) {
-              print('⚠️ [send] Chat switched after upload — aborting send to $targetChatId');
+              debugLog('⚠️ [send] Chat switched after upload — aborting send to $targetChatId');
               return;
             }
 
@@ -988,8 +1000,15 @@ class ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget> {
               'last_message_type': msgType.serialize(),
               'last_message_seen': [currentUserReference],
             });
+            _notifySidebarPreview({
+              'last_message': '📎 ${att.fileName}',
+              'last_message_at': getCurrentTimestamp,
+              'last_message_sent': currentUserReference,
+              'last_message_type': msgType.serialize(),
+              'last_message_seen': [currentUserReference],
+            });
           } catch (uploadError) {
-            print('❌ Error uploading ${att.fileName}: $uploadError');
+            debugLog('❌ Error uploading ${att.fileName}: $uploadError');
           }
         }
       }
@@ -998,7 +1017,7 @@ class ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget> {
       if (hasText) {
         // Safety check before sending text
         if (widget.chatReference?.reference.id != targetChatId) {
-          print('⚠️ [send] Chat switched before text send — aborting send to $targetChatId');
+          debugLog('⚠️ [send] Chat switched before text send — aborting send to $targetChatId');
           return;
         }
 
@@ -1022,13 +1041,15 @@ class ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget> {
           RegExp(r'<@[^|]+\|([^>]+)>'),
           (m) => '@${m.group(1)}',
         );
-        await fsPatchDocument(targetChatRef, {
+        final previewPatch = {
           'last_message': previewContent.length > 100 ? previewContent.substring(0, 100) : previewContent,
           'last_message_at': getCurrentTimestamp,
           'last_message_sent': currentUserReference,
           'last_message_type': MessageType.text.serialize(),
           'last_message_seen': [currentUserReference],
-        });
+        };
+        await fsPatchDocument(targetChatRef, previewPatch);
+        _notifySidebarPreview(previewPatch);
       }
 
       _model.messageTextController?.clear();
@@ -1041,7 +1062,7 @@ class ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget> {
         _model.messageFocusNode?.requestFocus();
       }
     } catch (e) {
-      print('Error sending message: $e');
+      debugLog('Error sending message: $e');
     } finally {
       _model.isSending = false;
       safeSetState(() {});
@@ -1087,7 +1108,7 @@ class ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget> {
         ),
       );
     } catch (e) {
-      print('Error scheduling message: $e');
+      debugLog('Error scheduling message: $e');
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: const Text('Failed to schedule message'),
@@ -1106,7 +1127,7 @@ class ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget> {
     final targetChatRef = widget.chatReference!.reference;
     final targetChatId = targetChatRef.id;
 
-    print('🎙️ [send] _handleSendVoice called: path=$audioPath, duration=${duration.inSeconds}s, targetChat=$targetChatId, webBytes=${audioBytes?.length ?? 0}');
+    debugLog('🎙️ [send] _handleSendVoice called: path=$audioPath, duration=${duration.inSeconds}s, targetChat=$targetChatId, webBytes=${audioBytes?.length ?? 0}');
 
     _model.isSending = true;
     safeSetState(() {});
@@ -1133,7 +1154,7 @@ class ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget> {
 
       final storagePath = 'users/$currentUserUid/uploads/${DateTime.now().millisecondsSinceEpoch}_$fileName';
 
-      print('⬆️ [upload] Uploading voice message to $storagePath');
+      debugLog('⬆️ [upload] Uploading voice message to $storagePath');
       final downloadUrl = await uploadData(storagePath, Uint8List.fromList(bytes));
       if (downloadUrl == null) {
         throw Exception('Failed to upload voice message.');
@@ -1152,15 +1173,17 @@ class ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget> {
 
       final lastMessageText = '[语音] ${duration.inSeconds}"';
       
-      await fsPatchDocument(targetChatRef, {
+      final voicePreviewPatch = {
         'last_message': lastMessageText,
         'last_message_at': getCurrentTimestamp,
         'last_message_sent': currentUserReference,
         'last_message_type': MessageType.voice.serialize(),
         'last_message_seen': [currentUserReference],
-      });
+      };
+      await fsPatchDocument(targetChatRef, voicePreviewPatch);
+      _notifySidebarPreview(voicePreviewPatch);
 
-      print('✅ [send] Voice message sent successfully');
+      debugLog('✅ [send] Voice message sent successfully');
 
       // Update unread counts (best-effort, don't fail the send if permissions are restricted)
       if (!useWindowsFirestoreRest) {
@@ -1187,13 +1210,13 @@ class ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget> {
             }
           }
         } catch (unreadError) {
-          print(
+          debugLog(
               '⚠️ [send] Could not update unread counts (non-fatal): $unreadError');
         }
       }
     } catch (e, stackTrace) {
-      print('❌ [send] Error sending voice message: $e');
-      print('❌ [send] Stack trace: $stackTrace');
+      debugLog('❌ [send] Error sending voice message: $e');
+      debugLog('❌ [send] Stack trace: $stackTrace');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -1265,7 +1288,7 @@ class ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget> {
         fileName: fileName,
         type: type,
       ));
-      print('📋 [web-paste] Added: $fileName (${file.bytes.length} bytes)');
+      debugLog('📋 [web-paste] Added: $fileName (${file.bytes.length} bytes)');
     }
     safeSetState(() {});
   }
@@ -1297,9 +1320,9 @@ class ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget> {
           fileName: fileName,
           type: type,
         ));
-        print('📂 [drop] Added file: $fileName (${bytes.length} bytes)');
+        debugLog('📂 [drop] Added file: $fileName (${bytes.length} bytes)');
       } catch (e) {
-        print('📂 [drop] Error processing dropped file: $e');
+        debugLog('📂 [drop] Error processing dropped file: $e');
       }
     }
     safeSetState(() {});
@@ -1437,7 +1460,7 @@ class ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget> {
             },
           );
         } catch (e) {
-          print(
+          debugLog(
               '❌ [itemBuilder] Error rendering message ${message.reference.id}: $e');
           return const SizedBox.shrink();
         }
@@ -1498,7 +1521,7 @@ class ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget> {
               ),
               builder: (context, snapshot) {
                 if (snapshot.hasError) {
-                  print('❌ [StreamBuilder] Error: ${snapshot.error}');
+                  debugLog('❌ [StreamBuilder] Error: ${snapshot.error}');
                   return Center(
                     child: Text(
                       'Error loading messages',
@@ -1876,12 +1899,12 @@ class ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget> {
               }
             },
             onAttachment: () async {
-              print('📎 [onAttachment] File picker opening...');
+              debugLog('📎 [onAttachment] File picker opening...');
               try {
                 final selectedFiles = await selectFiles(
                   multiFile: false,
                 );
-                print('📎 [onAttachment] File picker returned: ${selectedFiles?.length ?? 0} files');
+                debugLog('📎 [onAttachment] File picker returned: ${selectedFiles?.length ?? 0} files');
                 if (selectedFiles != null && selectedFiles.isNotEmpty) {
                   final file = selectedFiles.first;
                   // Use the original file path (filePath) to get the real filename,
@@ -1889,7 +1912,7 @@ class ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget> {
                   final fileName = (file.filePath != null && file.filePath!.isNotEmpty)
                       ? file.filePath!.split('/').last
                       : file.storagePath.split('/').last;
-                  print('📎 [onAttachment] File: $fileName, bytes: ${file.bytes.length}');
+                  debugLog('📎 [onAttachment] File: $fileName, bytes: ${file.bytes.length}');
                   // Determine type from file extension
                   final ext = fileName.split('.').last.toLowerCase();
                   final type = (ext == 'mp4' || ext == 'mov' || ext == 'avi')
@@ -1902,15 +1925,15 @@ class ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget> {
                     fileName: fileName,
                     type: type,
                   ));
-                  print('📎 [onAttachment] Added to pendingAttachments, count: ${_model.pendingAttachments.length}');
+                  debugLog('📎 [onAttachment] Added to pendingAttachments, count: ${_model.pendingAttachments.length}');
                   safeSetState(() {});
                 }
               } catch (e) {
-                print('❌ [onAttachment] Error: $e');
+                debugLog('❌ [onAttachment] Error: $e');
               }
             },
             onPhotoLibrary: () async {
-              print('📸 [onPhotoLibrary] Opening photo library...');
+              debugLog('📸 [onPhotoLibrary] Opening photo library...');
               try {
                 final picker = ImagePicker();
                 final picked = await picker.pickImage(source: ImageSource.gallery, imageQuality: 85);
@@ -1930,11 +1953,11 @@ class ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget> {
                     fileName: fileName,
                     type: type,
                   ));
-                  print('📸 [onPhotoLibrary] Added: $fileName (${bytes.length} bytes)');
+                  debugLog('📸 [onPhotoLibrary] Added: $fileName (${bytes.length} bytes)');
                   safeSetState(() {});
                 }
               } catch (e) {
-                print('❌ [onPhotoLibrary] Error: $e');
+                debugLog('❌ [onPhotoLibrary] Error: $e');
               }
             },
             onEmoji: () {

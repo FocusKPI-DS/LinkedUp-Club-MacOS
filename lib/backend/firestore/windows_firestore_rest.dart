@@ -3,7 +3,7 @@ import 'dart:io' show Platform;
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/foundation.dart' show kIsWeb, kDebugMode;
 import 'package:http/http.dart' as http;
 
 import '/backend/backend.dart';
@@ -17,6 +17,13 @@ bool get useWindowsFirestoreRest =>
 
 class WindowsFirestoreRest {
   WindowsFirestoreRest._();
+
+  static void _log(String message) {
+    if (kDebugMode) {
+      // ignore: avoid_print
+      print(message);
+    }
+  }
 
   static const _databaseRoot =
       'projects/$kFirebaseFunctionsProjectId/databases/(default)/documents';
@@ -768,8 +775,7 @@ class WindowsFirestoreRest {
   }) async {
     final token = await _idToken();
     final label = 'REST create:$collectionPath';
-    // ignore: avoid_print
-    print('[WindowsFirestoreRest] → $label');
+    _log('[WindowsFirestoreRest] → $label');
 
     final firestoreData = mapToFirestore(data);
     final response = await http
@@ -798,8 +804,7 @@ class WindowsFirestoreRest {
       throw Exception('Firestore REST $label: missing document name');
     }
 
-    // ignore: avoid_print
-    print('[WindowsFirestoreRest] ✓ $label');
+    _log('[WindowsFirestoreRest] ✓ $label');
     return _documentReferenceFromRestName(name);
   }
 
@@ -811,8 +816,7 @@ class WindowsFirestoreRest {
   }) async {
     final token = await _idToken();
     final label = 'REST create:$collectionId@${parentRef.path}';
-    // ignore: avoid_print
-    print('[WindowsFirestoreRest] → $label');
+    _log('[WindowsFirestoreRest] → $label');
 
     final firestoreData = mapToFirestore(data);
     final response = await http
@@ -841,8 +845,7 @@ class WindowsFirestoreRest {
       throw Exception('Firestore REST $label: missing document name');
     }
 
-    // ignore: avoid_print
-    print('[WindowsFirestoreRest] ✓ $label');
+    _log('[WindowsFirestoreRest] ✓ $label');
     return _documentReferenceFromRestName(name);
   }
 
@@ -854,8 +857,7 @@ class WindowsFirestoreRest {
     final token = await _idToken();
     final firestoreData = mapToFirestore(data);
     final label = 'REST set:${ref.path}';
-    // ignore: avoid_print
-    print('[WindowsFirestoreRest] → $label');
+    _log('[WindowsFirestoreRest] → $label');
 
     final pathParts = ref.path.split('/');
     if (pathParts.length < 2) {
@@ -883,8 +885,7 @@ class WindowsFirestoreRest {
       );
     }
 
-    // ignore: avoid_print
-    print('[WindowsFirestoreRest] ✓ $label');
+    _log('[WindowsFirestoreRest] ✓ $label');
   }
 
   /// Create a message under [chatRef] via REST (returns new doc ref).
@@ -894,8 +895,7 @@ class WindowsFirestoreRest {
   }) async {
     final token = await _idToken();
     final label = 'REST create message:${chatRef.id}';
-    // ignore: avoid_print
-    print('[WindowsFirestoreRest] → $label');
+    _log('[WindowsFirestoreRest] → $label');
 
     final firestoreData = mapToFirestore(data);
     final response = await http
@@ -924,8 +924,7 @@ class WindowsFirestoreRest {
       throw Exception('Firestore REST $label: missing document name');
     }
 
-    // ignore: avoid_print
-    print('[WindowsFirestoreRest] ✓ $label');
+    _log('[WindowsFirestoreRest] ✓ $label');
     return _documentReferenceFromRestName(name);
   }
 
@@ -939,8 +938,7 @@ class WindowsFirestoreRest {
     if (firestoreData.isEmpty) return;
 
     final label = 'REST patch:${ref.path}';
-    // ignore: avoid_print
-    print('[WindowsFirestoreRest] → $label');
+    _log('[WindowsFirestoreRest] → $label');
 
     final query = firestoreData.keys
         .map((k) => 'updateMask.fieldPaths=${Uri.encodeQueryComponent(k)}')
@@ -963,8 +961,7 @@ class WindowsFirestoreRest {
       );
     }
 
-    // ignore: avoid_print
-    print('[WindowsFirestoreRest] ✓ $label');
+    _log('[WindowsFirestoreRest] ✓ $label');
   }
 
   /// GET a single document's field map (null if missing).
@@ -973,8 +970,7 @@ class WindowsFirestoreRest {
   ) async {
     final token = await _idToken();
     final label = 'REST get:${ref.path}';
-    // ignore: avoid_print
-    print('[WindowsFirestoreRest] → $label');
+    _log('[WindowsFirestoreRest] → $label');
 
     final response = await http
         .get(
@@ -984,8 +980,7 @@ class WindowsFirestoreRest {
         .timeout(const Duration(seconds: 60));
 
     if (response.statusCode == 404) {
-      // ignore: avoid_print
-      print('[WindowsFirestoreRest] ✓ $label (missing)');
+      _log('[WindowsFirestoreRest] ✓ $label (missing)');
       return null;
     }
     if (response.statusCode >= 400) {
@@ -999,8 +994,7 @@ class WindowsFirestoreRest {
     final rawFields = decoded['fields'];
     if (rawFields is! Map) return {};
     final fields = _jsonMap(rawFields);
-    // ignore: avoid_print
-    print('[WindowsFirestoreRest] ✓ $label');
+    _log('[WindowsFirestoreRest] ✓ $label');
     return _restFieldsToMap(fields);
   }
 
@@ -1012,8 +1006,7 @@ class WindowsFirestoreRest {
   static Future<void> deleteDocument(DocumentReference ref) async {
     final token = await _idToken();
     final label = 'REST delete:${ref.path}';
-    // ignore: avoid_print
-    print('[WindowsFirestoreRest] → $label');
+    _log('[WindowsFirestoreRest] → $label');
 
     final response = await http
         .delete(
@@ -1027,8 +1020,7 @@ class WindowsFirestoreRest {
         'Firestore REST $label failed (${response.statusCode}): ${response.body}',
       );
     }
-    // ignore: avoid_print
-    print('[WindowsFirestoreRest] ✓ $label');
+    _log('[WindowsFirestoreRest] ✓ $label');
   }
 
   /// Clear a single field (Firestore field delete).
@@ -1038,8 +1030,7 @@ class WindowsFirestoreRest {
   ) async {
     final token = await _idToken();
     final label = 'REST delete-field:$fieldPath@${ref.path}';
-    // ignore: avoid_print
-    print('[WindowsFirestoreRest] → $label');
+    _log('[WindowsFirestoreRest] → $label');
 
     final query =
         'updateMask.fieldPaths=${Uri.encodeQueryComponent(fieldPath)}';
@@ -1063,8 +1054,7 @@ class WindowsFirestoreRest {
         'Firestore REST $label failed (${response.statusCode}): ${response.body}',
       );
     }
-    // ignore: avoid_print
-    print('[WindowsFirestoreRest] ✓ $label');
+    _log('[WindowsFirestoreRest] ✓ $label');
   }
 
   static Future<UsersRecord?> getUsersRecord(DocumentReference ref) async {
@@ -1185,8 +1175,7 @@ class WindowsFirestoreRest {
         mapRecord,
   }) async {
     final token = await _idToken();
-    // ignore: avoid_print
-    print('[WindowsFirestoreRest] → $label');
+    _log('[WindowsFirestoreRest] → $label');
 
     final response = await http
         .post(
@@ -1225,8 +1214,7 @@ class WindowsFirestoreRest {
       records.add(mapRecord(data, ref));
     }
 
-    // ignore: avoid_print
-    print('[WindowsFirestoreRest] ✓ $label (${records.length} docs)');
+    _log('[WindowsFirestoreRest] ✓ $label (${records.length} docs)');
     return records;
   }
 
