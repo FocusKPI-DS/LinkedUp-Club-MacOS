@@ -1,7 +1,9 @@
 import '/auth/firebase_auth/auth_util.dart';
 import '/backend/backend.dart';
+import '/backend/firestore/firestore_desktop_adapter.dart';
 import '/backend/schema/enums/enums.dart';
 import '/flutter_flow/flutter_flow_util.dart';
+import '/pages/desktop_chat/desktop_safe_user_builder.dart';
 import 'dart:io';
 import 'package:adaptive_platform_ui/adaptive_platform_ui.dart';
 import 'package:cached_network_image/cached_network_image.dart';
@@ -75,7 +77,7 @@ class _AddGroupMembersWidgetState extends State<AddGroupMembersWidget> {
 
     try {
       // Update the members list
-      await widget.chatDoc!.reference.update({
+      await fsPatchDocument(widget.chatDoc!.reference, {
         ...mapToFirestore({
           'members': _selectedMembers,
         }),
@@ -88,16 +90,19 @@ class _AddGroupMembersWidgetState extends State<AddGroupMembersWidget> {
 
       final systemMessage = '$userName added $_addedCount ${_addedCount == 1 ? 'member' : 'members'}';
 
-      await widget.chatDoc!.reference.collection('messages').add({
-        'content': systemMessage,
-        'chat_ref': widget.chatDoc!.reference,
-        'sender_ref': currentUserReference,
-        'timestamp': getCurrentTimestamp,
-        'message_type': 'system',
-      });
+      await fsCreateMessage(
+        widget.chatDoc!.reference,
+        {
+          'content': systemMessage,
+          'chat_ref': widget.chatDoc!.reference,
+          'sender_ref': currentUserReference,
+          'timestamp': getCurrentTimestamp,
+          'message_type': 'system',
+        },
+      );
 
       // Update chat's last_message fields for preview
-      await widget.chatDoc!.reference.update({
+      await fsPatchDocument(widget.chatDoc!.reference, {
         'last_message': systemMessage,
         'last_message_at': getCurrentTimestamp,
         'last_message_sent': currentUserReference,
@@ -252,16 +257,16 @@ class _AddGroupMembersWidgetState extends State<AddGroupMembersWidget> {
     return Container(
       color: Colors.white,
       child: AuthUserStreamWidget(
-        builder: (context) => StreamBuilder<UsersRecord>(
-          stream: UsersRecord.getDocument(currentUserReference!),
-          builder: (context, currentUserSnapshot) {
-            if (!currentUserSnapshot.hasData) {
+        builder: (context) => DesktopSafeUserPollBuilder(
+          userRef: currentUserReference!,
+          fetchOnce: fsGetUserOnce,
+          builder: (context, currentUser) {
+            if (currentUser == null) {
               return Center(
                 child: CupertinoActivityIndicator(),
               );
             }
 
-            final currentUser = currentUserSnapshot.data!;
             final connections = currentUser.friends;
             final existingMembers = widget.chatDoc?.members.toList() ?? [];
             final workspaceRef = currentUser.currentWorkspaceRef;
@@ -275,6 +280,27 @@ class _AddGroupMembersWidgetState extends State<AddGroupMembersWidget> {
             // If no workspace, just show friends
             if (workspaceRef == null) {
               return _buildCandidateList(friendRefs, []);
+            }
+
+            if (useWindowsFirestoreRest) {
+              return FutureBuilder<List<DocumentReference>>(
+                future: fsQueryWorkspaceMemberUserRefs(workspaceRef),
+                builder: (context, wsSnapshot) {
+                  List<DocumentReference> workspaceUserRefs = [];
+                  if (wsSnapshot.hasData) {
+                    final friendIds = friendRefs.map((r) => r.id).toSet();
+                    for (final userRef in wsSnapshot.data!) {
+                      if (userRef.id == currentUserReference?.id) continue;
+                      if (existingMembers.any((m) => m.id == userRef.id)) {
+                        continue;
+                      }
+                      if (friendIds.contains(userRef.id)) continue;
+                      workspaceUserRefs.add(userRef);
+                    }
+                  }
+                  return _buildCandidateList(friendRefs, workspaceUserRefs);
+                },
+              );
             }
 
             // Also query workspace members

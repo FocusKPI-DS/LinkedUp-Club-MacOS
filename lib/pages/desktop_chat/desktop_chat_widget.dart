@@ -6,6 +6,10 @@ import '/flutter_flow/flutter_flow_animations.dart';
 import '/flutter_flow/flutter_flow_icon_button.dart';
 import '/flutter_flow/flutter_flow_util.dart';
 import '/utils/chat_helpers.dart';
+import '/pages/desktop_chat/desktop_safe_user_builder.dart';
+import '/pages/desktop_chat/windows_chat_list_labels.dart';
+import '/pages/desktop_chat/windows_firestore_gate.dart';
+import '/backend/firestore/firestore_desktop_adapter.dart';
 import '/pages/chat/chat_component/chat_thread_component/chat_thread_component_widget.dart';
 import '/pages/chat/chat_component/task_reminder_digest_card.dart';
 import '/pages/desktop_chat/desktop_chat_model.dart';
@@ -52,6 +56,7 @@ import 'package:branchio_dynamic_linking_akp5u6/custom_code/actions/index.dart'
 import 'package:branchio_dynamic_linking_akp5u6/flutter_flow/custom_functions.dart'
     as branchio_dynamic_linking_akp5u6_functions;
 import '/custom_code/actions/index.dart' as actions;
+import '/backend/cloud_functions/callable_functions.dart';
 
 class DesktopChatWidget extends StatefulWidget {
   const DesktopChatWidget({Key? key}) : super(key: key);
@@ -73,6 +78,56 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
   bool _isSelectionMode = false;
   final Set<MessagesRecord> _selectedMessages = {};
 
+  /// Defer group-only Firestore widgets on Windows until the thread is stable.
+  bool _windowsGroupExtrasReady = false;
+  Timer? _windowsGroupExtrasTimer;
+  Timer? _chatFoldersPollTimer;
+
+  bool get _showWindowsGroupExtras {
+    if (kIsWeb || defaultTargetPlatform == TargetPlatform.macOS) return true;
+    if (Platform.isWindows || Platform.isLinux) return _windowsGroupExtrasReady;
+    return true;
+  }
+
+  void _onWindowsThreadOpened() {
+    if (kIsWeb || !(Platform.isWindows || Platform.isLinux)) return;
+    _windowsGroupExtrasReady = false;
+    _windowsGroupExtrasTimer?.cancel();
+    _model.chatFoldersSubscription?.cancel();
+    _model.chatFoldersSubscription = null;
+    _chatFoldersPollTimer?.cancel();
+    _chatFoldersPollTimer = null;
+    _windowsGroupExtrasTimer = Timer(const Duration(seconds: 4), () {
+      if (mounted) setState(() => _windowsGroupExtrasReady = true);
+    });
+  }
+
+  void _onWindowsThreadClosed() {
+    if (kIsWeb || !(Platform.isWindows || Platform.isLinux)) return;
+    _windowsGroupExtrasTimer?.cancel();
+    if (mounted) setState(() => _windowsGroupExtrasReady = false);
+    if (!DesktopSafeUserBuilder.useOnceFetch) {
+      _subscribeToChatFolders();
+    }
+  }
+
+  Widget _buildPlatformChatThread({Key? key}) {
+    final chat = _model.selectedChat;
+    if (chat == null) {
+      return const Center(child: Text('Select a conversation'));
+    }
+    return ChatThreadComponentWidget(
+      key: key ?? _chatThreadKey,
+      chatReference: chat,
+      activeSelectionId: ValueNotifier(null),
+      onMessageAction: _handleDesktopMessageAction,
+      onMessagesMutated: () => chatController.refreshChats(),
+      isSelectionMode: _isSelectionMode,
+      selectedMessages: _selectedMessages,
+      onMessageToggled: _toggleMessageSelection,
+    );
+  }
+
   void _toggleMessageSelection(MessagesRecord message) {
     setState(() {
       if (_selectedMessages.map((m) => m.reference.id).contains(message.reference.id)) {
@@ -93,12 +148,8 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
     });
   }
 
-  // Stable cache for user-doc futures so FutureBuilder doesn't reset on every rebuild
-  final Map<String, Future<UsersRecord>> _userDocFutureCache = {};
-
   Future<UsersRecord> _getOrCreateUserFuture(DocumentReference ref) =>
-      _userDocFutureCache.putIfAbsent(
-          ref.id, () => UsersRecord.getDocumentOnce(ref));
+      chatController.getOrCreateUserFuture(ref);
 
   // Track previous friends count for notifications
   int _previousFriendsCount = 0;
@@ -116,9 +167,12 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     _model = createModel(context, () => DesktopChatModel());
-    // Use Get.put with permanent: true to keep controller persistent across navigation
-    // This preserves knownUnreadChats and locallySeenChats state
-    chatController = Get.put(ChatController(), permanent: true);
+    // Reuse existing controller when switching back to Chat tab.
+    try {
+      chatController = Get.find<ChatController>();
+    } catch (_) {
+      chatController = Get.put(ChatController(), permanent: true);
+    }
 
     _model.tabController = TabController(
       vsync: this,
@@ -162,8 +216,11 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
             _model.selectedChat = selectedChat;
             print(
                 'DesktopChat: Synced selectedChat to model: ${selectedChat.reference.id}');
+            _onWindowsThreadOpened();
           } else {
             _model.selectedChat = null;
+            _onWindowsThreadClosed();
+            chatController.resumeListListeners();
           }
         });
       }
@@ -171,9 +228,14 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
 
     // Initialize presence system after a delay to ensure user is loaded
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (DesktopSafeUserBuilder.useOnceFetch) {
+        print('🪟 [DesktopChat] Windows chat tab opened (poll mode, no list streams)');
+      }
       Future.delayed(Duration(milliseconds: 500), () {
-        _initializePresence();
-        _subscribeToChatFolders();
+        if (!DesktopSafeUserBuilder.useOnceFetch) {
+          _initializePresence();
+          _subscribeToChatFolders();
+        }
       });
       // Clear dock badge when chat page is opened (macOS)
       if (!kIsWeb && Platform.isMacOS) {
@@ -185,6 +247,30 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
   void _subscribeToChatFolders() {
     if (currentUserReference == null) return;
     _model.chatFoldersSubscription?.cancel();
+    _chatFoldersPollTimer?.cancel();
+
+    if (useWindowsFirestoreRest) {
+      Future<void> poll() async {
+        try {
+          final folders = await fsQueryChatFolders(currentUserReference!);
+          if (mounted) {
+            setState(() {
+              _model.chatFolders = folders;
+            });
+          }
+        } catch (e) {
+          print('Error polling chat folders: $e');
+        }
+      }
+
+      poll();
+      _chatFoldersPollTimer = Timer.periodic(
+        const Duration(seconds: 30),
+        (_) => poll(),
+      );
+      return;
+    }
+
     _model.chatFoldersSubscription = queryChatFoldersRecord(
       parent: currentUserReference,
       queryBuilder: (q) => q.orderBy('order'),
@@ -217,7 +303,7 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
     _resetInactivityTimer();
     // Update to online if currently away
     if (currentUserReference != null) {
-      UsersRecord.getDocumentOnce(currentUserReference!).then((user) {
+      fsGetUserOnce(currentUserReference!).then((user) {
         if (!user.isOnline) {
           _updateOnlineStatus(true);
         }
@@ -241,7 +327,7 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
     }
 
     try {
-      await currentUserReference!.update({
+      await fsPatchDocument(currentUserReference!, {
         'is_online': isOnline,
       });
     } catch (e) {}
@@ -250,6 +336,7 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     super.didChangeAppLifecycleState(state);
+    if (DesktopSafeUserBuilder.useOnceFetch) return;
     switch (state) {
       case AppLifecycleState.resumed:
         // App is active, set user to online
@@ -272,9 +359,12 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _inactivityTimer?.cancel();
+    _windowsGroupExtrasTimer?.cancel();
+    _chatFoldersPollTimer?.cancel();
     _selectedChatSubscription?.cancel();
-    // Set user to offline when disposing
-    _updateOnlineStatus(false);
+    if (!DesktopSafeUserBuilder.useOnceFetch) {
+      _updateOnlineStatus(false);
+    }
     _model.dispose();
     // DON'T delete ChatController - keep it persistent across navigation
     // This preserves knownUnreadChats and locallySeenChats state
@@ -474,6 +564,14 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
                     // Scrollable avatar list
                     Expanded(
                       child: Obx(() {
+                        if (!_sidebarListReady) {
+                          return Center(
+                            child: CircularProgressIndicator(
+                              color: Color.fromARGB(255, 16, 184, 239),
+                            ),
+                          );
+                        }
+
                         final filteredChats = chatController.filteredChats;
                         return ListView.builder(
                           padding: EdgeInsets.symmetric(vertical: 6),
@@ -634,15 +732,16 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
         orElse: () => chat.members.first,
       );
 
-      return StreamBuilder<UsersRecord>(
-        stream: UsersRecord.getDocument(otherUserRef),
+      return DesktopSafeUserBuilder(
+        userRef: otherUserRef,
+        fetchOnce: _getOrCreateUserFuture,
         builder: (context, userSnapshot) {
           String imageUrl = '';
           if (otherUserRef.path.contains('ai_agent_summerai')) {
             imageUrl =
                 'https://firebasestorage.googleapis.com/v0/b/linkedup-c3e29.firebasestorage.app/o/asset%2Fsoftware-agent.png?alt=media&token=99761584-999d-4f8e-b3d1-f9d1baf86120';
-          } else if (userSnapshot.hasData && userSnapshot.data != null) {
-            imageUrl = userSnapshot.data?.photoUrl ?? '';
+          } else if (userSnapshot != null) {
+            imageUrl = userSnapshot.photoUrl;
           }
 
           return Container(
@@ -1053,9 +1152,21 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
     );
   }
 
+  bool get _sidebarListReady =>
+      !DesktopSafeUserBuilder.useOnceFetch ||
+      chatController.desktopSidebarReady.value;
+
   Widget _buildChatList() {
     return Expanded(
       child: Obx(() {
+        if (!_sidebarListReady) {
+          return Center(
+            child: CircularProgressIndicator(
+              color: Color.fromARGB(255, 16, 184, 239),
+            ),
+          );
+        }
+
         switch (chatController.chatState.value) {
           case ChatState.loading:
             return Center(
@@ -1479,6 +1590,7 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
                         chatReference: _model.searchPreviewChat,
                         activeSelectionId: ValueNotifier(null),
                         onMessageAction: _handleDesktopMessageAction,
+                        onMessagesMutated: () => chatController.refreshChats(),
                         isSelectionMode: false,
                         selectedMessages: {},
                         onMessageToggled: (_) {},
@@ -1868,17 +1980,18 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
   }
 
   String _formatSearchResultTime(DateTime time) {
+    final local = time.toLocal();
     final now = DateTime.now();
-    final diff = now.difference(time);
+    final diff = now.difference(local);
     if (diff.inDays == 0) {
-      return '${time.hour.toString().padLeft(2, '0')}:${time.minute.toString().padLeft(2, '0')}';
+      return DateFormat('h:mm a').format(local);
     } else if (diff.inDays == 1) {
       return 'Yesterday';
     } else if (diff.inDays < 7) {
       const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-      return days[time.weekday - 1];
+      return days[local.weekday - 1];
     } else {
-      return '${time.month.toString().padLeft(2, '0')}/${time.day.toString().padLeft(2, '0')}/${time.year}';
+      return '${local.month.toString().padLeft(2, '0')}/${local.day.toString().padLeft(2, '0')}/${local.year}';
     }
   }
 
@@ -2153,7 +2266,7 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
       onTap: () {
         if (folder != null) {
           // Toggle collapse
-          folder.reference.update({'is_collapsed': !isCollapsed});
+          fsPatchDocument(folder.reference, {'is_collapsed': !isCollapsed});
         }
       },
       onSecondaryTapUp: folder != null
@@ -2463,9 +2576,13 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
       onConfirm: (selectedIds) async {
         if (selectedIds.isEmpty) return;
         try {
-          await folder.reference.update({
-            'chat_ids': FieldValue.arrayUnion(selectedIds.toList()),
-            'updated_at': FieldValue.serverTimestamp(),
+          await fsArrayUnion(
+            folder.reference,
+            'chat_ids',
+            selectedIds.toList(),
+          );
+          await fsPatchDocument(folder.reference, {
+            'updated_at': getCurrentTimestamp,
           });
         } catch (e) {
           print('❌ Error adding chats to folder: $e');
@@ -2812,16 +2929,18 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
     }
     try {
       final nextOrder = _model.chatFolders.length;
-      final docRef = ChatFoldersRecord.createDoc(currentUserReference!);
-      print('📁 Creating folder "$name" at ${docRef.path}');
-      await docRef.set({
-        'name': name,
-        'order': nextOrder,
-        'is_collapsed': false,
-        'chat_ids': selectedChatIds ?? <String>[],
-        'created_at': FieldValue.serverTimestamp(),
-        'updated_at': FieldValue.serverTimestamp(),
-      });
+      print('📁 Creating folder "$name"');
+      await fsCreateChatFolderDocument(
+        userRef: currentUserReference!,
+        data: {
+          'name': name,
+          'order': nextOrder,
+          'is_collapsed': false,
+          'chat_ids': selectedChatIds ?? <String>[],
+          'created_at': getCurrentTimestamp,
+          'updated_at': getCurrentTimestamp,
+        },
+      );
       print('✅ Folder "$name" created successfully with ${selectedChatIds?.length ?? 0} groups');
     } catch (e, stack) {
       print('❌ Error creating folder: $e');
@@ -2877,7 +2996,7 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
           ),
           onSubmitted: (value) {
             if (value.trim().isNotEmpty) {
-              folder.reference.update({
+              fsPatchDocument(folder.reference, {
                 'name': value.trim(),
                 'updated_at': getCurrentTimestamp,
               });
@@ -2894,7 +3013,7 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
           TextButton(
             onPressed: () {
               if (controller.text.trim().isNotEmpty) {
-                folder.reference.update({
+                fsPatchDocument(folder.reference, {
                   'name': controller.text.trim(),
                   'updated_at': getCurrentTimestamp,
                 });
@@ -2943,7 +3062,7 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
           ),
           TextButton(
             onPressed: () {
-              folder.reference.delete();
+              fsDeleteDocument(folder.reference);
               Navigator.of(ctx).pop();
             },
             child: Text('Delete',
@@ -3093,8 +3212,12 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
         // Remove from all folders
         for (final folder in _model.chatFolders) {
           if (folder.chatIds.contains(chat.reference.id)) {
-            await folder.reference.update({
-              'chat_ids': FieldValue.arrayRemove([chat.reference.id]),
+            await fsArrayRemove(
+              folder.reference,
+              'chat_ids',
+              [chat.reference.id],
+            );
+            await fsPatchDocument(folder.reference, {
               'updated_at': getCurrentTimestamp,
             });
           }
@@ -3106,16 +3229,20 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
       for (final folder in _model.chatFolders) {
         if (folder.reference.id != value &&
             folder.chatIds.contains(chat.reference.id)) {
-          await folder.reference.update({
-            'chat_ids': FieldValue.arrayRemove([chat.reference.id]),
+          await fsArrayRemove(
+            folder.reference,
+            'chat_ids',
+            [chat.reference.id],
+          );
+          await fsPatchDocument(folder.reference, {
             'updated_at': getCurrentTimestamp,
           });
         }
       }
       // Then add to selected folder
       final targetRef = currentUserReference!.collection('chat_folders').doc(value);
-      await targetRef.update({
-        'chat_ids': FieldValue.arrayUnion([chat.reference.id]),
+      await fsArrayUnion(targetRef, 'chat_ids', [chat.reference.id]);
+      await fsPatchDocument(targetRef, {
         'updated_at': getCurrentTimestamp,
       });
     });
@@ -3126,7 +3253,7 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
       (member) => member != currentUserReference,
       orElse: () => chat.members.first,
     );
-    return await UsersRecord.getDocumentOnce(otherUserRef);
+    return await fsGetUserOnce(otherUserRef);
   }
 
   Widget _buildGroupCreationViewRight() {
@@ -3517,10 +3644,11 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
                         width: 1,
                       ),
                     ),
-                    child: StreamBuilder<UsersRecord>(
-                      stream: UsersRecord.getDocument(currentUserReference!),
-                      builder: (context, currentUserSnapshot) {
-                        if (!currentUserSnapshot.hasData) {
+                    child: DesktopSafeUserBuilder(
+                      userRef: currentUserReference!,
+                      fetchOnce: _getOrCreateUserFuture,
+                      builder: (context, currentUser) {
+                        if (currentUser == null) {
                           return Center(
                             child: CircularProgressIndicator(
                               color: Color(0xFF3B82F6),
@@ -3528,7 +3656,6 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
                           );
                         }
 
-                        final currentUser = currentUserSnapshot.data!;
                         final connections = currentUser.friends;
 
                         if (connections.isEmpty) {
@@ -3576,14 +3703,14 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
                           itemBuilder: (context, index) {
                             final connectionRef = connections[index];
 
-                            return StreamBuilder<UsersRecord>(
-                              stream: UsersRecord.getDocument(connectionRef),
-                              builder: (context, userSnapshot) {
-                                if (!userSnapshot.hasData) {
+                            return DesktopSafeUserBuilder(
+                              userRef: connectionRef,
+                              fetchOnce: _getOrCreateUserFuture,
+                              builder: (context, user) {
+                                if (user == null) {
                                   return SizedBox.shrink();
                                 }
 
-                                final user = userSnapshot.data!;
                                 final isCurrentUser =
                                     user.reference == currentUserReference;
                                 final isSelected = _model.selectedMembers
@@ -3937,7 +4064,7 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
         if (currentUserReference != null) {
           try {
             final currentUser =
-                await UsersRecord.getDocumentOnce(currentUserReference!);
+                await fsGetUserOnce(currentUserReference!);
             memberNames.add(currentUser.displayName.isNotEmpty
                 ? currentUser.displayName
                 : currentUser.email.split('@')[0]);
@@ -3949,7 +4076,7 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
         // Get selected member names
         for (final memberRef in _model.selectedMembers) {
           try {
-            final user = await UsersRecord.getDocumentOnce(memberRef);
+            final user = await fsGetUserOnce(memberRef);
             memberNames.add(user.displayName.isNotEmpty
                 ? user.displayName
                 : user.email.split('@')[0]);
@@ -3963,7 +4090,7 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
       }
 
       // Create the group chat
-      final newChatRef = await ChatsRecord.collection.add({
+      final newChatRef = await fsCreateChat({
         ...createChatsRecordData(
           title: groupName,
           isGroup: true,
@@ -3987,7 +4114,7 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
       final greeting =
           '${currentUserDisplayName.isNotEmpty ? currentUserDisplayName : "You"} created the group';
 
-      await newChatRef.collection('messages').add({
+      await fsCreateMessage(newChatRef, {
         'content': greeting,
         'created_at': getCurrentTimestamp,
         'sender_ref': currentUserReference,
@@ -3996,14 +4123,14 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
       });
 
       // Update chat with last message
-      await newChatRef.update({
+      await fsPatchDocument(newChatRef, {
         'last_message': greeting,
         'last_message_at': getCurrentTimestamp,
         'last_message_sent': currentUserReference,
       });
 
       // Get the created chat document
-      final newChat = await ChatsRecord.getDocumentOnce(newChatRef);
+      final newChat = await fsGetChatOnce(newChatRef);
 
       // Select the new group chat
       setState(() {
@@ -4255,10 +4382,11 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
                     ),
                   ),
                   Expanded(
-                    child: StreamBuilder<UsersRecord>(
-                      stream: UsersRecord.getDocument(currentUserReference!),
-                      builder: (context, currentUserSnapshot) {
-                        if (!currentUserSnapshot.hasData) {
+                    child: DesktopSafeUserBuilder(
+                      userRef: currentUserReference!,
+                      fetchOnce: _getOrCreateUserFuture,
+                      builder: (context, currentUser) {
+                        if (currentUser == null) {
                           return Center(
                             child: CircularProgressIndicator(
                               color: Color.fromARGB(255, 16, 184, 239),
@@ -4266,7 +4394,6 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
                           );
                         }
 
-                        final currentUser = currentUserSnapshot.data!;
                         final connections = currentUser.friends;
 
                         if (connections.isEmpty) {
@@ -4323,14 +4450,14 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
                           itemBuilder: (context, index) {
                             final connectionRef = connections[index];
 
-                            return StreamBuilder<UsersRecord>(
-                              stream: UsersRecord.getDocument(connectionRef),
-                              builder: (context, userSnapshot) {
-                                if (!userSnapshot.hasData) {
+                            return DesktopSafeUserBuilder(
+                              userRef: connectionRef,
+                              fetchOnce: _getOrCreateUserFuture,
+                              builder: (context, user) {
+                                if (user == null) {
                                   return SizedBox.shrink();
                                 }
 
-                                final user = userSnapshot.data!;
                                 final isCurrentUser =
                                     user.reference == currentUserReference;
 
@@ -4869,196 +4996,208 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
                 ],
               ),
             ),
-            // Content — stream of pinned messages
+            // Content — pinned messages
             Flexible(
-              child: StreamBuilder<List<MessagesRecord>>(
-                stream: queryMessagesRecord(
-                  parent: chat.reference,
-                  queryBuilder: (q) => q
-                      .where('is_pinned', isEqualTo: true),
+              child: _buildPinnedMessagesPopupContent(chat),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildPinnedMessagesPopupContent(ChatsRecord chat) {
+    Widget buildBody(AsyncSnapshot<List<MessagesRecord>> snapshot) {
+      if (snapshot.connectionState == ConnectionState.waiting &&
+          !snapshot.hasData) {
+        return Padding(
+          padding: const EdgeInsets.all(40),
+          child: Center(
+            child: SizedBox(
+              width: 28,
+              height: 28,
+              child: CircularProgressIndicator(
+                strokeWidth: 2,
+                valueColor:
+                    AlwaysStoppedAnimation<Color>(Color(0xFF3B82F6)),
+              ),
+            ),
+          ),
+        );
+      }
+
+      final pinnedMessages = (snapshot.data ?? [])
+        ..sort((a, b) {
+          final aTime = a.createdAt;
+          final bTime = b.createdAt;
+          if (aTime == null && bTime == null) return 0;
+          if (aTime == null) return 1;
+          if (bTime == null) return -1;
+          return bTime.compareTo(aTime);
+        });
+
+      if (pinnedMessages.isEmpty) {
+        return Padding(
+          padding: const EdgeInsets.symmetric(vertical: 48, horizontal: 24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                Icons.push_pin_outlined,
+                size: 48,
+                color: Color(0xFFD1D5DB),
+              ),
+              SizedBox(height: 12),
+              Text(
+                'No pinned messages',
+                style: TextStyle(
+                  fontFamily: 'Inter',
+                  fontSize: 15,
+                  fontWeight: FontWeight.w500,
+                  color: Color(0xFF6B7280),
                 ),
-                builder: (context, snapshot) {
-                  if (snapshot.connectionState == ConnectionState.waiting) {
-                    return Padding(
-                      padding: const EdgeInsets.all(40),
-                      child: Center(
-                        child: SizedBox(
-                          width: 28,
-                          height: 28,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                            valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF3B82F6)),
-                          ),
+              ),
+              SizedBox(height: 4),
+              Text(
+                'Long-press a message and select "Pin" to pin it here.',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontFamily: 'Inter',
+                  fontSize: 13,
+                  color: Color(0xFF9CA3AF),
+                ),
+              ),
+            ],
+          ),
+        );
+      }
+
+      return ListView.separated(
+        shrinkWrap: true,
+        padding: const EdgeInsets.symmetric(vertical: 8),
+        itemCount: pinnedMessages.length,
+        separatorBuilder: (_, __) => Divider(
+          height: 1,
+          color: Color(0xFFF3F4F6),
+          indent: 16,
+          endIndent: 16,
+        ),
+        itemBuilder: (context, index) {
+          final msg = pinnedMessages[index];
+          final senderName =
+              msg.senderName.isNotEmpty ? msg.senderName : 'Unknown';
+          final content = msg.content.isNotEmpty
+              ? msg.content
+              : (msg.attachmentUrl.isNotEmpty
+                  ? '📎 Attachment'
+                  : (msg.image.isNotEmpty ? '🖼️ Image' : '💬 Message'));
+          final timestamp = msg.createdAt?.toLocal();
+          final timeStr = timestamp != null
+              ? DateFormat('M/d/yyyy h:mm a').format(timestamp)
+              : '';
+
+          return InkWell(
+            onTap: () {
+              final messageId = msg.reference.id;
+              setState(() {
+                _model.showPinnedMessagesPopup = false;
+                _model.pinnedMessagesPopupChat = null;
+              });
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                _chatThreadKey.currentState?.scrollToMessage(messageId);
+              });
+            },
+            child: Padding(
+              padding: const EdgeInsets.symmetric(
+                horizontal: 16,
+                vertical: 12,
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Icon(
+                        Icons.push_pin,
+                        size: 14,
+                        color: Color(0xFF3B82F6),
+                      ),
+                      SizedBox(width: 6),
+                      Text(
+                        senderName,
+                        style: TextStyle(
+                          fontFamily: 'Inter',
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                          color: Color(0xFF111827),
                         ),
                       ),
-                    );
-                  }
-
-                  final pinnedMessages = (snapshot.data ?? [])
-                    ..sort((a, b) {
-                      final aTime = a.createdAt;
-                      final bTime = b.createdAt;
-                      if (aTime == null && bTime == null) return 0;
-                      if (aTime == null) return 1;
-                      if (bTime == null) return -1;
-                      return bTime.compareTo(aTime); // descending
-                    });
-
-                  if (pinnedMessages.isEmpty) {
-                    return Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 48, horizontal: 24),
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
+                      Spacer(),
+                      Text(
+                        timeStr,
+                        style: TextStyle(
+                          fontFamily: 'Inter',
+                          fontSize: 11,
+                          color: Color(0xFF9CA3AF),
+                        ),
+                      ),
+                    ],
+                  ),
+                  SizedBox(height: 6),
+                  Text(
+                    content.length > 200
+                        ? '${content.substring(0, 200)}...'
+                        : content,
+                    style: TextStyle(
+                      fontFamily: 'Inter',
+                      fontSize: 13.5,
+                      color: Color(0xFF374151),
+                      height: 1.4,
+                    ),
+                    maxLines: 4,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  if (msg.image.isNotEmpty || msg.images.isNotEmpty)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 6),
+                      child: Row(
                         children: [
-                          Icon(
-                            Icons.push_pin_outlined,
-                            size: 48,
-                            color: Color(0xFFD1D5DB),
-                          ),
-                          SizedBox(height: 12),
+                          Icon(Icons.image,
+                              size: 14, color: Color(0xFF9CA3AF)),
+                          SizedBox(width: 4),
                           Text(
-                            'No pinned messages',
+                            '${1 + msg.images.length} image(s)',
                             style: TextStyle(
                               fontFamily: 'Inter',
-                              fontSize: 15,
-                              fontWeight: FontWeight.w500,
-                              color: Color(0xFF6B7280),
-                            ),
-                          ),
-                          SizedBox(height: 4),
-                          Text(
-                            'Long-press a message and select "Pin" to pin it here.',
-                            textAlign: TextAlign.center,
-                            style: TextStyle(
-                              fontFamily: 'Inter',
-                              fontSize: 13,
+                              fontSize: 12,
                               color: Color(0xFF9CA3AF),
                             ),
                           ),
                         ],
                       ),
-                    );
-                  }
-
-                  return ListView.separated(
-                    shrinkWrap: true,
-                    padding: const EdgeInsets.symmetric(vertical: 8),
-                    itemCount: pinnedMessages.length,
-                    separatorBuilder: (_, __) => Divider(
-                      height: 1,
-                      color: Color(0xFFF3F4F6),
-                      indent: 16,
-                      endIndent: 16,
                     ),
-                    itemBuilder: (context, index) {
-                      final msg = pinnedMessages[index];
-                      final senderName = msg.senderName.isNotEmpty
-                          ? msg.senderName
-                          : 'Unknown';
-                      final content = msg.content.isNotEmpty
-                          ? msg.content
-                          : (msg.attachmentUrl.isNotEmpty
-                              ? '📎 Attachment'
-                              : (msg.image.isNotEmpty
-                                  ? '🖼️ Image'
-                                  : '💬 Message'));
-                      final timestamp = msg.createdAt;
-                      final timeStr = timestamp != null
-                          ? '${timestamp.month}/${timestamp.day}/${timestamp.year} ${timestamp.hour}:${timestamp.minute.toString().padLeft(2, '0')}'
-                          : '';
-
-                      return InkWell(
-                        onTap: () {
-                          final messageId = msg.reference.id;
-                          // Close popup and scroll to the pinned message in the chat thread
-                          setState(() {
-                            _model.showPinnedMessagesPopup = false;
-                            _model.pinnedMessagesPopupChat = null;
-                          });
-                          WidgetsBinding.instance.addPostFrameCallback((_) {
-                            _chatThreadKey.currentState?.scrollToMessage(messageId);
-                          });
-                        },
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 16,
-                            vertical: 12,
-                          ),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Row(
-                                children: [
-                                  Icon(
-                                    Icons.push_pin,
-                                    size: 14,
-                                    color: Color(0xFF3B82F6),
-                                  ),
-                                  SizedBox(width: 6),
-                                  Text(
-                                    senderName,
-                                    style: TextStyle(
-                                      fontFamily: 'Inter',
-                                      fontSize: 13,
-                                      fontWeight: FontWeight.w600,
-                                      color: Color(0xFF111827),
-                                    ),
-                                  ),
-                                  Spacer(),
-                                  Text(
-                                    timeStr,
-                                    style: TextStyle(
-                                      fontFamily: 'Inter',
-                                      fontSize: 11,
-                                      color: Color(0xFF9CA3AF),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                              SizedBox(height: 6),
-                              Text(
-                                content.length > 200
-                                    ? '${content.substring(0, 200)}...'
-                                    : content,
-                                style: TextStyle(
-                                  fontFamily: 'Inter',
-                                  fontSize: 13.5,
-                                  color: Color(0xFF374151),
-                                  height: 1.4,
-                                ),
-                                maxLines: 4,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                              if (msg.image.isNotEmpty || msg.images.isNotEmpty)
-                                Padding(
-                                  padding: const EdgeInsets.only(top: 6),
-                                  child: Row(
-                                    children: [
-                                      Icon(Icons.image, size: 14, color: Color(0xFF9CA3AF)),
-                                      SizedBox(width: 4),
-                                      Text(
-                                        '${1 + msg.images.length} image(s)',
-                                        style: TextStyle(
-                                          fontFamily: 'Inter',
-                                          fontSize: 12,
-                                          color: Color(0xFF9CA3AF),
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                            ],
-                          ),
-                        ),
-                      );
-                    },
-                  );
-                },
+                ],
               ),
             ),
-          ],
-        ),
+          );
+        },
+      );
+    }
+
+    if (useWindowsFirestoreRest) {
+      return _RestPollBuilder<List<MessagesRecord>>(
+        interval: const Duration(seconds: 10),
+        fetch: () => fsQueryPinnedMessages(chat.reference),
+        builder: (context, snapshot) => buildBody(snapshot),
+      );
+    }
+
+    return StreamBuilder<List<MessagesRecord>>(
+      stream: queryMessagesRecord(
+        parent: chat.reference,
+        queryBuilder: (q) => q.where('is_pinned', isEqualTo: true),
       ),
+      builder: (context, snapshot) => buildBody(snapshot),
     );
   }
 
@@ -5161,183 +5300,7 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
             ),
             // Content
             Flexible(
-              child: StreamBuilder<List<MessagesRecord>>(
-                stream: queryMessagesRecord(
-                  parent: chat.reference,
-                  queryBuilder: (q) => q.orderBy('created_at', descending: true),
-                ),
-                builder: (context, snapshot) {
-                  if (snapshot.connectionState == ConnectionState.waiting) {
-                    return Padding(
-                      padding: const EdgeInsets.all(60),
-                      child: Center(
-                        child: SizedBox(width: 32, height: 32, child: CircularProgressIndicator(strokeWidth: 2.5, valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF3B82F6)))),
-                      ),
-                    );
-                  }
-
-                  // Strict filter: must have attachment_url, exclude images/audio/video
-                  final fileMessages = (snapshot.data ?? []).where((msg) {
-                    if (msg.attachmentUrl.isEmpty) return false;
-                    if (msg.messageType == MessageType.image ||
-                        msg.messageType == MessageType.voice ||
-                        msg.messageType == MessageType.video) return false;
-                    if (msg.image.isNotEmpty || msg.images.isNotEmpty) return false;
-                    if (msg.audio.isNotEmpty || msg.video.isNotEmpty) return false;
-                    return true;
-                  }).toList();
-
-                  if (fileMessages.isEmpty) {
-                    return Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 80, horizontal: 40),
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(Icons.folder_open_rounded, size: 56, color: Color(0xFFD1D5DB)),
-                          SizedBox(height: 16),
-                          Text('No files shared yet', style: TextStyle(fontFamily: 'Inter', fontSize: 16, fontWeight: FontWeight.w500, color: Color(0xFF6B7280))),
-                          SizedBox(height: 6),
-                          Text('Files shared in this group will appear here.', textAlign: TextAlign.center, style: TextStyle(fontFamily: 'Inter', fontSize: 13, color: Color(0xFF9CA3AF))),
-                        ],
-                      ),
-                    );
-                  }
-
-                  return Column(
-                    children: [
-                      // Count bar
-                      Container(
-                        padding: EdgeInsets.symmetric(horizontal: 24, vertical: 10),
-                        decoration: BoxDecoration(border: Border(bottom: BorderSide(color: Color(0xFFF3F4F6), width: 1))),
-                        child: Row(
-                          children: [
-                            Text('${fileMessages.length} file${fileMessages.length == 1 ? '' : 's'}', style: TextStyle(fontFamily: 'Inter', fontSize: 12, fontWeight: FontWeight.w500, color: Color(0xFF6B7280))),
-                            Spacer(),
-                            Text('Sorted by newest', style: TextStyle(fontFamily: 'Inter', fontSize: 11, color: Color(0xFF9CA3AF))),
-                          ],
-                        ),
-                      ),
-                      Expanded(
-                        child: ListView.builder(
-                          padding: const EdgeInsets.symmetric(vertical: 4),
-                          itemCount: fileMessages.length,
-                          itemBuilder: (context, index) {
-                            final msg = fileMessages[index];
-                            final senderName = msg.senderName.isNotEmpty ? msg.senderName : 'Unknown';
-                            final timestamp = msg.createdAt;
-                            final daysAgo = timestamp != null ? DateTime.now().difference(timestamp).inDays : 0;
-                            final daysAgoStr = daysAgo == 0 ? 'Today' : (daysAgo == 1 ? 'Yesterday' : '$daysAgo days ago');
-                            final isExpired = daysAgo > 30;
-
-                            // Resolve file name: file_name field > content > URL extraction with timestamp stripping
-                            final fileUrl = msg.attachmentUrl;
-                            String fileName;
-                            final storedFileName = msg.snapshotData['file_name'];
-                            if (storedFileName is String && storedFileName.trim().isNotEmpty) {
-                              fileName = storedFileName.trim();
-                            } else if (msg.content.isNotEmpty && msg.content.contains('.') && msg.content.length < 150 && !msg.content.contains('/') && msg.content.split(' ').length < 8) {
-                              fileName = msg.content;
-                            } else {
-                              // Extract from URL and strip timestamp prefix
-                              try {
-                                final decodedPath = Uri.decodeComponent(fileUrl);
-                                final match = RegExp(r'\/([^\/\?]+)\?').firstMatch(decodedPath);
-                                String raw = '';
-                                if (match != null) {
-                                  raw = match.group(1)!;
-                                } else {
-                                  final uri = Uri.parse(fileUrl);
-                                  raw = uri.pathSegments.isNotEmpty ? uri.pathSegments.last : 'file';
-                                  if (raw.contains('/')) raw = raw.split('/').last;
-                                  if (raw.contains('?')) raw = raw.split('?').first;
-                                }
-                                raw = Uri.decodeComponent(raw);
-                                // Strip leading timestamp prefix: "1775578299259_filename.ext" → "filename.ext"
-                                final stripped = raw.replaceFirst(RegExp(r'^\d{10,}_'), '');
-                                fileName = (stripped.isNotEmpty && stripped.contains('.')) ? stripped : (raw.isNotEmpty ? raw : 'File');
-                              } catch (_) {
-                                fileName = 'File';
-                              }
-                            }
-
-                            final ext = fileName.split('.').last.toLowerCase();
-                            IconData fileIcon;
-                            Color fileIconColor;
-                            if (['pdf'].contains(ext)) { fileIcon = Icons.picture_as_pdf_rounded; fileIconColor = Color(0xFFDC2626); }
-                            else if (['doc', 'docx'].contains(ext)) { fileIcon = Icons.description_rounded; fileIconColor = Color(0xFF2563EB); }
-                            else if (['xls', 'xlsx', 'csv'].contains(ext)) { fileIcon = Icons.table_chart_rounded; fileIconColor = Color(0xFF059669); }
-                            else if (['ppt', 'pptx'].contains(ext)) { fileIcon = Icons.slideshow_rounded; fileIconColor = Color(0xFFEA580C); }
-                            else if (['zip', 'rar', '7z', 'tar', 'gz'].contains(ext)) { fileIcon = Icons.folder_zip_rounded; fileIconColor = Color(0xFF7C3AED); }
-                            else if (['env', 'txt', 'json', 'yml', 'yaml', 'md', 'js', 'dart', 'py'].contains(ext)) { fileIcon = Icons.code_rounded; fileIconColor = Color(0xFF475569); }
-                            else { fileIcon = Icons.insert_drive_file_rounded; fileIconColor = Color(0xFF6B7280); }
-
-                            return InkWell(
-                              onTap: isExpired ? null : () async {
-                                if (fileUrl.isNotEmpty) {
-                                  await qurioLaunchUrl(fileUrl);
-                                }
-                              },
-                              child: Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
-                                decoration: BoxDecoration(border: Border(bottom: BorderSide(color: Color(0xFFF3F4F6), width: 1))),
-                                child: Row(
-                                  children: [
-                                    Container(
-                                      width: 44, height: 44,
-                                      decoration: BoxDecoration(color: isExpired ? Color(0xFFF3F4F6) : fileIconColor.withOpacity(0.1), borderRadius: BorderRadius.circular(10)),
-                                      child: Center(child: Icon(fileIcon, size: 22, color: isExpired ? Color(0xFFD1D5DB) : fileIconColor)),
-                                    ),
-                                    SizedBox(width: 14),
-                                    Expanded(
-                                      child: Column(
-                                        crossAxisAlignment: CrossAxisAlignment.start,
-                                        children: [
-                                          Text(fileName, style: TextStyle(fontFamily: 'Inter', fontSize: 14, fontWeight: FontWeight.w500, color: isExpired ? Color(0xFF9CA3AF) : Color(0xFF111827), decoration: isExpired ? TextDecoration.lineThrough : null), maxLines: 1, overflow: TextOverflow.ellipsis),
-                                          SizedBox(height: 4),
-                                          Row(children: [
-                                            Icon(Icons.person_outline, size: 12, color: Color(0xFFBBBFCA)),
-                                            SizedBox(width: 4),
-                                            Text(senderName, style: TextStyle(fontFamily: 'Inter', fontSize: 12, color: Color(0xFF9CA3AF))),
-                                            SizedBox(width: 12),
-                                            Icon(Icons.access_time, size: 12, color: Color(0xFFBBBFCA)),
-                                            SizedBox(width: 4),
-                                            Text(daysAgoStr, style: TextStyle(fontFamily: 'Inter', fontSize: 12, color: Color(0xFF9CA3AF))),
-                                          ]),
-                                        ],
-                                      ),
-                                    ),
-                                    SizedBox(width: 12),
-                                    if (isExpired)
-                                      Container(
-                                        padding: EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                                        decoration: BoxDecoration(color: Color(0xFFFEF2F2), borderRadius: BorderRadius.circular(6), border: Border.all(color: Color(0xFFFECACA))),
-                                        child: Row(mainAxisSize: MainAxisSize.min, children: [
-                                          Icon(Icons.timer_off_rounded, size: 12, color: Color(0xFFEF4444)),
-                                          SizedBox(width: 4),
-                                          Text('Expired', style: TextStyle(fontFamily: 'Inter', fontSize: 11, fontWeight: FontWeight.w500, color: Color(0xFFEF4444))),
-                                        ]),
-                                      )
-                                    else
-                                      Container(
-                                        padding: EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                                        decoration: BoxDecoration(color: Color(0xFFEFF6FF), borderRadius: BorderRadius.circular(6), border: Border.all(color: Color(0xFFBFDBFE))),
-                                        child: Row(mainAxisSize: MainAxisSize.min, children: [
-                                          Icon(Icons.download_rounded, size: 14, color: Color(0xFF3B82F6)),
-                                          SizedBox(width: 4),
-                                          Text('Download', style: TextStyle(fontFamily: 'Inter', fontSize: 12, fontWeight: FontWeight.w500, color: Color(0xFF3B82F6))),
-                                        ]),
-                                      ),
-                                  ],
-                                ),
-                              ),
-                            );
-                          },
-                        ),
-                      ),
-                    ],
-                  );
-                },
-              ),
+              child: _buildGroupFilesPopupContent(chat),
             ),
           ],
         ),
@@ -5345,8 +5308,325 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
     );
   }
 
+  Widget _buildGroupFilesPopupContent(ChatsRecord chat) {
+    Widget buildBody(AsyncSnapshot<List<MessagesRecord>> snapshot) {
+      if (snapshot.connectionState == ConnectionState.waiting &&
+          !snapshot.hasData) {
+        return Padding(
+          padding: const EdgeInsets.all(60),
+          child: Center(
+            child: SizedBox(
+              width: 32,
+              height: 32,
+              child: CircularProgressIndicator(
+                strokeWidth: 2.5,
+                valueColor:
+                    AlwaysStoppedAnimation<Color>(Color(0xFF3B82F6)),
+              ),
+            ),
+          ),
+        );
+      }
 
+      final fileMessages = (snapshot.data ?? []).where((msg) {
+        if (msg.attachmentUrl.isEmpty) return false;
+        if (msg.messageType == MessageType.image ||
+            msg.messageType == MessageType.voice ||
+            msg.messageType == MessageType.video) {
+          return false;
+        }
+        if (msg.image.isNotEmpty || msg.images.isNotEmpty) return false;
+        if (msg.audio.isNotEmpty || msg.video.isNotEmpty) return false;
+        return true;
+      }).toList();
 
+      if (fileMessages.isEmpty) {
+        return Padding(
+          padding: const EdgeInsets.symmetric(vertical: 80, horizontal: 40),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.folder_open_rounded,
+                  size: 56, color: Color(0xFFD1D5DB)),
+              SizedBox(height: 16),
+              Text('No files shared yet',
+                  style: TextStyle(
+                      fontFamily: 'Inter',
+                      fontSize: 16,
+                      fontWeight: FontWeight.w500,
+                      color: Color(0xFF6B7280))),
+              SizedBox(height: 6),
+              Text('Files shared in this group will appear here.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                      fontFamily: 'Inter',
+                      fontSize: 13,
+                      color: Color(0xFF9CA3AF))),
+            ],
+          ),
+        );
+      }
+
+      return Column(
+        children: [
+          Container(
+            padding: EdgeInsets.symmetric(horizontal: 24, vertical: 10),
+            decoration: BoxDecoration(
+                border: Border(
+                    bottom: BorderSide(color: Color(0xFFF3F4F6), width: 1))),
+            child: Row(
+              children: [
+                Text(
+                    '${fileMessages.length} file${fileMessages.length == 1 ? '' : 's'}',
+                    style: TextStyle(
+                        fontFamily: 'Inter',
+                        fontSize: 12,
+                        fontWeight: FontWeight.w500,
+                        color: Color(0xFF6B7280))),
+                Spacer(),
+                Text('Sorted by newest',
+                    style: TextStyle(
+                        fontFamily: 'Inter',
+                        fontSize: 11,
+                        color: Color(0xFF9CA3AF))),
+              ],
+            ),
+          ),
+          Expanded(
+            child: ListView.builder(
+              padding: const EdgeInsets.symmetric(vertical: 4),
+              itemCount: fileMessages.length,
+              itemBuilder: (context, index) {
+                final msg = fileMessages[index];
+                final senderName =
+                    msg.senderName.isNotEmpty ? msg.senderName : 'Unknown';
+                final timestamp = msg.createdAt;
+                final daysAgo = timestamp != null
+                    ? DateTime.now().difference(timestamp).inDays
+                    : 0;
+                final daysAgoStr = daysAgo == 0
+                    ? 'Today'
+                    : (daysAgo == 1 ? 'Yesterday' : '$daysAgo days ago');
+                final isExpired = daysAgo > 30;
+
+                final fileUrl = msg.attachmentUrl;
+                String fileName;
+                final storedFileName = msg.snapshotData['file_name'];
+                if (storedFileName is String &&
+                    storedFileName.trim().isNotEmpty) {
+                  fileName = storedFileName.trim();
+                } else if (msg.content.isNotEmpty &&
+                    msg.content.contains('.') &&
+                    msg.content.length < 150 &&
+                    !msg.content.contains('/') &&
+                    msg.content.split(' ').length < 8) {
+                  fileName = msg.content;
+                } else {
+                  try {
+                    final decodedPath = Uri.decodeComponent(fileUrl);
+                    final match =
+                        RegExp(r'\/([^\/\?]+)\?').firstMatch(decodedPath);
+                    String raw = '';
+                    if (match != null) {
+                      raw = match.group(1)!;
+                    } else {
+                      final uri = Uri.parse(fileUrl);
+                      raw = uri.pathSegments.isNotEmpty
+                          ? uri.pathSegments.last
+                          : 'file';
+                      if (raw.contains('/')) raw = raw.split('/').last;
+                      if (raw.contains('?')) raw = raw.split('?').first;
+                    }
+                    raw = Uri.decodeComponent(raw);
+                    final stripped =
+                        raw.replaceFirst(RegExp(r'^\d{10,}_'), '');
+                    fileName = (stripped.isNotEmpty && stripped.contains('.'))
+                        ? stripped
+                        : (raw.isNotEmpty ? raw : 'File');
+                  } catch (_) {
+                    fileName = 'File';
+                  }
+                }
+
+                final ext = fileName.split('.').last.toLowerCase();
+                IconData fileIcon;
+                Color fileIconColor;
+                if (['pdf'].contains(ext)) {
+                  fileIcon = Icons.picture_as_pdf_rounded;
+                  fileIconColor = Color(0xFFDC2626);
+                } else if (['doc', 'docx'].contains(ext)) {
+                  fileIcon = Icons.description_rounded;
+                  fileIconColor = Color(0xFF2563EB);
+                } else if (['xls', 'xlsx', 'csv'].contains(ext)) {
+                  fileIcon = Icons.table_chart_rounded;
+                  fileIconColor = Color(0xFF059669);
+                } else if (['ppt', 'pptx'].contains(ext)) {
+                  fileIcon = Icons.slideshow_rounded;
+                  fileIconColor = Color(0xFFEA580C);
+                } else if (['zip', 'rar', '7z', 'tar', 'gz'].contains(ext)) {
+                  fileIcon = Icons.folder_zip_rounded;
+                  fileIconColor = Color(0xFF7C3AED);
+                } else if ([
+                  'env',
+                  'txt',
+                  'json',
+                  'yml',
+                  'yaml',
+                  'md',
+                  'js',
+                  'dart',
+                  'py'
+                ].contains(ext)) {
+                  fileIcon = Icons.code_rounded;
+                  fileIconColor = Color(0xFF475569);
+                } else {
+                  fileIcon = Icons.insert_drive_file_rounded;
+                  fileIconColor = Color(0xFF6B7280);
+                }
+
+                return InkWell(
+                  onTap: isExpired
+                      ? null
+                      : () async {
+                          if (fileUrl.isNotEmpty) {
+                            await qurioLaunchUrl(fileUrl);
+                          }
+                        },
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 24, vertical: 14),
+                    decoration: BoxDecoration(
+                        border: Border(
+                            bottom: BorderSide(
+                                color: Color(0xFFF3F4F6), width: 1))),
+                    child: Row(
+                      children: [
+                        Container(
+                          width: 44,
+                          height: 44,
+                          decoration: BoxDecoration(
+                              color: isExpired
+                                  ? Color(0xFFF3F4F6)
+                                  : fileIconColor.withOpacity(0.1),
+                              borderRadius: BorderRadius.circular(10)),
+                          child: Center(
+                              child: Icon(fileIcon,
+                                  size: 22,
+                                  color: isExpired
+                                      ? Color(0xFFD1D5DB)
+                                      : fileIconColor)),
+                        ),
+                        SizedBox(width: 14),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(fileName,
+                                  style: TextStyle(
+                                      fontFamily: 'Inter',
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.w500,
+                                      color: isExpired
+                                          ? Color(0xFF9CA3AF)
+                                          : Color(0xFF111827),
+                                      decoration: isExpired
+                                          ? TextDecoration.lineThrough
+                                          : null),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis),
+                              SizedBox(height: 4),
+                              Row(children: [
+                                Icon(Icons.person_outline,
+                                    size: 12, color: Color(0xFFBBBFCA)),
+                                SizedBox(width: 4),
+                                Text(senderName,
+                                    style: TextStyle(
+                                        fontFamily: 'Inter',
+                                        fontSize: 12,
+                                        color: Color(0xFF9CA3AF))),
+                                SizedBox(width: 12),
+                                Icon(Icons.access_time,
+                                    size: 12, color: Color(0xFFBBBFCA)),
+                                SizedBox(width: 4),
+                                Text(daysAgoStr,
+                                    style: TextStyle(
+                                        fontFamily: 'Inter',
+                                        fontSize: 12,
+                                        color: Color(0xFF9CA3AF))),
+                              ]),
+                            ],
+                          ),
+                        ),
+                        SizedBox(width: 12),
+                        if (isExpired)
+                          Container(
+                            padding: EdgeInsets.symmetric(
+                                horizontal: 10, vertical: 5),
+                            decoration: BoxDecoration(
+                                color: Color(0xFFFEF2F2),
+                                borderRadius: BorderRadius.circular(6),
+                                border:
+                                    Border.all(color: Color(0xFFFECACA))),
+                            child: Row(mainAxisSize: MainAxisSize.min, children: [
+                              Icon(Icons.timer_off_rounded,
+                                  size: 12, color: Color(0xFFEF4444)),
+                              SizedBox(width: 4),
+                              Text('Expired',
+                                  style: TextStyle(
+                                      fontFamily: 'Inter',
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w500,
+                                      color: Color(0xFFEF4444))),
+                            ]),
+                          )
+                        else
+                          Container(
+                            padding: EdgeInsets.symmetric(
+                                horizontal: 12, vertical: 6),
+                            decoration: BoxDecoration(
+                                color: Color(0xFFEFF6FF),
+                                borderRadius: BorderRadius.circular(6),
+                                border:
+                                    Border.all(color: Color(0xFFBFDBFE))),
+                            child: Row(mainAxisSize: MainAxisSize.min, children: [
+                              Icon(Icons.download_rounded,
+                                  size: 14, color: Color(0xFF3B82F6)),
+                              SizedBox(width: 4),
+                              Text('Download',
+                                  style: TextStyle(
+                                      fontFamily: 'Inter',
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w500,
+                                      color: Color(0xFF3B82F6))),
+                            ]),
+                          ),
+                      ],
+                    ),
+                  ),
+                );
+              },
+            ),
+          ),
+        ],
+      );
+    }
+
+    if (useWindowsFirestoreRest) {
+      return _RestPollBuilder<List<MessagesRecord>>(
+        interval: const Duration(seconds: 15),
+        fetch: () => fsQueryChatMessages(chat.reference, limit: 200),
+        builder: (context, snapshot) => buildBody(snapshot),
+      );
+    }
+
+    return StreamBuilder<List<MessagesRecord>>(
+      stream: queryMessagesRecord(
+        parent: chat.reference,
+        queryBuilder: (q) => q.orderBy('created_at', descending: true),
+      ),
+      builder: (context, snapshot) => buildBody(snapshot),
+    );
+  }
 
   Widget _buildDefaultChatView() {
     // Full search page takes priority
@@ -5360,13 +5640,13 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
               // Top panel with user info
               _buildChatHeader(),
               // Live Meeting Banner (only for group chats)
-              if (_model.selectedChat!.isGroup)
+              if (_model.selectedChat!.isGroup && _showWindowsGroupExtras)
                 MeetingBannerWidget(chat: _model.selectedChat!),
               // Pinned Announcement Banner (only for group chats)
-              if (_model.selectedChat!.isGroup)
+              if (_model.selectedChat!.isGroup && _showWindowsGroupExtras)
                 _buildAnnouncementBanner(_model.selectedChat!),
               // Action Items Stats Section (only for group chats)
-              if (_model.selectedChat!.isGroup)
+              if (_model.selectedChat!.isGroup && _showWindowsGroupExtras)
                 _buildActionItemsStats(_model.selectedChat!),
               // Tasks panel or Chat thread component
               Expanded(
@@ -5374,15 +5654,7 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
                     ? Stack(
                         children: [
                           // Show chat thread behind
-                          ChatThreadComponentWidget(
-                            key: _chatThreadKey,
-                            chatReference: _model.selectedChat,
-                            activeSelectionId: ValueNotifier(null),
-                            onMessageAction: _handleDesktopMessageAction,
-                            isSelectionMode: _isSelectionMode,
-                            selectedMessages: _selectedMessages,
-                            onMessageToggled: _toggleMessageSelection,
-                          ),
+                          _buildPlatformChatThread(),
                           // Semi-transparent overlay background
                           Positioned.fill(
                             child: GestureDetector(
@@ -5438,18 +5710,9 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
                     : Column(
                         children: [
                           Expanded(
-                            child: ChatThreadComponentWidget(
-                              key: _chatThreadKey,
-                              chatReference: _model.selectedChat,
-                              activeSelectionId: ValueNotifier(null),
-                              onMessageAction: _handleDesktopMessageAction,
-                              isSelectionMode: _isSelectionMode,
-                              selectedMessages: _selectedMessages,
-                              onMessageToggled: _toggleMessageSelection,
-                            ),
+                            child: _buildPlatformChatThread(key: _chatThreadKey),
                           ),
-                          if (_isSelectionMode)
-                            _buildSelectionBar(),
+                          if (_isSelectionMode) _buildSelectionBar(),
                         ],
                       ),
               ),
@@ -5985,8 +6248,7 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
     final path = _normalizeActionItemPath(actionItemRefPath);
     try {
       final ref = FirebaseFirestore.instance.doc(path);
-      final snap = await ref.get();
-      if (!snap.exists) {
+      if (!await fsDocumentExists(ref)) {
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -6003,10 +6265,7 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
         );
         return;
       }
-      await ref.update({
-        'status': 'completed',
-        'completed_time': FieldValue.serverTimestamp(),
-      });
+      await fsMarkActionItemDone(ref);
     } on FirebaseException catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -6034,8 +6293,7 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
     final path = _normalizeActionItemPath(actionItemRefPath);
     try {
       final ref = FirebaseFirestore.instance.doc(path);
-      final snap = await ref.get();
-      if (!snap.exists) {
+      if (!await fsDocumentExists(ref)) {
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -6045,9 +6303,7 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
         );
         return;
       }
-      await ref.update({
-        'last_reminder_at': FieldValue.delete(),
-      });
+      await fsDeleteDocumentField(ref, 'last_reminder_at');
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -6080,14 +6336,44 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
   }
 
   Widget _buildActionItemsStats(ChatsRecord chat) {
-    return StreamBuilder<List<ActionItemsRecord>>(
-      stream: queryActionItemsRecord(
-        queryBuilder: (actionItemsRecord) => actionItemsRecord.where(
-          'chat_ref',
-          isEqualTo: chat.reference,
-        ),
+    if (useWindowsFirestoreRest) {
+      return _RestPollBuilder<List<ActionItemsRecord>>(
+        interval: const Duration(seconds: 20),
+        fetch: () => fsQueryActionItemsByChat(chat.reference),
+        builder: (context, snapshot) =>
+            _buildActionItemsStatsBody(context, chat, snapshot),
+      );
+    }
+
+    final stream = queryActionItemsRecord(
+      queryBuilder: (actionItemsRecord) => actionItemsRecord.where(
+        'chat_ref',
+        isEqualTo: chat.reference,
       ),
-      builder: (context, snapshot) {
+    );
+
+    if (!kIsWeb && (Platform.isWindows || Platform.isLinux)) {
+      return _DeferredFirestoreStream<List<ActionItemsRecord>>(
+        delay: const Duration(milliseconds: 1200),
+        stream: stream,
+        placeholder: const SizedBox.shrink(),
+        builder: (context, snapshot) =>
+            _buildActionItemsStatsBody(context, chat, snapshot),
+      );
+    }
+
+    return StreamBuilder<List<ActionItemsRecord>>(
+      stream: stream,
+      builder: (context, snapshot) =>
+          _buildActionItemsStatsBody(context, chat, snapshot),
+    );
+  }
+
+  Widget _buildActionItemsStatsBody(
+    BuildContext context,
+    ChatsRecord chat,
+    AsyncSnapshot<List<ActionItemsRecord>> snapshot,
+  ) {
         if (!snapshot.hasData) {
           return SizedBox.shrink();
         }
@@ -6355,8 +6641,6 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
             ],
           ),
         );
-      },
-    );
   }
 
   /// Show a dialog to start a new meeting.
@@ -6522,6 +6806,171 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
 
   /// Announcement banner — shows the latest pinned announcement below the chat header.
   Widget _buildAnnouncementBanner(ChatsRecord chat) {
+    Widget buildBanner(List<AnnouncementsRecord> items, {Object? error}) {
+      if (error != null) {
+        print('❌ [AnnouncementBanner] Stream error: $error');
+        return const SizedBox.shrink();
+      }
+      if (items.isEmpty) {
+        return const SizedBox.shrink();
+      }
+
+      final ann = items.first;
+      final isConfirmed = currentUserReference != null &&
+          ann.confirmedBy.contains(currentUserReference);
+
+      // Hide banner once the user has confirmed
+      if (isConfirmed) return const SizedBox.shrink();
+
+      final memberCount = chat.members.length;
+      final confirmedCount = ann.confirmedBy.length;
+
+      return GestureDetector(
+        onTap: () {
+          setState(() {
+            _model.showAnnouncementsPanel = true;
+            _model.showGroupCreation = false;
+            _model.showNewMessageView = false;
+            _model.showGroupInfoPanel = false;
+            _model.groupInfoChat = null;
+            _model.showUserProfilePanel = false;
+            _model.userProfileUser = null;
+            _model.showChatHistoryPanel = false;
+          });
+        },
+        child: Container(
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              colors: [
+                const Color(0xFF3B82F6).withOpacity(0.08),
+                const Color(0xFF3B82F6).withOpacity(0.04),
+              ],
+            ),
+            border: const Border(
+              bottom: BorderSide(
+                color: Color(0xFFE5E7EB),
+                width: 1,
+              ),
+            ),
+          ),
+          child: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(4),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF3B82F6).withOpacity(0.15),
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: const Icon(Icons.campaign_rounded,
+                    color: Color(0xFF3B82F6), size: 16),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      ann.content.length > 80
+                          ? '${ann.content.substring(0, 80)}...'
+                          : ann.content,
+                      style: const TextStyle(
+                        fontFamily: 'Inter',
+                        color: Color(0xFF1E40AF),
+                        fontSize: 12.5,
+                        fontWeight: FontWeight.w500,
+                        height: 1.3,
+                      ),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      '$confirmedCount/$memberCount confirmed',
+                      style: TextStyle(
+                        fontFamily: 'Inter',
+                        color: const Color(0xFF6B7280),
+                        fontSize: 11,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              if (!isConfirmed)
+                InkWell(
+                  onTap: () async {
+                    if (currentUserReference == null) return;
+                    await fsArrayUnion(
+                      ann.reference,
+                      'confirmed_by',
+                      [currentUserReference],
+                    );
+                  },
+                  borderRadius: BorderRadius.circular(6),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 10, vertical: 5),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF3B82F6),
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: const Text(
+                      'Confirm',
+                      style: TextStyle(
+                        fontFamily: 'Inter',
+                        color: Colors.white,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ),
+                )
+              else
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF10B981).withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: const Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.check_circle,
+                          color: Color(0xFF10B981), size: 13),
+                      SizedBox(width: 3),
+                      Text(
+                        'Confirmed',
+                        style: TextStyle(
+                          fontFamily: 'Inter',
+                          color: Color(0xFF10B981),
+                          fontSize: 11,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              const SizedBox(width: 6),
+              const Icon(Icons.chevron_right,
+                  color: Color(0xFF9CA3AF), size: 18),
+            ],
+          ),
+        ),
+      );
+    }
+
+    if (useWindowsFirestoreRest) {
+      return _RestPollBuilder<List<AnnouncementsRecord>>(
+        interval: const Duration(seconds: 15),
+        fetch: () => fsQueryPinnedAnnouncements(chat.reference),
+        builder: (context, snapshot) =>
+            buildBanner(snapshot.data ?? [], error: snapshot.error),
+      );
+    }
+
     return StreamBuilder<List<AnnouncementsRecord>>(
       stream: queryAnnouncementsRecord(
         parent: chat.reference,
@@ -6531,157 +6980,9 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
       ),
       builder: (context, snapshot) {
         if (snapshot.hasError) {
-          print('❌ [AnnouncementBanner] Stream error: ${snapshot.error}');
-          return const SizedBox.shrink();
+          return buildBanner([], error: snapshot.error);
         }
-        if (!snapshot.hasData || snapshot.data!.isEmpty) {
-          return const SizedBox.shrink();
-        }
-
-        final ann = snapshot.data!.first;
-        final isConfirmed = currentUserReference != null &&
-            ann.confirmedBy.contains(currentUserReference);
-
-        // Hide banner once the user has confirmed
-        if (isConfirmed) return const SizedBox.shrink();
-
-        final memberCount = chat.members.length;
-        final confirmedCount = ann.confirmedBy.length;
-
-        return GestureDetector(
-          onTap: () {
-            setState(() {
-              _model.showAnnouncementsPanel = true;
-              _model.showGroupCreation = false;
-              _model.showNewMessageView = false;
-              _model.showGroupInfoPanel = false;
-              _model.groupInfoChat = null;
-              _model.showUserProfilePanel = false;
-              _model.userProfileUser = null;
-              _model.showChatHistoryPanel = false;
-            });
-          },
-          child: Container(
-            width: double.infinity,
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                colors: [
-                  const Color(0xFF3B82F6).withOpacity(0.08),
-                  const Color(0xFF3B82F6).withOpacity(0.04),
-                ],
-              ),
-              border: const Border(
-                bottom: BorderSide(
-                  color: Color(0xFFE5E7EB),
-                  width: 1,
-                ),
-              ),
-            ),
-            child: Row(
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(4),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF3B82F6).withOpacity(0.15),
-                    borderRadius: BorderRadius.circular(6),
-                  ),
-                  child: const Icon(Icons.campaign_rounded,
-                      color: Color(0xFF3B82F6), size: 16),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        ann.content.length > 80
-                            ? '${ann.content.substring(0, 80)}...'
-                            : ann.content,
-                        style: const TextStyle(
-                          fontFamily: 'Inter',
-                          color: Color(0xFF1E40AF),
-                          fontSize: 12.5,
-                          fontWeight: FontWeight.w500,
-                          height: 1.3,
-                        ),
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      const SizedBox(height: 3),
-                      Text(
-                        '$confirmedCount/$memberCount confirmed',
-                        style: TextStyle(
-                          fontFamily: 'Inter',
-                          color: const Color(0xFF6B7280),
-                          fontSize: 11,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(width: 8),
-                if (!isConfirmed)
-                  InkWell(
-                    onTap: () async {
-                      if (currentUserReference == null) return;
-                      await ann.reference.update({
-                        'confirmed_by':
-                            FieldValue.arrayUnion([currentUserReference]),
-                      });
-                    },
-                    borderRadius: BorderRadius.circular(6),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 10, vertical: 5),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFF3B82F6),
-                        borderRadius: BorderRadius.circular(6),
-                      ),
-                      child: const Text(
-                        'Confirm',
-                        style: TextStyle(
-                          fontFamily: 'Inter',
-                          color: Colors.white,
-                          fontSize: 11,
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-                    ),
-                  )
-                else
-                  Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF10B981).withOpacity(0.1),
-                      borderRadius: BorderRadius.circular(6),
-                    ),
-                    child: const Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(Icons.check_circle,
-                            color: Color(0xFF10B981), size: 13),
-                        SizedBox(width: 3),
-                        Text(
-                          'Confirmed',
-                          style: TextStyle(
-                            fontFamily: 'Inter',
-                            color: Color(0xFF10B981),
-                            fontSize: 11,
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                const SizedBox(width: 6),
-                const Icon(Icons.chevron_right,
-                    color: Color(0xFF9CA3AF), size: 18),
-              ],
-            ),
-          ),
-        );
+        return buildBanner(snapshot.data ?? []);
       },
     );
   }
@@ -6744,9 +7045,10 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
         orElse: () => chat.members.first,
       );
 
-      return StreamBuilder<UsersRecord>(
-        stream: UsersRecord.getDocument(otherUserRef),
-        builder: (context, userSnapshot) {
+      return DesktopSafeUserBuilder(
+        userRef: otherUserRef,
+        fetchOnce: _getOrCreateUserFuture,
+        builder: (context, user) {
           String imageUrl = '';
           bool isOnline = false;
 
@@ -6754,9 +7056,9 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
           if (otherUserRef.path.contains('ai_agent_summerai')) {
             imageUrl =
                 'https://firebasestorage.googleapis.com/v0/b/linkedup-c3e29.firebasestorage.app/o/asset%2Fsoftware-agent.png?alt=media&token=99761584-999d-4f8e-b3d1-f9d1baf86120';
-          } else if (userSnapshot.hasData && userSnapshot.data != null) {
-            imageUrl = userSnapshot.data?.photoUrl ?? '';
-            isOnline = userSnapshot.data?.isOnline ?? false;
+          } else if (user != null) {
+            imageUrl = user.photoUrl;
+            isOnline = user.isOnline;
           }
 
           return InkWell(
@@ -6882,6 +7184,23 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
 
       // Use cached name when available
       final cachedName = chatController.getCachedDisplayName(otherUserRef.id);
+      if (windowsChatListSkipUserFetch) {
+        return Text(
+          windowsChatDmListLabel(
+            otherUserRef: otherUserRef,
+            cachedName: cachedName,
+          ),
+          style: TextStyle(
+            fontFamily: 'Inter',
+            color: Color(0xFF1F2937),
+            fontSize: 16,
+            fontWeight: FontWeight.w600,
+          ),
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+        );
+      }
+
       if (cachedName != null && cachedName.isNotEmpty) {
         return Text(
           cachedName,
@@ -6939,11 +7258,11 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
     });
 
     try {
-      final callable = FirebaseFunctions.instance.httpsCallable('dailySummary');
-
-      await callable.call({
-        'chatId': chat.reference.id,
-      });
+      await invokeCloudFunction(
+        'dailySummary',
+        data: {'chatId': chat.reference.id},
+        timeout: const Duration(seconds: 120),
+      );
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -7038,7 +7357,7 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
     );
 
     try {
-      final user = await UsersRecord.getDocumentOnce(otherUserRef);
+      final user = await fsGetUserOnce(otherUserRef);
       if (context.mounted) {
         // Show user profile inline in the right panel (macOS)
         setState(() {
@@ -7076,7 +7395,7 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
         chatController.blockedUserIds.value.contains(otherUserRef.id);
 
     try {
-      final user = await UsersRecord.getDocumentOnce(otherUserRef);
+      final user = await fsGetUserOnce(otherUserRef);
 
       if (isBlocked) {
         // Unblock Logic
@@ -7121,14 +7440,14 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
         );
 
         if (shouldUnblock == true) {
-          final blockedRecords = await BlockedUsersRecord.collection
-              .where('blocker_user', isEqualTo: currentUserReference)
-              .where('blocked_user', isEqualTo: otherUserRef)
-              .get();
-
-          for (var doc in blockedRecords.docs) {
-            await doc.reference.delete();
-          }
+          await fsUnblockUser(
+            blockerUser: currentUserReference!,
+            blockedUser: otherUserRef,
+          );
+          final unblockedIds =
+              Set<String>.from(chatController.blockedUserIds.value)
+                ..remove(otherUserRef.id);
+          chatController.blockedUserIds.value = unblockedIds;
 
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
@@ -7179,13 +7498,14 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
         );
 
         if (shouldBlock == true) {
-          await BlockedUsersRecord.collection.add({
-            ...createBlockedUsersRecordData(
-              blockerUser: currentUserReference,
-              blockedUser: otherUserRef,
-              createdAt: getCurrentTimestamp,
-            ),
-          });
+          await fsBlockUser(
+            blockerUser: currentUserReference!,
+            blockedUser: otherUserRef,
+          );
+          chatController.blockedUserIds.value = {
+            ...chatController.blockedUserIds.value,
+            otherUserRef.id,
+          };
 
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
@@ -7261,14 +7581,17 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
       final isPinned = chat.isPinnedByUser(userRef);
 
       if (isPinned) {
-        await chat.reference.update({
-          'pinned_by': FieldValue.arrayRemove([userRef]),
-        });
+        await fsArrayRemove(chat.reference, 'pinned_by', [userRef]);
       } else {
-        await chat.reference.update({
-          'pinned_by': FieldValue.arrayUnion([userRef]),
-        });
+        await fsArrayUnion(chat.reference, 'pinned_by', [userRef]);
       }
+
+      chatController.applyLocalChatPinState(
+        chatRef: chat.reference,
+        userRef: userRef,
+        pinned: !isPinned,
+      );
+      await chatController.refreshChats(force: true);
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -7336,7 +7659,7 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
 
     if (shouldDelete == true) {
       try {
-        await chat.reference.delete();
+        await fsDeleteDocument(chat.reference);
         setState(() {
           _model.selectedChat = null;
         });
@@ -7654,7 +7977,7 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
     for (final m in messages) {
       if (m.senderRef != null && !userCache.containsKey(m.senderRef)) {
         try {
-          final doc = await UsersRecord.getDocumentOnce(m.senderRef!);
+          final doc = await fsGetUserOnce(m.senderRef!);
           userCache[m.senderRef!] = doc;
         } catch (_) {}
       }
@@ -7696,15 +8019,17 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
       forwardedHistory: historyJson,
     );
 
-    await MessagesRecord.createDoc(targetChat.reference).set(messageData);
-
-    await targetChat.reference.update({
-      'last_message': '[Chat History]',
-      'last_message_at': getCurrentTimestamp,
-      'last_message_sent': currentUserReference,
-      'last_message_type': MessageType.text.serialize(),
-      'last_message_seen': [currentUserReference],
-    });
+    await fsCreateMessageAndUpdateChat(
+      chatRef: targetChat.reference,
+      messageData: messageData,
+      chatUpdateData: {
+        'last_message': '[Chat History]',
+        'last_message_at': getCurrentTimestamp,
+        'last_message_sent': currentUserReference,
+        'last_message_type': MessageType.text.serialize(),
+        'last_message_seen': [currentUserReference],
+      },
+    );
   }
 
   void _deleteSelectedMessages() async {
@@ -7735,7 +8060,7 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
     if (shouldDelete == true) {
       for (final msg in _selectedMessages) {
         try {
-          await msg.reference.delete();
+          await fsDeleteDocument(msg.reference);
         } catch (_) {}
       }
       _exitSelectionMode();
@@ -7904,20 +8229,21 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
         senderPhoto: currentUserPhoto,
       );
 
-      await MessagesRecord.createDoc(targetChat.reference)
-          .set(forwardData);
-
-      // Update last_message on target chat
       final previewText = message.content.length > 100
           ? message.content.substring(0, 100)
           : message.content;
-      await targetChat.reference.update({
-        'last_message': previewText,
-        'last_message_at': getCurrentTimestamp,
-        'last_message_sent': currentUserReference,
-        'last_message_type': message.messageType?.serialize() ?? 'M',
-        'last_message_seen': [currentUserReference],
-      });
+
+      await fsCreateMessageAndUpdateChat(
+        chatRef: targetChat.reference,
+        messageData: forwardData,
+        chatUpdateData: {
+          'last_message': previewText,
+          'last_message_at': getCurrentTimestamp,
+          'last_message_sent': currentUserReference,
+          'last_message_type': message.messageType?.serialize() ?? 'M',
+          'last_message_seen': [currentUserReference],
+        },
+      );
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -8381,8 +8707,10 @@ class _ChatListItemState extends State<_ChatListItem>
                         widget.chat.lastMessageAt != null
                             ? () {
                                 final now = DateTime.now();
-                                final messageTime = widget.chat.lastMessageAt!;
-                                final difference = now.difference(messageTime);
+                                final messageTime =
+                                    widget.chat.lastMessageAt!.toLocal();
+                                final difference =
+                                    now.difference(messageTime);
 
                                 // If within 24 hours, show time only
                                 if (difference.inHours < 24) {
@@ -8471,9 +8799,10 @@ class _ChatListItemState extends State<_ChatListItem>
         orElse: () => chat.members.first,
       );
 
-      return StreamBuilder<UsersRecord>(
-        stream: UsersRecord.getDocument(otherUserRef),
-        builder: (context, userSnapshot) {
+      return DesktopSafeUserBuilder(
+        userRef: otherUserRef,
+        fetchOnce: widget.getOrCreateUserFuture,
+        builder: (context, user) {
           String imageUrl = '';
           bool isOnline = false;
 
@@ -8481,13 +8810,9 @@ class _ChatListItemState extends State<_ChatListItem>
           if (otherUserRef.path.contains('ai_agent_summerai')) {
             imageUrl =
                 'https://firebasestorage.googleapis.com/v0/b/linkedup-c3e29.firebasestorage.app/o/asset%2Fsoftware-agent.png?alt=media&token=99761584-999d-4f8e-b3d1-f9d1baf86120';
-          } else if (userSnapshot.hasData && userSnapshot.data != null) {
-            imageUrl = userSnapshot.data?.photoUrl ?? '';
-            isOnline = userSnapshot.data?.isOnline ?? false;
-          } else if (userSnapshot.hasError) {
-            // Error loading user
-          } else {
-            // Loading user data
+          } else if (user != null) {
+            imageUrl = user.photoUrl;
+            isOnline = user.isOnline;
           }
 
           return Stack(
@@ -8597,6 +8922,24 @@ class _ChatListItemState extends State<_ChatListItem>
       // Use cached name when available to avoid "Direct Chat" flash on rebuilds
       final cachedName =
           widget.chatController.getCachedDisplayName(otherUserRef.id);
+
+      if (windowsChatListSkipUserFetch) {
+        return Text(
+          windowsChatDmListLabel(
+            otherUserRef: otherUserRef,
+            cachedName: cachedName,
+          ),
+          style: TextStyle(
+            fontFamily: 'Inter',
+            color: Color(0xFF111827),
+            fontSize: 13,
+            fontWeight: FontWeight.w500,
+          ),
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+        );
+      }
+
       if (cachedName != null && cachedName.isNotEmpty) {
         return Text(
           cachedName,
@@ -8647,6 +8990,48 @@ class _ChatListItemState extends State<_ChatListItem>
   }
 
   Widget _getLastMessagePreview(ChatsRecord chat, {bool isSelected = false}) {
+    String _groupSenderPrefix() {
+      if (chat.lastMessageSent == null) return '';
+      if (chat.lastMessageSent == currentUserReference) return 'You: ';
+      if (DesktopSafeUserBuilder.useOnceFetch) {
+        final cached = widget.chatController
+            .getCachedDisplayName(chat.lastMessageSent!.id);
+        if (cached != null && cached.isNotEmpty) {
+          return '${cached.split(' ').first}: ';
+        }
+        return '';
+      }
+      return '';
+    }
+
+    Widget _richPreview(String prefix, String text) {
+      return Text.rich(
+        TextSpan(
+          children: [
+            TextSpan(
+              text: prefix,
+              style: TextStyle(
+                fontFamily: 'Inter',
+                color: isSelected ? Color(0xFF6B7280) : Color(0xFF374151),
+                fontSize: 11,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            TextSpan(
+              text: text,
+              style: TextStyle(
+                fontFamily: 'Inter',
+                color: isSelected ? Color(0xFF9CA3AF) : Color(0xFF6B7280),
+                fontSize: 11,
+              ),
+            ),
+          ],
+        ),
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+      );
+    }
+
     // If lastMessage is empty, check lastMessageType to show appropriate preview
     if (chat.lastMessage.isEmpty) {
       // Check if there's a message type (video, image, etc.)
@@ -8673,12 +9058,16 @@ class _ChatListItemState extends State<_ChatListItem>
 
         // For group chats, we might want to show sender name too
         if (chat.isGroup && chat.lastMessageSent != null) {
-          return StreamBuilder<UsersRecord>(
-            stream: UsersRecord.getDocument(chat.lastMessageSent!),
-            builder: (context, snapshot) {
+          if (DesktopSafeUserBuilder.useOnceFetch) {
+            return _richPreview(_groupSenderPrefix(), previewText);
+          }
+          return DesktopSafeUserBuilder(
+            userRef: chat.lastMessageSent!,
+            fetchOnce: widget.getOrCreateUserFuture,
+            builder: (context, sender) {
               String prefix = '';
-              if (snapshot.hasData && snapshot.data != null) {
-                final senderName = snapshot.data!.displayName;
+              if (sender != null) {
+                final senderName = sender.displayName;
                 final firstName = senderName.split(' ').first;
                 if (chat.lastMessageSent == currentUserReference) {
                   prefix = 'You: ';
@@ -8744,12 +9133,20 @@ class _ChatListItemState extends State<_ChatListItem>
 
     // For group chats, show sender name
     if (chat.isGroup && chat.lastMessageSent != null) {
-      return StreamBuilder<UsersRecord>(
-        stream: UsersRecord.getDocument(chat.lastMessageSent!),
-        builder: (context, snapshot) {
+      final body = chat.lastMessage.replaceAllMapped(
+        RegExp(r'<@[^|]+\|([^>]+)>'),
+        (m) => '@${m.group(1)}',
+      );
+      if (DesktopSafeUserBuilder.useOnceFetch) {
+        return _richPreview(_groupSenderPrefix(), body);
+      }
+      return DesktopSafeUserBuilder(
+        userRef: chat.lastMessageSent!,
+        fetchOnce: widget.getOrCreateUserFuture,
+        builder: (context, sender) {
           String prefix = '';
-          if (snapshot.hasData && snapshot.data != null) {
-            final senderName = snapshot.data!.displayName;
+          if (sender != null) {
+            final senderName = sender.displayName;
             // Get first name only
             final firstName = senderName.split(' ').first;
             // Check if it's the current user
@@ -8868,6 +9265,116 @@ class _ForwardModeOption extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+}
+
+/// Delays subscribing to a Firestore stream on Windows/Linux to reduce
+/// concurrent native channel traffic when opening a chat thread.
+class _DeferredFirestoreStream<T> extends StatefulWidget {
+  const _DeferredFirestoreStream({
+    required this.delay,
+    required this.stream,
+    required this.builder,
+    this.placeholder = const SizedBox.shrink(),
+  });
+
+  final Duration delay;
+  final Stream<T> stream;
+  final Widget placeholder;
+  final Widget Function(BuildContext context, AsyncSnapshot<T> snapshot) builder;
+
+  @override
+  State<_DeferredFirestoreStream<T>> createState() =>
+      _DeferredFirestoreStreamState<T>();
+}
+
+class _DeferredFirestoreStreamState<T> extends State<_DeferredFirestoreStream<T>> {
+  Stream<T>? _activeStream;
+
+  @override
+  void initState() {
+    super.initState();
+    Future.delayed(widget.delay, () {
+      if (mounted) setState(() => _activeStream = widget.stream);
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_activeStream == null) return widget.placeholder;
+    return StreamBuilder<T>(
+      stream: _activeStream,
+      builder: widget.builder,
+    );
+  }
+}
+
+/// Periodic REST fetch for Windows/Linux — same UI as StreamBuilder, no native plugin.
+class _RestPollBuilder<T> extends StatefulWidget {
+  const _RestPollBuilder({
+    required this.interval,
+    required this.fetch,
+    required this.builder,
+  });
+
+  final Duration interval;
+  final Future<T> Function() fetch;
+  final Widget Function(BuildContext context, AsyncSnapshot<T> snapshot) builder;
+
+  @override
+  State<_RestPollBuilder<T>> createState() => _RestPollBuilderState<T>();
+}
+
+class _RestPollBuilderState<T> extends State<_RestPollBuilder<T>> {
+  T? _data;
+  Object? _error;
+  bool _loading = true;
+  Timer? _timer;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+    _timer = Timer.periodic(widget.interval, (_) => _load());
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    super.dispose();
+  }
+
+  Future<void> _load() async {
+    try {
+      final result = await widget.fetch();
+      if (mounted) {
+        setState(() {
+          _data = result;
+          _error = null;
+          _loading = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _error = e;
+          _loading = false;
+        });
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return widget.builder(
+      context,
+      _loading && _data == null
+          ? AsyncSnapshot<T>.waiting()
+          : _error != null
+              ? AsyncSnapshot<T>.withError(
+                  ConnectionState.done, _error!, StackTrace.current)
+              : AsyncSnapshot<T>.withData(ConnectionState.done, _data as T),
     );
   }
 }

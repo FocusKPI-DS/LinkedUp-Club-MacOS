@@ -1,5 +1,7 @@
 import '/auth/firebase_auth/auth_util.dart';
 import '/backend/backend.dart';
+import '/backend/firestore/firestore_desktop_adapter.dart';
+import '/pages/desktop_chat/rest_poll_builder.dart';
 import '/backend/push_notifications/push_notifications_util.dart';
 import '/backend/schema/enums/enums.dart';
 import '/backend/schema/structs/index.dart';
@@ -144,13 +146,8 @@ class _EventDetailWidgetState extends State<EventDetailWidget>
       }
       _model.loading = false;
       safeSetState(() {});
-      _model.events = await queryEventsRecordOnce(
-        queryBuilder: (eventsRecord) => eventsRecord.where(
-          'event_id',
-          isEqualTo: widget.eventId,
-        ),
-        singleRecord: true,
-      ).then((s) => s.firstOrNull);
+      _model.events = (await fsQueryEventsByEventId(widget.eventId ?? ''))
+          .firstOrNull;
       _model.attendeesNum = _model.events?.participants.length;
       _model.canonicalId =
           '${_model.events?.reference.id}/${currentUserReference?.path}/${valueOrDefault(currentUserDocument?.invitationCode, '')}';
@@ -167,21 +164,16 @@ class _EventDetailWidgetState extends State<EventDetailWidget>
       safeSetState(() {});
       await Future.wait([
         Future(() async {
-          _model.participants = await queryParticipantRecordOnce(
-            parent: _model.events?.reference,
+          _model.participants = await fsQueryParticipants(
+            _model.events!.reference,
           );
           _model.participant =
               _model.participants!.toList().cast<ParticipantRecord>();
           safeSetState(() {});
         }),
         Future(() async {
-          _model.chat = await queryChatsRecordOnce(
-            queryBuilder: (chatsRecord) => chatsRecord.where(
-              'event_ref',
-              isEqualTo: _model.events?.reference,
-            ),
-            singleRecord: true,
-          ).then((s) => s.firstOrNull);
+          _model.chat = (await fsQueryChatsByEventRef(_model.events!.reference))
+              .firstOrNull;
         }),
       ]);
       if (_model.participants!
@@ -874,14 +866,8 @@ class _EventDetailWidgetState extends State<EventDetailWidget>
                                                     builder: (context) =>
                                                         FFButtonWidget(
                                                       onPressed: () async {
-                                                        var participantRecordReference =
-                                                            ParticipantRecord
-                                                                .createDoc(_model
-                                                                    .eventDoc!
-                                                                    .reference);
-                                                        await participantRecordReference
-                                                            .set(
-                                                                createParticipantRecordData(
+                                                        final participantData =
+                                                            createParticipantRecordData(
                                                           userId:
                                                               currentUserReference
                                                                   ?.id,
@@ -900,45 +886,29 @@ class _EventDetailWidgetState extends State<EventDetailWidget>
                                                               currentUserDocument
                                                                   ?.bio,
                                                               ''),
-                                                        ));
-                                                        _model.joined = ParticipantRecord
-                                                            .getDocumentFromData(
-                                                                createParticipantRecordData(
-                                                                  userId:
-                                                                      currentUserReference
-                                                                          ?.id,
-                                                                  userRef:
-                                                                      currentUserReference,
-                                                                  name:
-                                                                      currentUserDisplayName,
-                                                                  joinedAt:
-                                                                      getCurrentTimestamp,
-                                                                  status:
-                                                                      ParticipantStatus
-                                                                          .joined
-                                                                          .name,
-                                                                  image:
-                                                                      currentUserPhoto,
-                                                                  bio: valueOrDefault(
-                                                                      currentUserDocument
-                                                                          ?.bio,
-                                                                      ''),
-                                                                ),
-                                                                participantRecordReference);
+                                                        );
+                                                        var participantRecordReference =
+                                                            ParticipantRecord
+                                                                .createDoc(_model
+                                                                    .eventDoc!
+                                                                    .reference);
+                                                        await fsSetDocument(
+                                                          participantRecordReference,
+                                                          participantData,
+                                                        );
+                                                        _model.joined =
+                                                            ParticipantRecord
+                                                                .getDocumentFromData(
+                                                          participantData,
+                                                          participantRecordReference,
+                                                        );
 
-                                                        await _model
-                                                            .eventDoc!.reference
-                                                            .update({
-                                                          ...mapToFirestore(
-                                                            {
-                                                              'participants':
-                                                                  FieldValue
-                                                                      .arrayUnion([
-                                                                currentUserReference
-                                                              ]),
-                                                            },
-                                                          ),
-                                                        });
+                                                        await fsArrayUnion(
+                                                          _model.eventDoc!
+                                                              .reference,
+                                                          'participants',
+                                                          [currentUserReference],
+                                                        );
                                                         if (_model.chat !=
                                                             null) {
                                                           _model.blocked =
@@ -1047,19 +1017,14 @@ class _EventDetailWidgetState extends State<EventDetailWidget>
                                                                 },
                                                               );
 
-                                                              await _model.chat!
-                                                                  .reference
-                                                                  .update({
-                                                                ...mapToFirestore(
-                                                                  {
-                                                                    'members':
-                                                                        FieldValue
-                                                                            .arrayUnion([
-                                                                      currentUserReference
-                                                                    ]),
-                                                                  },
-                                                                ),
-                                                              });
+                                                              await fsArrayUnion(
+                                                                _model.chat!
+                                                                    .reference,
+                                                                'members',
+                                                                [
+                                                                  currentUserReference
+                                                                ],
+                                                              );
                                                             }
                                                           }
 
@@ -1157,47 +1122,34 @@ class _EventDetailWidgetState extends State<EventDetailWidget>
                                                               currentUserReference)
                                                           .toList()
                                                           .isNotEmpty) {
-                                                        await _model
-                                                            .participants!
-                                                            .where((e) =>
-                                                                e.userRef ==
-                                                                currentUserReference)
-                                                            .toList()
-                                                            .firstOrNull!
-                                                            .reference
-                                                            .delete();
+                                                        await fsDeleteDocument(
+                                                            _model
+                                                                .participants!
+                                                                .where((e) =>
+                                                                    e.userRef ==
+                                                                    currentUserReference)
+                                                                .toList()
+                                                                .firstOrNull!
+                                                                .reference);
 
-                                                        await _model
-                                                            .eventDoc!.reference
-                                                            .update({
-                                                          ...mapToFirestore(
-                                                            {
-                                                              'participants':
-                                                                  FieldValue
-                                                                      .arrayRemove([
-                                                                currentUserReference
-                                                              ]),
-                                                            },
-                                                          ),
-                                                        });
+                                                        await fsArrayRemove(
+                                                          _model.eventDoc!
+                                                              .reference,
+                                                          'participants',
+                                                          [currentUserReference],
+                                                        );
                                                       } else {
-                                                        await _model
-                                                            .joined!.reference
-                                                            .delete();
+                                                        await fsDeleteDocument(
+                                                            _model
+                                                                .joined!
+                                                                .reference);
 
-                                                        await _model
-                                                            .eventDoc!.reference
-                                                            .update({
-                                                          ...mapToFirestore(
-                                                            {
-                                                              'participants':
-                                                                  FieldValue
-                                                                      .arrayRemove([
-                                                                currentUserReference
-                                                              ]),
-                                                            },
-                                                          ),
-                                                        });
+                                                        await fsArrayRemove(
+                                                          _model.eventDoc!
+                                                              .reference,
+                                                          'participants',
+                                                          [currentUserReference],
+                                                        );
                                                       }
 
                                                       _model.joinSelected =
@@ -1335,15 +1287,21 @@ class _EventDetailWidgetState extends State<EventDetailWidget>
                                                 eventDoc: _model.eventDoc!,
                                                 onSuccess: () async {
                                                   _model.allParticipantsUpdated =
-                                                      await queryParticipantRecordOnce(
-                                                    parent: _model
-                                                        .eventDoc?.reference,
+                                                      await fsQueryParticipants(
+                                                    _model.eventDoc!.reference,
                                                   );
-                                                  _model.updatedEvent =
-                                                      await EventsRecord
-                                                          .getDocumentOnce(
-                                                              _model.eventDoc!
-                                                                  .reference);
+                                                  final eventData =
+                                                      await fsFetchDocumentData(
+                                                    _model.eventDoc!.reference,
+                                                  );
+                                                  if (eventData != null) {
+                                                    _model.updatedEvent =
+                                                        EventsRecord
+                                                            .getDocumentFromData(
+                                                      eventData,
+                                                      _model.eventDoc!.reference,
+                                                    );
+                                                  }
                                                   _model.participant = _model
                                                       .allParticipantsUpdated!
                                                       .toList()
@@ -2687,23 +2645,10 @@ class _EventDetailWidgetState extends State<EventDetailWidget>
                                               padding: const EdgeInsetsDirectional
                                                   .fromSTEB(
                                                       16.0, 15.0, 16.0, 0.0),
-                                              child: StreamBuilder<
-                                                  List<ChatsRecord>>(
-                                                stream: queryChatsRecord(
-                                                  queryBuilder: (chatsRecord) =>
-                                                      chatsRecord
-                                                          .where(
-                                                            'is_group',
-                                                            isEqualTo: true,
-                                                          )
-                                                          .where(
-                                                            'event_ref',
-                                                            isEqualTo: _model
-                                                                .eventDoc
-                                                                ?.reference,
-                                                          ),
-                                                ),
-                                                builder: (context, snapshot) {
+                                              child: _eventGroupChatsPollOrStream(
+                                                context,
+                                                _model.eventDoc!.reference,
+                                                (context, snapshot) {
                                                   // Customize what your widget looks like when it's loading.
                                                   if (!snapshot.hasData) {
                                                     return Center(
@@ -2953,17 +2898,14 @@ class _EventDetailWidgetState extends State<EventDetailWidget>
                                                                       FFButtonWidget(
                                                                         onPressed:
                                                                             () async {
-                                                                          await columnChatsRecord
-                                                                              .reference
-                                                                              .update({
-                                                                            ...mapToFirestore(
-                                                                              {
-                                                                                'members': FieldValue.arrayUnion([
-                                                                                  currentUserReference
-                                                                                ]),
-                                                                              },
-                                                                            ),
-                                                                          });
+                                                                          await fsArrayUnion(
+                                                                            columnChatsRecord
+                                                                                .reference,
+                                                                            'members',
+                                                                            [
+                                                                              currentUserReference
+                                                                            ],
+                                                                          );
 
                                                                           context
                                                                               .pushNamed(
@@ -3071,6 +3013,28 @@ class _EventDetailWidgetState extends State<EventDetailWidget>
           ),
         ),
       ),
+    );
+  }
+
+  Widget _eventGroupChatsPollOrStream(
+    BuildContext context,
+    DocumentReference eventRef,
+    Widget Function(BuildContext, AsyncSnapshot<List<ChatsRecord>>) builder,
+  ) {
+    if (useWindowsFirestoreRest) {
+      return RestPollBuilder<List<ChatsRecord>>(
+        interval: const Duration(seconds: 30),
+        fetch: () => fsQueryEventGroupChats(eventRef),
+        builder: builder,
+      );
+    }
+    return StreamBuilder<List<ChatsRecord>>(
+      stream: queryChatsRecord(
+        queryBuilder: (chatsRecord) => chatsRecord
+            .where('is_group', isEqualTo: true)
+            .where('event_ref', isEqualTo: eventRef),
+      ),
+      builder: builder,
     );
   }
 }

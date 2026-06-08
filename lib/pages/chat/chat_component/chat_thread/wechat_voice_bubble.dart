@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 import 'dart:io' show Platform;
 import 'package:assets_audio_player/assets_audio_player.dart';
 import '/app_state.dart';
+import '/utils/chat_message_font.dart';
 
 /// A compact voice message widget matching Lona's blue-white UI theme.
 ///
@@ -31,6 +32,7 @@ class _WeChatVoiceBubbleState extends State<WeChatVoiceBubble>
   Duration _totalDuration = Duration.zero;
   late AnimationController _waveCtrl;
   bool _isWebmOnNative = false; // True if .webm on iOS/macOS (unsupported)
+  bool _audioOpened = false;
 
   /// Check if the audio URL is a .webm file that can't be played on native iOS/macOS
   bool get _isUnsupportedFormat {
@@ -70,17 +72,20 @@ class _WeChatVoiceBubbleState extends State<WeChatVoiceBubble>
       }
     });
 
-    // Eagerly open audio (without autoStart) to get the duration
-    // Skip .webm files on iOS/macOS — AVPlayer can't decode them and will hang
-    if (widget.audioUrl.isNotEmpty && !_isWebmOnNative) {
-      _player.open(
-        Audio.network(widget.audioUrl),
-        autoStart: false,
-        showNotification: false,
-      ).catchError((e) {
-        debugPrint('⚠️ VoiceBubble: failed to load audio: $e');
-      });
-    }
+    // Load audio lazily on first play — avoids N concurrent native players
+    // when a chat thread opens with many voice messages (Windows crash).
+  }
+
+  void _ensureAudioOpened() {
+    if (_audioOpened || _isWebmOnNative || widget.audioUrl.isEmpty) return;
+    _audioOpened = true;
+    _player.open(
+      Audio.network(widget.audioUrl),
+      autoStart: false,
+      showNotification: false,
+    ).catchError((e) {
+      debugPrint('⚠️ VoiceBubble: failed to load audio: $e');
+    });
   }
 
   @override
@@ -94,13 +99,8 @@ class _WeChatVoiceBubbleState extends State<WeChatVoiceBubble>
       
       if (wasUnsupported && !_isWebmOnNative && widget.audioUrl.isNotEmpty) {
         // URL changed from .webm to .m4a — now safe to load
-        _player.open(
-          Audio.network(widget.audioUrl),
-          autoStart: false,
-          showNotification: false,
-        ).catchError((e) {
-          debugPrint('⚠️ VoiceBubble: failed to load transcoded audio: $e');
-        });
+        _audioOpened = false;
+        _ensureAudioOpened();
       }
     }
   }
@@ -126,6 +126,7 @@ class _WeChatVoiceBubbleState extends State<WeChatVoiceBubble>
       }
       return;
     }
+    _ensureAudioOpened();
     try {
       await _player.playOrPause();
     } catch (e) {
@@ -194,7 +195,7 @@ class _WeChatVoiceBubbleState extends State<WeChatVoiceBubble>
     final durationText = Text(
       _fmtDuration(),
       style: TextStyle(
-        fontFamily: 'SF Pro Text',
+        fontFamily: chatMessageFontFamily,
         fontSize: fontSize - 1,
         color: textColor,
       ),

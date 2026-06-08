@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'dart:async';
 import '/backend/backend.dart';
 import '/auth/firebase_auth/auth_util.dart';
+import '/backend/firestore/firestore_desktop_adapter.dart';
 
 class TaskStats extends StatefulWidget {
   const TaskStats({super.key});
@@ -22,6 +24,14 @@ class _TaskStatsState extends State<TaskStats> {
     final currentUserDisplayName =
         currentUserDocument?.displayName ?? currentUser?.displayName ?? '';
 
+    if (useWindowsFirestoreRest) {
+      return _RestTaskStats(
+        completedTasks: _completedTasks,
+        currentUserDisplayName: currentUserDisplayName,
+        buildStats: _buildStatsForTodos,
+      );
+    }
+
     return StreamBuilder<List<ActionItemsRecord>>(
       stream: queryActionItemsRecord(
         queryBuilder: (actionItemsRecord) => actionItemsRecord
@@ -37,7 +47,14 @@ class _TaskStatsState extends State<TaskStats> {
           return _buildEmptyStats();
         }
 
-        final allTodos = snapshot.data!;
+        return _buildStatsForTodos(snapshot.data!);
+      },
+    );
+  }
+
+  Widget _buildStatsForTodos(List<ActionItemsRecord> allTodos) {
+    final currentUserDisplayName =
+        currentUserDocument?.displayName ?? currentUser?.displayName ?? '';
 
         // Filter tasks: ONLY show tasks where user is in involved_people
         final filteredTodos = allTodos.where((task) {
@@ -215,8 +232,6 @@ class _TaskStatsState extends State<TaskStats> {
             ],
           ),
         );
-      },
-    );
   }
 
   void _showInsight(BuildContext context, List<ActionItemsRecord> todos) {
@@ -497,5 +512,64 @@ class _TaskStatsState extends State<TaskStats> {
         ],
       ),
     );
+  }
+}
+
+typedef _TaskStatsBuilder = Widget Function(List<ActionItemsRecord> todos);
+
+class _RestTaskStats extends StatefulWidget {
+  const _RestTaskStats({
+    required this.completedTasks,
+    required this.currentUserDisplayName,
+    required this.buildStats,
+  });
+
+  final Set<String> completedTasks;
+  final String currentUserDisplayName;
+  final _TaskStatsBuilder buildStats;
+
+  @override
+  State<_RestTaskStats> createState() => _RestTaskStatsState();
+}
+
+class _RestTaskStatsState extends State<_RestTaskStats> {
+  List<ActionItemsRecord>? _items;
+  Timer? _pollTimer;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+    _pollTimer = Timer.periodic(const Duration(seconds: 30), (_) => _load());
+  }
+
+  @override
+  void dispose() {
+    _pollTimer?.cancel();
+    super.dispose();
+  }
+
+  Future<void> _load() async {
+    try {
+      final items = await fsQueryRecentActionItems();
+      if (mounted) setState(() => _items = items);
+    } catch (_) {}
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_items == null) {
+      return const SizedBox(
+        height: 200,
+        child: Center(
+          child: SizedBox(
+            width: 24,
+            height: 24,
+            child: CircularProgressIndicator(strokeWidth: 2),
+          ),
+        ),
+      );
+    }
+    return widget.buildStats(_items!);
   }
 }

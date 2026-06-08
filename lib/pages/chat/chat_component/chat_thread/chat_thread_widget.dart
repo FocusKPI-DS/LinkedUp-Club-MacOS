@@ -4,12 +4,14 @@ import 'dart:convert';
 import '/pages/chat/forwarded_history_viewer/forwarded_history_viewer_widget.dart';
 import '/auth/firebase_auth/auth_util.dart';
 import '/backend/backend.dart';
+import '/backend/firestore/firestore_desktop_adapter.dart';
 import '/backend/schema/enums/enums.dart';
 import '/pages/user_summary/user_summary_widget.dart';
 import '/flutter_flow/flutter_flow_audio_player.dart';
 import '/flutter_flow/flutter_flow_expanded_image_view.dart';
 import '/custom_code/widgets/video_message_widget.dart';
 import '/flutter_flow/flutter_flow_util.dart';
+import '/utils/chat_message_font.dart';
 // import '/flutter_flow/flutter_flow_widgets.dart';
 import '/pages/chat/chat_component/p_d_f_view/p_d_f_view_widget.dart';
 import '/pages/chat/chat_component/report_component/report_component_widget.dart';
@@ -38,7 +40,7 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 // import 'package:flutter_spinkit/flutter_spinkit.dart';
-import 'package:google_fonts/google_fonts.dart';
+import 'package:google_fonts/google_fonts.dart' hide Config;
 import 'package:page_transition/page_transition.dart';
 // import 'package:provider/provider.dart';
 import 'chat_thread_model.dart';
@@ -63,6 +65,7 @@ class ChatThreadWidget extends StatefulWidget {
     this.isConsecutive = false,
     this.showTimestamp = true,
     this.onMessageAction,
+    this.onMessagesMutated,
     this.activeSelectionId,
     this.isSelectionMode = false,
     this.selectedMessages,
@@ -87,6 +90,7 @@ class ChatThreadWidget extends StatefulWidget {
       isConsecutive; // Whether this message is part of a streak by the exact same sender
   final bool showTimestamp; // Whether to show the in-bubble timestamp
   final Function(String, MessagesRecord)? onMessageAction;
+  final VoidCallback? onMessagesMutated;
   final ValueNotifier<String?>? activeSelectionId;
   final bool isSelectionMode;
   final Set<MessagesRecord>? selectedMessages;
@@ -755,8 +759,7 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
     final path = _normalizeActionItemPath(actionItemRefPath);
     try {
       final ref = FirebaseFirestore.instance.doc(path);
-      final snap = await ref.get();
-      if (!snap.exists) {
+      if (!await fsDocumentExists(ref)) {
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -773,10 +776,7 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
         );
         return;
       }
-      await ref.update({
-        'status': 'completed',
-        'completed_time': FieldValue.serverTimestamp(),
-      });
+      await fsMarkActionItemDone(ref);
     } on FirebaseException catch (e) {
       if (!mounted) return;
       final isNotFound = e.code == 'not-found';
@@ -807,8 +807,7 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
     final path = _normalizeActionItemPath(actionItemRefPath);
     try {
       final ref = FirebaseFirestore.instance.doc(path);
-      final snap = await ref.get();
-      if (!snap.exists) {
+      if (!await fsDocumentExists(ref)) {
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -824,7 +823,7 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
         );
         return;
       }
-      await ref.update({'last_reminder_at': FieldValue.delete()});
+      await fsDeleteDocumentField(ref, 'last_reminder_at');
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -955,47 +954,13 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
 
     if (confirmed == true) {
       try {
-        // Delete the message
-        await widget.message!.reference.delete();
+        if (widget.message == null || widget.chatRef == null) return;
+        await fsUnsendMessage(
+          message: widget.message!,
+          chatRef: widget.chatRef!,
+        );
 
-        // Update chat's last message if this was the last message
-        final chatDoc = await widget.chatRef!.get();
-        if (chatDoc.exists) {
-          final chatData = chatDoc.data() as Map<String, dynamic>;
-          final lastMessageSent =
-              chatData['last_message_sent'] as DocumentReference?;
-
-          // If this was the last message, update chat
-          if (lastMessageSent == currentUserReference) {
-            // Get the previous message
-            final previousMessages = await widget.chatRef!
-                .collection('messages')
-                .orderBy('created_at', descending: true)
-                .limit(1)
-                .get();
-
-            if (previousMessages.docs.isNotEmpty) {
-              final previousMessage = previousMessages.docs.first;
-              final previousData = previousMessage.data();
-
-              // Update chat with previous message info
-              await widget.chatRef!.update({
-                'last_message': previousData['content'] ?? '',
-                'last_message_at': previousData['created_at'],
-                'last_message_sent': previousData['sender_ref'],
-                'last_message_type': previousData['message_type'],
-              });
-            } else {
-              // No previous messages, reset chat
-              await widget.chatRef!.update({
-                'last_message': '',
-                'last_message_at': getCurrentTimestamp,
-                'last_message_sent': currentUserReference,
-                'last_message_type': MessageType.text,
-              });
-            }
-          }
-        }
+        widget.onMessagesMutated?.call();
 
         // Show success message
         if (mounted) {
@@ -1057,7 +1022,11 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
   Future<void> _pinMessage() async {
     if (widget.message == null) return;
     try {
-      await widget.message!.reference.update({'is_pinned': true});
+      await fsPatchDocument(
+        widget.message!.reference,
+        {'is_pinned': true},
+      );
+      widget.onMessagesMutated?.call();
       if (mounted) {
         _showSuccessPopup('Message Pinned');
       }
@@ -1074,7 +1043,11 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
   Future<void> _unpinMessage() async {
     if (widget.message == null) return;
     try {
-      await widget.message!.reference.update({'is_pinned': false});
+      await fsPatchDocument(
+        widget.message!.reference,
+        {'is_pinned': false},
+      );
+      widget.onMessagesMutated?.call();
       if (mounted) {
         _showSuccessPopup('Message Unpinned');
       }
@@ -1286,7 +1259,7 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                               style: TextStyle(
-                                fontFamily: 'SF Pro Text',
+                                fontFamily: chatMessageFontFamily,
                                 fontSize: 9.5,
                                 color: isDestructive
                                     ? const Color(0xFFFF3B30)
@@ -1531,9 +1504,19 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
           _locallyRemovedReactions.remove(emoji);
         });
       }
-      await msgRef.update({
-        'reactions_by_user.$userId': FieldValue.arrayUnion([emoji])
-      });
+      if (useWindowsFirestoreRest) {
+        final current = Map<String, List<String>>.from(
+          widget.message?.reactionsByUser ?? const {},
+        );
+        final list = List<String>.from(current[userId] ?? []);
+        if (!list.contains(emoji)) list.add(emoji);
+        current[userId] = list;
+        await fsPatchMessageReactions(msgRef, current);
+      } else {
+        await msgRef.update({
+          'reactions_by_user.$userId': FieldValue.arrayUnion([emoji])
+        });
+      }
     } catch (_) {
       // no-op: best effort
     }
@@ -1718,9 +1701,23 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
         });
       }
       // Persist
-      await msgRef.update({
-        'reactions_by_user.$userId': FieldValue.arrayRemove([emoji])
-      });
+      if (useWindowsFirestoreRest) {
+        final current = Map<String, List<String>>.from(
+          widget.message?.reactionsByUser ?? const {},
+        );
+        final list = List<String>.from(current[userId] ?? []);
+        list.remove(emoji);
+        if (list.isEmpty) {
+          current.remove(userId);
+        } else {
+          current[userId] = list;
+        }
+        await fsPatchMessageReactions(msgRef, current);
+      } else {
+        await msgRef.update({
+          'reactions_by_user.$userId': FieldValue.arrayRemove([emoji])
+        });
+      }
     } catch (_) {
       // no-op
     }
@@ -1730,12 +1727,8 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
     if (userIds.isEmpty) return '';
     try {
       final futures = userIds.map((uid) async {
-        final snap = await UsersRecord.collection
-            .where('uid', isEqualTo: uid)
-            .limit(1)
-            .get();
-        if (snap.docs.isEmpty) return uid;
-        final user = UsersRecord.fromSnapshot(snap.docs.first);
+        final user = await fsTryGetUserOnce(UsersRecord.collection.doc(uid));
+        if (user == null) return uid;
         return user.displayName.isNotEmpty ? user.displayName : uid;
       });
       final names = await Future.wait(futures);
@@ -2614,13 +2607,13 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
             mainAxisSize: MainAxisSize.min,
             children: [
               Row(
-                children: const [
+                children: [
                   Icon(Icons.history, size: 16.0, color: Colors.black87),
                   SizedBox(width: 6.0),
                   Text(
                     'Chat History',
                     style: TextStyle(
-                      fontFamily: 'SF Pro Text',
+                      fontFamily: chatMessageFontFamily,
                       fontSize: 15.0,
                       fontWeight: FontWeight.w600,
                       color: Colors.black87,
@@ -2668,8 +2661,8 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
                     '$senderName: $displayContent',
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      fontFamily: 'SF Pro Text',
+                    style: TextStyle(
+                      fontFamily: chatMessageFontFamily,
                       fontSize: 13.0,
                       color: Color(0xFF666666),
                     ),
@@ -2677,10 +2670,10 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
                 );
               }).toList(),
               if (historyList.length > 3)
-                const Text(
+                Text(
                   '...',
                   style: TextStyle(
-                    fontFamily: 'SF Pro Text',
+                    fontFamily: chatMessageFontFamily,
                     fontSize: 13.0,
                     color: Color(0xFF666666),
                   ),
@@ -2843,8 +2836,8 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
                 child: Center(
                   child: Text(
                     dateTimeFormat('MMM d, h:mm a', widget.message!.createdAt!),
-                    style: const TextStyle(
-                      fontFamily: 'SF Pro Text',
+                    style: TextStyle(
+                      fontFamily: chatMessageFontFamily,
                       color: Color(0xFF8E8E93),
                       fontSize: 12.0,
                       fontWeight: FontWeight.w500,
@@ -3124,8 +3117,8 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
                                                                             children: [
                                                                               Text(
                                                                                 widget.message?.replyToSender ?? 'Unknown',
-                                                                                style: const TextStyle(
-                                                                                  fontFamily: 'SF Pro Text',
+                                                                                style: TextStyle(
+                                                                                  fontFamily: chatMessageFontFamily,
                                                                                   color: Color(0xFF007AFF),
                                                                                   fontSize: 13.0,
                                                                                   fontWeight: FontWeight.w600,
@@ -3134,8 +3127,8 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
                                                                               const SizedBox(height: 2.0),
                                                                               Text(
                                                                                 widget.message?.replyToContent ?? '',
-                                                                                style: const TextStyle(
-                                                                                  fontFamily: 'SF Pro Text',
+                                                                                style: TextStyle(
+                                                                                  fontFamily: chatMessageFontFamily,
                                                                                   color: Color(0xFF667781),
                                                                                   fontSize: 13.0,
                                                                                 ),
@@ -3220,7 +3213,7 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
                                                                             textScaler: TextScaler.noScaling,
                                                                             // iOS native text styling
                                                                             p: TextStyle(
-                                                                              fontFamily: 'SF Pro Text',
+                                                                              fontFamily: chatMessageFontFamily,
                                                                               color: const Color(0xFF000000),
                                                                               fontSize: FFAppState().chatFontSize,
                                                                               letterSpacing: -0.4,
@@ -3228,43 +3221,43 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
                                                                               height: 1.3,
                                                                             ),
                                                                             h1: TextStyle(
-                                                                              fontFamily: 'SF Pro Text',
+                                                                              fontFamily: chatMessageFontFamily,
                                                                               color: const Color(0xFF000000),
                                                                               fontSize: FFAppState().chatFontSize,
                                                                               fontWeight: FontWeight.w700,
                                                                             ),
                                                                             h2: TextStyle(
-                                                                              fontFamily: 'SF Pro Text',
+                                                                              fontFamily: chatMessageFontFamily,
                                                                               color: const Color(0xFF000000),
                                                                               fontSize: FFAppState().chatFontSize,
                                                                               fontWeight: FontWeight.w700,
                                                                             ),
                                                                             h3: TextStyle(
-                                                                              fontFamily: 'SF Pro Text',
+                                                                              fontFamily: chatMessageFontFamily,
                                                                               color: const Color(0xFF000000),
                                                                               fontSize: FFAppState().chatFontSize,
                                                                               fontWeight: FontWeight.w600,
                                                                             ),
                                                                             h4: TextStyle(
-                                                                              fontFamily: 'SF Pro Text',
+                                                                              fontFamily: chatMessageFontFamily,
                                                                               color: const Color(0xFF000000),
                                                                               fontSize: FFAppState().chatFontSize,
                                                                               fontWeight: FontWeight.w600,
                                                                             ),
                                                                             h5: TextStyle(
-                                                                              fontFamily: 'SF Pro Text',
+                                                                              fontFamily: chatMessageFontFamily,
                                                                               color: const Color(0xFF000000),
                                                                               fontSize: FFAppState().chatFontSize,
                                                                               fontWeight: FontWeight.w600,
                                                                             ),
                                                                             h6: TextStyle(
-                                                                              fontFamily: 'SF Pro Text',
+                                                                              fontFamily: chatMessageFontFamily,
                                                                               color: const Color(0xFF000000),
                                                                               fontSize: FFAppState().chatFontSize,
                                                                               fontWeight: FontWeight.w500,
                                                                             ),
                                                                             a: TextStyle(
-                                                                              fontFamily: 'SF Pro Text',
+                                                                              fontFamily: chatMessageFontFamily,
                                                                               color: const Color(0xFF007AFF),
                                                                               fontSize: FFAppState().chatFontSize,
                                                                               letterSpacing: -0.4,
@@ -3279,13 +3272,13 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
                                                                             ),
                                                                             listBullet:
                                                                                 TextStyle(
-                                                                              fontFamily: 'SF Pro Text',
+                                                                              fontFamily: chatMessageFontFamily,
                                                                               color: const Color(0xFF000000),
                                                                               fontSize: FFAppState().chatFontSize,
                                                                             ),
                                                                             blockquote:
                                                                                 TextStyle(
-                                                                              fontFamily: 'SF Pro Text',
+                                                                              fontFamily: chatMessageFontFamily,
                                                                               color: const Color(0xFF667781),
                                                                               fontSize: FFAppState().chatFontSize,
                                                                             ),
@@ -3296,13 +3289,13 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
                                                                             ),
                                                                             strong:
                                                                                 TextStyle(
-                                                                              fontFamily: 'SF Pro Text',
+                                                                              fontFamily: chatMessageFontFamily,
                                                                               color: const Color(0xFF000000),
                                                                               fontSize: FFAppState().chatFontSize,
                                                                               fontWeight: FontWeight.w600,
                                                                             ),
                                                                             em: TextStyle(
-                                                                              fontFamily: 'SF Pro Text',
+                                                                              fontFamily: chatMessageFontFamily,
                                                                               color: const Color(0xFF000000),
                                                                               fontSize: FFAppState().chatFontSize,
                                                                               fontStyle: FontStyle.italic,
@@ -3310,14 +3303,14 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
                                                                             ),
                                                                             tableBody:
                                                                                 TextStyle(
-                                                                              fontFamily: 'SF Pro Text',
+                                                                              fontFamily: chatMessageFontFamily,
                                                                               color: const Color(0xFF000000),
                                                                               fontSize: FFAppState().chatFontSize - 1.0,
                                                                               fontWeight: FontWeight.w400,
                                                                             ),
                                                                             tableHead:
                                                                                 TextStyle(
-                                                                              fontFamily: 'SF Pro Text',
+                                                                              fontFamily: chatMessageFontFamily,
                                                                               color: const Color(0xFF000000),
                                                                               fontSize: FFAppState().chatFontSize - 1.0,
                                                                               fontWeight: FontWeight.w600,
@@ -3368,7 +3361,7 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
                                                                       Text(
                                                                         'via Qurio AI',
                                                                         style: TextStyle(
-                                                                          fontFamily: 'SF Pro Text',
+                                                                          fontFamily: chatMessageFontFamily,
                                                                           color: Color(0xFF0077B5),
                                                                           fontSize: 11.0,
                                                                           fontWeight: FontWeight.w500,
@@ -3399,7 +3392,7 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
                                                                         style:
                                                                             TextStyle(
                                                                           fontFamily:
-                                                                              'SF Pro Text',
+                                                                              chatMessageFontFamily,
                                                                           color:
                                                                               const Color(0xFF8E8E93),
                                                                           fontSize:
@@ -3415,9 +3408,9 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
                                                                         Text(
                                                                           ' • ',
                                                                           style:
-                                                                              const TextStyle(
+                                                                              TextStyle(
                                                                             fontFamily:
-                                                                                'SF Pro Text',
+                                                                                chatMessageFontFamily,
                                                                             color:
                                                                                 Color(0xFF8E8E93),
                                                                             fontSize:
@@ -3429,9 +3422,9 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
                                                                               'MMM d, h:mm a',
                                                                               widget.message!.editedAt!),
                                                                           style:
-                                                                              const TextStyle(
+                                                                              TextStyle(
                                                                             fontFamily:
-                                                                                'SF Pro Text',
+                                                                                chatMessageFontFamily,
                                                                             color:
                                                                                 Color(0xFF8E8E93),
                                                                             fontSize:
@@ -4210,8 +4203,8 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
                                                                             children: [
                                                                               Text(
                                                                                 widget.message?.replyToSender ?? 'Unknown',
-                                                                                style: const TextStyle(
-                                                                                  fontFamily: 'SF Pro Text',
+                                                                                style: TextStyle(
+                                                                                  fontFamily: chatMessageFontFamily,
                                                                                   color: Color(0xFF007AFF),
                                                                                   fontSize: 13.0,
                                                                                   fontWeight: FontWeight.w600,
@@ -4220,8 +4213,8 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
                                                                               const SizedBox(height: 2.0),
                                                                               Text(
                                                                                 widget.message?.replyToContent ?? '',
-                                                                                style: const TextStyle(
-                                                                                  fontFamily: 'SF Pro Text',
+                                                                                style: TextStyle(
+                                                                                  fontFamily: chatMessageFontFamily,
                                                                                   color: Color(0xFF667781),
                                                                                   fontSize: 13.0,
                                                                                 ),
@@ -4306,7 +4299,7 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
                                                                             textScaler: TextScaler.noScaling,
                                                                             // iMessage received bubble: dark text on gray
                                                                             p: TextStyle(
-                                                                              fontFamily: 'SF Pro Text',
+                                                                              fontFamily: chatMessageFontFamily,
                                                                               color: const Color(0xFF000000),
                                                                               fontSize: FFAppState().chatFontSize,
                                                                               letterSpacing: -0.4,
@@ -4314,43 +4307,43 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
                                                                               height: 1.3,
                                                                             ),
                                                                             h1: TextStyle(
-                                                                              fontFamily: 'SF Pro Text',
+                                                                              fontFamily: chatMessageFontFamily,
                                                                               color: const Color(0xFF000000),
                                                                               fontSize: FFAppState().chatFontSize,
                                                                               fontWeight: FontWeight.w700,
                                                                             ),
                                                                             h2: TextStyle(
-                                                                              fontFamily: 'SF Pro Text',
+                                                                              fontFamily: chatMessageFontFamily,
                                                                               color: const Color(0xFF000000),
                                                                               fontSize: FFAppState().chatFontSize,
                                                                               fontWeight: FontWeight.w700,
                                                                             ),
                                                                             h3: TextStyle(
-                                                                              fontFamily: 'SF Pro Text',
+                                                                              fontFamily: chatMessageFontFamily,
                                                                               color: const Color(0xFF000000),
                                                                               fontSize: FFAppState().chatFontSize,
                                                                               fontWeight: FontWeight.w600,
                                                                             ),
                                                                             h4: TextStyle(
-                                                                              fontFamily: 'SF Pro Text',
+                                                                              fontFamily: chatMessageFontFamily,
                                                                               color: const Color(0xFF000000),
                                                                               fontSize: FFAppState().chatFontSize,
                                                                               fontWeight: FontWeight.w600,
                                                                             ),
                                                                             h5: TextStyle(
-                                                                              fontFamily: 'SF Pro Text',
+                                                                              fontFamily: chatMessageFontFamily,
                                                                               color: const Color(0xFF000000),
                                                                               fontSize: FFAppState().chatFontSize,
                                                                               fontWeight: FontWeight.w600,
                                                                             ),
                                                                             h6: TextStyle(
-                                                                              fontFamily: 'SF Pro Text',
+                                                                              fontFamily: chatMessageFontFamily,
                                                                               color: const Color(0xFF000000),
                                                                               fontSize: FFAppState().chatFontSize,
                                                                               fontWeight: FontWeight.w500,
                                                                             ),
                                                                             a: TextStyle(
-                                                                              fontFamily: 'SF Pro Text',
+                                                                              fontFamily: chatMessageFontFamily,
                                                                               color: const Color(0xFF007AFF),
                                                                               fontSize: FFAppState().chatFontSize,
                                                                               letterSpacing: -0.4,
@@ -4365,13 +4358,13 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
                                                                             ),
                                                                             listBullet:
                                                                                 TextStyle(
-                                                                              fontFamily: 'SF Pro Text',
+                                                                              fontFamily: chatMessageFontFamily,
                                                                               color: const Color(0xFF000000),
                                                                               fontSize: FFAppState().chatFontSize,
                                                                             ),
                                                                             blockquote:
                                                                                 TextStyle(
-                                                                              fontFamily: 'SF Pro Text',
+                                                                              fontFamily: chatMessageFontFamily,
                                                                               color: const Color(0xFF667781),
                                                                               fontSize: FFAppState().chatFontSize,
                                                                             ),
@@ -4382,13 +4375,13 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
                                                                             ),
                                                                             strong:
                                                                                 TextStyle(
-                                                                              fontFamily: 'SF Pro Text',
+                                                                              fontFamily: chatMessageFontFamily,
                                                                               color: const Color(0xFF000000),
                                                                               fontSize: FFAppState().chatFontSize,
                                                                               fontWeight: FontWeight.w600,
                                                                             ),
                                                                             em: TextStyle(
-                                                                              fontFamily: 'SF Pro Text',
+                                                                              fontFamily: chatMessageFontFamily,
                                                                               color: const Color(0xFF000000),
                                                                               fontSize: FFAppState().chatFontSize,
                                                                               fontStyle: FontStyle.italic,
@@ -4396,14 +4389,14 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
                                                                             ),
                                                                             tableBody:
                                                                                 TextStyle(
-                                                                              fontFamily: 'SF Pro Text',
+                                                                              fontFamily: chatMessageFontFamily,
                                                                               color: const Color(0xFF000000),
                                                                               fontSize: FFAppState().chatFontSize - 1.0,
                                                                               fontWeight: FontWeight.w400,
                                                                             ),
                                                                             tableHead:
                                                                                 TextStyle(
-                                                                              fontFamily: 'SF Pro Text',
+                                                                              fontFamily: chatMessageFontFamily,
                                                                               color: const Color(0xFF000000),
                                                                               fontSize: FFAppState().chatFontSize - 1.0,
                                                                               fontWeight: FontWeight.w600,
@@ -4454,7 +4447,7 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
                                                                       Text(
                                                                         'via Qurio AI',
                                                                         style: TextStyle(
-                                                                          fontFamily: 'SF Pro Text',
+                                                                          fontFamily: chatMessageFontFamily,
                                                                           color: Color(0xFF0077B5),
                                                                           fontSize: 11.0,
                                                                           fontWeight: FontWeight.w500,

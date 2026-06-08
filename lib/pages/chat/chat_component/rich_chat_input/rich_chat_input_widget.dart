@@ -30,6 +30,7 @@ class RichChatInputWidget extends StatefulWidget {
   final VoidCallback? onScreenRecord;
   final VoidCallback? onPhotoLibrary;
   final VoidCallback? onCamera;
+  final Future<bool> Function()? onTryPasteImage;
   final bool isScreenRecording;
   final bool hasAttachments;
   final String? initialText;
@@ -52,6 +53,7 @@ class RichChatInputWidget extends StatefulWidget {
     this.onScreenRecord,
     this.onPhotoLibrary,
     this.onCamera,
+    this.onTryPasteImage,
     this.isScreenRecording = false,
     this.hasAttachments = false,
     this.initialText,
@@ -75,6 +77,7 @@ class _RichChatInputWidgetState extends State<RichChatInputWidget> {
   late QuillController _controller;
   late FocusNode _focusNode;
   bool _isComposing = false;
+  bool _pasteKeyboardHandlerRegistered = false;
   bool _showToolbar = false;
   bool _showScheduleOverlay = false;
   DateTime? _scheduledDate;
@@ -83,8 +86,8 @@ class _RichChatInputWidgetState extends State<RichChatInputWidget> {
   final IMEComposingHandler _imeHandler = IMEComposingHandler();
 
   // Voice Recording State
-  final AudioRecorder _audioRecorder = AudioRecorder();
-  RecorderController? _waveController;  // null on web (package uses Platform internally)
+  AudioRecorder? _audioRecorder;
+  RecorderController? _waveController;  // mobile only (crashes on desktop)
   bool _isRecording = false;
   bool _hasRecorded = false;
   String? _recordedFilePath;
@@ -97,6 +100,11 @@ class _RichChatInputWidgetState extends State<RichChatInputWidget> {
   // Speech to text state (kept for future use)
   final stt.SpeechToText _speech = stt.SpeechToText();
   bool _sttAvailable = false;
+
+  AudioRecorder get _recorder {
+    _audioRecorder ??= AudioRecorder();
+    return _audioRecorder!;
+  }
 
   @override
   void initState() {
@@ -117,7 +125,7 @@ class _RichChatInputWidgetState extends State<RichChatInputWidget> {
     _controller.addListener(_onTextChanged);
     _controller.addListener(_onSelectionChanged);
 
-    if (!kIsWeb) {
+    if (!kIsWeb && (Platform.isAndroid || Platform.isIOS)) {
       _waveController = RecorderController()
         ..androidEncoder = AndroidEncoder.aac
         ..androidOutputFormat = AndroidOutputFormat.mpeg4
@@ -125,12 +133,42 @@ class _RichChatInputWidgetState extends State<RichChatInputWidget> {
         ..sampleRate = 44100;
     }
 
-    // Don't auto-init speech on macOS — it triggers a TCC privacy crash
-    // (SIGABRT) if the user hasn't previously granted speech recognition
-    // permission via System Settings.  We defer init to when the user
-    // explicitly taps a speech-to-text button.
-    if (!kIsWeb && !Platform.isMacOS) {
+    // Defer speech init on desktop — macOS TCC crash; Windows has no STT plugin.
+    if (!kIsWeb && (Platform.isAndroid || Platform.isIOS)) {
       _initSpeech();
+    }
+
+    _syncPasteKeyboardHandler();
+  }
+
+  void _syncPasteKeyboardHandler() {
+    final shouldRegister = widget.onTryPasteImage != null;
+    if (shouldRegister && !_pasteKeyboardHandlerRegistered) {
+      HardwareKeyboard.instance.addHandler(_onHardwarePasteKey);
+      _pasteKeyboardHandlerRegistered = true;
+    } else if (!shouldRegister && _pasteKeyboardHandlerRegistered) {
+      HardwareKeyboard.instance.removeHandler(_onHardwarePasteKey);
+      _pasteKeyboardHandlerRegistered = false;
+    }
+  }
+
+  /// Runs before QuillEditor — Quill overwrites [FocusNode.onKeyEvent] on the same node.
+  bool _onHardwarePasteKey(KeyEvent event) {
+    if (widget.onTryPasteImage == null) return false;
+    if (!_focusNode.hasFocus) return false;
+    if (event is! KeyDownEvent) return false;
+    if (event.logicalKey != LogicalKeyboardKey.keyV) return false;
+    if (!_pasteShortcutActive) return false;
+
+    unawaited(_handlePasteShortcut());
+    return true;
+  }
+
+  @override
+  void didUpdateWidget(RichChatInputWidget oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.onTryPasteImage != widget.onTryPasteImage) {
+      _syncPasteKeyboardHandler();
     }
   }
 
@@ -203,8 +241,12 @@ class _RichChatInputWidgetState extends State<RichChatInputWidget> {
   void dispose() {
     _recordTimer?.cancel();
     _waveController?.dispose();
-    _audioRecorder.dispose();
-    
+    _audioRecorder?.dispose();
+
+    if (_pasteKeyboardHandlerRegistered) {
+      HardwareKeyboard.instance.removeHandler(_onHardwarePasteKey);
+      _pasteKeyboardHandlerRegistered = false;
+    }
     _imeHandler.dispose();
     _controller.removeListener(_onTextChanged);
     _controller.removeListener(_onSelectionChanged);
@@ -298,14 +340,14 @@ class _RichChatInputWidgetState extends State<RichChatInputWidget> {
 
   Future<void> _startRecording() async {
     try {
-      if (await _audioRecorder.hasPermission()) {
+      if (await _recorder.hasPermission()) {
         _recordDuration = 0;
 
         if (kIsWeb) {
           // Web: use start() mode with opus — record_web's startStream only supports pcm16bits.
           // start() uses MediaRecorder API and returns a blob URL on stop().
           _recordedBytes = null;
-          await _audioRecorder.start(
+          await _recorder.start(
             const RecordConfig(encoder: AudioEncoder.opus, numChannels: 1),
             path: '',  // path is ignored on web
           );
@@ -316,7 +358,7 @@ class _RichChatInputWidgetState extends State<RichChatInputWidget> {
           final fileName = 'voice_message_${DateTime.now().millisecondsSinceEpoch}.m4a';
           _recordedFilePath = '${directory.path}/$fileName';
 
-          await _audioRecorder.start(
+          await _recorder.start(
             const RecordConfig(encoder: AudioEncoder.aacLc, bitRate: 128000),
             path: _recordedFilePath!,
           );
@@ -351,7 +393,7 @@ class _RichChatInputWidgetState extends State<RichChatInputWidget> {
 
       if (kIsWeb) {
         // Web: stop() returns a blob URL, fetch byte data from it
-        final blobUrl = await _audioRecorder.stop();
+        final blobUrl = await _recorder.stop();
         print('🎙️ [web-stop] Got blob URL: $blobUrl');
         if (blobUrl != null && blobUrl.isNotEmpty) {
           _recordedBytes = await fetchBlobUrlBytes(blobUrl);
@@ -360,7 +402,7 @@ class _RichChatInputWidgetState extends State<RichChatInputWidget> {
           print('❌ [web-stop] No blob URL returned from stop()');
         }
       } else {
-        await _audioRecorder.stop();
+        await _recorder.stop();
         await _waveController?.stop();
       }
 
@@ -379,7 +421,7 @@ class _RichChatInputWidgetState extends State<RichChatInputWidget> {
   void _cancelRecording() {
     _recordTimer?.cancel();
     if (_isRecording) {
-      _audioRecorder.stop();
+      _recorder.stop();
       if (!kIsWeb) {
         _waveController?.stop();
       }
@@ -550,10 +592,7 @@ class _RichChatInputWidgetState extends State<RichChatInputWidget> {
           ),
         ],
         if (kIsWeb ||
-            (!kIsWeb &&
-                (Platform.isMacOS ||
-                    Platform.isWindows ||
-                    Platform.isLinux))) ...[
+            (!kIsWeb && (Platform.isMacOS || Platform.isLinux))) ...[
           PopupMenuItem(
             value: 'screenshot',
             onTap: widget.onScreenshot,
@@ -569,6 +608,12 @@ class _RichChatInputWidgetState extends State<RichChatInputWidget> {
               ],
             ),
           ),
+        ],
+        if (kIsWeb ||
+            (!kIsWeb &&
+                (Platform.isMacOS ||
+                    Platform.isWindows ||
+                    Platform.isLinux))) ...[
           PopupMenuItem(
             value: 'record',
             onTap: widget.onScreenRecord,
@@ -690,6 +735,295 @@ class _RichChatInputWidgetState extends State<RichChatInputWidget> {
     }
   }
 
+  bool get _pasteShortcutActive {
+    if (!kIsWeb && Platform.isMacOS) {
+      return HardwareKeyboard.instance.isMetaPressed;
+    }
+    return HardwareKeyboard.instance.isControlPressed;
+  }
+
+  Future<void> _handlePasteShortcut() async {
+    debugPrint('📋 [paste] Ctrl+V in message input');
+    final handled = await widget.onTryPasteImage!();
+    debugPrint('📋 [paste] attachment handled=$handled');
+    if (handled || !mounted) return;
+
+    final data = await Clipboard.getData(Clipboard.kTextPlain);
+    final text = data?.text;
+    if (text == null || text.isEmpty) return;
+
+    final selection = _controller.selection;
+    final start = selection.start;
+    final end = selection.end;
+    _controller.replaceText(
+      start,
+      end - start,
+      text,
+      TextSelection.collapsed(offset: start + text.length),
+    );
+  }
+
+  Widget _buildQuillEditor() {
+    return QuillEditor.basic(
+      controller: _controller,
+      focusNode: _focusNode,
+      scrollController: ScrollController(),
+      config: QuillEditorConfig(
+          placeholder: widget.placeholder,
+          autoFocus: false,
+          expands: false,
+          padding: EdgeInsets.zero,
+          customStyles: DefaultStyles(
+            placeHolder: DefaultTextBlockStyle(
+              TextStyle(
+                fontSize: FFAppState().chatFontSize,
+                color: FlutterFlowTheme.of(context)
+                    .secondaryText
+                    .withOpacity(0.55),
+                fontFamily: 'Inter',
+              ),
+              HorizontalSpacing.zero,
+              VerticalSpacing.zero,
+              VerticalSpacing.zero,
+              null,
+            ),
+            paragraph: DefaultTextBlockStyle(
+              TextStyle(
+                fontSize: FFAppState().chatFontSize,
+                color: FlutterFlowTheme.of(context).primaryText,
+                fontFamily: 'Inter',
+                height: 1.4,
+              ),
+              HorizontalSpacing.zero,
+              VerticalSpacing.zero,
+              VerticalSpacing.zero,
+              null,
+            ),
+            h1: DefaultTextBlockStyle(
+              TextStyle(
+                fontSize: FFAppState().chatFontSize,
+                color: FlutterFlowTheme.of(context).primaryText,
+                fontFamily: 'Inter',
+                fontWeight: FontWeight.w700,
+                height: 1.4,
+              ),
+              HorizontalSpacing.zero,
+              VerticalSpacing.zero,
+              VerticalSpacing.zero,
+              null,
+            ),
+            h2: DefaultTextBlockStyle(
+              TextStyle(
+                fontSize: FFAppState().chatFontSize,
+                color: FlutterFlowTheme.of(context).primaryText,
+                fontFamily: 'Inter',
+                fontWeight: FontWeight.w700,
+                height: 1.4,
+              ),
+              HorizontalSpacing.zero,
+              VerticalSpacing.zero,
+              VerticalSpacing.zero,
+              null,
+            ),
+            h3: DefaultTextBlockStyle(
+              TextStyle(
+                fontSize: FFAppState().chatFontSize,
+                color: FlutterFlowTheme.of(context).primaryText,
+                fontFamily: 'Inter',
+                fontWeight: FontWeight.w600,
+                height: 1.4,
+              ),
+              HorizontalSpacing.zero,
+              VerticalSpacing.zero,
+              VerticalSpacing.zero,
+              null,
+            ),
+            h4: DefaultTextBlockStyle(
+              TextStyle(
+                fontSize: FFAppState().chatFontSize,
+                color: FlutterFlowTheme.of(context).primaryText,
+                fontFamily: 'Inter',
+                fontWeight: FontWeight.w600,
+                height: 1.4,
+              ),
+              HorizontalSpacing.zero,
+              VerticalSpacing.zero,
+              VerticalSpacing.zero,
+              null,
+            ),
+            h5: DefaultTextBlockStyle(
+              TextStyle(
+                fontSize: FFAppState().chatFontSize,
+                color: FlutterFlowTheme.of(context).primaryText,
+                fontFamily: 'Inter',
+                fontWeight: FontWeight.w600,
+                height: 1.4,
+              ),
+              HorizontalSpacing.zero,
+              VerticalSpacing.zero,
+              VerticalSpacing.zero,
+              null,
+            ),
+            h6: DefaultTextBlockStyle(
+              TextStyle(
+                fontSize: FFAppState().chatFontSize,
+                color: FlutterFlowTheme.of(context).primaryText,
+                fontFamily: 'Inter',
+                fontWeight: FontWeight.w500,
+                height: 1.4,
+              ),
+              HorizontalSpacing.zero,
+              VerticalSpacing.zero,
+              VerticalSpacing.zero,
+              null,
+            ),
+            bold: const TextStyle(
+              fontWeight: FontWeight.w700,
+              fontFamily: 'Inter',
+            ),
+            italic: const TextStyle(
+              fontStyle: FontStyle.italic,
+              fontFamily: 'Inter',
+            ),
+            strikeThrough: const TextStyle(
+              decoration: TextDecoration.lineThrough,
+              fontFamily: 'Inter',
+            ),
+            link: TextStyle(
+              color: FlutterFlowTheme.of(context).primary,
+              decoration: TextDecoration.underline,
+              fontFamily: 'Inter',
+            ),
+            leading: DefaultTextBlockStyle(
+              TextStyle(
+                fontSize: FFAppState().chatFontSize,
+                color: FlutterFlowTheme.of(context).primaryText,
+                fontFamily: 'Inter',
+                height: 1.4,
+              ),
+              HorizontalSpacing.zero,
+              VerticalSpacing.zero,
+              VerticalSpacing.zero,
+              null,
+            ),
+            lists: DefaultListBlockStyle(
+              TextStyle(
+                fontSize: FFAppState().chatFontSize,
+                color: FlutterFlowTheme.of(context).primaryText,
+                fontFamily: 'Inter',
+                height: 1.4,
+              ),
+              HorizontalSpacing.zero,
+              VerticalSpacing(4, 4),
+              VerticalSpacing.zero,
+              null,
+              null,
+            ),
+            indent: DefaultTextBlockStyle(
+              TextStyle(
+                fontSize: FFAppState().chatFontSize,
+                color: FlutterFlowTheme.of(context).primaryText,
+                fontFamily: 'Inter',
+                height: 1.4,
+              ),
+              HorizontalSpacing.zero,
+              VerticalSpacing.zero,
+              VerticalSpacing.zero,
+              null,
+            ),
+            align: DefaultTextBlockStyle(
+              TextStyle(
+                fontSize: FFAppState().chatFontSize,
+                color: FlutterFlowTheme.of(context).primaryText,
+                fontFamily: 'Inter',
+                height: 1.4,
+              ),
+              HorizontalSpacing.zero,
+              VerticalSpacing.zero,
+              VerticalSpacing.zero,
+              null,
+            ),
+            quote: DefaultTextBlockStyle(
+              TextStyle(
+                fontSize: FFAppState().chatFontSize,
+                color: FlutterFlowTheme.of(context)
+                    .primaryText
+                    .withOpacity(0.7),
+                fontFamily: 'Inter',
+                fontStyle: FontStyle.italic,
+                height: 1.4,
+              ),
+              HorizontalSpacing.zero,
+              VerticalSpacing(4, 4),
+              VerticalSpacing.zero,
+              BoxDecoration(
+                border: Border(
+                  left: BorderSide(
+                    color: FlutterFlowTheme.of(context)
+                        .secondaryText
+                        .withOpacity(0.4),
+                    width: 3,
+                  ),
+                ),
+              ),
+            ),
+            code: DefaultTextBlockStyle(
+              TextStyle(
+                fontSize: FFAppState().chatFontSize - 1,
+                color: FlutterFlowTheme.of(context).primaryText,
+                fontFamily: 'SF Mono',
+                height: 1.4,
+              ),
+              HorizontalSpacing.zero,
+              VerticalSpacing(4, 4),
+              VerticalSpacing.zero,
+              BoxDecoration(
+                color: FlutterFlowTheme.of(context)
+                    .alternate
+                    .withOpacity(0.2),
+                borderRadius: BorderRadius.circular(4),
+              ),
+            ),
+            inlineCode: InlineCodeStyle(
+              style: TextStyle(
+                fontSize: FFAppState().chatFontSize - 1,
+                color: FlutterFlowTheme.of(context).primaryText,
+                fontFamily: 'SF Mono',
+                backgroundColor: FlutterFlowTheme.of(context)
+                    .alternate
+                    .withOpacity(0.3),
+              ),
+            ),
+          ),
+          customShortcuts: {
+            if (FFAppState().sendMessageShortcut == 0)
+              const SingleActivator(LogicalKeyboardKey.enter):
+                  const SendMessageIntent(),
+            if (FFAppState().sendMessageShortcut == 1)
+              const SingleActivator(LogicalKeyboardKey.enter, shift: true):
+                  const SendMessageIntent(),
+            if (FFAppState().sendMessageShortcut == 2)
+              const SingleActivator(LogicalKeyboardKey.enter, meta: true):
+                  const SendMessageIntent(),
+            const SingleActivator(LogicalKeyboardKey.numpadEnter):
+                const SendMessageIntent(),
+          },
+          customActions: {
+            SendMessageIntent: CallbackAction<SendMessageIntent>(
+              onInvoke: (SendMessageIntent intent) {
+                if (widget.isMentionActive) {
+                  widget.onMentionConfirm?.call();
+                  return null;
+                }
+                _handleSend(fromHardwareKeyboard: true);
+                return null;
+              },
+            ),
+          },
+        ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Container(
@@ -786,264 +1120,7 @@ class _RichChatInputWidgetState extends State<RichChatInputWidget> {
                   ),
                   child: (_isRecording || _hasRecorded || _showVoiceReady)
                       ? _buildRecordingUI()
-                      : QuillEditor.basic(
-                          controller: _controller,
-                          focusNode: _focusNode,
-                          scrollController: ScrollController(),
-                          config: QuillEditorConfig(
-                            placeholder: widget.placeholder,
-                            autoFocus: false,
-                            expands: false,
-                            padding: EdgeInsets.zero,
-                            customStyles: DefaultStyles(
-                              placeHolder: DefaultTextBlockStyle(
-                                TextStyle(
-                                  fontSize: FFAppState().chatFontSize,
-                                  color: FlutterFlowTheme.of(context)
-                                      .secondaryText
-                                      .withOpacity(0.55),
-                                  fontFamily: 'Inter',
-                                ),
-                                HorizontalSpacing.zero,
-                                VerticalSpacing.zero,
-                                VerticalSpacing.zero,
-                                null,
-                              ),
-                              paragraph: DefaultTextBlockStyle(
-                                TextStyle(
-                                  fontSize: FFAppState().chatFontSize,
-                                  color: FlutterFlowTheme.of(context).primaryText,
-                                  fontFamily: 'Inter',
-                                  height: 1.4,
-                                ),
-                          HorizontalSpacing.zero,
-                          VerticalSpacing.zero,
-                          VerticalSpacing.zero,
-                          null,
-                        ),
-                        h1: DefaultTextBlockStyle(
-                          TextStyle(
-                            fontSize: FFAppState().chatFontSize,
-                            color: FlutterFlowTheme.of(context).primaryText,
-                            fontFamily: 'Inter',
-                            fontWeight: FontWeight.w700,
-                            height: 1.4,
-                          ),
-                          HorizontalSpacing.zero,
-                          VerticalSpacing.zero,
-                          VerticalSpacing.zero,
-                          null,
-                        ),
-                        h2: DefaultTextBlockStyle(
-                          TextStyle(
-                            fontSize: FFAppState().chatFontSize,
-                            color: FlutterFlowTheme.of(context).primaryText,
-                            fontFamily: 'Inter',
-                            fontWeight: FontWeight.w700,
-                            height: 1.4,
-                          ),
-                          HorizontalSpacing.zero,
-                          VerticalSpacing.zero,
-                          VerticalSpacing.zero,
-                          null,
-                        ),
-                        h3: DefaultTextBlockStyle(
-                          TextStyle(
-                            fontSize: FFAppState().chatFontSize,
-                            color: FlutterFlowTheme.of(context).primaryText,
-                            fontFamily: 'Inter',
-                            fontWeight: FontWeight.w600,
-                            height: 1.4,
-                          ),
-                          HorizontalSpacing.zero,
-                          VerticalSpacing.zero,
-                          VerticalSpacing.zero,
-                          null,
-                        ),
-                        h4: DefaultTextBlockStyle(
-                          TextStyle(
-                            fontSize: FFAppState().chatFontSize,
-                            color: FlutterFlowTheme.of(context).primaryText,
-                            fontFamily: 'Inter',
-                            fontWeight: FontWeight.w600,
-                            height: 1.4,
-                          ),
-                          HorizontalSpacing.zero,
-                          VerticalSpacing.zero,
-                          VerticalSpacing.zero,
-                          null,
-                        ),
-                        h5: DefaultTextBlockStyle(
-                          TextStyle(
-                            fontSize: FFAppState().chatFontSize,
-                            color: FlutterFlowTheme.of(context).primaryText,
-                            fontFamily: 'Inter',
-                            fontWeight: FontWeight.w600,
-                            height: 1.4,
-                          ),
-                          HorizontalSpacing.zero,
-                          VerticalSpacing.zero,
-                          VerticalSpacing.zero,
-                          null,
-                        ),
-                        h6: DefaultTextBlockStyle(
-                          TextStyle(
-                            fontSize: FFAppState().chatFontSize,
-                            color: FlutterFlowTheme.of(context).primaryText,
-                            fontFamily: 'Inter',
-                            fontWeight: FontWeight.w500,
-                            height: 1.4,
-                          ),
-                          HorizontalSpacing.zero,
-                          VerticalSpacing.zero,
-                          VerticalSpacing.zero,
-                          null,
-                        ),
-                        bold: const TextStyle(
-                          fontWeight: FontWeight.w700,
-                          fontFamily: 'Inter',
-                        ),
-                        italic: const TextStyle(
-                          fontStyle: FontStyle.italic,
-                          fontFamily: 'Inter',
-                        ),
-                        strikeThrough: const TextStyle(
-                          decoration: TextDecoration.lineThrough,
-                          fontFamily: 'Inter',
-                        ),
-                        link: TextStyle(
-                          color: FlutterFlowTheme.of(context).primary,
-                          decoration: TextDecoration.underline,
-                          fontFamily: 'Inter',
-                        ),
-                        leading: DefaultTextBlockStyle(
-                          TextStyle(
-                            fontSize: FFAppState().chatFontSize,
-                            color: FlutterFlowTheme.of(context).primaryText,
-                            fontFamily: 'Inter',
-                            height: 1.4,
-                          ),
-                          HorizontalSpacing.zero,
-                          VerticalSpacing.zero,
-                          VerticalSpacing.zero,
-                          null,
-                        ),
-                        lists: DefaultListBlockStyle(
-                          TextStyle(
-                            fontSize: FFAppState().chatFontSize,
-                            color: FlutterFlowTheme.of(context).primaryText,
-                            fontFamily: 'Inter',
-                            height: 1.4,
-                          ),
-                          HorizontalSpacing.zero,
-                          VerticalSpacing(4, 4),
-                          VerticalSpacing.zero,
-                          null,
-                          null,
-                        ),
-                        indent: DefaultTextBlockStyle(
-                          TextStyle(
-                            fontSize: FFAppState().chatFontSize,
-                            color: FlutterFlowTheme.of(context).primaryText,
-                            fontFamily: 'Inter',
-                            height: 1.4,
-                          ),
-                          HorizontalSpacing.zero,
-                          VerticalSpacing.zero,
-                          VerticalSpacing.zero,
-                          null,
-                        ),
-                        align: DefaultTextBlockStyle(
-                          TextStyle(
-                            fontSize: FFAppState().chatFontSize,
-                            color: FlutterFlowTheme.of(context).primaryText,
-                            fontFamily: 'Inter',
-                            height: 1.4,
-                          ),
-                          HorizontalSpacing.zero,
-                          VerticalSpacing.zero,
-                          VerticalSpacing.zero,
-                          null,
-                        ),
-                        quote: DefaultTextBlockStyle(
-                          TextStyle(
-                            fontSize: FFAppState().chatFontSize,
-                            color: FlutterFlowTheme.of(context)
-                                .primaryText
-                                .withOpacity(0.7),
-                            fontFamily: 'Inter',
-                            fontStyle: FontStyle.italic,
-                            height: 1.4,
-                          ),
-                          HorizontalSpacing.zero,
-                          VerticalSpacing(4, 4),
-                          VerticalSpacing.zero,
-                          BoxDecoration(
-                            border: Border(
-                              left: BorderSide(
-                                color: FlutterFlowTheme.of(context)
-                                    .secondaryText
-                                    .withOpacity(0.4),
-                                width: 3,
-                              ),
-                            ),
-                          ),
-                        ),
-                        code: DefaultTextBlockStyle(
-                          TextStyle(
-                            fontSize: FFAppState().chatFontSize - 1,
-                            color: FlutterFlowTheme.of(context).primaryText,
-                            fontFamily: 'SF Mono',
-                            height: 1.4,
-                          ),
-                          HorizontalSpacing.zero,
-                          VerticalSpacing(4, 4),
-                          VerticalSpacing.zero,
-                          BoxDecoration(
-                            color: FlutterFlowTheme.of(context)
-                                .alternate
-                                .withOpacity(0.2),
-                            borderRadius: BorderRadius.circular(4),
-                          ),
-                        ),
-                        inlineCode: InlineCodeStyle(
-                          style: TextStyle(
-                            fontSize: FFAppState().chatFontSize - 1,
-                            color: FlutterFlowTheme.of(context).primaryText,
-                            fontFamily: 'SF Mono',
-                            backgroundColor: FlutterFlowTheme.of(context)
-                                .alternate
-                                .withOpacity(0.3),
-                          ),
-                        ),
-                      ),
-                      customShortcuts: {
-                        if (FFAppState().sendMessageShortcut == 0)
-                          const SingleActivator(LogicalKeyboardKey.enter):
-                              const SendMessageIntent(),
-                        if (FFAppState().sendMessageShortcut == 1)
-                          const SingleActivator(LogicalKeyboardKey.enter,
-                              shift: true): const SendMessageIntent(),
-                        if (FFAppState().sendMessageShortcut == 2)
-                          const SingleActivator(LogicalKeyboardKey.enter,
-                              meta: true): const SendMessageIntent(),
-                        const SingleActivator(LogicalKeyboardKey.numpadEnter):
-                            const SendMessageIntent(),
-                      },
-                      customActions: {
-                        SendMessageIntent: CallbackAction<SendMessageIntent>(
-                          onInvoke: (SendMessageIntent intent) {
-                            if (widget.isMentionActive) {
-                              widget.onMentionConfirm?.call();
-                              return null;
-                            }
-                            _handleSend(fromHardwareKeyboard: true);
-                            return null;
-                          },
-                        ),
-                      },
-                    ),
-                  ),
+                      : _buildQuillEditor(),
                 ),
               ),
 
@@ -1551,7 +1628,7 @@ class _RichChatInputWidgetState extends State<RichChatInputWidget> {
           
           // Waveform
           Expanded(
-            child: kIsWeb
+            child: kIsWeb || _waveController == null
                 ? _buildWebWaveformPlaceholder()
                 : AudioWaveforms(
                     size: const Size(double.infinity, 30),

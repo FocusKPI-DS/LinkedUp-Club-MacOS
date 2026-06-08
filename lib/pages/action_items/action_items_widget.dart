@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '/backend/backend.dart';
+import '/backend/firestore/firestore_desktop_adapter.dart';
 import '/auth/firebase_auth/auth_util.dart';
+import '/pages/desktop_chat/rest_poll_builder.dart';
 
 class ActionItemsWidget extends StatefulWidget {
   const ActionItemsWidget({super.key});
@@ -22,13 +24,7 @@ class _ActionItemsWidgetState extends State<ActionItemsWidget> {
       return _buildEmptyState();
     }
 
-    return StreamBuilder<List<ActionItemsRecord>>(
-      stream: queryActionItemsRecord(
-        queryBuilder: (actionItemsRecord) => actionItemsRecord
-            .where('user_ref', isEqualTo: currentUserReference)
-            .orderBy('created_time', descending: true)
-            .limit(20),
-      ),
+    return _buildActionItemsStream(
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const Center(child: CircularProgressIndicator());
@@ -130,6 +126,75 @@ class _ActionItemsWidgetState extends State<ActionItemsWidget> {
           ),
         );
       },
+    );
+  }
+
+  Widget _buildActionItemsStream({
+    required Widget Function(
+      BuildContext context,
+      AsyncSnapshot<List<ActionItemsRecord>> snapshot,
+    ) builder,
+  }) {
+    if (useWindowsFirestoreRest) {
+      return RestPollBuilder<List<ActionItemsRecord>>(
+        interval: const Duration(seconds: 20),
+        fetch: () => fsQueryActionItemsByUser(
+          currentUserReference!,
+          limit: 20,
+        ),
+        builder: builder,
+      );
+    }
+    return StreamBuilder<List<ActionItemsRecord>>(
+      stream: queryActionItemsRecord(
+        queryBuilder: (actionItemsRecord) => actionItemsRecord
+            .where('user_ref', isEqualTo: currentUserReference)
+            .orderBy('created_time', descending: true)
+            .limit(20),
+      ),
+      builder: builder,
+    );
+  }
+
+  Widget _buildChatTitle(ActionItemsRecord todo) {
+    if (todo.groupName.isNotEmpty || todo.chatRef == null) {
+      return Text(
+        todo.groupName,
+        style: const TextStyle(
+          fontFamily: 'Inter',
+          fontSize: 12,
+          fontWeight: FontWeight.w500,
+          color: Color(0xFF64748B),
+        ),
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+      );
+    }
+
+    Widget titleFromName(String name) => Text(
+          name,
+          style: const TextStyle(
+            fontFamily: 'Inter',
+            fontSize: 12,
+            fontWeight: FontWeight.w500,
+            color: Color(0xFF64748B),
+          ),
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+        );
+
+    if (useWindowsFirestoreRest) {
+      return FutureBuilder<ChatsRecord>(
+        future: fsGetChatOnce(todo.chatRef!),
+        builder: (context, chatSnap) =>
+            titleFromName(chatSnap.data?.title ?? ''),
+      );
+    }
+
+    return StreamBuilder<ChatsRecord>(
+      stream: ChatsRecord.getDocument(todo.chatRef!),
+      builder: (context, chatSnap) =>
+          titleFromName(chatSnap.data?.title ?? ''),
     );
   }
 
@@ -284,37 +349,7 @@ class _ActionItemsWidgetState extends State<ActionItemsWidget> {
                 children: [
                   _buildPriorityBadge(todo.priority),
                   const SizedBox(width: 8),
-                  Expanded(
-                    child: (todo.groupName.isNotEmpty || todo.chatRef == null)
-                        ? Text(
-                            todo.groupName,
-                            style: const TextStyle(
-                              fontFamily: 'Inter',
-                              fontSize: 12,
-                              fontWeight: FontWeight.w500,
-                              color: Color(0xFF64748B),
-                            ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          )
-                        : StreamBuilder<ChatsRecord>(
-                            stream: ChatsRecord.getDocument(todo.chatRef!),
-                            builder: (context, chatSnap) {
-                              final name = chatSnap.data?.title ?? '';
-                              return Text(
-                                name,
-                                style: const TextStyle(
-                                  fontFamily: 'Inter',
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w500,
-                                  color: Color(0xFF64748B),
-                                ),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                              );
-                            },
-                          ),
-                  ),
+                  Expanded(child: _buildChatTitle(todo)),
                   const SizedBox(width: 6),
                   Transform.translate(
                     offset: const Offset(-10, -10),
@@ -554,11 +589,7 @@ class _ActionItemsWidgetState extends State<ActionItemsWidget> {
     });
 
     try {
-      // Update task in Firebase
-      await todo.reference.update({
-        'status': 'completed',
-        'completed_time': FieldValue.serverTimestamp(),
-      });
+      await fsMarkActionItemDone(todo.reference);
     } catch (e) {
       print('Error updating task: $e');
       // Rollback on error

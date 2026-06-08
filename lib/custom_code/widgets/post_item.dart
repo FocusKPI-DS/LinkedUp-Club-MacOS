@@ -1,5 +1,7 @@
 // Automatic FlutterFlow imports
 import '/backend/backend.dart';
+import '/backend/firestore/firestore_desktop_adapter.dart';
+import '/pages/desktop_chat/rest_poll_builder.dart';
 import '/backend/schema/structs/index.dart';
 import 'package:ff_theme/flutter_flow/flutter_flow_theme.dart';
 import '/flutter_flow/flutter_flow_util.dart';
@@ -59,21 +61,19 @@ class _PostItemState extends State<PostItem> {
 
     try {
       if (isLiked) {
-        // Unlike
-        await post.reference.update({
-          ...mapToFirestore({
-            'like_count': FieldValue.increment(-1),
-            'liked_by': FieldValue.arrayRemove([currentUserReference]),
-          }),
-        });
+        await fsIncrementDocumentField(post.reference, 'like_count', -1);
+        await fsArrayRemove(
+          post.reference,
+          'liked_by',
+          [currentUserReference],
+        );
       } else {
-        // Like
-        await post.reference.update({
-          ...mapToFirestore({
-            'like_count': FieldValue.increment(1),
-            'liked_by': FieldValue.arrayUnion([currentUserReference]),
-          }),
-        });
+        await fsIncrementDocumentField(post.reference, 'like_count', 1);
+        await fsArrayUnion(
+          post.reference,
+          'liked_by',
+          [currentUserReference],
+        );
       }
     } catch (e) {
       debugPrint('Error toggling like: $e');
@@ -93,19 +93,17 @@ class _PostItemState extends State<PostItem> {
 
     try {
       if (isSaved) {
-        // Unsave
-        await post.reference.update({
-          ...mapToFirestore({
-            'saved_by': FieldValue.arrayRemove([currentUserReference]),
-          }),
-        });
+        await fsArrayRemove(
+          post.reference,
+          'saved_by',
+          [currentUserReference],
+        );
       } else {
-        // Save
-        await post.reference.update({
-          ...mapToFirestore({
-            'saved_by': FieldValue.arrayUnion([currentUserReference]),
-          }),
-        });
+        await fsArrayUnion(
+          post.reference,
+          'saved_by',
+          [currentUserReference],
+        );
       }
     } catch (e) {
       debugPrint('Error toggling save: $e');
@@ -135,28 +133,48 @@ class _PostItemState extends State<PostItem> {
 
   @override
   Widget build(BuildContext context) {
+    if (useWindowsFirestoreRest) {
+      return RestPollBuilder<PostsRecord?>(
+        interval: const Duration(seconds: 30),
+        fetch: () => fsGetPostOnce(widget.postRef),
+        builder: (context, snapshot) => _buildPostContent(context, snapshot),
+      );
+    }
     return StreamBuilder<PostsRecord>(
       stream: PostsRecord.getDocument(widget.postRef),
-      builder: (context, snapshot) {
-        if (!snapshot.hasData) {
-          return Container(
-            width: widget.width,
-            height: widget.height > 0
-                ? widget.height
-                : 200.0, // Use flexible height
-            decoration: BoxDecoration(
-              color: FlutterFlowTheme.of(context).secondaryBackground,
-              borderRadius: BorderRadius.circular(12.0),
-            ),
-            child: Center(
-              child: CircularProgressIndicator(
-                color: FlutterFlowTheme.of(context).primary,
-              ),
-            ),
-          );
-        }
+      builder: (context, snapshot) => _buildPostContent(
+        context,
+        snapshot.hasData
+            ? AsyncSnapshot<PostsRecord?>.withData(
+                ConnectionState.done,
+                snapshot.data,
+              )
+            : AsyncSnapshot<PostsRecord?>.waiting(),
+      ),
+    );
+  }
 
-        final post = snapshot.data!;
+  Widget _buildPostContent(
+    BuildContext context,
+    AsyncSnapshot<PostsRecord?> snapshot,
+  ) {
+    if (!snapshot.hasData) {
+      return Container(
+        width: widget.width,
+        height: widget.height > 0 ? widget.height : 200.0,
+        decoration: BoxDecoration(
+          color: FlutterFlowTheme.of(context).secondaryBackground,
+          borderRadius: BorderRadius.circular(12.0),
+        ),
+        child: Center(
+          child: CircularProgressIndicator(
+            color: FlutterFlowTheme.of(context).primary,
+          ),
+        ),
+      );
+    }
+
+    final post = snapshot.data!;
 
         // Debug print to check data
         debugPrint('Post likes: ${post.likeCount}');
@@ -189,8 +207,7 @@ class _PostItemState extends State<PostItem> {
                 // User info row
                 InkWell(
                   onTap: () async {
-                    final user =
-                        await UsersRecord.getDocumentOnce(post.authorRef!);
+                    final user = await fsGetUserOnce(post.authorRef!);
                     if (context.mounted) {
                       context.pushNamed(
                         UserProfileDetailWidget.routeName,
@@ -329,13 +346,10 @@ class _PostItemState extends State<PostItem> {
 
                             if (shouldBlock == true) {
                               // Create blocked user record
-                              await BlockedUsersRecord.collection.add({
-                                ...createBlockedUsersRecordData(
-                                  blockerUser: currentUserReference,
-                                  blockedUser: post.authorRef,
-                                  createdAt: getCurrentTimestamp,
-                                ),
-                              });
+                              await fsBlockUser(
+                                blockerUser: currentUserReference!,
+                                blockedUser: post.authorRef!,
+                              );
 
                               ScaffoldMessenger.of(context).showSnackBar(
                                 const SnackBar(
@@ -344,8 +358,7 @@ class _PostItemState extends State<PostItem> {
                             }
                           } else if (value == 'view_user') {
                             // Navigate to user profile
-                            final user = await UsersRecord.getDocumentOnce(
-                                post.authorRef!);
+                            final user = await fsGetUserOnce(post.authorRef!);
                             if (context.mounted) {
                               context.pushNamed(
                                 UserProfileDetailWidget.routeName,
@@ -662,7 +675,5 @@ class _PostItemState extends State<PostItem> {
             ),
           ),
         );
-      },
-    );
   }
 }

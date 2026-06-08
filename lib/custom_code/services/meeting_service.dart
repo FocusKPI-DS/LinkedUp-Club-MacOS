@@ -1,6 +1,8 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '/auth/firebase_auth/auth_util.dart';
 import '/backend/backend.dart';
+import '/backend/firestore/firestore_desktop_adapter.dart';
+import '/flutter_flow/flutter_flow_util.dart';
 
 /// Service for managing active meetings in group chats.
 ///
@@ -33,38 +35,33 @@ class MeetingService {
     print('📹 [MeetingService] Starter: $name');
 
     try {
-      // Write active_meeting to chat doc
-      await chatRef.update({
+      await fsPatchDocument(chatRef, {
         'active_meeting': {
           'url': meetUrl,
           'started_by': userRef,
-          'started_at': FieldValue.serverTimestamp(),
+          'started_at': getCurrentTimestamp,
           'participants': [userRef],
         },
       });
       print('📹 [MeetingService] ✅ active_meeting written to Firestore');
     } catch (e) {
       print('📹 [MeetingService] ❌ Failed to write active_meeting: $e');
-      // Don't return — try sending the message even if the meeting field failed
     }
 
     try {
-      // Send system message
-      final messagesRef = chatRef.collection('messages');
-      await messagesRef.add({
+      await fsCreateMessage(chatRef, {
         'content': '📹 $name started a Google Meet\n$meetUrl',
         'sender': userRef,
         'sender_name': name,
-        'created_at': FieldValue.serverTimestamp(),
+        'created_at': getCurrentTimestamp,
         'message_type': 'system',
         'meeting_url': meetUrl,
       });
       print('📹 [MeetingService] ✅ System message sent');
 
-      // Update chat's last message
-      await chatRef.update({
+      await fsPatchDocument(chatRef, {
         'last_message': '📹 $name started a Google Meet',
-        'last_message_at': FieldValue.serverTimestamp(),
+        'last_message_at': getCurrentTimestamp,
         'last_message_sent': userRef,
       });
       print('📹 [MeetingService] ✅ Last message updated');
@@ -85,30 +82,24 @@ class MeetingService {
     print('📹 [MeetingService] Ending meeting in ${chatRef.id}');
 
     try {
-      // Clear active_meeting
-      await chatRef.update({
-        'active_meeting': FieldValue.delete(),
-      });
+      await fsDeleteDocumentField(chatRef, 'active_meeting');
       print('📹 [MeetingService] ✅ active_meeting cleared');
     } catch (e) {
       print('📹 [MeetingService] ❌ Failed to clear active_meeting: $e');
     }
 
     try {
-      // Send system message
-      final messagesRef = chatRef.collection('messages');
-      await messagesRef.add({
+      await fsCreateMessage(chatRef, {
         'content': '📹 $name ended the meeting',
         'sender': currentUserReference,
         'sender_name': name,
-        'created_at': FieldValue.serverTimestamp(),
+        'created_at': getCurrentTimestamp,
         'message_type': 'system',
       });
 
-      // Update chat's last message
-      await chatRef.update({
+      await fsPatchDocument(chatRef, {
         'last_message': '📹 $name ended the meeting',
-        'last_message_at': FieldValue.serverTimestamp(),
+        'last_message_at': getCurrentTimestamp,
         'last_message_sent': currentUserReference,
       });
       print('📹 [MeetingService] ✅ End message sent');
@@ -125,9 +116,11 @@ class MeetingService {
     if (userRef == null) return;
 
     try {
-      await chatRef.update({
-        'active_meeting.participants': FieldValue.arrayUnion([userRef]),
-      });
+      await fsArrayUnion(
+        chatRef,
+        'active_meeting.participants',
+        [userRef],
+      );
       print('📹 [MeetingService] ✅ Joined meeting');
     } catch (e) {
       print('📹 [MeetingService] ❌ Failed to join meeting: $e');
@@ -142,9 +135,11 @@ class MeetingService {
     if (userRef == null) return;
 
     try {
-      await chatRef.update({
-        'active_meeting.participants': FieldValue.arrayRemove([userRef]),
-      });
+      await fsArrayRemove(
+        chatRef,
+        'active_meeting.participants',
+        [userRef],
+      );
       print('📹 [MeetingService] ✅ Left meeting');
     } catch (e) {
       print('📹 [MeetingService] ❌ Failed to leave meeting: $e');

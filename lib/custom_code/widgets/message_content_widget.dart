@@ -10,6 +10,7 @@ import 'package:flutter/services.dart';
 import 'package:ff_theme/flutter_flow/flutter_flow_theme.dart';
 import '/custom_code/widgets/index.dart' as custom_widgets;
 import '/app_state.dart';
+import '/utils/chat_message_font.dart';
 
 class _MatchInfo {
   final int start;
@@ -92,7 +93,7 @@ class MessageContentWidget extends StatelessWidget {
 
     final baseBlackStyle = TextStyle(
       fontSize: fontSize,
-      fontFamily: 'SF Pro Text',
+      fontFamily: chatMessageFontFamily,
       color: Color(0xFF000000),
       letterSpacing: -0.4,
       fontWeight: FontWeight.w400,
@@ -101,7 +102,7 @@ class MessageContentWidget extends StatelessWidget {
 
     final mentionStyle = TextStyle(
       fontSize: fontSize,
-      fontFamily: 'SF Pro Text',
+      fontFamily: chatMessageFontFamily,
       color: Color(0xFF007AFF),
       letterSpacing: -0.4,
       fontWeight: FontWeight.w600,
@@ -110,7 +111,7 @@ class MessageContentWidget extends StatelessWidget {
 
     final linkStyle = TextStyle(
       fontSize: fontSize,
-      fontFamily: 'SF Pro Text',
+      fontFamily: chatMessageFontFamily,
       color: const Color(0xFF007AFF),
       letterSpacing: -0.4,
       fontWeight: FontWeight.w400,
@@ -294,7 +295,7 @@ class MessageContentWidget extends StatelessWidget {
         style: TextStyle(
           color: Color(0xFF000000),
           fontSize: FFAppState().chatFontSize,
-          fontFamily: 'SF Pro Text',
+          fontFamily: chatMessageFontFamily,
           fontWeight: FontWeight.w400,
           letterSpacing: -0.4,
           height: 1.3,
@@ -386,7 +387,7 @@ class MessageContentWidget extends StatelessWidget {
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(
-                        fontFamily: 'SF Pro Text',
+                        fontFamily: chatMessageFontFamily,
                         fontSize: 8.5, // slightly larger, readable
                         color: isDestructive
                             ? const Color(0xFFFF3B30)
@@ -488,10 +489,10 @@ class CodeElementBuilder extends MarkdownElementBuilder {
                 children: [
                   Text(
                     language.isEmpty ? 'code' : language,
-                    style: const TextStyle(
+                    style: TextStyle(
                       color: Color(0xFFABB2BF),
                       fontSize: 12,
-                      fontFamily: 'SF Pro Text',
+                      fontFamily: chatMessageFontFamily,
                       fontWeight: FontWeight.bold,
                     ),
                   ),

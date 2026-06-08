@@ -1,5 +1,8 @@
 import '/auth/firebase_auth/auth_util.dart';
 import '/backend/backend.dart';
+import '/backend/firestore/firestore_desktop_adapter.dart';
+import '/pages/desktop_chat/desktop_safe_user_builder.dart';
+import '/pages/desktop_chat/rest_poll_builder.dart';
 import '/backend/schema/enums/enums.dart';
 import '/flutter_flow/flutter_flow_icon_button.dart';
 import 'package:ff_theme/flutter_flow/flutter_flow_theme.dart';
@@ -220,73 +223,81 @@ class _ChatHistoryWidgetState extends State<ChatHistoryWidget> {
 
               // Results List
               Expanded(
-                child: StreamBuilder<List<MessagesRecord>>(
-                  stream: queryMessagesRecord(
-                    parent: widget.chatDoc.reference,
-                    queryBuilder: (messagesRecord) =>
-                        messagesRecord.orderBy('created_at', descending: true),
-                  ),
-                  builder: (context, snapshot) {
-                    if (!snapshot.hasData) {
-                      return Center(
-                        child: SizedBox(
-                          width: 50.0,
-                          height: 50.0,
-                          child: CircularProgressIndicator(
-                            color: FlutterFlowTheme.of(context).primary,
-                          ),
+                child: useWindowsFirestoreRest
+                    ? RestPollBuilder<List<MessagesRecord>>(
+                        interval: const Duration(seconds: 30),
+                        fetch: () => fsQueryChatMessages(
+                          widget.chatDoc.reference,
+                          limit: 500,
                         ),
-                      );
-                    }
-
-                    final allMessages = snapshot.data!;
-                    final filteredMessages = _filterMessages(allMessages);
-
-                    if (filteredMessages.isEmpty) {
-                      return Center(
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(Icons.search_off_rounded,
-                                size: 64,
-                                color:
-                                    FlutterFlowTheme.of(context).secondaryText),
-                            SizedBox(height: 12),
-                            Text(
-                              'No results found',
-                              style: FlutterFlowTheme.of(context)
-                                  .bodyMedium
-                                  .override(
-                                    fontFamily: 'Inter',
-                                    color: FlutterFlowTheme.of(context)
-                                        .secondaryText,
-                                  ),
-                            ),
-                          ],
+                        builder: (context, snapshot) =>
+                            _buildMessagesList(context, snapshot),
+                      )
+                    : StreamBuilder<List<MessagesRecord>>(
+                        stream: queryMessagesRecord(
+                          parent: widget.chatDoc.reference,
+                          queryBuilder: (messagesRecord) => messagesRecord
+                              .orderBy('created_at', descending: true),
                         ),
-                      );
-                    }
-
-                    return ListView.separated(
-                      padding: EdgeInsets.symmetric(vertical: 12),
-                      itemCount: filteredMessages.length,
-                      separatorBuilder: (_, __) => Divider(
-                          height: 1,
-                          color: FlutterFlowTheme.of(context)
-                              .alternate
-                              .withOpacity(0.5)),
-                      itemBuilder: (context, index) {
-                        final message = filteredMessages[index];
-                        return _buildMessageItem(message);
-                      },
-                    );
-                  },
-                ),
+                        builder: (context, snapshot) =>
+                            _buildMessagesList(context, snapshot),
+                      ),
               ),
             ],
           ),
         ),
       ),
+    );
+  }
+
+  Widget _buildMessagesList(
+    BuildContext context,
+    AsyncSnapshot<List<MessagesRecord>> snapshot,
+  ) {
+    if (!snapshot.hasData) {
+      return Center(
+        child: SizedBox(
+          width: 50.0,
+          height: 50.0,
+          child: CircularProgressIndicator(
+            color: FlutterFlowTheme.of(context).primary,
+          ),
+        ),
+      );
+    }
+
+    final filteredMessages = _filterMessages(snapshot.data!);
+
+    if (filteredMessages.isEmpty) {
+      return Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.search_off_rounded,
+                size: 64,
+                color: FlutterFlowTheme.of(context).secondaryText),
+            SizedBox(height: 12),
+            Text(
+              'No results found',
+              style: FlutterFlowTheme.of(context).bodyMedium.override(
+                    fontFamily: 'Inter',
+                    color: FlutterFlowTheme.of(context).secondaryText,
+                  ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return ListView.separated(
+      padding: EdgeInsets.symmetric(vertical: 12),
+      itemCount: filteredMessages.length,
+      separatorBuilder: (_, __) => Divider(
+          height: 1,
+          color: FlutterFlowTheme.of(context).alternate.withOpacity(0.5)),
+      itemBuilder: (context, index) {
+        return _buildMessageItem(filteredMessages[index]);
+      },
     );
   }
 
@@ -350,14 +361,16 @@ class _ChatHistoryWidgetState extends State<ChatHistoryWidget> {
                 border: Border.all(
                     color: FlutterFlowTheme.of(context).alternate, width: 1),
               ),
-              child: StreamBuilder<UsersRecord>(
-                stream: UsersRecord.getDocument(message.senderRef!),
-                builder: (context, snapshot) {
-                  if (!snapshot.hasData)
+              child: DesktopSafeUserBuilder(
+                userRef: message.senderRef!,
+                fetchOnce: DesktopSafeUserBuilder.defaultFetchUser,
+                builder: (context, user) {
+                  if (user == null) {
                     return Container(
                         color: FlutterFlowTheme.of(context).alternate);
+                  }
                   return CachedNetworkImage(
-                    imageUrl: snapshot.data!.photoUrl,
+                    imageUrl: user.photoUrl,
                     fit: BoxFit.cover,
                     placeholder: (context, url) => Container(
                         color: FlutterFlowTheme.of(context).alternate),
@@ -377,12 +390,13 @@ class _ChatHistoryWidgetState extends State<ChatHistoryWidget> {
                   Row(
                     children: [
                       Expanded(
-                        child: StreamBuilder<UsersRecord>(
-                          stream: UsersRecord.getDocument(message.senderRef!),
-                          builder: (context, snapshot) {
-                            if (!snapshot.hasData) return Text('...');
+                        child: DesktopSafeUserBuilder(
+                          userRef: message.senderRef!,
+                          fetchOnce: DesktopSafeUserBuilder.defaultFetchUser,
+                          builder: (context, user) {
+                            if (user == null) return Text('...');
                             return Text(
-                              snapshot.data!.displayName,
+                              user.displayName,
                               style: FlutterFlowTheme.of(context)
                                   .bodyMedium
                                   .override(

@@ -1,5 +1,7 @@
 import '/auth/firebase_auth/auth_util.dart';
 import '/backend/backend.dart';
+import '/backend/firestore/firestore_desktop_adapter.dart';
+import '/pages/desktop_chat/desktop_safe_user_builder.dart';
 import '/flutter_flow/flutter_flow_util.dart';
 import '/pages/mobile_chat/mobile_chat_widget.dart';
 import '/pages/connections/add_connections_widget.dart';
@@ -154,15 +156,14 @@ class _ConnectionsWidgetState extends State<ConnectionsWidget> {
 
               // Filter Segmented Control
               if (currentUserReference != null)
-                StreamBuilder<UsersRecord>(
-                  stream: UsersRecord.getDocument(currentUserReference!),
-                  builder: (context, userSnapshot) {
-                    final connectionsCount = userSnapshot.hasData
-                        ? userSnapshot.data!.friends.length
-                        : 0;
-                    final incomingRequestsCount = userSnapshot.hasData
-                        ? userSnapshot.data!.friendRequests.length
-                        : 0;
+                DesktopSafeUserBuilder(
+                  userRef: currentUserReference!,
+                  fetchOnce: fsGetUserOnce,
+                  builder: (context, user) {
+                    final connectionsCount =
+                        user?.friends.length ?? 0;
+                    final incomingRequestsCount =
+                        user?.friendRequests.length ?? 0;
 
                     return Padding(
                       padding:
@@ -309,16 +310,15 @@ class _ConnectionsWidgetState extends State<ConnectionsWidget> {
       );
     }
 
-    return StreamBuilder<UsersRecord>(
-      stream: UsersRecord.getDocument(currentUserReference!),
-      builder: (context, currentUserSnapshot) {
-        if (!currentUserSnapshot.hasData) {
+    return DesktopSafeUserBuilder(
+      userRef: currentUserReference!,
+      fetchOnce: fsGetUserOnce,
+      builder: (context, currentUser) {
+        if (currentUser == null) {
           return Center(
             child: CupertinoActivityIndicator(),
           );
         }
-
-        final currentUser = currentUserSnapshot.data!;
 
         // Show tab content based on selected tab
         switch (_selectedTabIndex) {
@@ -400,13 +400,13 @@ class _ConnectionsWidgetState extends State<ConnectionsWidget> {
               separatorBuilder: (context, index) => SizedBox.shrink(),
               itemBuilder: (context, index) {
                 final connectionRef = connections[index];
-                return StreamBuilder<UsersRecord>(
-                  stream: UsersRecord.getDocument(connectionRef),
-                  builder: (context, userSnapshot) {
-                    if (!userSnapshot.hasData) {
+                return DesktopSafeUserBuilder(
+                  userRef: connectionRef,
+                  fetchOnce: fsGetUserOnce,
+                  builder: (context, user) {
+                    if (user == null) {
                       return SizedBox.shrink();
                     }
-                    final user = userSnapshot.data!;
 
                     // Filter by search query
                     if (_searchQuery.isNotEmpty) {
@@ -499,13 +499,13 @@ class _ConnectionsWidgetState extends State<ConnectionsWidget> {
               separatorBuilder: (context, index) => SizedBox.shrink(),
               itemBuilder: (context, index) {
                 final requestRef = requests[index];
-                return StreamBuilder<UsersRecord>(
-                  stream: UsersRecord.getDocument(requestRef),
-                  builder: (context, userSnapshot) {
-                    if (!userSnapshot.hasData) {
+                return DesktopSafeUserBuilder(
+                  userRef: requestRef,
+                  fetchOnce: fsGetUserOnce,
+                  builder: (context, user) {
+                    if (user == null) {
                       return SizedBox.shrink();
                     }
-                    final user = userSnapshot.data!;
 
                     // Filter by search query
                     if (_searchQuery.isNotEmpty) {
@@ -597,13 +597,13 @@ class _ConnectionsWidgetState extends State<ConnectionsWidget> {
               separatorBuilder: (context, index) => SizedBox.shrink(),
               itemBuilder: (context, index) {
                 final requestRef = sentRequests[index];
-                return StreamBuilder<UsersRecord>(
-                  stream: UsersRecord.getDocument(requestRef),
-                  builder: (context, userSnapshot) {
-                    if (!userSnapshot.hasData) {
+                return DesktopSafeUserBuilder(
+                  userRef: requestRef,
+                  fetchOnce: fsGetUserOnce,
+                  builder: (context, user) {
+                    if (user == null) {
                       return SizedBox.shrink();
                     }
-                    final user = userSnapshot.data!;
                     final isValidSentRequest =
                         _isValidSentRequest(user.reference, currentUser);
                     if (!isValidSentRequest) {
@@ -1005,8 +1005,7 @@ class _ConnectionsWidgetState extends State<ConnectionsWidget> {
 
     try {
       // Bulletproof check - ensure they are actually connected
-      final currentUserDoc = await currentUserReference!.get();
-      final currentUserData = UsersRecord.fromSnapshot(currentUserDoc);
+      final currentUserData = await fsGetUserOnce(currentUserReference!);
 
       if (!currentUserData.friends.contains(user.reference)) {
         _showErrorMessage('You are not connected with ${user.displayName}');
@@ -1014,16 +1013,20 @@ class _ConnectionsWidgetState extends State<ConnectionsWidget> {
       }
 
       // Update current user's document (we have permission for our own document)
-      await currentUserReference!.update({
-        'friends': FieldValue.arrayRemove([user.reference]),
-      });
+      await fsArrayRemove(
+        currentUserReference!,
+        'friends',
+        [user.reference],
+      );
 
       // Try to update other user's document (may fail due to permissions, but that's okay)
       // The connection will be removed from their side when they next sync
       try {
-        await user.reference.update({
-          'friends': FieldValue.arrayRemove([currentUserReference]),
-        });
+        await fsArrayRemove(
+          user.reference,
+          'friends',
+          [currentUserReference!],
+        );
       } catch (e) {
         // If we can't update the other user's document, that's okay
         // The connection is still removed from our side
@@ -1184,11 +1187,9 @@ class _ConnectionsWidgetState extends State<ConnectionsWidget> {
       // Check if a chat already exists between current user and this user in the current workspace
       final currentWorkspaceRef = currentUserDocument?.currentWorkspaceRef;
 
-      final existingChats = await queryChatsRecordOnce(
-        queryBuilder: (chatsRecord) => chatsRecord
-            .where('members', arrayContains: currentUserReference)
-            .where('is_group', isEqualTo: false)
-            .where('workspace_ref', isEqualTo: currentWorkspaceRef),
+      final existingChats = await fsQueryMemberDmChats(
+        memberRef: currentUserReference!,
+        workspaceRef: currentWorkspaceRef,
       );
 
       // Find if there's already a direct chat with this user in the current workspace
@@ -1210,7 +1211,7 @@ class _ConnectionsWidgetState extends State<ConnectionsWidget> {
         chatToOpen = existingChat;
       } else {
         // Create a new chat
-        final newChatRef = await ChatsRecord.collection.add({
+        final newChatRef = await fsCreateChat({
           ...createChatsRecordData(
             isGroup: false,
             title: '', // Empty for direct chats
@@ -1225,7 +1226,7 @@ class _ConnectionsWidgetState extends State<ConnectionsWidget> {
         });
 
         // Get the created chat document
-        chatToOpen = await ChatsRecord.getDocumentOnce(newChatRef);
+        chatToOpen = await fsGetChatOnce(newChatRef);
       }
 
       // Navigate to the chat - use push so we can go back to Connections
@@ -1275,8 +1276,7 @@ class _ConnectionsWidgetState extends State<ConnectionsWidget> {
 
     try {
       // Bulletproof check - don't send if already connected or request already sent
-      final currentUserDoc = await currentUserReference!.get();
-      final currentUserData = UsersRecord.fromSnapshot(currentUserDoc);
+      final currentUserData = await fsGetUserOnce(currentUserReference!);
 
       if (currentUserData.friends.contains(user.reference)) {
         _showErrorMessage('You are already connected with ${user.displayName}');
@@ -1295,20 +1295,16 @@ class _ConnectionsWidgetState extends State<ConnectionsWidget> {
         return;
       }
 
-      // Use a batch write for better performance and atomicity
-      final batch = FirebaseFirestore.instance.batch();
-
-      // Update current user's sent requests
-      batch.update(currentUserReference!, {
-        'sent_requests': FieldValue.arrayUnion([user.reference]),
-      });
-
-      // Update target user's friend requests
-      batch.update(user.reference, {
-        'friend_requests': FieldValue.arrayUnion([currentUserReference]),
-      });
-
-      await batch.commit();
+      await fsArrayUnion(
+        currentUserReference!,
+        'sent_requests',
+        [user.reference],
+      );
+      await fsArrayUnion(
+        user.reference,
+        'friend_requests',
+        [currentUserReference!],
+      );
 
       if (mounted) {
         _showSuccessMessage('Connection request sent to ${user.displayName}');
@@ -1340,8 +1336,7 @@ class _ConnectionsWidgetState extends State<ConnectionsWidget> {
 
     try {
       // Bulletproof check - ensure they sent us a request and we're not already connected
-      final currentUserDoc = await currentUserReference!.get();
-      final currentUserData = UsersRecord.fromSnapshot(currentUserDoc);
+      final currentUserData = await fsGetUserOnce(currentUserReference!);
 
       if (currentUserData.friends.contains(user.reference)) {
         _showErrorMessage('You are already connected with ${user.displayName}');
@@ -1353,24 +1348,23 @@ class _ConnectionsWidgetState extends State<ConnectionsWidget> {
         return;
       }
 
-      // Use a batch write for better performance and atomicity
-      final batch = FirebaseFirestore.instance.batch();
-
-      // Update current user: add to friends, remove from friend_requests
-      batch.update(currentUserReference!, {
-        'friends': FieldValue.arrayUnion([user.reference]),
-        'friend_requests': FieldValue.arrayRemove([user.reference]),
-        'sent_requests': FieldValue.arrayRemove(
-            [user.reference]), // Remove if we also sent them a request
-      });
-
-      // Update other user: add to friends, remove from sent_requests
-      batch.update(user.reference, {
-        'friends': FieldValue.arrayUnion([currentUserReference]),
-        'sent_requests': FieldValue.arrayRemove([currentUserReference]),
-      });
-
-      await batch.commit();
+      await fsArrayUnion(currentUserReference!, 'friends', [user.reference]);
+      await fsArrayRemove(
+        currentUserReference!,
+        'friend_requests',
+        [user.reference],
+      );
+      await fsArrayRemove(
+        currentUserReference!,
+        'sent_requests',
+        [user.reference],
+      );
+      await fsArrayUnion(user.reference, 'friends', [currentUserReference!]);
+      await fsArrayRemove(
+        user.reference,
+        'sent_requests',
+        [currentUserReference!],
+      );
 
       if (mounted) {
         _showSuccessMessage('Connection request accepted!');
@@ -1401,18 +1395,18 @@ class _ConnectionsWidgetState extends State<ConnectionsWidget> {
 
     try {
       // Bulletproof check - ensure request exists
-      final currentUserDoc = await currentUserReference!.get();
-      final currentUserData = UsersRecord.fromSnapshot(currentUserDoc);
+      final currentUserData = await fsGetUserOnce(currentUserReference!);
 
       if (!currentUserData.friendRequests.contains(user.reference)) {
         _showErrorMessage('No pending request from ${user.displayName}');
         return;
       }
 
-      // Only update current user's document (we have permission for this)
-      await currentUserReference!.update({
-        'friend_requests': FieldValue.arrayRemove([user.reference]),
-      });
+      await fsArrayRemove(
+        currentUserReference!,
+        'friend_requests',
+        [user.reference],
+      );
 
       if (mounted) {
         _showSuccessMessage('Connection request declined');
@@ -1438,8 +1432,7 @@ class _ConnectionsWidgetState extends State<ConnectionsWidget> {
 
     try {
       // Bulletproof check - ensure sent request exists
-      final currentUserDoc = await currentUserReference!.get();
-      final currentUserData = UsersRecord.fromSnapshot(currentUserDoc);
+      final currentUserData = await fsGetUserOnce(currentUserReference!);
 
       if (!currentUserData.sentRequests.contains(user.reference)) {
         _showErrorMessage('No pending sent request to ${user.displayName}');
@@ -1451,10 +1444,11 @@ class _ConnectionsWidgetState extends State<ConnectionsWidget> {
         return;
       }
 
-      // Only update current user's document (we have permission for this)
-      await currentUserReference!.update({
-        'sent_requests': FieldValue.arrayRemove([user.reference]),
-      });
+      await fsArrayRemove(
+        currentUserReference!,
+        'sent_requests',
+        [user.reference],
+      );
 
       if (mounted) {
         _showSuccessMessage('Connection request cancelled');

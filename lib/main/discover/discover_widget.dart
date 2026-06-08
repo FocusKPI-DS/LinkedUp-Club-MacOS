@@ -1,6 +1,8 @@
 import '/auth/base_auth_user_provider.dart';
 import '/auth/firebase_auth/auth_util.dart';
 import '/backend/backend.dart';
+import '/backend/firestore/firestore_desktop_adapter.dart';
+import '/pages/desktop_chat/rest_poll_builder.dart';
 import '/backend/schema/structs/index.dart';
 import '/component/empty_schedule/empty_schedule_widget.dart';
 import '/components/congratulatio_acc_creation_widget.dart';
@@ -220,9 +222,27 @@ class _DiscoverWidgetState extends State<DiscoverWidget>
     context.watch<FFAppState>();
 
     return Builder(
-      builder: (context) => StreamBuilder<List<EventsRecord>>(
-        stream: queryEventsRecord(),
-        builder: (context, snapshot) {
+      builder: (context) {
+        if (useWindowsFirestoreRest) {
+          return RestPollBuilder<List<EventsRecord>>(
+            interval: const Duration(seconds: 30),
+            fetch: () => fsQueryEvents(limit: 50),
+            builder: (context, snapshot) =>
+                _buildDiscoverBody(context, snapshot),
+          );
+        }
+        return StreamBuilder<List<EventsRecord>>(
+          stream: queryEventsRecord(),
+          builder: (context, snapshot) => _buildDiscoverBody(context, snapshot),
+        );
+      },
+    );
+  }
+
+  Widget _buildDiscoverBody(
+    BuildContext context,
+    AsyncSnapshot<List<EventsRecord>> snapshot,
+  ) {
           // Customize what your widget looks like when it's loading.
           if (!snapshot.hasData) {
             return Scaffold(
@@ -920,20 +940,9 @@ class _DiscoverWidgetState extends State<DiscoverWidget>
                                                           ),
                                                         ],
                                                       ),
-                                                      StreamBuilder<
-                                                          List<ChatsRecord>>(
-                                                        stream:
-                                                            queryChatsRecord(
-                                                          queryBuilder:
-                                                              (chatsRecord) =>
-                                                                  chatsRecord
-                                                                      .where(
-                                                            'is_group',
-                                                            isEqualTo: true,
-                                                          ),
-                                                        ),
-                                                        builder: (context,
-                                                            snapshot) {
+                                                      _groupChatsPollOrStream(
+                                                        context,
+                                                        (context, snapshot) {
                                                           // Customize what your widget looks like when it's loading.
                                                           if (!snapshot
                                                               .hasData) {
@@ -1175,15 +1184,11 @@ class _DiscoverWidgetState extends State<DiscoverWidget>
                                                                                   },
                                                                                 );
                                                                               } else {
-                                                                                await wrapChatsRecord.reference.update({
-                                                                                  ...mapToFirestore(
-                                                                                    {
-                                                                                      'members': FieldValue.arrayUnion([
-                                                                                        currentUserReference
-                                                                                      ]),
-                                                                                    },
-                                                                                  ),
-                                                                                });
+                                                                                await fsArrayUnion(
+                                                                                  wrapChatsRecord.reference,
+                                                                                  'members',
+                                                                                  [currentUserReference],
+                                                                                );
 
                                                                                 context.pushNamed(
                                                                                   ChatDetailWidget.routeName,
@@ -1282,8 +1287,25 @@ class _DiscoverWidgetState extends State<DiscoverWidget>
               ),
             ),
           );
-        },
+  }
+
+  Widget _groupChatsPollOrStream(
+    BuildContext context,
+    Widget Function(BuildContext, AsyncSnapshot<List<ChatsRecord>>) builder,
+  ) {
+    if (useWindowsFirestoreRest) {
+      return RestPollBuilder<List<ChatsRecord>>(
+        interval: const Duration(seconds: 30),
+        fetch: () => fsQueryGroupChats(),
+        builder: builder,
+      );
+    }
+    return StreamBuilder<List<ChatsRecord>>(
+      stream: queryChatsRecord(
+        queryBuilder: (chatsRecord) =>
+            chatsRecord.where('is_group', isEqualTo: true),
       ),
+      builder: builder,
     );
   }
 }

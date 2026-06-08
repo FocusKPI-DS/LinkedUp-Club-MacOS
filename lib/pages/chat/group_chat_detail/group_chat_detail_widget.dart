@@ -1,5 +1,6 @@
 import '/auth/firebase_auth/auth_util.dart';
 import '/backend/backend.dart';
+import '/backend/firestore/firestore_desktop_adapter.dart';
 import '/backend/schema/enums/enums.dart';
 import '/component/empty_schedule/empty_schedule_widget.dart';
 import '/components/delete_chat_group_widget.dart';
@@ -20,6 +21,7 @@ import '/custom_code/widgets/index.dart' as custom_widgets;
 import '/custom_code/services/fireflies_api_service.dart';
 import '/index.dart';
 import '/utils/chat_helpers.dart';
+import '/pages/desktop_chat/rest_poll_builder.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:ff_theme/flutter_flow/flutter_flow_theme.dart';
@@ -93,19 +95,15 @@ class _GroupChatDetailWidgetState extends State<GroupChatDetailWidget>
 
       try {
         if (currentUserReference == chatDocToLoad.admin) {
-          final reports = await queryReportsRecordOnce(
-            queryBuilder: (reportsRecord) => reportsRecord.where(
-              'chat_group',
-              isEqualTo: chatDocToLoad.reference,
-            ),
-          );
+          final reports =
+              await fsQueryReportsByChatGroup(chatDocToLoad.reference);
           if (!mounted || widget.chatDoc?.reference.path != chatPathToLoad) return;
           _model.chat = reports;
           _model.report = _model.chat!.toList().cast<ReportsRecord>();
           safeSetState(() {});
         }
         final chatRef = chatDocToLoad.reference;
-        final messages = await queryMessagesRecordOnce(parent: chatRef);
+        final messages = await fsQueryChatMessages(chatRef, limit: 500);
         if (!mounted || widget.chatDoc?.reference.path != chatPathToLoad) return;
         _model.messages = messages;
         _model.message = _model.messages!
@@ -121,9 +119,7 @@ class _GroupChatDetailWidgetState extends State<GroupChatDetailWidget>
         // Only query participants when this group has an event (eventRef); otherwise skip to avoid hang/failure
         final eventRef = chatDocToLoad.eventRef;
         if (eventRef != null) {
-          final participant = await queryParticipantRecordOnce(
-            parent: eventRef,
-          );
+          final participant = await fsQueryParticipants(eventRef);
           if (!mounted || widget.chatDoc?.reference.path != chatPathToLoad) return;
           _model.participant = participant;
           _model.participants =
@@ -1278,34 +1274,68 @@ class _GroupChatDetailWidgetState extends State<GroupChatDetailWidget>
     );
   }
 
+  Widget _buildActionTasksPreviewStream({
+    required ChatsRecord? chatDoc,
+    required Widget Function(
+      BuildContext context,
+      AsyncSnapshot<List<ActionItemsRecord>> snapshot,
+    ) builder,
+  }) {
+    if (chatDoc == null) {
+      return builder(
+        context,
+        AsyncSnapshot<List<ActionItemsRecord>>.withData(
+          ConnectionState.done,
+          const [],
+        ),
+      );
+    }
+    if (useWindowsFirestoreRest) {
+      return RestPollBuilder<List<ActionItemsRecord>>(
+        interval: const Duration(seconds: 20),
+        fetch: () => fsQueryActionItemsByChat(chatDoc.reference, limit: 10),
+        builder: builder,
+      );
+    }
+    return StreamBuilder<List<ActionItemsRecord>>(
+      stream: queryActionItemsRecord(
+        queryBuilder: (actionItemsRecord) => actionItemsRecord
+            .where('chat_ref', isEqualTo: chatDoc.reference)
+            .orderBy('created_time', descending: true)
+            .limit(10),
+      ),
+      builder: builder,
+    );
+  }
+
   /// Helper function to send a system update message to the group chat
   Future<void> _sendSystemMessage(String messageContent) async {
     if (widget.chatDoc == null || currentUserReference == null) return;
 
     try {
-      final messageRef = MessagesRecord.createDoc(widget.chatDoc!.reference);
-      await messageRef.set({
-        'content': messageContent,
-        'sender_ref': currentUserReference,
-        'sender_name': currentUserDisplayName.isNotEmpty
-            ? currentUserDisplayName
-            : (currentUserDocument?.displayName ?? 'Someone'),
-        'sender_photo': currentUserPhoto.isNotEmpty
-            ? currentUserPhoto
-            : (currentUserDocument?.photoUrl ?? ''),
-        'created_at': getCurrentTimestamp,
-        'message_type': MessageType.text.serialize(),
-        'is_read_by': [],
-        'is_system_message': true,
-      });
-
-      // Update chat's last message
-      await widget.chatDoc!.reference.update({
-        'last_message': messageContent,
-        'last_message_at': getCurrentTimestamp,
-        'last_message_sent': currentUserReference,
-        'last_message_type': MessageType.text.serialize(),
-      });
+      await fsCreateMessageAndUpdateChat(
+        chatRef: widget.chatDoc!.reference,
+        messageData: {
+          'content': messageContent,
+          'sender_ref': currentUserReference,
+          'sender_name': currentUserDisplayName.isNotEmpty
+              ? currentUserDisplayName
+              : (currentUserDocument?.displayName ?? 'Someone'),
+          'sender_photo': currentUserPhoto.isNotEmpty
+              ? currentUserPhoto
+              : (currentUserDocument?.photoUrl ?? ''),
+          'created_at': getCurrentTimestamp,
+          'message_type': MessageType.text.serialize(),
+          'is_read_by': [],
+          'is_system_message': true,
+        },
+        chatUpdateData: {
+          'last_message': messageContent,
+          'last_message_at': getCurrentTimestamp,
+          'last_message_sent': currentUserReference,
+          'last_message_type': MessageType.text.serialize(),
+        },
+      );
     } catch (e) {
       print('Error sending system message: $e');
       // Don't show error to user as the update itself succeeded
@@ -1328,7 +1358,7 @@ class _GroupChatDetailWidgetState extends State<GroupChatDetailWidget>
     final oldName = widget.chatDoc?.title ?? '';
     if (oldName != newName) {
       try {
-        await widget.chatDoc!.reference.update({
+        await fsPatchDocument(widget.chatDoc!.reference, {
           'title': newName,
         });
 
@@ -1365,7 +1395,7 @@ class _GroupChatDetailWidgetState extends State<GroupChatDetailWidget>
 
     if (oldDescription != newDescription) {
       try {
-        await widget.chatDoc!.reference.update({
+        await fsPatchDocument(widget.chatDoc!.reference, {
           'description': newDescription,
         });
 
@@ -1482,7 +1512,7 @@ class _GroupChatDetailWidgetState extends State<GroupChatDetailWidget>
 
                             // Only update if name actually changed
                             if (oldName != newName) {
-                              await widget.chatDoc!.reference.update({
+                              await fsPatchDocument(widget.chatDoc!.reference, {
                                 'title': newName,
                               });
 
@@ -1628,7 +1658,7 @@ class _GroupChatDetailWidgetState extends State<GroupChatDetailWidget>
 
                           // Only update if description actually changed
                           if (oldDescription != newDescription) {
-                            await widget.chatDoc!.reference.update({
+                            await fsPatchDocument(widget.chatDoc!.reference, {
                               'description': newDescription,
                             });
 
@@ -1767,7 +1797,7 @@ class _GroupChatDetailWidgetState extends State<GroupChatDetailWidget>
           final newImageUrl = await _uploadGroupImage(image);
 
           // Update chat document
-          await widget.chatDoc!.reference.update({
+          await fsPatchDocument(widget.chatDoc!.reference, {
             'chat_image_url': newImageUrl,
           });
 
@@ -2049,9 +2079,11 @@ class _GroupChatDetailWidgetState extends State<GroupChatDetailWidget>
 
     try {
       // Add user to admin_users list (multi-admin support)
-      await widget.chatDoc!.reference.update({
-        'admin_users': FieldValue.arrayUnion([user.reference]),
-      });
+      await fsArrayUnion(
+        widget.chatDoc!.reference,
+        'admin_users',
+        [user.reference],
+      );
 
       // Send system message
       final userName = currentUserDisplayName.isNotEmpty
@@ -2186,15 +2218,15 @@ class _GroupChatDetailWidgetState extends State<GroupChatDetailWidget>
 
     try {
       // Remove user from admin_users list
-      await widget.chatDoc!.reference.update({
-        'admin_users': FieldValue.arrayRemove([user.reference]),
-      });
+      await fsArrayRemove(
+        widget.chatDoc!.reference,
+        'admin_users',
+        [user.reference],
+      );
 
       // Also clear legacy admin field if it matches
       if (widget.chatDoc!.admin?.path == user.reference.path) {
-        await widget.chatDoc!.reference.update({
-          'admin': FieldValue.delete(),
-        });
+        await fsDeleteDocumentField(widget.chatDoc!.reference, 'admin');
       }
 
       // Send system message
@@ -2334,7 +2366,7 @@ class _GroupChatDetailWidgetState extends State<GroupChatDetailWidget>
           List<DocumentReference>.from(widget.chatDoc!.members);
       updatedMembers.remove(user.reference);
 
-      await widget.chatDoc!.reference.update({
+      await fsPatchDocument(widget.chatDoc!.reference, {
         'members': updatedMembers,
       });
 
@@ -2400,7 +2432,7 @@ class _GroupChatDetailWidgetState extends State<GroupChatDetailWidget>
     final newIsPrivate = !currentIsPrivate;
 
     try {
-      await widget.chatDoc!.reference.update({
+      await fsPatchDocument(widget.chatDoc!.reference, {
         'is_private': newIsPrivate,
       });
 
@@ -2850,7 +2882,7 @@ class _GroupChatDetailWidgetState extends State<GroupChatDetailWidget>
                               try {
                                 // Update only the members list - admin field remains unchanged
                                 // New members are added as regular members, not admins
-                                await widget.chatDoc!.reference.update({
+                                await fsPatchDocument(widget.chatDoc!.reference, {
                                   ...mapToFirestore({
                                     'members': _model.userRef,
                                   }),
@@ -3963,17 +3995,8 @@ class _GroupChatDetailWidgetState extends State<GroupChatDetailWidget>
                                         ),
                                         const SizedBox(height: 16),
                                         // Action Tasks Section - Inline
-                                        StreamBuilder<List<ActionItemsRecord>>(
-                                          stream: queryActionItemsRecord(
-                                            queryBuilder: (actionItemsRecord) =>
-                                                actionItemsRecord
-                                                    .where('chat_ref',
-                                                        isEqualTo: widget
-                                                            .chatDoc!.reference)
-                                                    .orderBy('created_time',
-                                                        descending: true)
-                                                    .limit(10),
-                                          ),
+                                        _buildActionTasksPreviewStream(
+                                          chatDoc: widget.chatDoc,
                                           builder: (context, snapshot) {
                                             final actionItems =
                                                 snapshot.data ?? [];
@@ -5204,18 +5227,17 @@ class _GroupChatDetailWidgetState extends State<GroupChatDetailWidget>
                                                                                     ),
                                                                                     FFButtonWidget(
                                                                                       onPressed: () async {
-                                                                                        await reportListsItem.chatGroup!.update({
-                                                                                          ...mapToFirestore(
-                                                                                            {
-                                                                                              'members': FieldValue.arrayRemove([
-                                                                                                columnUsersRecord.reference
-                                                                                              ]),
-                                                                                              'blocked_user': FieldValue.arrayUnion([
-                                                                                                columnUsersRecord.reference
-                                                                                              ]),
-                                                                                            },
-                                                                                          ),
-                                                                                        });
+                                                                                        final chatRef = reportListsItem.chatGroup!;
+                                                                                        await fsArrayRemove(
+                                                                                          chatRef,
+                                                                                          'members',
+                                                                                          [columnUsersRecord.reference],
+                                                                                        );
+                                                                                        await fsArrayUnion(
+                                                                                          chatRef,
+                                                                                          'blocked_user',
+                                                                                          [columnUsersRecord.reference],
+                                                                                        );
                                                                                       },
                                                                                       text: 'Block',
                                                                                       options: FFButtonOptions(
@@ -5515,14 +5537,11 @@ class _GroupChatDetailWidgetState extends State<GroupChatDetailWidget>
                                           },
                                         );
                                       } else {
-                                        await widget.chatDoc!.reference.update({
-                                          ...mapToFirestore(
-                                            {
-                                              'members': FieldValue.arrayRemove(
-                                                  [currentUserReference]),
-                                            },
-                                          ),
-                                        });
+                                        await fsArrayRemove(
+                                          widget.chatDoc!.reference,
+                                          'members',
+                                          [currentUserReference!],
+                                        );
 
                                         context.safePop();
                                       }

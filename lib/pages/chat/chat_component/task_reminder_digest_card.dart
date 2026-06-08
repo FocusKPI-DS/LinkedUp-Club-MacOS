@@ -5,6 +5,8 @@ import 'package:ff_theme/flutter_flow/flutter_flow_theme.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
+import '/backend/firestore/firestore_desktop_adapter.dart';
+
 /// Paths of action items marked done (persists across rebuilds so we show them as completed).
 final Set<String> _kCompletedActionItemPaths = {};
 
@@ -202,6 +204,24 @@ class _TaskReminderDigestCardState extends State<TaskReminderDigestCard> {
       return;
     }
     try {
+      if (useWindowsFirestoreRest) {
+        final completed = <String>{};
+        for (final path in paths) {
+          final ref = FirebaseFirestore.instance.doc(path);
+          final data = await fsFetchDocumentData(ref);
+          if (data != null && data['status'] == 'completed') {
+            completed.add(path);
+          }
+        }
+        _kCompletedPathsCache[_cacheKey] = completed;
+        if (!mounted) return;
+        final same = _completedPathsFromFirestore != null &&
+            _completedPathsFromFirestore!.length == completed.length &&
+            completed.every(_completedPathsFromFirestore!.contains);
+        if (!same) setState(() => _completedPathsFromFirestore = completed);
+        return;
+      }
+
       final snaps = await Future.wait(
         paths.map((p) => FirebaseFirestore.instance.doc(p).get()),
       );

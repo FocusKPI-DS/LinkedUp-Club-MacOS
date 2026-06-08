@@ -1,5 +1,6 @@
 import '/auth/firebase_auth/auth_util.dart';
 import '/backend/backend.dart';
+import '/backend/firestore/firestore_desktop_adapter.dart';
 import '/component/empty_friend_list/empty_friend_list_widget.dart';
 import '/flutter_flow/flutter_flow_animations.dart';
 import '/flutter_flow/flutter_flow_util.dart';
@@ -7,10 +8,11 @@ import '/flutter_flow/flutter_flow_widgets.dart';
 import 'dart:ui';
 import '/custom_code/actions/index.dart' as actions;
 import '/index.dart';
-import '/index.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:ff_theme/flutter_flow/flutter_flow_theme.dart';
 import '/utils/chat_helpers.dart';
+import '/pages/desktop_chat/desktop_safe_user_builder.dart';
+import '/pages/desktop_chat/rest_poll_builder.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter_animate/flutter_animate.dart';
@@ -45,16 +47,8 @@ class _ContactsListWidgetState extends State<ContactsListWidget>
 
     // On page load action.
     SchedulerBinding.instance.addPostFrameCallback((_) async {
-      _model.myChat = await queryChatsRecordOnce(
-        queryBuilder: (chatsRecord) => chatsRecord
-            .where(
-              'members',
-              arrayContains: currentUserReference,
-            )
-            .where(
-              'is_group',
-              isEqualTo: false,
-            ),
+      _model.myChat = await fsQueryMemberDmChats(
+        memberRef: currentUserReference!,
       );
       _model.addToMember(currentUserReference!);
       _model.addToName(currentUserDisplayName);
@@ -353,12 +347,11 @@ class _ContactsListWidgetState extends State<ContactsListWidget>
                                                 (friendRequestIndex) {
                                           final friendRequestItem =
                                               friendRequest[friendRequestIndex];
-                                          return StreamBuilder<UsersRecord>(
-                                            stream: UsersRecord.getDocument(
-                                                friendRequestItem),
-                                            builder: (context, snapshot) {
-                                              // Customize what your widget looks like when it's loading.
-                                              if (!snapshot.hasData) {
+                                          return DesktopSafeUserPollBuilder(
+                                            userRef: friendRequestItem,
+                                            fetchOnce: fsGetUserOnce,
+                                            builder: (context, user) {
+                                              if (user == null) {
                                                 return Center(
                                                   child: SizedBox(
                                                     width: 50.0,
@@ -378,7 +371,7 @@ class _ContactsListWidgetState extends State<ContactsListWidget>
                                               }
 
                                               final containerUsersRecord =
-                                                  snapshot.data!;
+                                                  user;
 
                                               return Container(
                                                 decoration:
@@ -483,37 +476,27 @@ class _ContactsListWidgetState extends State<ContactsListWidget>
                                                               FFButtonWidget(
                                                                 onPressed:
                                                                     () async {
-                                                                  await currentUserReference!
-                                                                      .update({
-                                                                    ...mapToFirestore(
-                                                                      {
-                                                                        'friends':
-                                                                            FieldValue.arrayUnion([
-                                                                          friendRequestItem
-                                                                        ]),
-                                                                        'friend_requests':
-                                                                            FieldValue.arrayRemove([
-                                                                          friendRequestItem
-                                                                        ]),
-                                                                      },
-                                                                    ),
-                                                                  });
+                                                                  await fsArrayUnion(
+                                                                    currentUserReference!,
+                                                                    'friends',
+                                                                    [friendRequestItem],
+                                                                  );
+                                                                  await fsArrayRemove(
+                                                                    currentUserReference!,
+                                                                    'friend_requests',
+                                                                    [friendRequestItem],
+                                                                  );
 
-                                                                  await friendRequestItem
-                                                                      .update({
-                                                                    ...mapToFirestore(
-                                                                      {
-                                                                        'sent_requests':
-                                                                            FieldValue.arrayRemove([
-                                                                          currentUserReference
-                                                                        ]),
-                                                                        'friends':
-                                                                            FieldValue.arrayUnion([
-                                                                          currentUserReference
-                                                                        ]),
-                                                                      },
-                                                                    ),
-                                                                  });
+                                                                  await fsArrayRemove(
+                                                                    friendRequestItem,
+                                                                    'sent_requests',
+                                                                    [currentUserReference!],
+                                                                  );
+                                                                  await fsArrayUnion(
+                                                                    friendRequestItem,
+                                                                    'friends',
+                                                                    [currentUserReference!],
+                                                                  );
                                                                   await Future
                                                                       .wait([
                                                                     Future(
@@ -599,17 +582,11 @@ class _ContactsListWidgetState extends State<ContactsListWidget>
                                                               FFButtonWidget(
                                                                 onPressed:
                                                                     () async {
-                                                                  await currentUserReference!
-                                                                      .update({
-                                                                    ...mapToFirestore(
-                                                                      {
-                                                                        'friend_requests':
-                                                                            FieldValue.arrayRemove([
-                                                                          friendRequestItem
-                                                                        ]),
-                                                                      },
-                                                                    ),
-                                                                  });
+                                                                  await fsArrayRemove(
+                                                                    currentUserReference!,
+                                                                    'friend_requests',
+                                                                    [friendRequestItem],
+                                                                  );
                                                                 },
                                                                 text: 'Decline',
                                                                 options:
@@ -880,213 +857,8 @@ class _ContactsListWidgetState extends State<ContactsListWidget>
                             );
                           }
 
-                          return StreamBuilder<List<WorkspaceMembersRecord>>(
-                            stream: queryWorkspaceMembersRecord(
-                              queryBuilder: (workspaceMembersRecord) =>
-                                  workspaceMembersRecord.where('workspace_ref',
-                                      isEqualTo:
-                                          currentUser?.currentWorkspaceRef),
-                            ),
-                            builder: (context, membersSnapshot) {
-                              if (!membersSnapshot.hasData) {
-                                return Center(
-                                  child: SizedBox(
-                                    width: 50.0,
-                                    height: 50.0,
-                                    child: CircularProgressIndicator(
-                                      valueColor: AlwaysStoppedAnimation<Color>(
-                                        FlutterFlowTheme.of(context).primary,
-                                      ),
-                                    ),
-                                  ),
-                                );
-                              }
-
-                              final members = membersSnapshot.data!;
-
-                              return Container(
-                                width: double.infinity,
-                                decoration: BoxDecoration(
-                                  color: FlutterFlowTheme.of(context)
-                                      .secondaryBackground,
-                                ),
-                                child: Padding(
-                                  padding: const EdgeInsets.all(16.0),
-                                  child: Column(
-                                    mainAxisSize: MainAxisSize.max,
-                                    children: members.map((member) {
-                                      return StreamBuilder<UsersRecord>(
-                                        stream: UsersRecord.getDocument(
-                                            member.userRef!),
-                                        builder: (context, userSnapshot) {
-                                          if (!userSnapshot.hasData) {
-                                            return SizedBox.shrink();
-                                          }
-
-                                          final user = userSnapshot.data!;
-                                          final isCurrentUser =
-                                              user.reference ==
-                                                  currentUserReference;
-
-                                          if (isCurrentUser) {
-                                            return SizedBox.shrink();
-                                          }
-
-                                          return InkWell(
-                                            splashColor: Colors.transparent,
-                                            focusColor: Colors.transparent,
-                                            hoverColor: Colors.transparent,
-                                            highlightColor: Colors.transparent,
-                                            onTap: () async {
-                                              // Start a new chat with this workspace member
-                                              await _startNewChatWithUser(user);
-                                            },
-                                            child: Container(
-                                              margin:
-                                                  EdgeInsets.only(bottom: 12),
-                                              padding: EdgeInsets.all(12),
-                                              decoration: BoxDecoration(
-                                                color:
-                                                    FlutterFlowTheme.of(context)
-                                                        .primaryBackground,
-                                                borderRadius:
-                                                    BorderRadius.circular(12),
-                                                border: Border.all(
-                                                  color: FlutterFlowTheme.of(
-                                                          context)
-                                                      .alternate,
-                                                  width: 1,
-                                                ),
-                                              ),
-                                              child: Row(
-                                                mainAxisSize: MainAxisSize.max,
-                                                children: [
-                                                  ClipRRect(
-                                                    borderRadius:
-                                                        BorderRadius.circular(
-                                                            24.0),
-                                                    child: Image.network(
-                                                      valueOrDefault<String>(
-                                                        user.photoUrl,
-                                                        'https://firebasestorage.googleapis.com/v0/b/linkedup-c3e29.firebasestorage.app/o/asset%2Fjurica-koletic-7YVZYZeITc8-unsplash.jpg?alt=media&token=d05a38c8-e024-4624-bdb3-82e4f7c6afab',
-                                                      ),
-                                                      width: 48.0,
-                                                      height: 48.0,
-                                                      fit: BoxFit.cover,
-                                                    ),
-                                                  ),
-                                                  SizedBox(width: 12),
-                                                  Expanded(
-                                                    child: Column(
-                                                      mainAxisSize:
-                                                          MainAxisSize.min,
-                                                      crossAxisAlignment:
-                                                          CrossAxisAlignment
-                                                              .start,
-                                                      children: [
-                                                        Row(
-                                                          children: [
-                                                            Expanded(
-                                                              child: Text(
-                                                                user.displayName,
-                                                                style: FlutterFlowTheme.of(
-                                                                        context)
-                                                                    .titleMedium
-                                                                    .override(
-                                                                      font: GoogleFonts
-                                                                          .inter(
-                                                                        fontWeight:
-                                                                            FontWeight.w600,
-                                                                      ),
-                                                                      color: const Color(
-                                                                          0xFF1F2937),
-                                                                      fontSize:
-                                                                          16.0,
-                                                                    ),
-                                                              ),
-                                                            ),
-                                                            Container(
-                                                              padding: EdgeInsets
-                                                                  .symmetric(
-                                                                      horizontal:
-                                                                          8,
-                                                                      vertical:
-                                                                          4),
-                                                              decoration:
-                                                                  BoxDecoration(
-                                                                color: _getRoleColor(
-                                                                    member
-                                                                        .role),
-                                                                borderRadius:
-                                                                    BorderRadius
-                                                                        .circular(
-                                                                            12),
-                                                              ),
-                                                              child: Text(
-                                                                member.role
-                                                                    .toUpperCase(),
-                                                                style:
-                                                                    TextStyle(
-                                                                  color: Colors
-                                                                      .white,
-                                                                  fontSize: 10,
-                                                                  fontWeight:
-                                                                      FontWeight
-                                                                          .w600,
-                                                                ),
-                                                              ),
-                                                            ),
-                                                          ],
-                                                        ),
-                                                        SizedBox(height: 4),
-                                                        Text(
-                                                          user.email,
-                                                          style: FlutterFlowTheme
-                                                                  .of(context)
-                                                              .bodySmall
-                                                              .override(
-                                                                color: const Color(
-                                                                    0xFF6B7280),
-                                                                fontSize: 12.0,
-                                                              ),
-                                                        ),
-                                                        SizedBox(height: 4),
-                                                        Text(
-                                                          'Tap to start a chat',
-                                                          style: FlutterFlowTheme
-                                                                  .of(context)
-                                                              .bodySmall
-                                                              .override(
-                                                                color: FlutterFlowTheme.of(
-                                                                        context)
-                                                                    .primary,
-                                                                fontSize: 12.0,
-                                                                fontWeight:
-                                                                    FontWeight
-                                                                        .w500,
-                                                              ),
-                                                        ),
-                                                      ],
-                                                    ),
-                                                  ),
-                                                  Icon(
-                                                    Icons.chat_bubble_outline,
-                                                    color: FlutterFlowTheme.of(
-                                                            context)
-                                                        .primary,
-                                                    size: 20,
-                                                  ),
-                                                ],
-                                              ),
-                                            ),
-                                          );
-                                        },
-                                      );
-                                    }).toList(),
-                                  ),
-                                ),
-                              );
-                            },
+                          return _buildWorkspaceMembersSection(
+                            currentUser?.currentWorkspaceRef,
                           );
                         },
                       ),
@@ -1135,6 +907,187 @@ class _ContactsListWidgetState extends State<ContactsListWidget>
           ),
         ),
       ),
+    );
+  }
+
+  Widget _buildWorkspaceMembersSection(DocumentReference? workspaceRef) {
+    if (workspaceRef == null) {
+      return const SizedBox.shrink();
+    }
+
+    Widget membersBody(
+      AsyncSnapshot<List<WorkspaceMembersRecord>> membersSnapshot,
+    ) {
+      if (!membersSnapshot.hasData) {
+        return Center(
+          child: SizedBox(
+            width: 50.0,
+            height: 50.0,
+            child: CircularProgressIndicator(
+              valueColor: AlwaysStoppedAnimation<Color>(
+                FlutterFlowTheme.of(context).primary,
+              ),
+            ),
+          ),
+        );
+      }
+
+      final members = membersSnapshot.data!;
+
+      return Container(
+        width: double.infinity,
+        decoration: BoxDecoration(
+          color: FlutterFlowTheme.of(context).secondaryBackground,
+        ),
+        child: Padding(
+          padding: const EdgeInsets.all(16.0),
+          child: Column(
+            mainAxisSize: MainAxisSize.max,
+            children: members.map((member) {
+              return DesktopSafeUserPollBuilder(
+                userRef: member.userRef!,
+                fetchOnce: fsGetUserOnce,
+                builder: (context, user) {
+                  if (user == null) {
+                    return const SizedBox.shrink();
+                  }
+
+                  if (user.reference == currentUserReference) {
+                    return const SizedBox.shrink();
+                  }
+
+                  return InkWell(
+                    splashColor: Colors.transparent,
+                    focusColor: Colors.transparent,
+                    hoverColor: Colors.transparent,
+                    highlightColor: Colors.transparent,
+                    onTap: () async {
+                      await _startNewChatWithUser(user);
+                    },
+                    child: Container(
+                      margin: const EdgeInsets.only(bottom: 12),
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: FlutterFlowTheme.of(context).primaryBackground,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: FlutterFlowTheme.of(context).alternate,
+                          width: 1,
+                        ),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.max,
+                        children: [
+                          ClipRRect(
+                            borderRadius: BorderRadius.circular(24.0),
+                            child: Image.network(
+                              valueOrDefault<String>(
+                                user.photoUrl,
+                                'https://firebasestorage.googleapis.com/v0/b/linkedup-c3e29.firebasestorage.app/o/asset%2Fjurica-koletic-7YVZYZeITc8-unsplash.jpg?alt=media&token=d05a38c8-e024-4624-bdb3-82e4f7c6afab',
+                              ),
+                              width: 48.0,
+                              height: 48.0,
+                              fit: BoxFit.cover,
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  children: [
+                                    Expanded(
+                                      child: Text(
+                                        user.displayName,
+                                        style: FlutterFlowTheme.of(context)
+                                            .titleMedium
+                                            .override(
+                                              font: GoogleFonts.inter(
+                                                fontWeight: FontWeight.w600,
+                                              ),
+                                              color: const Color(0xFF1F2937),
+                                              fontSize: 16.0,
+                                            ),
+                                      ),
+                                    ),
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 8,
+                                        vertical: 4,
+                                      ),
+                                      decoration: BoxDecoration(
+                                        color: _getRoleColor(member.role),
+                                        borderRadius: BorderRadius.circular(12),
+                                      ),
+                                      child: Text(
+                                        member.role.toUpperCase(),
+                                        style: const TextStyle(
+                                          color: Colors.white,
+                                          fontSize: 10,
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  user.email,
+                                  style: FlutterFlowTheme.of(context)
+                                      .bodySmall
+                                      .override(
+                                        color: const Color(0xFF6B7280),
+                                        fontSize: 12.0,
+                                      ),
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  'Tap to start a chat',
+                                  style: FlutterFlowTheme.of(context)
+                                      .bodySmall
+                                      .override(
+                                        color:
+                                            FlutterFlowTheme.of(context).primary,
+                                        fontSize: 12.0,
+                                        fontWeight: FontWeight.w500,
+                                      ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          Icon(
+                            Icons.chat_bubble_outline,
+                            color: FlutterFlowTheme.of(context).primary,
+                            size: 20,
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
+                },
+              );
+            }).toList(),
+          ),
+        ),
+      );
+    }
+
+    if (useWindowsFirestoreRest) {
+      return RestPollBuilder<List<WorkspaceMembersRecord>>(
+        interval: const Duration(seconds: 30),
+        fetch: () => fsQueryWorkspaceMembers(workspaceRef),
+        builder: (context, snapshot) => membersBody(snapshot),
+      );
+    }
+
+    return StreamBuilder<List<WorkspaceMembersRecord>>(
+      stream: queryWorkspaceMembersRecord(
+        queryBuilder: (workspaceMembersRecord) => workspaceMembersRecord
+            .where('workspace_ref', isEqualTo: workspaceRef),
+      ),
+      builder: (context, snapshot) => membersBody(snapshot),
     );
   }
 }

@@ -127,8 +127,12 @@ GoRouter createRouter(AppStateNotifier appStateNotifier) {
                   ? NavBarPage(initialPage: tab ?? 'MobileChat')
                   : NavBarPage(initialPage: tab))
               : const WelcomeWidget();
-          print(
-              '   Returning NavBarPage with initialPage: ${tab ?? 'MobileChat'}');
+          final initialPageLabel = !appStateNotifier.loggedIn
+              ? 'Welcome'
+              : (!kIsWeb && Platform.isIOS)
+                  ? (tab ?? 'MobileChat')
+                  : (tab ?? 'Home');
+          print('   Returning NavBarPage with initialPage: $initialPageLabel');
           return result;
         },
       ),
@@ -223,8 +227,9 @@ GoRouter createRouter(AppStateNotifier appStateNotifier) {
         path: MobileSettingsWidget.routePath,
         requireAuth: true,
         builder: (context, params) {
-          // Redirect macOS and web to desktop settings page
-          if (kIsWeb || (!kIsWeb && Platform.isMacOS)) {
+          // Redirect macOS, Windows, and web to desktop settings page
+          if (kIsWeb ||
+              (!kIsWeb && (Platform.isMacOS || Platform.isWindows))) {
             return params.isEmpty
                 ? NavBarPage(initialPage: 'ProfileSettings')
                 : const ProfileSettingsWidget();

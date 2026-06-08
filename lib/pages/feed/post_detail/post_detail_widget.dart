@@ -1,5 +1,7 @@
 import '/auth/firebase_auth/auth_util.dart';
 import '/backend/backend.dart';
+import '/backend/firestore/firestore_desktop_adapter.dart';
+import '/pages/desktop_chat/rest_poll_builder.dart';
 import '/flutter_flow/flutter_flow_icon_button.dart';
 import '/flutter_flow/flutter_flow_util.dart';
 import '/flutter_flow/flutter_flow_widgets.dart';
@@ -181,226 +183,7 @@ class _PostDetailWidgetState extends State<PostDetailWidget> {
                                     maxHeight: 700.0,
                                   ),
                                   decoration: const BoxDecoration(),
-                                  child: StreamBuilder<List<CommentsRecord>>(
-                                    stream: queryCommentsRecord(
-                                      parent: widget.postDoc?.reference,
-                                      queryBuilder: (commentsRecord) =>
-                                          commentsRecord.orderBy('created_at',
-                                              descending: true),
-                                    ),
-                                    builder: (context, snapshot) {
-                                      // Customize what your widget looks like when it's loading.
-                                      if (!snapshot.hasData) {
-                                        return Center(
-                                          child: SizedBox(
-                                            width: 50.0,
-                                            height: 50.0,
-                                            child: CircularProgressIndicator(
-                                              valueColor:
-                                                  AlwaysStoppedAnimation<Color>(
-                                                FlutterFlowTheme.of(context)
-                                                    .primary,
-                                              ),
-                                            ),
-                                          ),
-                                        );
-                                      }
-                                      List<CommentsRecord>
-                                          listViewCommentsRecordList =
-                                          snapshot.data!;
-
-                                      return ListView.separated(
-                                        padding: EdgeInsets.zero,
-                                        shrinkWrap: true,
-                                        scrollDirection: Axis.vertical,
-                                        itemCount:
-                                            listViewCommentsRecordList.length,
-                                        separatorBuilder: (_, __) =>
-                                            const SizedBox(height: 9.0),
-                                        itemBuilder: (context, listViewIndex) {
-                                          final listViewCommentsRecord =
-                                              listViewCommentsRecordList[
-                                                  listViewIndex];
-                                          return Container(
-                                            width: double.infinity,
-                                            decoration: BoxDecoration(
-                                              color:
-                                                  FlutterFlowTheme.of(context)
-                                                      .secondaryBackground,
-                                              borderRadius:
-                                                  BorderRadius.circular(12.0),
-                                            ),
-                                            child: Padding(
-                                              padding: const EdgeInsets.all(12.0),
-                                              child: Row(
-                                                mainAxisSize: MainAxisSize.max,
-                                                crossAxisAlignment:
-                                                    CrossAxisAlignment.start,
-                                                children: [
-                                                  Container(
-                                                    width: 32.0,
-                                                    height: 32.0,
-                                                    decoration: BoxDecoration(
-                                                      color:
-                                                          FlutterFlowTheme.of(
-                                                                  context)
-                                                              .accent1,
-                                                      image: DecorationImage(
-                                                        fit: BoxFit.cover,
-                                                        image: Image.network(
-                                                          valueOrDefault<
-                                                              String>(
-                                                            listViewCommentsRecord
-                                                                .userImage,
-                                                            'https://images.unsplash.com/photo-1533850595620-7b1711221751?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w0NTYyMDF8MHwxfHJhbmRvbXx8fHx8fHx8fDE3NTI3NDI5MzB8&ixlib=rb-4.1.0&q=80&w=1080',
-                                                          ),
-                                                        ).image,
-                                                      ),
-                                                      shape: BoxShape.circle,
-                                                    ),
-                                                  ),
-                                                  Expanded(
-                                                    child: Column(
-                                                      mainAxisSize:
-                                                          MainAxisSize.max,
-                                                      crossAxisAlignment:
-                                                          CrossAxisAlignment
-                                                              .start,
-                                                      children: [
-                                                        Row(
-                                                          mainAxisSize:
-                                                              MainAxisSize.max,
-                                                          mainAxisAlignment:
-                                                              MainAxisAlignment
-                                                                  .spaceBetween,
-                                                          children: [
-                                                            Text(
-                                                              valueOrDefault<
-                                                                  String>(
-                                                                listViewCommentsRecord
-                                                                    .userName,
-                                                                'Mike Chen',
-                                                              ),
-                                                              style: FlutterFlowTheme
-                                                                      .of(context)
-                                                                  .bodyMedium
-                                                                  .override(
-                                                                    font: GoogleFonts
-                                                                        .inter(
-                                                                      fontWeight:
-                                                                          FontWeight
-                                                                              .w600,
-                                                                      fontStyle: FlutterFlowTheme.of(
-                                                                              context)
-                                                                          .bodyMedium
-                                                                          .fontStyle,
-                                                                    ),
-                                                                    letterSpacing:
-                                                                        0.0,
-                                                                    fontWeight:
-                                                                        FontWeight
-                                                                            .w600,
-                                                                    fontStyle: FlutterFlowTheme.of(
-                                                                            context)
-                                                                        .bodyMedium
-                                                                        .fontStyle,
-                                                                  ),
-                                                            ),
-                                                            Text(
-                                                              dateTimeFormat(
-                                                                  "relative",
-                                                                  listViewCommentsRecord
-                                                                      .createdAt!),
-                                                              style: FlutterFlowTheme
-                                                                      .of(context)
-                                                                  .bodySmall
-                                                                  .override(
-                                                                    font: GoogleFonts
-                                                                        .inter(
-                                                                      fontWeight: FlutterFlowTheme.of(
-                                                                              context)
-                                                                          .bodySmall
-                                                                          .fontWeight,
-                                                                      fontStyle: FlutterFlowTheme.of(
-                                                                              context)
-                                                                          .bodySmall
-                                                                          .fontStyle,
-                                                                    ),
-                                                                    color: FlutterFlowTheme.of(
-                                                                            context)
-                                                                        .secondaryText,
-                                                                    letterSpacing:
-                                                                        0.0,
-                                                                    fontWeight: FlutterFlowTheme.of(
-                                                                            context)
-                                                                        .bodySmall
-                                                                        .fontWeight,
-                                                                    fontStyle: FlutterFlowTheme.of(
-                                                                            context)
-                                                                        .bodySmall
-                                                                        .fontStyle,
-                                                                  ),
-                                                            ),
-                                                          ],
-                                                        ),
-                                                        Padding(
-                                                          padding:
-                                                              const EdgeInsetsDirectional
-                                                                  .fromSTEB(
-                                                                      0.0,
-                                                                      4.0,
-                                                                      0.0,
-                                                                      8.0),
-                                                          child: Text(
-                                                            valueOrDefault<
-                                                                String>(
-                                                              listViewCommentsRecord
-                                                                  .text,
-                                                              'Wow, that looks incredible! I\'ve been wanting to hike there for months. How difficult was the trail?',
-                                                            ),
-                                                            style: FlutterFlowTheme
-                                                                    .of(context)
-                                                                .bodyMedium
-                                                                .override(
-                                                                  font:
-                                                                      GoogleFonts
-                                                                          .inter(
-                                                                    fontWeight: FlutterFlowTheme.of(
-                                                                            context)
-                                                                        .bodyMedium
-                                                                        .fontWeight,
-                                                                    fontStyle: FlutterFlowTheme.of(
-                                                                            context)
-                                                                        .bodyMedium
-                                                                        .fontStyle,
-                                                                  ),
-                                                                  letterSpacing:
-                                                                      0.0,
-                                                                  fontWeight: FlutterFlowTheme.of(
-                                                                          context)
-                                                                      .bodyMedium
-                                                                      .fontWeight,
-                                                                  fontStyle: FlutterFlowTheme.of(
-                                                                          context)
-                                                                      .bodyMedium
-                                                                      .fontStyle,
-                                                                  lineHeight:
-                                                                      1.4,
-                                                                ),
-                                                          ),
-                                                        ),
-                                                      ],
-                                                    ),
-                                                  ),
-                                                ].divide(const SizedBox(width: 12.0)),
-                                              ),
-                                            ),
-                                          );
-                                        },
-                                        controller: _model.listViewController,
-                                      );
-                                    },
-                                  ),
+                                  child: _buildCommentsList(context),
                                 ),
                               ]
                                   .divide(const SizedBox(height: 16.0))
@@ -578,26 +361,31 @@ class _PostDetailWidgetState extends State<PostDetailWidget> {
                                   _model.numCmm = _model.numCmm! + 1;
                                   safeSetState(() {});
 
-                                  var commentsRecordReference =
-                                      CommentsRecord.createDoc(
-                                          widget.postDoc!.reference);
-                                  await commentsRecordReference
-                                      .set(createCommentsRecordData(
+                                  final commentData = createCommentsRecordData(
                                     userRef: currentUserReference,
                                     text: _model.content,
                                     createdAt: getCurrentTimestamp,
                                     userImage: currentUserPhoto,
                                     userName: currentUserDisplayName,
-                                  ));
+                                  );
+                                  late DocumentReference commentsRecordReference;
+                                  if (useWindowsFirestoreRest) {
+                                    commentsRecordReference =
+                                        await fsCreateSubcollectionDocument(
+                                      parentRef: widget.postDoc!.reference,
+                                      collectionId: 'comments',
+                                      data: commentData,
+                                    );
+                                  } else {
+                                    commentsRecordReference =
+                                        CommentsRecord.createDoc(
+                                            widget.postDoc!.reference);
+                                    await commentsRecordReference
+                                        .set(commentData);
+                                  }
                                   _model.done =
                                       CommentsRecord.getDocumentFromData(
-                                          createCommentsRecordData(
-                                            userRef: currentUserReference,
-                                            text: _model.content,
-                                            createdAt: getCurrentTimestamp,
-                                            userImage: currentUserPhoto,
-                                            userName: currentUserDisplayName,
-                                          ),
+                                          commentData,
                                           commentsRecordReference);
                                   await _model.bigculom?.animateTo(
                                     _model.bigculom!.position.maxScrollExtent,
@@ -605,14 +393,11 @@ class _PostDetailWidgetState extends State<PostDetailWidget> {
                                     curve: Curves.ease,
                                   );
 
-                                  await widget.postDoc!.reference.update({
-                                    ...mapToFirestore(
-                                      {
-                                        'comment_count':
-                                            FieldValue.increment(1),
-                                      },
-                                    ),
-                                  });
+                                  await fsIncrementDocumentField(
+                                    widget.postDoc!.reference,
+                                    'comment_count',
+                                    1,
+                                  );
 
                                   safeSetState(() {});
                                 },
@@ -629,6 +414,182 @@ class _PostDetailWidgetState extends State<PostDetailWidget> {
           ),
         ),
       ),
+    );
+  }
+
+  Widget _buildCommentsList(BuildContext context) {
+    Widget buildList(
+      BuildContext context,
+      AsyncSnapshot<List<CommentsRecord>> snapshot,
+    ) {
+      if (!snapshot.hasData) {
+        return Center(
+          child: SizedBox(
+            width: 50.0,
+            height: 50.0,
+            child: CircularProgressIndicator(
+              valueColor: AlwaysStoppedAnimation<Color>(
+                FlutterFlowTheme.of(context).primary,
+              ),
+            ),
+          ),
+        );
+      }
+      final listViewCommentsRecordList = snapshot.data!;
+
+      return ListView.separated(
+        padding: EdgeInsets.zero,
+        shrinkWrap: true,
+        scrollDirection: Axis.vertical,
+        itemCount: listViewCommentsRecordList.length,
+        separatorBuilder: (_, __) => const SizedBox(height: 9.0),
+        itemBuilder: (context, listViewIndex) {
+          final listViewCommentsRecord =
+              listViewCommentsRecordList[listViewIndex];
+          return Container(
+            width: double.infinity,
+            decoration: BoxDecoration(
+              color: FlutterFlowTheme.of(context).secondaryBackground,
+              borderRadius: BorderRadius.circular(12.0),
+            ),
+            child: Padding(
+              padding: const EdgeInsets.all(12.0),
+              child: Row(
+                mainAxisSize: MainAxisSize.max,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Container(
+                    width: 32.0,
+                    height: 32.0,
+                    decoration: BoxDecoration(
+                      color: FlutterFlowTheme.of(context).accent1,
+                      image: DecorationImage(
+                        fit: BoxFit.cover,
+                        image: Image.network(
+                          valueOrDefault<String>(
+                            listViewCommentsRecord.userImage,
+                            'https://images.unsplash.com/photo-1533850595620-7b1711221751?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w0NTYyMDF8MHwxfHJhbmRvbXx8fHx8fHx8fDE3NTI3NDI5MzB8&ixlib=rb-4.1.0&q=80&w=1080',
+                          ),
+                        ).image,
+                      ),
+                      shape: BoxShape.circle,
+                    ),
+                  ),
+                  Expanded(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.max,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          mainAxisSize: MainAxisSize.max,
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text(
+                              valueOrDefault<String>(
+                                listViewCommentsRecord.userName,
+                                'Mike Chen',
+                              ),
+                              style: FlutterFlowTheme.of(context)
+                                  .bodyMedium
+                                  .override(
+                                    font: GoogleFonts.inter(
+                                      fontWeight: FontWeight.w600,
+                                      fontStyle: FlutterFlowTheme.of(context)
+                                          .bodyMedium
+                                          .fontStyle,
+                                    ),
+                                    letterSpacing: 0.0,
+                                    fontWeight: FontWeight.w600,
+                                    fontStyle: FlutterFlowTheme.of(context)
+                                        .bodyMedium
+                                        .fontStyle,
+                                  ),
+                            ),
+                            Text(
+                              dateTimeFormat(
+                                'relative',
+                                listViewCommentsRecord.createdAt!,
+                              ),
+                              style: FlutterFlowTheme.of(context)
+                                  .bodySmall
+                                  .override(
+                                    font: GoogleFonts.inter(
+                                      fontWeight: FlutterFlowTheme.of(context)
+                                          .bodySmall
+                                          .fontWeight,
+                                      fontStyle: FlutterFlowTheme.of(context)
+                                          .bodySmall
+                                          .fontStyle,
+                                    ),
+                                    color: FlutterFlowTheme.of(context)
+                                        .secondaryText,
+                                    letterSpacing: 0.0,
+                                    fontWeight: FlutterFlowTheme.of(context)
+                                        .bodySmall
+                                        .fontWeight,
+                                    fontStyle: FlutterFlowTheme.of(context)
+                                        .bodySmall
+                                        .fontStyle,
+                                  ),
+                            ),
+                          ],
+                        ),
+                        Padding(
+                          padding: const EdgeInsetsDirectional.fromSTEB(
+                              0.0, 4.0, 0.0, 8.0),
+                          child: Text(
+                            valueOrDefault<String>(
+                              listViewCommentsRecord.text,
+                              'Wow, that looks incredible! I\'ve been wanting to hike there for months. How difficult was the trail?',
+                            ),
+                            style: FlutterFlowTheme.of(context)
+                                .bodyMedium
+                                .override(
+                                  font: GoogleFonts.inter(
+                                    fontWeight: FlutterFlowTheme.of(context)
+                                        .bodyMedium
+                                        .fontWeight,
+                                    fontStyle: FlutterFlowTheme.of(context)
+                                        .bodyMedium
+                                        .fontStyle,
+                                  ),
+                                  letterSpacing: 0.0,
+                                  fontWeight: FlutterFlowTheme.of(context)
+                                      .bodyMedium
+                                      .fontWeight,
+                                  fontStyle: FlutterFlowTheme.of(context)
+                                      .bodyMedium
+                                      .fontStyle,
+                                  lineHeight: 1.4,
+                                ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ].divide(const SizedBox(width: 12.0)),
+              ),
+            ),
+          );
+        },
+        controller: _model.listViewController,
+      );
+    }
+
+    if (useWindowsFirestoreRest) {
+      return RestPollBuilder<List<CommentsRecord>>(
+        interval: const Duration(seconds: 30),
+        fetch: () => fsQueryComments(widget.postDoc!.reference),
+        builder: buildList,
+      );
+    }
+    return StreamBuilder<List<CommentsRecord>>(
+      stream: queryCommentsRecord(
+        parent: widget.postDoc?.reference,
+        queryBuilder: (commentsRecord) =>
+            commentsRecord.orderBy('created_at', descending: true),
+      ),
+      builder: buildList,
     );
   }
 }

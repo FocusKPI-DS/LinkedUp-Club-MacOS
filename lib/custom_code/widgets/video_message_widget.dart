@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:video_player/video_player.dart';
@@ -31,11 +32,20 @@ class _VideoMessageWidgetState extends State<VideoMessageWidget> {
   bool _isInitialized = false;
   double? _calculatedWidth;
   double? _calculatedHeight;
+  bool _lazyInitPending = false;
+
+  static bool get _lazyVideoOnDesktop =>
+      !kIsWeb && (Platform.isWindows || Platform.isLinux);
 
   @override
   void initState() {
     super.initState();
-    _initializeVideo();
+    if (_lazyVideoOnDesktop) {
+      _isInitialized = true;
+      _lazyInitPending = true;
+    } else {
+      _initializeVideo();
+    }
   }
 
   Future<void> _initializeVideo() async {
@@ -206,8 +216,48 @@ class _VideoMessageWidgetState extends State<VideoMessageWidget> {
       );
     }
 
-    // Check if video controller is null (failed to initialize)
+    // Check if video controller is null (failed to initialize or lazy pending)
     if (_videoPlayerController == null || _chewieController == null) {
+      if (_lazyInitPending) {
+        return GestureDetector(
+          onTap: () {
+            setState(() {
+              _lazyInitPending = false;
+              _isInitialized = false;
+            });
+            _initializeVideo();
+          },
+          child: buildContainer(
+            width: displayWidth,
+            height: displayHeight,
+            child: Stack(
+              fit: StackFit.expand,
+              children: [
+                if (widget.thumbnailUrl != null)
+                  CachedNetworkImage(
+                    imageUrl: widget.thumbnailUrl!,
+                    fit: BoxFit.cover,
+                  )
+                else
+                  Center(
+                    child: Icon(
+                      Icons.play_circle_outline,
+                      color: FlutterFlowTheme.of(context).secondaryText,
+                      size: 50,
+                    ),
+                  ),
+                Center(
+                  child: Icon(
+                    Icons.play_circle_filled,
+                    color: Colors.white.withOpacity(0.9),
+                    size: 48,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      }
       return buildContainer(
         width: displayWidth,
         height: displayHeight,

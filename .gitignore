@@ -23,6 +23,12 @@ node_modules/
 .DS_Store
 Thumbs.db
 
+# Windows Google OAuth (copy env.json.example → env.json, fill in, do not commit)
+env.json
+
+# Cursor (local IDE ignore rules)
+.cursorignore
+
 # Firebase Service Account Keys (SENSITIVE!)
 firebase/functions/serviceAccountKey.json
 firebase/functions/linkedup-c3e29-firebase-adminsdk-*.json

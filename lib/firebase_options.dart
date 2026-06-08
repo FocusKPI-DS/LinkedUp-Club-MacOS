@@ -27,10 +27,7 @@ class DefaultFirebaseOptions {
       case TargetPlatform.macOS:
         return macos;
       case TargetPlatform.windows:
-        throw UnsupportedError(
-          'DefaultFirebaseOptions have not been configured for windows - '
-          'you can reconfigure this by running the FlutterFire CLI again.',
-        );
+        return windows;
       case TargetPlatform.linux:
         throw UnsupportedError(
           'DefaultFirebaseOptions have not been configured for linux - '
@@ -81,6 +78,18 @@ class DefaultFirebaseOptions {
     messagingSenderId: '548534727055',
     projectId: 'linkedup-c3e29',
     storageBucket: 'linkedup-c3e29.firebasestorage.app',
+  );
+
+  /// Windows desktop — run `flutterfire configure` to register a native Windows app.
+  /// Uses web app credentials until a dedicated Windows app is added in Firebase Console.
+  static const FirebaseOptions windows = FirebaseOptions(
+    apiKey: 'AIzaSyB7hpucMa-mSk6Bp9_OOt_1BFaO7E7HPTw',
+    appId: '1:548534727055:web:d770e39d4c066094bb5bfa',
+    messagingSenderId: '548534727055',
+    projectId: 'linkedup-c3e29',
+    authDomain: 'linkedup-c3e29.firebaseapp.com',
+    storageBucket: 'linkedup-c3e29.firebasestorage.app',
+    measurementId: 'G-LRGXVB1ZKH',
   );
 
 }

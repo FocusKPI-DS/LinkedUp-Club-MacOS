@@ -4,6 +4,11 @@ import '/custom_code/services/web_notification_service.dart';
 import 'package:get/get.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'dart:async';
+import 'dart:io' show Platform;
+import 'package:flutter/foundation.dart' show kIsWeb;
+
+import '/pages/desktop_chat/windows_firestore_gate.dart';
+import '/backend/firestore/firestore_desktop_adapter.dart';
 
 enum ChatState { loading, success, error }
 
@@ -61,10 +66,43 @@ class ChatController extends GetxController {
 
   // Cache: userRef.id → display name (populated on chat load for fast search)
   final Map<String, String> _userDisplayNameCache = {};
+  final Map<String, UsersRecord> _userRecordCache = {};
+  final Map<String, Future<UsersRecord>> _userFutureCache = {};
+
+  /// Windows/Linux: sidebar stays on spinner until DM names + avatars are prefetched.
+  final RxBool desktopSidebarReady = true.obs;
+  bool _desktopSidebarPrimed = false;
 
   /// Returns cached display name for a user (used by UI to avoid "Direct Chat" flash).
   String? getCachedDisplayName(String? userRefId) =>
       userRefId == null ? null : _userDisplayNameCache[userRefId];
+
+  Future<UsersRecord> getOrCreateUserFuture(DocumentReference ref) {
+    if (!fsIsRealUserRef(ref)) {
+      final cached = _userRecordCache[ref.id];
+      if (cached != null) return Future.value(cached);
+      final synthetic = fsSyntheticAgentUser(ref);
+      _userRecordCache[ref.id] = synthetic;
+      _userDisplayNameCache[ref.id] = synthetic.displayName;
+      return Future.value(synthetic);
+    }
+
+    final cached = _userRecordCache[ref.id];
+    if (cached != null) return Future.value(cached);
+    return _userFutureCache.putIfAbsent(ref.id, () async {
+      try {
+        final user = await fsGetUserOnce(ref);
+        _userRecordCache[ref.id] = user;
+        if (user.displayName.isNotEmpty) {
+          _userDisplayNameCache[ref.id] = user.displayName;
+        }
+        return user;
+      } catch (e) {
+        _userFutureCache.remove(ref.id);
+        rethrow;
+      }
+    });
+  }
 
   // Chat IDs that matched a message content search (async, cleared when query changes)
   final RxSet<String> _messageSearchMatchIds = <String>{}.obs;
@@ -78,26 +116,72 @@ class ChatController extends GetxController {
   final RxList<MessageSearchResult> messageSearchResults = <MessageSearchResult>[].obs;
   final RxBool isSearchingMessages = false.obs;
 
+  bool _listListenersPaused = false;
+
+  List<ChatsRecord> _cachedServiceChats = [];
+  bool _desktopExtrasLoading = false;
+
   @override
   void onInit() {
     super.onInit();
-    loadChats();
+    if (!kIsWeb && (Platform.isWindows || Platform.isLinux)) {
+      desktopSidebarReady.value = false;
+      // Let the chat shell mount before the first (single) Firestore query.
+      Future.delayed(const Duration(milliseconds: 900), () {
+        if (!isClosed) {
+          loadChats(staggerSubscriptions: true);
+        }
+      });
+    } else {
+      loadChats();
+    }
+  }
+
+  /// Suspend chat-list Firestore streams while viewing a thread (Windows/Linux).
+  Future<void> pauseListListeners() async {
+    if (_listListenersPaused || kIsWeb) return;
+    if (!Platform.isWindows && !Platform.isLinux) return;
+    _listListenersPaused = true;
+    _desktopPollTimer?.cancel();
+    await _chatsSubscription?.cancel();
+    await _serviceChatsSubscription?.cancel();
+    await _blockedUsersSubscription?.cancel();
+    _chatsSubscription = null;
+    _serviceChatsSubscription = null;
+    _blockedUsersSubscription = null;
+    print('⏸️ [ChatController] Paused list listeners (thread open)');
+  }
+
+  Future<void> resumeListListeners() async {
+    if (!_listListenersPaused || kIsWeb) return;
+    if (!Platform.isWindows && !Platform.isLinux) return;
+    _listListenersPaused = false;
+    print('▶️ [ChatController] Resuming list listeners');
+    await loadChats(staggerSubscriptions: true);
   }
 
   StreamSubscription? _chatsSubscription;
   StreamSubscription? _serviceChatsSubscription;
   StreamSubscription? _blockedUsersSubscription;
+  Timer? _desktopPollTimer;
+
+  static bool get _desktopPollMode =>
+      !kIsWeb && (Platform.isWindows || Platform.isLinux);
 
   @override
   void onClose() {
+    _desktopPollTimer?.cancel();
     _chatsSubscription?.cancel();
     _blockedUsersSubscription?.cancel();
     _serviceChatsSubscription?.cancel();
     super.onClose();
   }
 
-  // Load chats from Firestore with real-time updates
-  Future<void> loadChats() async {
+  // Load chats from Firestore with real-time updates (poll-only on Windows/Linux).
+  Future<void> loadChats({bool staggerSubscriptions = false}) async {
+    if (_desktopPollMode) {
+      return _loadChatsDesktopPoll();
+    }
     try {
       // Cancel existing subscriptions if any
       await _chatsSubscription?.cancel();
@@ -141,6 +225,11 @@ class ChatController extends GetxController {
         },
       );
 
+      if (staggerSubscriptions) {
+        await Future.delayed(const Duration(milliseconds: 400));
+        if (isClosed) return;
+      }
+
       // Listen to service chats
       _serviceChatsSubscription = serviceChatsStream.listen(
         (chatsList) {
@@ -153,22 +242,31 @@ class ChatController extends GetxController {
         },
       );
 
-      // Listen to blocked users for real-time filtering
-      print(
-          'Debug: Initializing blocked user listener in ChatController. CurrentUserRef: $currentUserReference');
-      _blockedUsersSubscription = BlockedUsersRecord.collection
-          .where('blocker_user', isEqualTo: currentUserReference)
-          .snapshots()
-          .listen((snapshot) {
-        blockedUserIds.value = snapshot.docs
-            .map((doc) => BlockedUsersRecord.fromSnapshot(doc).blockedUser?.id)
-            .whereType<String>()
-            .toSet();
-        print('Debug: ChatController updated blocked IDs to: $blockedUserIds');
-        chats.refresh();
-      }, onError: (e) {
-        print('Debug: Error in ChatController blocked user listener: $e');
-      });
+      if (staggerSubscriptions) {
+        await Future.delayed(const Duration(milliseconds: 400));
+        if (isClosed) return;
+      }
+
+      // Listen to blocked users for real-time filtering (native plugin only)
+      if (!useWindowsFirestoreRest) {
+        print(
+            'Debug: Initializing blocked user listener in ChatController. CurrentUserRef: $currentUserReference');
+        _blockedUsersSubscription = BlockedUsersRecord.collection
+            .where('blocker_user', isEqualTo: currentUserReference)
+            .snapshots()
+            .listen((snapshot) {
+          blockedUserIds.value = snapshot.docs
+              .map((doc) =>
+                  BlockedUsersRecord.fromSnapshot(doc).blockedUser?.id)
+              .whereType<String>()
+              .toSet();
+          print(
+              'Debug: ChatController updated blocked IDs to: $blockedUserIds');
+          chats.refresh();
+        }, onError: (e) {
+          print('Debug: Error in ChatController blocked user listener: $e');
+        });
+      }
     } catch (e) {
       errorMessage.value = 'Error loading chats: $e';
       chatState.value = ChatState.error;
@@ -257,9 +355,11 @@ class ChatController extends GetxController {
           if (hasLastMessage && isNotSentByUser && !userInSeenList) {
             // New message arrived in open chat - mark as seen in background
             // Don't await to avoid blocking the UI update
-            markMessagesAsSeen(chat).catchError((e) {
-              print('⚠️ Error auto-marking open chat as seen: $e');
-            });
+            if (!useWindowsFirestoreRest) {
+              markMessagesAsSeen(chat).catchError((e) {
+                print('⚠️ Error auto-marking open chat as seen: $e');
+              });
+            }
           }
 
           // Skip adding to knownUnreadChats
@@ -332,6 +432,20 @@ class ChatController extends GetxController {
   void selectChat(ChatsRecord chat) {
     _manuallyMarkedUnread.remove(chat.reference.id);
     selectedChat.value = chat;
+
+    if (!kIsWeb && (Platform.isWindows || Platform.isLinux)) {
+      // Avoid native messages subcollection — local badge + REST chat patch only.
+      locallySeenChats[chat.reference.id] = DateTime.now();
+      knownUnreadChats.remove(chat.reference.id);
+      final currentChats = List<ChatsRecord>.from(chats);
+      chats.value = currentChats;
+      pauseListListeners();
+      if (useWindowsFirestoreRest) {
+        unawaited(_patchChatSeenViaRest(chat));
+      }
+      return;
+    }
+
     markMessagesAsSeen(chat);
   }
 
@@ -556,6 +670,11 @@ class ChatController extends GetxController {
       final currentChats = List<ChatsRecord>.from(chats);
       chats.value = currentChats;
 
+      if (useWindowsFirestoreRest) {
+        await _patchChatSeenViaRest(chat);
+        return;
+      }
+
       // Mark individual messages as read
       await _markIndividualMessagesAsRead(chat);
 
@@ -598,6 +717,42 @@ class ChatController extends GetxController {
     }
   }
 
+  /// Chat-level seen state only — no messages subcollection reads on Windows.
+  Future<void> _patchChatSeenViaRest(ChatsRecord chat) async {
+    if (currentUserReference == null) return;
+
+    try {
+      final patch = <String, dynamic>{};
+      if (!chat.lastMessageSeen.contains(currentUserReference) &&
+          chat.lastMessage.isNotEmpty &&
+          chat.lastMessageSent != currentUserReference) {
+        final updatedSeenList =
+            List<DocumentReference>.from(chat.lastMessageSeen);
+        if (!updatedSeenList.contains(currentUserReference)) {
+          updatedSeenList.add(currentUserReference!);
+          patch['last_message_seen'] =
+              updatedSeenList.map((ref) => ref).toList();
+        }
+      }
+
+      final markedUnreadBy =
+          chat.snapshotData['marked_unread_by'] as List<dynamic>?;
+      if (markedUnreadBy != null &&
+          markedUnreadBy.contains(currentUserReference)) {
+        patch['marked_unread_by'] = markedUnreadBy
+            .where((r) => r != currentUserReference)
+            .toList();
+      }
+
+      if (patch.isEmpty) return;
+
+      await fsPatchDocument(chat.reference, patch);
+      print('✅ [REST] Marked chat ${chat.reference.id} as seen');
+    } catch (e) {
+      print('❌ [REST] Error marking chat as seen: $e');
+    }
+  }
+
   // Mark individual messages as read for better accuracy
   // Marks ALL unread messages in the chat as read
   Future<void> _markIndividualMessagesAsRead(ChatsRecord chat) async {
@@ -605,12 +760,19 @@ class ChatController extends GetxController {
 
     try {
       // Get all messages (increased limit to handle more messages)
-      final messages = await queryMessagesRecord(
-        parent: chat.reference,
-        queryBuilder: (messages) => messages
-            .orderBy('created_at', descending: true)
-            .limit(1000), // Process more messages for accuracy
-      ).first;
+      final messages = !kIsWeb && (Platform.isWindows || Platform.isLinux)
+          ? await queryMessagesRecordOnce(
+              parent: chat.reference,
+              queryBuilder: (messages) => messages
+                  .orderBy('created_at', descending: true)
+                  .limit(1000),
+            )
+          : await queryMessagesRecord(
+              parent: chat.reference,
+              queryBuilder: (messages) => messages
+                  .orderBy('created_at', descending: true)
+                  .limit(1000),
+            ).first;
 
       // Batch update messages - Firestore batch limit is 500 operations
       final batch = FirebaseFirestore.instance.batch();
@@ -824,13 +986,21 @@ class ChatController extends GetxController {
         final batch = refList.skip(i).take(30).toList();
         for (final ref in batch) {
           try {
-            final doc = await ref.get();
-            if (doc.exists) {
-              final data = doc.data() as Map<String, dynamic>?;
-              final name = (data?['display_name'] as String?) ??
-                  (data?['name'] as String?) ??
-                  '';
-              _userDisplayNameCache[ref.id] = name;
+            if (useWindowsFirestoreRest) {
+              final user = await fsTryGetUserOnce(ref);
+              if (user != null) {
+                final name = user.displayName;
+                _userDisplayNameCache[ref.id] = name;
+              }
+            } else {
+              final doc = await ref.get();
+              if (doc.exists) {
+                final data = doc.data() as Map<String, dynamic>?;
+                final name = (data?['display_name'] as String?) ??
+                    (data?['name'] as String?) ??
+                    '';
+                _userDisplayNameCache[ref.id] = name;
+              }
             }
           } catch (_) {}
         }
@@ -868,39 +1038,42 @@ class ChatController extends GetxController {
         }
         if (chatName.isEmpty) chatName = 'Group Chat';
 
-        // Messages are stored as a subcollection of each chat document
-        final messages = await chat.reference
-            .collection('messages')
-            .orderBy('created_at', descending: true)
-            .limit(200)
-            .get();
+        final Iterable<MessagesRecord> messageRecords;
+        if (useWindowsFirestoreRest) {
+          messageRecords = await fsQueryChatMessages(
+            chat.reference,
+            limit: 200,
+          );
+        } else {
+          final snapshot = await chat.reference
+              .collection('messages')
+              .orderBy('created_at', descending: true)
+              .limit(200)
+              .get();
+          messageRecords = snapshot.docs
+              .map((doc) => MessagesRecord.getDocumentFromData(doc.data(), doc.reference));
+        }
 
-        for (final doc in messages.docs) {
-          final data = doc.data();
-          final text = ((data['content'] ?? '') as String).toLowerCase();
+        for (final message in messageRecords) {
+          final text = message.content.toLowerCase();
           if (text.contains(lowercaseQuery)) {
             newMatches.add(chat.reference.id);
             // Collect up to 3 matching messages per chat
             if (newResults.where((r) => r.chatId == chat.reference.id).length < 3) {
-              // Resolve sender name from sender_ref if sender_name is empty
-              String senderName = (data['sender_name'] ?? '') as String;
-              String senderPhoto = (data['sender_photo'] ?? '') as String;
-              if (senderName.isEmpty && data['sender_ref'] != null) {
-                final senderRef = data['sender_ref'] as DocumentReference;
-                // Try cache first
+              String senderName = message.senderName;
+              String senderPhoto = message.senderPhoto;
+              if (senderName.isEmpty && message.senderRef != null) {
+                final senderRef = message.senderRef!;
                 senderName = _userDisplayNameCache[senderRef.id] ?? '';
                 if (senderName.isEmpty) {
                   try {
-                    final userDoc = await senderRef.get();
-                    if (userDoc.exists) {
-                      final userData = userDoc.data() as Map<String, dynamic>?;
-                      senderName = (userData?['display_name'] ?? '') as String;
-                      if (senderPhoto.isEmpty) {
-                        senderPhoto = (userData?['photo_url'] ?? '') as String;
-                      }
-                      if (senderName.isNotEmpty) {
-                        _userDisplayNameCache[senderRef.id] = senderName;
-                      }
+                    final userDoc = await fsGetUserOnce(senderRef);
+                    senderName = userDoc.displayName;
+                    if (senderPhoto.isEmpty) {
+                      senderPhoto = userDoc.photoUrl;
+                    }
+                    if (senderName.isNotEmpty) {
+                      _userDisplayNameCache[senderRef.id] = senderName;
                     }
                   } catch (_) {}
                 }
@@ -911,9 +1084,9 @@ class ChatController extends GetxController {
                 chatName: chatName,
                 senderName: senderName,
                 senderPhoto: senderPhoto,
-                content: (data['content'] ?? '') as String,
-                createdAt: (data['created_at'] as Timestamp?)?.toDate(),
-                messageRef: doc.reference,
+                content: message.content,
+                createdAt: message.createdAt,
+                messageRef: message.reference,
                 chatRef: chat.reference,
                 isGroup: chat.isGroup,
               ));
@@ -941,8 +1114,215 @@ class ChatController extends GetxController {
   }
 
   // Refresh chats
-  Future<void> refreshChats() async {
+  Future<void> refreshChats({bool force = false}) async {
+    if (_desktopPollMode) {
+      await _fetchChatsDesktopOnce(force: force);
+      if (!force) {
+        _desktopPollTimer?.cancel();
+        _desktopPollTimer = Timer.periodic(const Duration(seconds: 25), (_) {
+          if (!_listListenersPaused && !isClosed) {
+            _fetchChatsDesktopOnce();
+          }
+        });
+      }
+      return;
+    }
     await loadChats();
+  }
+
+  /// Instant sidebar update after pin/unpin while chat list polling is paused.
+  void applyLocalChatPinState({
+    required DocumentReference chatRef,
+    required DocumentReference userRef,
+    required bool pinned,
+  }) {
+    ChatsRecord patchRecord(ChatsRecord chat) {
+      if (chat.reference.path != chatRef.path) return chat;
+      final pinnedBy = List<DocumentReference>.from(chat.pinnedBy);
+      if (pinned) {
+        if (!pinnedBy.any((ref) => ref.path == userRef.path)) {
+          pinnedBy.add(userRef);
+        }
+      } else {
+        pinnedBy.removeWhere((ref) => ref.path == userRef.path);
+      }
+      final data = Map<String, dynamic>.from(chat.snapshotData);
+      data['pinned_by'] = pinnedBy;
+      return ChatsRecord.getDocumentFromData(data, chat.reference);
+    }
+
+    chats.value = chats.map(patchRecord).toList();
+    final selected = selectedChat.value;
+    if (selected != null && selected.reference.path == chatRef.path) {
+      selectedChat.value = patchRecord(selected);
+    }
+    chats.refresh();
+  }
+
+  Future<void> _loadChatsDesktopPoll() async {
+    if (_listListenersPaused || isClosed) return;
+    await _fetchChatsDesktopOnce();
+    _desktopPollTimer?.cancel();
+    _desktopPollTimer = Timer.periodic(const Duration(seconds: 25), (_) {
+      if (!_listListenersPaused && !isClosed) {
+        _fetchChatsDesktopOnce();
+      }
+    });
+  }
+
+  Future<void> _fetchChatsDesktopOnce({bool force = false}) async {
+    if (!force && (_listListenersPaused || isClosed)) return;
+    if (currentUserReference == null) {
+      errorMessage.value = 'User not logged in';
+      chatState.value = ChatState.error;
+      return;
+    }
+    try {
+      final waitForSidebar = !_desktopSidebarPrimed;
+      if (waitForSidebar || chats.isEmpty) {
+        chatState.value = ChatState.loading;
+        if (waitForSidebar) {
+          desktopSidebarReady.value = false;
+        }
+      }
+
+      final List<ChatsRecord> regularChats;
+      if (useWindowsFirestoreRest) {
+        regularChats =
+            await fsQueryMemberChats(currentUserReference!);
+      } else {
+        regularChats = await WindowsFirestoreGate.instance.run(
+          () => queryChatsRecordOnce(
+            queryBuilder: (chatsRecord) => chatsRecord.where(
+              'members',
+              arrayContains: currentUserReference,
+            ),
+          ),
+          label: 'chats:members',
+        );
+      }
+
+      var serviceChats = _cachedServiceChats;
+      if (waitForSidebar || serviceChats.isEmpty) {
+        try {
+          if (useWindowsFirestoreRest) {
+            serviceChats = await fsQueryServiceChats();
+          } else {
+            serviceChats = await WindowsFirestoreGate.instance.run(
+              () => queryChatsRecordOnce(
+                queryBuilder: (chatsRecord) =>
+                    chatsRecord.where('is_service_chat', isEqualTo: true),
+              ),
+              label: 'chats:service',
+            );
+          }
+          _cachedServiceChats = serviceChats;
+        } catch (e) {
+          print('⚠️ [ChatController] service chats load: $e');
+        }
+      }
+
+      _combineAndUpdateChats(regularChats, serviceChats);
+
+      if (waitForSidebar) {
+        await _preloadSidebarMetadata();
+        _desktopSidebarPrimed = true;
+        desktopSidebarReady.value = true;
+      } else {
+        unawaited(_preloadSidebarMetadata());
+      }
+
+      chatState.value = ChatState.success;
+      print(
+        '✅ [ChatController] desktop list ready: ${regularChats.length} chats',
+      );
+
+      if (!_desktopExtrasLoading) {
+        _desktopExtrasLoading = true;
+        unawaited(_fetchBlockedUsersDesktopOnce());
+      }
+    } catch (e) {
+      errorMessage.value = 'Error loading chats: $e';
+      chatState.value = ChatState.error;
+      desktopSidebarReady.value = true;
+      print('❌ [ChatController] desktop poll failed: $e');
+    }
+  }
+
+  Future<void> _preloadSidebarMetadata() async {
+    final refsById = <String, DocumentReference>{};
+
+    for (final chat in chats) {
+      if (!chat.isGroup && chat.members.isNotEmpty) {
+        final otherRef = chat.members.firstWhere(
+          (m) => m != currentUserReference,
+          orElse: () => chat.members.first,
+        );
+        if (fsIsRealUserRef(otherRef)) {
+          refsById.putIfAbsent(otherRef.id, () => otherRef);
+        } else {
+          final synthetic = fsSyntheticAgentUser(otherRef);
+          _userRecordCache[otherRef.id] = synthetic;
+          _userDisplayNameCache[otherRef.id] = synthetic.displayName;
+        }
+      }
+
+      final senderRef = chat.lastMessageSent;
+      if (senderRef != null &&
+          senderRef != currentUserReference &&
+          fsIsRealUserRef(senderRef)) {
+        refsById.putIfAbsent(senderRef.id, () => senderRef);
+      } else if (senderRef != null &&
+          senderRef != currentUserReference &&
+          !fsIsRealUserRef(senderRef)) {
+        final synthetic = fsSyntheticAgentUser(senderRef);
+        _userRecordCache[senderRef.id] = synthetic;
+        _userDisplayNameCache[senderRef.id] = synthetic.displayName;
+      }
+    }
+
+    final toFetch = refsById.values
+        .where((ref) => !_userRecordCache.containsKey(ref.id))
+        .toList();
+
+    const batchSize = 8;
+    for (var i = 0; i < toFetch.length; i += batchSize) {
+      if (isClosed || _listListenersPaused) return;
+      final batch = toFetch.skip(i).take(batchSize);
+      await Future.wait(
+        batch.map((ref) async {
+          try {
+            await getOrCreateUserFuture(ref);
+          } catch (e) {
+            print('⚠️ [ChatController] skip user prefetch ${ref.path}: $e');
+          }
+        }),
+      );
+    }
+  }
+
+  Future<void> _fetchBlockedUsersDesktopOnce() async {
+    if (currentUserReference == null) return;
+    try {
+      if (useWindowsFirestoreRest) {
+        final records = await fsQueryBlockedUsers(currentUserReference!);
+        blockedUserIds.value = records
+            .map((doc) => doc.blockedUser?.id)
+            .whereType<String>()
+            .toSet();
+      } else {
+        final snapshot = await WindowsFirestoreGate.instance.run(
+          () => BlockedUsersRecord.collection
+              .where('blocker_user', isEqualTo: currentUserReference)
+              .get(),
+          label: 'blocked-users',
+        );
+        blockedUserIds.value = snapshot.docs
+            .map((doc) => BlockedUsersRecord.fromSnapshot(doc).blockedUser?.id)
+            .whereType<String>()
+            .toSet();
+      }
+    } catch (_) {}
   }
 
   // Update tab title with unread message count

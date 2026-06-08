@@ -1,8 +1,10 @@
 import '/auth/firebase_auth/auth_util.dart';
 import '/backend/backend.dart';
+import '/backend/firestore/firestore_desktop_adapter.dart';
 import '/components/delete_account_widget.dart';
 import '/flutter_flow/flutter_flow_util.dart';
 import '/pages/user_summary/user_summary_widget.dart';
+import '/pages/desktop_chat/rest_poll_builder.dart';
 import '/app_state.dart';
 import 'profile_settings_model.dart';
 export 'profile_settings_model.dart';
@@ -17,6 +19,8 @@ import 'package:firebase_messaging/firebase_messaging.dart';
 import 'dart:convert';
 import 'dart:math';
 import 'package:crypto/crypto.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:intl/intl.dart';
 
 class ProfileSettingsWidget extends StatefulWidget {
   const ProfileSettingsWidget({Key? key, this.initialTab}) : super(key: key);
@@ -100,7 +104,7 @@ class _ProfileSettingsWidgetState extends State<ProfileSettingsWidget>
         });
         final tokenDocRef = await _getCurrentDeviceTokenDoc();
         if (tokenDocRef != null) {
-          await tokenDocRef.update({
+          await fsPatchDocument(tokenDocRef, {
             'notifications_enabled': true,
           });
           print('✅ Notification enabled for this device after System Settings grant');
@@ -130,7 +134,8 @@ class _ProfileSettingsWidgetState extends State<ProfileSettingsWidget>
     }
   }
 
-  bool get isDesktop => kIsWeb || (!kIsWeb && Platform.isMacOS);
+  bool get isDesktop =>
+      kIsWeb || (!kIsWeb && (Platform.isMacOS || Platform.isWindows));
 
   // Build help item widget
   Widget _buildHelpItem({
@@ -446,7 +451,7 @@ class _ProfileSettingsWidgetState extends State<ProfileSettingsWidget>
       try {
         final tokenDocRef = await _getCurrentDeviceTokenDoc();
         if (tokenDocRef != null) {
-          await tokenDocRef.update({
+          await fsPatchDocument(tokenDocRef, {
             'notifications_enabled': false,
           });
           print('✅ Notifications disabled for this device');
@@ -515,7 +520,7 @@ class _ProfileSettingsWidgetState extends State<ProfileSettingsWidget>
     try {
       final tokenDocRef = await _getCurrentDeviceTokenDoc();
       if (tokenDocRef != null) {
-        await tokenDocRef.update({
+        await fsPatchDocument(tokenDocRef, {
           'notifications_enabled': true,
         });
         print('✅ Notifications enabled for this device');
@@ -748,30 +753,30 @@ class _ProfileSettingsWidgetState extends State<ProfileSettingsWidget>
     final keyHash = sha256.convert(utf8.encode(rawKey)).toString();
 
     try {
-      final docRef = await FirebaseFirestore.instance
-          .collection('users')
-          .doc(currentUserUid)
-          .collection('api_keys')
-          .add({
-        'key_hash': keyHash,
-        'key_value': rawKey,
-        'key_preview': '${rawKey.substring(0, 16)}...${rawKey.substring(rawKey.length - 4)}',
-        'name': name.trim(),
-        'created_at': FieldValue.serverTimestamp(),
-        'last_used_at': null,
-        'permissions': ['read', 'write'],
-        'is_active': true,
-      });
-      // Write to top-level index for O(1) lookup by Cloud Functions
-      await FirebaseFirestore.instance
-          .collection('api_key_hashes')
-          .doc(keyHash)
-          .set({
-        'uid': currentUserUid,
-        'key_doc_id': docRef.id,
-        'is_active': true,
-        'created_at': FieldValue.serverTimestamp(),
-      });
+      final userRef = UsersRecord.collection.doc(currentUserUid);
+      final docRef = await fsCreateSubcollectionDocument(
+        parentRef: userRef,
+        collectionId: 'api_keys',
+        data: {
+          'key_hash': keyHash,
+          'key_value': rawKey,
+          'key_preview': '${rawKey.substring(0, 16)}...${rawKey.substring(rawKey.length - 4)}',
+          'name': name.trim(),
+          'created_at': getCurrentTimestamp,
+          'last_used_at': null,
+          'permissions': ['read', 'write'],
+          'is_active': true,
+        },
+      );
+      await fsSetDocument(
+        FirebaseFirestore.instance.collection('api_key_hashes').doc(keyHash),
+        {
+          'uid': currentUserUid,
+          'key_doc_id': docRef.id,
+          'is_active': true,
+          'created_at': getCurrentTimestamp,
+        },
+      );
       debugPrint('✅ API key written to Firestore successfully');
     } catch (e) {
       debugPrint('❌ Firestore write error: $e');
@@ -1040,31 +1045,32 @@ class _ProfileSettingsWidgetState extends State<ProfileSettingsWidget>
     final keyHash = sha256.convert(utf8.encode(rawKey)).toString();
 
     try {
-      final docRef = await FirebaseFirestore.instance
-          .collection('users')
-          .doc(currentUserUid)
-          .collection('api_keys')
-          .add({
-        'key_hash': keyHash,
-        'key_value': rawKey,
-        'key_preview': '${rawKey.substring(0, 14)}...${rawKey.substring(rawKey.length - 4)}',
-        'name': name.trim(),
-        'created_at': FieldValue.serverTimestamp(),
-        'last_used_at': null,
-        'permissions': ['read', 'write'],
-        'is_active': true,
-        'key_type': 'system',
-      });
-      await FirebaseFirestore.instance
-          .collection('api_key_hashes')
-          .doc(keyHash)
-          .set({
-        'uid': currentUserUid,
-        'key_doc_id': docRef.id,
-        'is_active': true,
-        'key_type': 'system',
-        'created_at': FieldValue.serverTimestamp(),
-      });
+      final userRef = UsersRecord.collection.doc(currentUserUid);
+      final docRef = await fsCreateSubcollectionDocument(
+        parentRef: userRef,
+        collectionId: 'api_keys',
+        data: {
+          'key_hash': keyHash,
+          'key_value': rawKey,
+          'key_preview': '${rawKey.substring(0, 14)}...${rawKey.substring(rawKey.length - 4)}',
+          'name': name.trim(),
+          'created_at': getCurrentTimestamp,
+          'last_used_at': null,
+          'permissions': ['read', 'write'],
+          'is_active': true,
+          'key_type': 'system',
+        },
+      );
+      await fsSetDocument(
+        FirebaseFirestore.instance.collection('api_key_hashes').doc(keyHash),
+        {
+          'uid': currentUserUid,
+          'key_doc_id': docRef.id,
+          'is_active': true,
+          'key_type': 'system',
+          'created_at': getCurrentTimestamp,
+        },
+      );
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -1321,21 +1327,12 @@ class _ProfileSettingsWidgetState extends State<ProfileSettingsWidget>
           SizedBox(height: 14),
 
           // System keys list
-          StreamBuilder<QuerySnapshot>(
-            stream: FirebaseFirestore.instance
-                .collection('users')
-                .doc(currentUserUid)
-                .collection('api_keys')
-                .orderBy('created_at', descending: true)
-                .snapshots(),
-            builder: (context, snapshot) {
-              if (snapshot.connectionState == ConnectionState.waiting) {
+          _buildApiKeysStream(
+            systemKeysOnly: true,
+            builder: (context, docs, isLoading) {
+              if (isLoading) {
                 return Center(child: CupertinoActivityIndicator());
               }
-
-              final docs = (snapshot.data?.docs ?? [])
-                  .where((d) => (d.data() as Map<String, dynamic>)['key_type'] == 'system')
-                  .toList();
 
               if (docs.isEmpty) {
                 return Container(
@@ -1375,12 +1372,12 @@ class _ProfileSettingsWidgetState extends State<ProfileSettingsWidget>
                   children: docs.asMap().entries.map((entry) {
                     final index = entry.key;
                     final doc = entry.value;
-                    final data = doc.data() as Map<String, dynamic>;
+                    final data = doc.data()!;
                     final name = data['name'] ?? 'Untitled';
                     final preview = data['key_preview'] ?? '****';
                     final fullKey = data['key_value'] as String?;
                     final isActive = data['is_active'] ?? true;
-                    final createdAt = data['created_at'] as Timestamp?;
+                    final createdAt = _parseApiKeyTimestamp(data['created_at']);
                     final keyHash = data['key_hash'] as String?;
 
                     return Column(
@@ -1487,7 +1484,7 @@ class _ProfileSettingsWidgetState extends State<ProfileSettingsWidget>
                                         Text('Created', style: TextStyle(fontFamily: 'SF Pro Display', fontSize: 13, fontWeight: FontWeight.w600, color: Color(0xFF333333))),
                                         SizedBox(height: 4),
                                         Text(
-                                          createdAt != null ? DateFormat('MMM d, yyyy \'at\' h:mm a').format(createdAt.toDate()) : 'Unknown',
+                                          createdAt != null ? DateFormat('MMM d, yyyy \'at\' h:mm a').format(createdAt) : 'Unknown',
                                           style: TextStyle(fontFamily: 'SF Pro Display', fontSize: 13, color: Color(0xFF666666)),
                                         ),
                                         SizedBox(height: 20),
@@ -1529,8 +1526,11 @@ class _ProfileSettingsWidgetState extends State<ProfileSettingsWidget>
                                                       ),
                                                     );
                                                     if (confirm == true) {
-                                                      await doc.reference.update({'is_active': false});
-                                                      await FirebaseFirestore.instance.collection('api_key_hashes').doc(keyHash).update({'is_active': false});
+                                                      await fsPatchDocument(doc.reference, {'is_active': false});
+                                                      await fsPatchDocument(
+                                                        FirebaseFirestore.instance.collection('api_key_hashes').doc(keyHash),
+                                                        {'is_active': false},
+                                                      );
                                                     }
                                                   },
                                                 ),
@@ -1626,7 +1626,7 @@ class _ProfileSettingsWidgetState extends State<ProfileSettingsWidget>
                                       ),
                                       SizedBox(height: 2),
                                       Text(
-                                        'Created ${createdAt != null ? DateFormat('MMM d, yyyy').format(createdAt.toDate()) : 'Unknown'}',
+                                        'Created ${createdAt != null ? DateFormat('MMM d, yyyy').format(createdAt) : 'Unknown'}',
                                         style: TextStyle(
                                           fontFamily: 'SF Pro Display',
                                           fontSize: 12,
@@ -1660,8 +1660,11 @@ class _ProfileSettingsWidgetState extends State<ProfileSettingsWidget>
                                         ),
                                       );
                                       if (confirm == true) {
-                                        await doc.reference.update({'is_active': false});
-                                        await FirebaseFirestore.instance.collection('api_key_hashes').doc(keyHash).update({'is_active': false});
+                                        await fsPatchDocument(doc.reference, {'is_active': false});
+                                        await fsPatchDocument(
+                                          FirebaseFirestore.instance.collection('api_key_hashes').doc(keyHash),
+                                          {'is_active': false},
+                                        );
                                       }
                                     },
                                     child: Icon(CupertinoIcons.xmark_circle, size: 20, color: Color(0xFFCC3333)),
@@ -1787,21 +1790,12 @@ class _ProfileSettingsWidgetState extends State<ProfileSettingsWidget>
           ),
           SizedBox(height: 16),
 
-          StreamBuilder<QuerySnapshot>(
-            stream: FirebaseFirestore.instance
-                .collection('users')
-                .doc(currentUserUid)
-                .collection('api_keys')
-                .orderBy('created_at', descending: true)
-                .snapshots(),
-            builder: (context, snapshot) {
-              if (snapshot.connectionState == ConnectionState.waiting) {
+          _buildApiKeysStream(
+            systemKeysOnly: false,
+            builder: (context, docs, isLoading) {
+              if (isLoading) {
                 return Center(child: CupertinoActivityIndicator());
               }
-
-              final docs = (snapshot.data?.docs ?? [])
-                  .where((d) => (d.data() as Map<String, dynamic>)['key_type'] != 'system')
-                  .toList();
 
               if (docs.isEmpty) {
                 return Container(
@@ -1850,13 +1844,13 @@ class _ProfileSettingsWidgetState extends State<ProfileSettingsWidget>
                   children: docs.asMap().entries.map((entry) {
                     final index = entry.key;
                     final doc = entry.value;
-                    final data = doc.data() as Map<String, dynamic>;
+                    final data = doc.data()!;
                     final name = data['name'] ?? 'Untitled';
                     final preview = data['key_preview'] ?? '****';
                     final fullKey = data['key_value'] as String?;
                     final isActive = data['is_active'] ?? true;
-                    final createdAt = data['created_at'] as Timestamp?;
-                    final lastUsed = data['last_used_at'] as Timestamp?;
+                    final createdAt = _parseApiKeyTimestamp(data['created_at']);
+                    final lastUsed = _parseApiKeyTimestamp(data['last_used_at']);
 
                     return Column(
                       children: [
@@ -1962,7 +1956,7 @@ class _ProfileSettingsWidgetState extends State<ProfileSettingsWidget>
                                         Text('Created', style: TextStyle(fontFamily: 'SF Pro Display', fontSize: 13, fontWeight: FontWeight.w600, color: Color(0xFF333333))),
                                         SizedBox(height: 4),
                                         Text(
-                                          createdAt != null ? DateFormat('MMM d, yyyy h:mm a').format(createdAt.toDate()) : 'Unknown',
+                                          createdAt != null ? DateFormat('MMM d, yyyy h:mm a').format(createdAt) : 'Unknown',
                                           style: TextStyle(fontFamily: 'SF Pro Display', fontSize: 14, color: Color(0xFF666666)),
                                         ),
                                         if (lastUsed != null) ...[
@@ -1970,7 +1964,7 @@ class _ProfileSettingsWidgetState extends State<ProfileSettingsWidget>
                                           Text('Last Used', style: TextStyle(fontFamily: 'SF Pro Display', fontSize: 13, fontWeight: FontWeight.w600, color: Color(0xFF333333))),
                                           SizedBox(height: 4),
                                           Text(
-                                            DateFormat('MMM d, yyyy h:mm a').format(lastUsed.toDate()),
+                                            DateFormat('MMM d, yyyy h:mm a').format(lastUsed),
                                             style: TextStyle(fontFamily: 'SF Pro Display', fontSize: 14, color: Color(0xFF666666)),
                                           ),
                                         ],
@@ -2064,8 +2058,8 @@ class _ProfileSettingsWidgetState extends State<ProfileSettingsWidget>
                                         ),
                                         SizedBox(height: 2),
                                         Text(
-                                          'Created ${createdAt != null ? DateFormat('MMM d, yyyy').format(createdAt.toDate()) : 'Unknown'}'
-                                          '${lastUsed != null ? '  ·  Used ${DateFormat('MMM d').format(lastUsed.toDate())}' : ''}',
+                                          'Created ${createdAt != null ? DateFormat('MMM d, yyyy').format(createdAt) : 'Unknown'}'
+                                          '${lastUsed != null ? '  ·  Used ${DateFormat('MMM d').format(lastUsed)}' : ''}',
                                           style: TextStyle(
                                             fontFamily: 'SF Pro Display',
                                             fontSize: 12,
@@ -2170,11 +2164,13 @@ class _ProfileSettingsWidgetState extends State<ProfileSettingsWidget>
                                       ),
                                     );
                                     if (confirm == true) {
-                                      await doc.reference.update({'is_active': false});
-                                      // Also update top-level hash index
-                                      final keyHash = (doc.data() as Map<String, dynamic>)['key_hash'];
+                                      await fsPatchDocument(doc.reference, {'is_active': false});
+                                      final keyHash = doc.data()?['key_hash'];
                                       if (keyHash != null) {
-                                        await FirebaseFirestore.instance.collection('api_key_hashes').doc(keyHash).update({'is_active': false});
+                                        await fsPatchDocument(
+                                          FirebaseFirestore.instance.collection('api_key_hashes').doc(keyHash as String),
+                                          {'is_active': false},
+                                        );
                                       }
                                     }
                                   },
@@ -3320,6 +3316,86 @@ class _ProfileSettingsWidgetState extends State<ProfileSettingsWidget>
                     ),
                   ),
       ),
+    );
+  }
+
+  DateTime? _parseApiKeyTimestamp(dynamic value) {
+    if (value == null) return null;
+    if (value is Timestamp) return value.toDate();
+    if (value is DateTime) return value;
+    if (value is String) return DateTime.tryParse(value);
+    return null;
+  }
+
+  List<FsDocSnapshot> _filterApiKeyDocs(
+    List<FsDocSnapshot> docs, {
+    required bool systemKeysOnly,
+  }) {
+    final filtered = docs.where((d) {
+      final isSystem = (d.data()?['key_type'] ?? '') == 'system';
+      return systemKeysOnly ? isSystem : !isSystem;
+    }).toList();
+    filtered.sort((a, b) {
+      final aTime = _parseApiKeyTimestamp(a.data()?['created_at']) ??
+          DateTime.fromMillisecondsSinceEpoch(0);
+      final bTime = _parseApiKeyTimestamp(b.data()?['created_at']) ??
+          DateTime.fromMillisecondsSinceEpoch(0);
+      return bTime.compareTo(aTime);
+    });
+    return filtered;
+  }
+
+  Widget _buildApiKeysStream({
+    required bool systemKeysOnly,
+    required Widget Function(
+      BuildContext context,
+      List<FsDocSnapshot> docs,
+      bool isLoading,
+    ) builder,
+  }) {
+    final userRef = UsersRecord.collection.doc(currentUserUid);
+
+    if (useWindowsFirestoreRest) {
+      return RestPollBuilder<List<FsDocSnapshot>>(
+        interval: const Duration(seconds: 30),
+        fetch: () => fsQueryUserSubcollection(
+          userRef: userRef,
+          collectionId: 'api_keys',
+        ),
+        builder: (context, snapshot) {
+          final isLoading = snapshot.connectionState == ConnectionState.waiting &&
+              !snapshot.hasData;
+          final docs = _filterApiKeyDocs(
+            snapshot.data ?? [],
+            systemKeysOnly: systemKeysOnly,
+          );
+          return builder(context, docs, isLoading);
+        },
+      );
+    }
+
+    return StreamBuilder<QuerySnapshot>(
+      stream: FirebaseFirestore.instance
+          .collection('users')
+          .doc(currentUserUid)
+          .collection('api_keys')
+          .orderBy('created_at', descending: true)
+          .snapshots(),
+      builder: (context, snapshot) {
+        final isLoading = snapshot.connectionState == ConnectionState.waiting;
+        final rawDocs = snapshot.data?.docs ?? [];
+        final docs = _filterApiKeyDocs(
+          rawDocs
+              .map(
+                (d) => FsDocSnapshot.fromQuery(
+                  d as QueryDocumentSnapshot<Map<String, dynamic>>,
+                ),
+              )
+              .toList(),
+          systemKeysOnly: systemKeysOnly,
+        );
+        return builder(context, docs, isLoading);
+      },
     );
   }
 }

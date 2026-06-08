@@ -1,4 +1,5 @@
 import '/backend/backend.dart';
+import '/backend/firestore/firestore_desktop_adapter.dart';
 import '/flutter_flow/flutter_flow_util.dart';
 import '/custom_code/widgets/index.dart' as custom_widgets;
 import '/index.dart';
@@ -63,15 +64,7 @@ class _FeedWidgetState extends State<FeedWidget> {
 
   Future<List<PostsRecord>> _fetchAllPosts() async {
     try {
-      final query = await PostsRecord.collection
-          .orderBy('created_at', descending: true)
-          .limit(100) // Cap reads so we don't fetch entire collection
-          .get();
-
-      final List<PostsRecord> allPosts = [];
-      for (final doc in query.docs) {
-        allPosts.add(PostsRecord.fromSnapshot(doc));
-      }
+      final allPosts = await fsQueryAllPosts(limit: 100);
 
       // Sort posts: pinned first, then by creation date
       allPosts.sort((a, b) {
@@ -93,13 +86,10 @@ class _FeedWidgetState extends State<FeedWidget> {
     }
 
     try {
-      final blockedQuery = await BlockedUsersRecord.collection
-          .where('blocker_user', isEqualTo: currentUserReference)
-          .where('blocked_user', isEqualTo: userRef)
-          .limit(1)
-          .get();
-
-      return blockedQuery.docs.isNotEmpty;
+      return await fsIsUserBlocked(
+        blockerRef: currentUserReference!,
+        blockedRef: userRef,
+      );
     } catch (e) {
       print('Error checking blocked user: $e');
       return false; // If error, don't block

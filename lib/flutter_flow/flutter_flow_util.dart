@@ -47,10 +47,11 @@ String dateTimeFormat(String format, DateTime? dateTime, {String? locale}) {
   if (dateTime == null) {
     return '';
   }
+  final local = dateTime.toLocal();
   if (format == 'relative') {
-    return timeago.format(dateTime, locale: locale, allowFromNow: true);
+    return timeago.format(local, locale: locale, allowFromNow: true);
   }
-  return DateFormat(format, locale).format(dateTime);
+  return DateFormat(format, locale).format(local);
 }
 
 Theme wrapInMaterialDatePickerTheme(

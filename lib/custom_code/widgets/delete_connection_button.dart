@@ -17,6 +17,7 @@ import 'package:flutter/material.dart';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '/auth/firebase_auth/auth_util.dart';
+import '/backend/firestore/firestore_desktop_adapter.dart';
 import '/flutter_flow/flutter_flow_widgets.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter/scheduler.dart';
@@ -134,8 +135,9 @@ class _DeleteConnectionButtonState extends State<DeleteConnectionButton> {
       DocumentReference targetUserRef = widget.targetUser.reference;
 
       // Bulletproof check - ensure they are actually connected
-      final currentUserDoc = await currentUserRef.get();
-      final currentUserData = UsersRecord.fromSnapshot(currentUserDoc);
+      final currentUserData = useWindowsFirestoreRest
+          ? await fsGetUserOnce(currentUserRef)
+          : UsersRecord.fromSnapshot(await currentUserRef.get());
 
       if (!currentUserData.friends.contains(targetUserRef)) {
         if (mounted) {
@@ -150,16 +152,10 @@ class _DeleteConnectionButtonState extends State<DeleteConnectionButton> {
       }
 
       // Update current user's document (we have permission for our own document)
-      await currentUserRef.update({
-        'friends': FieldValue.arrayRemove([targetUserRef]),
-      });
+      await fsArrayRemove(currentUserRef, 'friends', [targetUserRef]);
 
-      // Try to update other user's document (may fail due to permissions, but that's okay)
-      // The connection will be removed from their side when they next sync
       try {
-        await targetUserRef.update({
-          'friends': FieldValue.arrayRemove([currentUserRef]),
-        });
+        await fsArrayRemove(targetUserRef, 'friends', [currentUserRef]);
       } catch (e) {
         // If we can't update the other user's document, that's okay
         // The connection is still removed from our side

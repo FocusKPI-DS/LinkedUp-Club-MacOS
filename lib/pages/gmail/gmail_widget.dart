@@ -3,6 +3,8 @@ import '/flutter_flow/flutter_flow_util.dart';
 import '/pages/gmail/gmail_model.dart';
 import '/auth/firebase_auth/auth_util.dart';
 import '/backend/backend.dart';
+import '/backend/firestore/firestore_desktop_adapter.dart';
+import '/pages/desktop_chat/desktop_safe_user_builder.dart';
 import '/custom_code/actions/index.dart' as actions;
 import 'package:ff_theme/flutter_flow/flutter_flow_theme.dart';
 import 'package:intl/intl.dart';
@@ -48,7 +50,7 @@ class _GmailWidgetState extends State<GmailWidget> {
       DateTime.now(); // Selected date for calendar view
 
   // Cache management
-  StreamSubscription<DocumentSnapshot>? _cacheSubscription;
+  Timer? _cachePollTimer;
   Timer? _autoRefreshTimer;
   Map<String, Map<String, dynamic>> _emailBodyCache =
       {}; // In-memory cache for full email bodies (session only)
@@ -67,7 +69,7 @@ class _GmailWidgetState extends State<GmailWidget> {
 
   @override
   void dispose() {
-    _cacheSubscription?.cancel();
+    _cachePollTimer?.cancel();
     _autoRefreshTimer?.cancel();
     _emailBodyCache.clear(); // Clear in-memory cache on dispose
     _model.dispose();
@@ -130,55 +132,68 @@ class _GmailWidgetState extends State<GmailWidget> {
     return labels.contains('STARRED');
   }
 
+  DocumentReference? get _gmailCacheRef {
+    if (currentUserUid.isEmpty) return null;
+    return FirebaseFirestore.instance
+        .collection('users')
+        .doc(currentUserUid)
+        .collection('gmail_cache')
+        .doc('recent');
+  }
+
+  Future<void> _applyGmailCacheData(Map<String, dynamic>? data) async {
+    if (data == null || data['emails'] == null || !mounted) return;
+
+    final cachedEmails = List<Map<String, dynamic>>.from(
+      (data['emails'] as List).map((e) => _convertMap(e as Map)),
+    );
+    final newNextPageToken = data['next_page_token']?.toString();
+
+    setState(() {
+      _emails = cachedEmails;
+      _allEmails = cachedEmails;
+      _nextPageToken = newNextPageToken;
+    });
+
+    print('✅ Gmail cache updated: ${cachedEmails.length} emails');
+
+    final isCurrentRoute = ModalRoute.of(context)?.isCurrent ?? false;
+    if (isCurrentRoute &&
+        cachedEmails.length < 50 &&
+        newNextPageToken != null &&
+        !_isLoading) {
+      Future.delayed(const Duration(seconds: 1), () {
+        if (mounted &&
+            (ModalRoute.of(context)?.isCurrent ?? false) &&
+            _emails.length < 50 &&
+            _nextPageToken != null) {
+          _loadMoreEmailsInBackground();
+        }
+      });
+    }
+  }
+
+  Future<void> _pollGmailCache() async {
+    final cacheRef = _gmailCacheRef;
+    if (cacheRef == null || !mounted) return;
+    try {
+      final data = await fsFetchDocumentData(cacheRef);
+      await _applyGmailCacheData(data);
+    } catch (e) {
+      print('❌ Error polling gmail cache: $e');
+    }
+  }
+
   /// Initialize Gmail cache - read from Firestore and set up auto-refresh
   void _initializeGmailCache() {
     if (currentUser == null || currentUserUid.isEmpty) {
       return;
     }
 
-    // Listen to Firestore cache for real-time updates
-    _cacheSubscription = FirebaseFirestore.instance
-        .collection('users')
-        .doc(currentUserUid)
-        .collection('gmail_cache')
-        .doc('recent')
-        .snapshots()
-        .listen((snapshot) {
-      if (snapshot.exists && mounted) {
-        final data = snapshot.data();
-        if (data != null && data['emails'] != null) {
-          final cachedEmails = List<Map<String, dynamic>>.from(
-            (data['emails'] as List).map((e) => _convertMap(e as Map)),
-          );
-
-          final newNextPageToken = data['next_page_token']?.toString();
-
-          setState(() {
-            _emails = cachedEmails;
-            _allEmails = cachedEmails;
-            _nextPageToken = newNextPageToken;
-          });
-
-          print('✅ Gmail cache updated: ${cachedEmails.length} emails');
-
-          // Only prefetch more in background when this tab is visible (avoids competing when user is on Chat/News)
-          final isCurrentRoute = ModalRoute.of(context)?.isCurrent ?? false;
-          if (isCurrentRoute &&
-              cachedEmails.length < 50 &&
-              newNextPageToken != null &&
-              !_isLoading) {
-            Future.delayed(const Duration(seconds: 1), () {
-              if (mounted &&
-                  (ModalRoute.of(context)?.isCurrent ?? false) &&
-                  _emails.length < 50 &&
-                  _nextPageToken != null) {
-                _loadMoreEmailsInBackground();
-              }
-            });
-          }
-        }
-      }
-    });
+    _pollGmailCache();
+    _cachePollTimer?.cancel();
+    _cachePollTimer =
+        Timer.periodic(const Duration(seconds: 30), (_) => _pollGmailCache());
 
     // Start auto-refresh timer only after a short delay so initial load isn't competing with other tabs
     Future.delayed(const Duration(seconds: 10), () {
@@ -202,16 +217,12 @@ class _GmailWidgetState extends State<GmailWidget> {
     }
 
     try {
-      final cacheDoc = await FirebaseFirestore.instance
-          .collection('users')
-          .doc(currentUserUid)
-          .collection('gmail_cache')
-          .doc('recent')
-          .get();
+      final cacheRef = _gmailCacheRef;
+      if (cacheRef == null) return;
 
-      if (cacheDoc.exists) {
-        final data = cacheDoc.data();
-        if (data != null && data['emails'] != null) {
+      final data = await fsFetchDocumentData(cacheRef);
+
+      if (data != null && data['emails'] != null) {
           final cachedEmails = List<Map<String, dynamic>>.from(
             (data['emails'] as List).map((e) => _convertMap(e as Map)),
           );
@@ -238,10 +249,6 @@ class _GmailWidgetState extends State<GmailWidget> {
           }
 
           // Note: New email check happens in _checkGmailConnection() when opening Gmail section
-        } else {
-          // No cache, trigger priority fetch
-          _triggerPriorityFetch();
-        }
       } else {
         // No cache, trigger priority fetch
         _triggerPriorityFetch();
@@ -373,10 +380,10 @@ class _GmailWidgetState extends State<GmailWidget> {
     }
 
     // Check if Gmail is connected by fetching user document
-    final userDoc = await currentUserDocument!.reference.get();
-    if (userDoc.exists) {
-      final userData = userDoc.data() as Map<String, dynamic>?;
-      final isConnected = userData?['gmail_connected'] == true;
+    final userData =
+        await fsFetchDocumentData(currentUserDocument!.reference);
+    if (userData != null) {
+      final isConnected = userData['gmail_connected'] == true;
 
       if (isConnected) {
         // Load from cache first (instant), then check for new emails in background
@@ -1254,13 +1261,15 @@ class _GmailWidgetState extends State<GmailWidget> {
     try {
       // Update user document to remove Gmail connection
       if (currentUserDocument != null) {
-        await currentUserDocument!.reference.update({
+        await fsPatchDocument(currentUserDocument!.reference, {
           'gmail_connected': false,
-          'gmail_access_token': FieldValue.delete(),
-          'gmail_refresh_token': FieldValue.delete(),
-          'gmail_email': FieldValue.delete(),
-          'gmail_connected_at': FieldValue.delete(),
         });
+        await fsDeleteMultipleFields(currentUserDocument!.reference, [
+          'gmail_access_token',
+          'gmail_refresh_token',
+          'gmail_email',
+          'gmail_connected_at',
+        ]);
 
         // Clear email state
         setState(() {
@@ -1413,16 +1422,10 @@ class _GmailWidgetState extends State<GmailWidget> {
             tooltip: 'Compose new email',
           ),
           // Gmail user avatar and logout
-          StreamBuilder<UsersRecord>(
-            stream: currentUserDocument != null
-                ? UsersRecord.getDocument(currentUserDocument!.reference)
-                : Stream<UsersRecord>.value(UsersRecord.getDocumentFromData(
-                    {},
-                    FirebaseFirestore.instance
-                        .collection('users')
-                        .doc('dummy'))),
-            builder: (context, snapshot) {
-              final userData = snapshot.data;
+          DesktopSafeUserPollBuilder(
+            userRef: currentUserDocument!.reference,
+            fetchOnce: DesktopSafeUserBuilder.defaultFetchUser,
+            builder: (context, userData) {
               // Get Gmail email from snapshot data
               final userGmailEmail =
                   (userData?.snapshotData['gmail_email'] as String?) ?? '';
@@ -1575,28 +1578,28 @@ class _GmailWidgetState extends State<GmailWidget> {
           ),
         ],
       ),
-      body: StreamBuilder<UsersRecord>(
-        stream: currentUserDocument != null
-            ? UsersRecord.getDocument(currentUserDocument!.reference)
-            : Stream<UsersRecord>.value(UsersRecord.getDocumentFromData({},
-                FirebaseFirestore.instance.collection('users').doc('dummy'))),
-        builder: (context, snapshot) {
-          if (!snapshot.hasData || currentUserDocument == null) {
-            return _buildNotConnectedState();
-          }
+      body: currentUserDocument == null
+          ? _buildNotConnectedState()
+          : DesktopSafeUserPollBuilder(
+              userRef: currentUserDocument!.reference,
+              fetchOnce: DesktopSafeUserBuilder.defaultFetchUser,
+              builder: (context, userData) {
+                if (userData == null) {
+                  return _buildNotConnectedState();
+                }
 
-          final userData = snapshot.data!;
-          // Check Gmail connection from raw data
-          final gmailConnected =
-              (userData.snapshotData['gmail_connected'] as bool?) ?? false;
+                // Check Gmail connection from raw data
+                final gmailConnected =
+                    (userData.snapshotData['gmail_connected'] as bool?) ??
+                        false;
 
-          if (!gmailConnected) {
-            return _buildNotConnectedState();
-          }
+                if (!gmailConnected) {
+                  return _buildNotConnectedState();
+                }
 
-          return _buildEmailList();
-        },
-      ),
+                return _buildEmailList();
+              },
+            ),
     );
   }
 

@@ -1,5 +1,8 @@
 import '/auth/firebase_auth/auth_util.dart';
 import '/backend/backend.dart';
+import '/backend/firestore/firestore_desktop_adapter.dart';
+import '/pages/desktop_chat/desktop_safe_user_builder.dart';
+import '/pages/desktop_chat/rest_poll_builder.dart';
 import '/flutter_flow/flutter_flow_util.dart';
 import '/pages/mobile_chat/mobile_chat_widget.dart';
 import '/pages/user_summary/user_summary_widget.dart';
@@ -37,6 +40,7 @@ class _AddConnectionsWidgetState extends State<AddConnectionsWidget> {
   final ScrollController _scrollController = ScrollController();
   List<UsersRecord> _loadedUsers = [];
   DocumentSnapshot? _lastDocument;
+  String? _lastWindowsUserId;
   bool _isLoadingMore = false;
   bool _hasMoreUsers = true;
   bool _isInitialLoading = true;
@@ -100,15 +104,15 @@ class _AddConnectionsWidgetState extends State<AddConnectionsWidget> {
 
     try {
       // Get current user data to calculate mutual connections
-      final currentUserDoc = await currentUserReference!.get();
-      final currentUser = UsersRecord.fromSnapshot(currentUserDoc);
+      final currentUser = await fsGetUserOnce(currentUserReference!);
 
       // Fetch a larger batch of users to sort by mutual connections
-      // Fetch 50 users to have enough to sort and prioritize
-      final users = await queryUsersRecordOnce(
-        queryBuilder: (q) => q.limit(100),
-        limit: 100,
-      );
+      final users = useWindowsFirestoreRest
+          ? await fsQueryUsers(limit: 100)
+          : await queryUsersRecordOnce(
+              queryBuilder: (q) => q.limit(100),
+              limit: 100,
+            );
 
       // Filter out current user
       final filteredUsers = users
@@ -137,7 +141,11 @@ class _AddConnectionsWidgetState extends State<AddConnectionsWidget> {
 
       // Store the last user's document for pagination
       if (topUsers.isNotEmpty) {
-        _lastDocument = await topUsers.last.reference.get();
+        if (useWindowsFirestoreRest) {
+          _lastWindowsUserId = topUsers.last.reference.id;
+        } else {
+          _lastDocument = await topUsers.last.reference.get();
+        }
       }
 
       setState(() {
@@ -157,7 +165,8 @@ class _AddConnectionsWidgetState extends State<AddConnectionsWidget> {
   // Load more users for pagination
   Future<void> _loadMoreUsers() async {
     if (currentUserReference == null ||
-        _lastDocument == null ||
+        (!useWindowsFirestoreRest && _lastDocument == null) ||
+        (useWindowsFirestoreRest && _lastWindowsUserId == null) ||
         !_hasMoreUsers ||
         _isLoadingMore) {
       return;
@@ -169,17 +178,24 @@ class _AddConnectionsWidgetState extends State<AddConnectionsWidget> {
 
     try {
       // Get current user data to calculate mutual connections
-      final currentUserDoc = await currentUserReference!.get();
-      final currentUser = UsersRecord.fromSnapshot(currentUserDoc);
+      final currentUser = await fsGetUserOnce(currentUserReference!);
 
-      // Fetch next batch of users
-      Query query = UsersRecord.collection
-          .startAfterDocument(_lastDocument!)
-          .limit(100); // Fetch 100 to have enough to sort
+      final Iterable<UsersRecord> fetchedUsersIterable;
+      if (useWindowsFirestoreRest) {
+        fetchedUsersIterable = await fsQueryUsers(
+          limit: 100,
+          startAfterUserId: _lastWindowsUserId,
+        );
+      } else {
+        Query query = UsersRecord.collection
+            .startAfterDocument(_lastDocument!)
+            .limit(100);
+        final querySnapshot = await query.get();
+        fetchedUsersIterable = querySnapshot.docs
+            .map((doc) => UsersRecord.fromSnapshot(doc));
+      }
 
-      final querySnapshot = await query.get();
-      final fetchedUsers = querySnapshot.docs
-          .map((doc) => UsersRecord.fromSnapshot(doc))
+      final fetchedUsers = fetchedUsersIterable
           .where((user) => user.reference != currentUserReference)
           .where((user) => !_loadedUsers
               .any((loaded) => loaded.reference.id == user.reference.id))
@@ -215,7 +231,11 @@ class _AddConnectionsWidgetState extends State<AddConnectionsWidget> {
 
       if (newUsers.isNotEmpty) {
         // Store the last user's document for pagination
-        _lastDocument = await newUsers.last.reference.get();
+        if (useWindowsFirestoreRest) {
+          _lastWindowsUserId = newUsers.last.reference.id;
+        } else {
+          _lastDocument = await newUsers.last.reference.get();
+        }
 
         setState(() {
           _loadedUsers.addAll(newUsers);
@@ -434,10 +454,11 @@ class _AddConnectionsWidgetState extends State<AddConnectionsWidget> {
       );
     }
 
-    return StreamBuilder<UsersRecord>(
-      stream: UsersRecord.getDocument(currentUserReference!),
-      builder: (context, currentUserSnapshot) {
-        if (!currentUserSnapshot.hasData) {
+    return DesktopSafeUserPollBuilder(
+      userRef: currentUserReference!,
+      fetchOnce: fsGetUserOnce,
+      builder: (context, currentUser) {
+        if (currentUser == null) {
           return Container(
             color: Colors.white,
             child: Center(
@@ -446,17 +467,19 @@ class _AddConnectionsWidgetState extends State<AddConnectionsWidget> {
           );
         }
 
-        final currentUser = currentUserSnapshot.data!;
-
         // Show dummy profile cards if no search query
         if (_searchQuery.isEmpty) {
-          return _buildDummyProfileCards();
+          return _buildDummyProfileCards(currentUser);
         }
 
         // Fetch all users and filter client-side for real-time suggestions
-        return StreamBuilder<List<UsersRecord>>(
-          stream: queryUsersRecord(),
-          builder: (context, searchSnapshot) {
+        return _buildUserSearchGrid(currentUser);
+      },
+    );
+  }
+
+  Widget _buildUserSearchGrid(UsersRecord currentUser) {
+    Widget buildGrid(AsyncSnapshot<List<UsersRecord>> searchSnapshot) {
             // Check for errors first
             if (searchSnapshot.hasError) {
               print('Error searching users: ${searchSnapshot.error}');
@@ -547,9 +570,19 @@ class _AddConnectionsWidgetState extends State<AddConnectionsWidget> {
                 },
               ),
             );
-          },
-        );
-      },
+    }
+
+    if (useWindowsFirestoreRest) {
+      return RestPollBuilder<List<UsersRecord>>(
+        interval: const Duration(seconds: 30),
+        fetch: () => fsQueryUsers(limit: 200),
+        builder: (context, snapshot) => buildGrid(snapshot),
+      );
+    }
+
+    return StreamBuilder<List<UsersRecord>>(
+      stream: queryUsersRecord(),
+      builder: (context, snapshot) => buildGrid(snapshot),
     );
   }
 
@@ -932,8 +965,7 @@ class _AddConnectionsWidgetState extends State<AddConnectionsWidget> {
 
     try {
       // Bulletproof check - ensure they are actually connected
-      final currentUserDoc = await currentUserReference!.get();
-      final currentUserData = UsersRecord.fromSnapshot(currentUserDoc);
+      final currentUserData = await fsGetUserOnce(currentUserReference!);
 
       if (!currentUserData.friends.contains(user.reference)) {
         _showErrorMessage('You are not connected with ${user.displayName}');
@@ -941,16 +973,18 @@ class _AddConnectionsWidgetState extends State<AddConnectionsWidget> {
       }
 
       // Update current user's document (we have permission for our own document)
-      await currentUserReference!.update({
-        'friends': FieldValue.arrayRemove([user.reference]),
-      });
+      await fsArrayRemove(
+        currentUserReference!,
+        'friends',
+        [user.reference],
+      );
 
-      // Try to update other user's document (may fail due to permissions, but that's okay)
-      // The connection will be removed from their side when they next sync
       try {
-        await user.reference.update({
-          'friends': FieldValue.arrayRemove([currentUserReference]),
-        });
+        await fsArrayRemove(
+          user.reference,
+          'friends',
+          [currentUserReference!],
+        );
       } catch (e) {
         // If we can't update the other user's document, that's okay
         // The connection is still removed from our side
@@ -1001,7 +1035,7 @@ class _AddConnectionsWidgetState extends State<AddConnectionsWidget> {
     );
   }
 
-  Widget _buildDummyProfileCards() {
+  Widget _buildDummyProfileCards(UsersRecord currentUser) {
     if (_isInitialLoading) {
       return Container(
         color: Colors.white,
@@ -1019,71 +1053,54 @@ class _AddConnectionsWidgetState extends State<AddConnectionsWidget> {
       );
     }
 
-    return StreamBuilder<UsersRecord>(
-      stream: UsersRecord.getDocument(currentUserReference!),
-      builder: (context, currentUserSnapshot) {
-        if (!currentUserSnapshot.hasData) {
-          return Container(
-            color: Colors.white,
-            child: Center(
+    final filteredUsers = _loadedUsers.where((user) {
+      return !_isUserConnected(user.reference, currentUser);
+    }).toList();
+
+    if (filteredUsers.isEmpty && !_isLoadingMore) {
+      return _buildEmptyState(
+        icon: CupertinoIcons.person_2,
+        title: 'No Recommendations',
+        subtitle: 'All available users are already connected',
+      );
+    }
+
+    return Container(
+      color: Colors.white,
+      child: GridView.builder(
+        controller: _scrollController,
+        padding: EdgeInsets.all(16),
+        gridDelegate: SliverGridDelegateWithMaxCrossAxisExtent(
+          maxCrossAxisExtent: 280,
+          crossAxisSpacing: 16,
+          mainAxisSpacing: 16,
+          childAspectRatio: 0.70,
+        ),
+        itemCount: filteredUsers.length + (_isLoadingMore ? 1 : 0),
+        itemBuilder: (context, index) {
+          if (index == filteredUsers.length) {
+            // Loading indicator at the end
+            return Center(
               child: CupertinoActivityIndicator(),
-            ),
+            );
+          }
+
+          final user = filteredUsers[index];
+          final mutualCount =
+              _calculateMutualConnections(currentUser, user);
+          final isConnected = _isUserConnected(user.reference, currentUser);
+          final isSentRequest =
+              _isValidSentRequest(user.reference, currentUser);
+
+          return _buildProfileCard(
+            user: user,
+            currentUser: currentUser,
+            mutualConnections: mutualCount,
+            isConnected: isConnected,
+            isSentRequest: isSentRequest,
           );
-        }
-
-        final currentUser = currentUserSnapshot.data!;
-
-        // Filter out already connected users
-        final filteredUsers = _loadedUsers.where((user) {
-          return !_isUserConnected(user.reference, currentUser);
-        }).toList();
-
-        if (filteredUsers.isEmpty && !_isLoadingMore) {
-          return _buildEmptyState(
-            icon: CupertinoIcons.person_2,
-            title: 'No Recommendations',
-            subtitle: 'All available users are already connected',
-          );
-        }
-
-        return Container(
-          color: Colors.white,
-          child: GridView.builder(
-            controller: _scrollController,
-            padding: EdgeInsets.all(16),
-            gridDelegate: SliverGridDelegateWithMaxCrossAxisExtent(
-              maxCrossAxisExtent: 280,
-              crossAxisSpacing: 16,
-              mainAxisSpacing: 16,
-              childAspectRatio: 0.70,
-            ),
-            itemCount: filteredUsers.length + (_isLoadingMore ? 1 : 0),
-            itemBuilder: (context, index) {
-              if (index == filteredUsers.length) {
-                // Loading indicator at the end
-                return Center(
-                  child: CupertinoActivityIndicator(),
-                );
-              }
-
-              final user = filteredUsers[index];
-              final mutualCount =
-                  _calculateMutualConnections(currentUser, user);
-              final isConnected = _isUserConnected(user.reference, currentUser);
-              final isSentRequest =
-                  _isValidSentRequest(user.reference, currentUser);
-
-              return _buildProfileCard(
-                user: user,
-                currentUser: currentUser,
-                mutualConnections: mutualCount,
-                isConnected: isConnected,
-                isSentRequest: isSentRequest,
-              );
-            },
-          ),
-        );
-      },
+        },
+      ),
     );
   }
 
@@ -1472,8 +1489,7 @@ class _AddConnectionsWidgetState extends State<AddConnectionsWidget> {
 
     try {
       // Bulletproof check - don't send if already connected or request already sent
-      final currentUserDoc = await currentUserReference!.get();
-      final currentUserData = UsersRecord.fromSnapshot(currentUserDoc);
+      final currentUserData = await fsGetUserOnce(currentUserReference!);
 
       if (currentUserData.friends.contains(user.reference)) {
         _showErrorMessage('You are already connected with ${user.displayName}');
@@ -1492,20 +1508,16 @@ class _AddConnectionsWidgetState extends State<AddConnectionsWidget> {
         return;
       }
 
-      // Use a batch write for better performance and atomicity
-      final batch = FirebaseFirestore.instance.batch();
-
-      // Update current user's sent requests
-      batch.update(currentUserReference!, {
-        'sent_requests': FieldValue.arrayUnion([user.reference]),
-      });
-
-      // Update target user's friend requests
-      batch.update(user.reference, {
-        'friend_requests': FieldValue.arrayUnion([currentUserReference]),
-      });
-
-      await batch.commit();
+      await fsArrayUnion(
+        currentUserReference!,
+        'sent_requests',
+        [user.reference],
+      );
+      await fsArrayUnion(
+        user.reference,
+        'friend_requests',
+        [currentUserReference!],
+      );
 
       if (mounted) {
         _showSuccessMessage('Connection request sent to ${user.displayName}');
@@ -1537,28 +1549,23 @@ class _AddConnectionsWidgetState extends State<AddConnectionsWidget> {
 
     try {
       // Bulletproof check - ensure request exists
-      final currentUserDoc = await currentUserReference!.get();
-      final currentUserData = UsersRecord.fromSnapshot(currentUserDoc);
+      final currentUserData = await fsGetUserOnce(currentUserReference!);
 
       if (!currentUserData.sentRequests.contains(user.reference)) {
         _showErrorMessage('No pending request to ${user.displayName}');
         return;
       }
 
-      // Use a batch write for better performance and atomicity
-      final batch = FirebaseFirestore.instance.batch();
-
-      // Update current user: remove from sent_requests
-      batch.update(currentUserReference!, {
-        'sent_requests': FieldValue.arrayRemove([user.reference]),
-      });
-
-      // Update target user: remove from friend_requests
-      batch.update(user.reference, {
-        'friend_requests': FieldValue.arrayRemove([currentUserReference]),
-      });
-
-      await batch.commit();
+      await fsArrayRemove(
+        currentUserReference!,
+        'sent_requests',
+        [user.reference],
+      );
+      await fsArrayRemove(
+        user.reference,
+        'friend_requests',
+        [currentUserReference!],
+      );
 
       if (mounted) {
         _showSuccessMessage('Connection request cancelled');
@@ -1589,8 +1596,7 @@ class _AddConnectionsWidgetState extends State<AddConnectionsWidget> {
 
     try {
       // Bulletproof check - ensure they sent us a request and we're not already connected
-      final currentUserDoc = await currentUserReference!.get();
-      final currentUserData = UsersRecord.fromSnapshot(currentUserDoc);
+      final currentUserData = await fsGetUserOnce(currentUserReference!);
 
       if (currentUserData.friends.contains(user.reference)) {
         _showErrorMessage('You are already connected with ${user.displayName}');
@@ -1602,24 +1608,23 @@ class _AddConnectionsWidgetState extends State<AddConnectionsWidget> {
         return;
       }
 
-      // Use a batch write for better performance and atomicity
-      final batch = FirebaseFirestore.instance.batch();
-
-      // Update current user: add to friends, remove from friend_requests
-      batch.update(currentUserReference!, {
-        'friends': FieldValue.arrayUnion([user.reference]),
-        'friend_requests': FieldValue.arrayRemove([user.reference]),
-        'sent_requests': FieldValue.arrayRemove(
-            [user.reference]), // Remove if we also sent them a request
-      });
-
-      // Update other user: add to friends, remove from sent_requests
-      batch.update(user.reference, {
-        'friends': FieldValue.arrayUnion([currentUserReference]),
-        'sent_requests': FieldValue.arrayRemove([currentUserReference]),
-      });
-
-      await batch.commit();
+      await fsArrayUnion(currentUserReference!, 'friends', [user.reference]);
+      await fsArrayRemove(
+        currentUserReference!,
+        'friend_requests',
+        [user.reference],
+      );
+      await fsArrayRemove(
+        currentUserReference!,
+        'sent_requests',
+        [user.reference],
+      );
+      await fsArrayUnion(user.reference, 'friends', [currentUserReference!]);
+      await fsArrayRemove(
+        user.reference,
+        'sent_requests',
+        [currentUserReference!],
+      );
 
       if (mounted) {
         _showSuccessMessage('Connection request accepted!');
@@ -1650,18 +1655,18 @@ class _AddConnectionsWidgetState extends State<AddConnectionsWidget> {
 
     try {
       // Bulletproof check - ensure request exists
-      final currentUserDoc = await currentUserReference!.get();
-      final currentUserData = UsersRecord.fromSnapshot(currentUserDoc);
+      final currentUserData = await fsGetUserOnce(currentUserReference!);
 
       if (!currentUserData.friendRequests.contains(user.reference)) {
         _showErrorMessage('No pending request from ${user.displayName}');
         return;
       }
 
-      // Only update current user's document (we have permission for this)
-      await currentUserReference!.update({
-        'friend_requests': FieldValue.arrayRemove([user.reference]),
-      });
+      await fsArrayRemove(
+        currentUserReference!,
+        'friend_requests',
+        [user.reference],
+      );
 
       if (mounted) {
         _showSuccessMessage('Connection request declined');

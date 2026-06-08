@@ -1,7 +1,9 @@
 import '/auth/firebase_auth/auth_util.dart';
 import '/backend/backend.dart';
+import '/backend/firestore/firestore_desktop_adapter.dart';
 import '/flutter_flow/flutter_flow_util.dart';
 import '/flutter_flow/flutter_flow_widgets.dart';
+import '/pages/desktop_chat/rest_poll_builder.dart';
 import 'dart:ui';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -144,31 +146,24 @@ class _AddUserWidgetState extends State<AddUserWidget> {
             ),
             Expanded(
               child: AuthUserStreamWidget(
-                builder: (context) =>
-                    StreamBuilder<List<WorkspaceMembersRecord>>(
-                  stream: queryWorkspaceMembersRecord(
-                    queryBuilder: (workspaceMembersRecord) =>
-                        workspaceMembersRecord.where(
-                      'workspace_ref',
-                      isEqualTo: currentUserDocument?.currentWorkspaceRef,
-                    ),
-                  ),
-                  builder: (context, membersSnapshot) {
-                    if (!membersSnapshot.hasData) {
-                      return Center(
-                        child: SizedBox(
-                          width: 50.0,
-                          height: 50.0,
-                          child: CircularProgressIndicator(
-                            valueColor: AlwaysStoppedAnimation<Color>(
-                              FlutterFlowTheme.of(context).primary,
-                            ),
+                builder: (context) {
+                  final workspaceRef =
+                      currentUserDocument?.currentWorkspaceRef;
+                  if (workspaceRef == null) {
+                    return Center(
+                      child: SizedBox(
+                        width: 50.0,
+                        height: 50.0,
+                        child: CircularProgressIndicator(
+                          valueColor: AlwaysStoppedAnimation<Color>(
+                            FlutterFlowTheme.of(context).primary,
                           ),
                         ),
-                      );
-                    }
+                      ),
+                    );
+                  }
 
-                    final members = membersSnapshot.data ?? [];
+                  Widget buildMemberList(List<WorkspaceMembersRecord> members) {
                     final existingMembers = widget.userRefs?.toList() ?? [];
                     final candidateUserRefs = members
                         .map((m) => m.userRef)
@@ -186,7 +181,9 @@ class _AddUserWidgetState extends State<AddUserWidget> {
                             List.generate(candidateUserRefs.length, (index) {
                           final userRef = candidateUserRefs[index];
                           return FutureBuilder<UsersRecord>(
-                            future: UsersRecord.getDocumentOnce(userRef),
+                            future: useWindowsFirestoreRest
+                                ? fsGetUserOnce(userRef)
+                                : UsersRecord.getDocumentOnce(userRef),
                             builder: (context, snapshot) {
                               if (!snapshot.hasData) {
                                 return SizedBox.shrink();
@@ -443,8 +440,57 @@ class _AddUserWidgetState extends State<AddUserWidget> {
                         }).divide(const SizedBox(height: 8.0)),
                       ),
                     );
-                  },
-                ),
+                  }
+
+                  if (useWindowsFirestoreRest) {
+                    return RestPollBuilder<List<WorkspaceMembersRecord>>(
+                      interval: const Duration(seconds: 15),
+                      fetch: () => fsQueryWorkspaceMembers(workspaceRef),
+                      builder: (context, membersSnapshot) {
+                        if (!membersSnapshot.hasData) {
+                          return Center(
+                            child: SizedBox(
+                              width: 50.0,
+                              height: 50.0,
+                              child: CircularProgressIndicator(
+                                valueColor: AlwaysStoppedAnimation<Color>(
+                                  FlutterFlowTheme.of(context).primary,
+                                ),
+                              ),
+                            ),
+                          );
+                        }
+                        return buildMemberList(membersSnapshot.data ?? []);
+                      },
+                    );
+                  }
+
+                  return StreamBuilder<List<WorkspaceMembersRecord>>(
+                    stream: queryWorkspaceMembersRecord(
+                      queryBuilder: (workspaceMembersRecord) =>
+                          workspaceMembersRecord.where(
+                        'workspace_ref',
+                        isEqualTo: workspaceRef,
+                      ),
+                    ),
+                    builder: (context, membersSnapshot) {
+                      if (!membersSnapshot.hasData) {
+                        return Center(
+                          child: SizedBox(
+                            width: 50.0,
+                            height: 50.0,
+                            child: CircularProgressIndicator(
+                              valueColor: AlwaysStoppedAnimation<Color>(
+                                FlutterFlowTheme.of(context).primary,
+                              ),
+                            ),
+                          ),
+                        );
+                      }
+                      return buildMemberList(membersSnapshot.data ?? []);
+                    },
+                  );
+                },
               ),
             ),
           ].divide(const SizedBox(height: 12.0)),

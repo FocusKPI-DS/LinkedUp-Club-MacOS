@@ -13,10 +13,12 @@ import 'package:flutter/material.dart';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '/auth/firebase_auth/auth_util.dart';
+import '/backend/firestore/firestore_desktop_adapter.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:badges/badges.dart' as badges;
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'paginated_notifications.dart';
+import 'dart:async';
 
 class NotificationSettings extends StatefulWidget {
   const NotificationSettings({
@@ -41,6 +43,8 @@ class _NotificationSettingsState extends State<NotificationSettings> {
   bool _isLoading = true;
   StreamSubscription<DocumentSnapshot>? _userSubscription;
   StreamSubscription<QuerySnapshot>? _notificationSubscription;
+  Timer? _userPoll;
+  Timer? _notificationPoll;
   int _unreadCount = 0;
 
   @override
@@ -54,52 +58,93 @@ class _NotificationSettingsState extends State<NotificationSettings> {
   void dispose() {
     _userSubscription?.cancel();
     _notificationSubscription?.cancel();
+    _userPoll?.cancel();
+    _notificationPoll?.cancel();
     super.dispose();
+  }
+
+  void _applyUserSettings(Map<String, dynamic> data) {
+    setState(() {
+      _eventUpdateValue = data['event_updates_enabled'] ?? true;
+      _newMessageValue = data['new_message_enabled'] ?? true;
+      _connectionRequestsValue = data['connection_requests_enabled'] ?? true;
+      _isLoading = false;
+    });
+  }
+
+  Future<void> _pollUserSettings() async {
+    if (currentUserReference == null) return;
+    try {
+      final data = await fsFetchDocumentData(currentUserReference!);
+      if (data != null && mounted) {
+        _applyUserSettings(data);
+      }
+    } catch (e) {
+      print('Error polling user settings: $e');
+    }
   }
 
   void _loadUserSettings() {
     if (currentUserReference == null) return;
 
-    // Listen to user document changes
+    if (useWindowsFirestoreRest) {
+      _pollUserSettings();
+      _userPoll = Timer.periodic(
+        const Duration(seconds: 15),
+        (_) => _pollUserSettings(),
+      );
+      return;
+    }
+
     _userSubscription = currentUserReference!.snapshots().listen((snapshot) {
       if (snapshot.exists) {
-        Map<String, dynamic> data = snapshot.data() as Map<String, dynamic>;
-        setState(() {
-          _eventUpdateValue = data['event_updates_enabled'] ?? true;
-          _newMessageValue = data['new_message_enabled'] ?? true;
-          _connectionRequestsValue =
-              data['connection_requests_enabled'] ?? true;
-          _isLoading = false;
-        });
+        _applyUserSettings(snapshot.data() as Map<String, dynamic>);
       }
     });
   }
 
-  void _subscribeToNotifications() {
-    if (currentUserReference != null) {
-      String userPath = currentUserReference?.path ?? '';
-
-      // Count unread notifications from ff_user_push_notifications
-      _notificationSubscription = FirebaseFirestore.instance
-          .collection('ff_user_push_notifications')
-          .where('user_refs', arrayContains: userPath)
-          .where('status', isEqualTo: 'succeeded')
-          .snapshots()
-          .listen((snapshot) {
-        if (mounted) {
-          setState(() {
-            _unreadCount = snapshot.docs.length;
-          });
-        }
-      });
+  Future<void> _pollNotifications() async {
+    if (currentUserReference == null) return;
+    try {
+      final docs = await fsQueryUserPushNotifications(
+        userPath: currentUserReference!.path,
+      );
+      if (mounted) {
+        setState(() => _unreadCount = docs.length);
+      }
+    } catch (e) {
+      print('Error polling notifications: $e');
     }
+  }
+
+  void _subscribeToNotifications() {
+    if (currentUserReference == null) return;
+
+    if (useWindowsFirestoreRest) {
+      _pollNotifications();
+      _notificationPoll = Timer.periodic(
+        const Duration(seconds: 15),
+        (_) => _pollNotifications(),
+      );
+      return;
+    }
+
+    final userPath = currentUserReference!.path;
+    _notificationSubscription = FirebaseFirestore.instance
+        .collection('ff_user_push_notifications')
+        .where('user_refs', arrayContains: userPath)
+        .where('status', isEqualTo: 'succeeded')
+        .snapshots()
+        .listen((snapshot) {
+      if (mounted) {
+        setState(() => _unreadCount = snapshot.docs.length);
+      }
+    });
   }
 
   Future<void> _updateSetting(String field, bool value) async {
     try {
-      await currentUserReference!.update({
-        field: value,
-      });
+      await fsPatchDocument(currentUserReference!, {field: value});
     } catch (e) {
       print('Error updating notification setting: $e');
       ScaffoldMessenger.of(context).showSnackBar(

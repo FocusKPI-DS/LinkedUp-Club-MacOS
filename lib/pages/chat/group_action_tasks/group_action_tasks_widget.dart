@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '/backend/backend.dart';
+import '/backend/firestore/firestore_desktop_adapter.dart';
 import '/flutter_flow/flutter_flow_util.dart';
+import '/pages/desktop_chat/rest_poll_builder.dart';
 import 'package:ff_theme/flutter_flow/flutter_flow_theme.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'group_action_tasks_model.dart';
@@ -50,6 +52,34 @@ class _GroupActionTasksWidgetState extends State<GroupActionTasksWidget> {
   void dispose() {
     _model.dispose();
     super.dispose();
+  }
+
+  Future<List<ActionItemsRecord>> _tasksMatchingTitle(ActionItemsRecord todo) async {
+    if (todo.chatRef == null) return [todo];
+    final all = await fsQueryActionItemsByChat(todo.chatRef!);
+    return all.where((t) => t.title == todo.title).toList();
+  }
+
+  Widget _buildTasksStream({required Widget Function(AsyncSnapshot<List<ActionItemsRecord>>) body}) {
+    if (widget.chatDoc == null) {
+      return const Center(child: Text('No group selected'));
+    }
+    if (useWindowsFirestoreRest) {
+      return RestPollBuilder<List<ActionItemsRecord>>(
+        interval: const Duration(seconds: 20),
+        fetch: () => fsQueryActionItemsByChat(widget.chatDoc!.reference, limit: 100),
+        builder: (context, snapshot) => body(snapshot),
+      );
+    }
+    return StreamBuilder<List<ActionItemsRecord>>(
+      stream: queryActionItemsRecord(
+        queryBuilder: (actionItemsRecord) => actionItemsRecord
+            .where('chat_ref', isEqualTo: widget.chatDoc!.reference)
+            .orderBy('created_time', descending: true)
+            .limit(100),
+      ),
+      builder: (context, snapshot) => body(snapshot),
+    );
   }
 
   @override
@@ -123,18 +153,8 @@ class _GroupActionTasksWidgetState extends State<GroupActionTasksWidget> {
                 ),
                 body: SafeArea(
                   top: true,
-                  child: widget.chatDoc == null
-                      ? const Center(child: Text('No group selected'))
-                      : StreamBuilder<List<ActionItemsRecord>>(
-                          stream: queryActionItemsRecord(
-                            queryBuilder: (actionItemsRecord) =>
-                                actionItemsRecord
-                                    .where('chat_ref',
-                                        isEqualTo: widget.chatDoc!.reference)
-                                    .orderBy('created_time', descending: true)
-                                    .limit(100),
-                          ),
-                          builder: (context, snapshot) {
+                  child: _buildTasksStream(
+                    body: (snapshot) {
                             if (snapshot.connectionState ==
                                 ConnectionState.waiting) {
                               return const Center(
@@ -635,10 +655,7 @@ class _GroupActionTasksWidgetState extends State<GroupActionTasksWidget> {
           _completingTasks[taskId] = null; // use indeterminate bar
         });
 
-        await todo.reference.update({
-          'status': 'completed',
-          'completed_time': FieldValue.serverTimestamp(),
-        });
+        await fsMarkActionItemDone(todo.reference);
 
         if (mounted) {
           setState(() {
@@ -652,7 +669,7 @@ class _GroupActionTasksWidgetState extends State<GroupActionTasksWidget> {
         setState(() {
           _pendingStatusChange[taskId] = 'pending';
         });
-        await todo.reference.update({
+        await fsPatchDocument(todo.reference, {
           'status': 'pending',
           'completed_time': null,
         });
@@ -738,17 +755,10 @@ class _GroupActionTasksWidgetState extends State<GroupActionTasksWidget> {
       try {
         // Delete ALL task documents with the same chat_ref and title
         // This ensures the task is removed for all involved users
-        final allTasksSnapshot = await ActionItemsRecord.collection
-            .where('chat_ref', isEqualTo: todo.chatRef)
-            .where('title', isEqualTo: todo.title)
-            .get();
-
-        // Batch delete all related task documents
-        final batch = FirebaseFirestore.instance.batch();
-        for (var doc in allTasksSnapshot.docs) {
-          batch.delete(doc.reference);
+        final tasks = await _tasksMatchingTitle(todo);
+        for (final task in tasks) {
+          await fsDeleteDocument(task.reference);
         }
-        await batch.commit();
 
         // Show success message
         if (mounted) {
@@ -785,7 +795,7 @@ class _GroupActionTasksWidgetState extends State<GroupActionTasksWidget> {
     if (widget.chatDoc?.members != null) {
       for (var memberRef in widget.chatDoc!.members) {
         try {
-          final member = await UsersRecord.getDocumentOnce(memberRef);
+          final member = await fsGetUserOnce(memberRef);
           groupMembers.add(member);
         } catch (e) {
           print('Error fetching member: $e');
@@ -1127,24 +1137,15 @@ class _GroupActionTasksWidgetState extends State<GroupActionTasksWidget> {
                       try {
                         // Update ALL task documents with the same chat_ref and original title
                         // This ensures changes sync across all users' home pages
-                        final allTasksSnapshot = await ActionItemsRecord
-                            .collection
-                            .where('chat_ref', isEqualTo: todo.chatRef)
-                            .where('title', isEqualTo: todo.title)
-                            .get();
-
-                        // Batch update all related task documents
-                        final batch = FirebaseFirestore.instance.batch();
-                        for (var doc in allTasksSnapshot.docs) {
-                          final taskRef = doc.reference;
-                          batch.update(taskRef, {
+                        final tasks = await _tasksMatchingTitle(todo);
+                        for (final task in tasks) {
+                          await fsPatchDocument(task.reference, {
                             'title': titleController.text.trim(),
                             'involved_people': selectedPeople.toList(),
                             'priority': selectedPriority,
                             'due_date': selectedDueDate,
                           });
                         }
-                        await batch.commit();
 
                         // Find newly added people and create task documents for them
                         final originalPeople = Set.from(todo.involvedPeople);
@@ -1163,20 +1164,23 @@ class _GroupActionTasksWidgetState extends State<GroupActionTasksWidget> {
                                 // don't create a duplicate
                                 if (todo.userRef != userRef) {
                                   // Check if a task already exists for this user with the same chat_ref and title
-                                  final existingTasks = await ActionItemsRecord
-                                      .collection
-                                      .where('user_ref', isEqualTo: userRef)
-                                      .where('chat_ref',
-                                          isEqualTo: todo.chatRef)
-                                      .where('title',
-                                          isEqualTo:
-                                              titleController.text.trim())
-                                      .get()
-                                      .then((snapshot) => snapshot.docs);
+                                  final chatTasks = todo.chatRef != null
+                                      ? await fsQueryActionItemsByChat(
+                                          todo.chatRef!,
+                                        )
+                                      : <ActionItemsRecord>[];
+                                  final existingTasks = chatTasks
+                                      .where(
+                                        (t) =>
+                                            t.userRef?.path == userRef.path &&
+                                            t.title ==
+                                                titleController.text.trim(),
+                                      )
+                                      .toList();
 
                                   // Only create a new task if one doesn't already exist
                                   if (existingTasks.isEmpty) {
-                                    await ActionItemsRecord.collection.add(
+                                    await fsCreateActionItem(
                                       createActionItemsRecordData(
                                         title: titleController.text.trim(),
                                         groupName: todo.groupName,
@@ -1258,7 +1262,7 @@ class _GroupActionTasksWidgetState extends State<GroupActionTasksWidget> {
     if (widget.chatDoc?.members != null) {
       for (var memberRef in widget.chatDoc!.members) {
         try {
-          final member = await UsersRecord.getDocumentOnce(memberRef);
+          final member = await fsGetUserOnce(memberRef);
           groupMembers.add(member);
         } catch (e) {
           print('Error fetching member: $e');
@@ -1283,8 +1287,7 @@ class _GroupActionTasksWidgetState extends State<GroupActionTasksWidget> {
       return;
     }
 
-    final currentUser =
-        await UsersRecord.getDocumentOnce(currentUserReference!);
+    final currentUser = await fsGetUserOnce(currentUserReference!);
     final workspaceRef =
         widget.chatDoc?.workspaceRef ?? currentUser.currentWorkspaceRef;
 
@@ -1673,8 +1676,6 @@ class _GroupActionTasksWidgetState extends State<GroupActionTasksWidget> {
                       final chatRef = widget.chatDoc?.reference;
 
                       // Create action item for each assigned person
-                      final batch = FirebaseFirestore.instance.batch();
-
                       for (String personName in selectedPeople) {
                         // Find the user reference for this person
                         UsersRecord? assignedUser;
@@ -1686,9 +1687,6 @@ class _GroupActionTasksWidgetState extends State<GroupActionTasksWidget> {
                         }
 
                         if (assignedUser != null) {
-                          final actionItemRef =
-                              ActionItemsRecord.collection.doc();
-
                           final actionItemData = createActionItemsRecordData(
                             title: titleController.text.trim(),
                             groupName: groupName,
@@ -1704,11 +1702,9 @@ class _GroupActionTasksWidgetState extends State<GroupActionTasksWidget> {
                             description: descriptionController.text.trim(),
                           );
 
-                          batch.set(actionItemRef, actionItemData);
+                          await fsCreateActionItem(actionItemData);
                         }
                       }
-
-                      await batch.commit();
 
                       if (mounted) {
                         Navigator.pop(context);

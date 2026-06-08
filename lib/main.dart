@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'dart:io' show Platform;
 import 'dart:math';
-import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/foundation.dart' show kIsWeb, PlatformDispatcher;
 import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/gestures.dart';
@@ -27,6 +27,9 @@ import '/main/home/home_widget.dart';
 import '/pages/mobile_chat/mobile_chat_widget.dart';
 import '/pages/desktop_chat/desktop_chat_widget.dart';
 import '/pages/desktop_chat/chat_controller.dart';
+import '/pages/desktop_chat/desktop_safe_user_builder.dart';
+import '/pages/desktop_chat/rest_poll_builder.dart';
+import '/backend/firestore/firestore_desktop_adapter.dart';
 import '/pages/gmail/gmail_widget.dart';
 import '/pages/gmail/gmail_mobile_widget.dart';
 import '/pages/connections/connections_widget.dart';
@@ -54,6 +57,19 @@ import 'package:url_launcher/url_launcher.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  FlutterError.onError = (details) {
+    FlutterError.presentError(details);
+    debugPrint('FlutterError: ${details.exceptionAsString()}');
+    if (details.stack != null) {
+      debugPrint('${details.stack}');
+    }
+  };
+  PlatformDispatcher.instance.onError = (error, stack) {
+    debugPrint('Uncaught error: $error');
+    debugPrint('$stack');
+    return true;
+  };
 
   // Detect if running embedded inside Qurio desktop app (checks ?embedded=qurio URL param)
   QurioEmbedded.initialize();
@@ -143,8 +159,10 @@ void main() async {
       ],
       child: MyApp(),
     ));
-  } catch (e) {
+  } catch (e, stackTrace) {
     // Error during app initialization
+    debugPrint('App initialization error: $e');
+    debugPrint('$stackTrace');
     // Run app with minimal configuration if initialization fails
     runApp(MaterialApp(
       home: Scaffold(
@@ -171,6 +189,11 @@ bool _gmailPrefetchTriggered = false;
 /// Delayed so it doesn't compete with app startup and other Firebase traffic.
 void _triggerGmailPrefetchIfConnected() async {
   if (_gmailPrefetchTriggered) {
+    return;
+  }
+
+  // Defer Gmail cloud prefetch on desktop — reduces Firestore/API load at login.
+  if (!kIsWeb && (Platform.isWindows || Platform.isLinux)) {
     return;
   }
 
@@ -604,6 +627,9 @@ class _MyAppState extends State<MyApp> {
       // Ensure FCM token is saved when user logs in
       // This handles the case where token was obtained before login
       Future.delayed(const Duration(seconds: 1), () async {
+        if (!kIsWeb && (Platform.isWindows || Platform.isLinux)) {
+          return;
+        }
         try {
           if (currentUserReference != null) {
             await actions.ensureFcmToken(currentUserReference!);
@@ -803,8 +829,16 @@ class _NavBarPageState extends State<NavBarPage> with WidgetsBindingObserver {
   String _currentPageName = 'Home';
   late Widget? _currentPage;
 
-  // Persistent MobileChatWidget to preserve state across parent rebuilds
-  late final Widget _mobileChatWidget;
+  // Lazy-init chat UIs so Windows does not load chat stack at login (Home first).
+  Widget? _mobileChatWidgetCache;
+  Widget get _mobileChatWidget =>
+      _mobileChatWidgetCache ??= const MobileChatWidget(
+        key: ValueKey('mobile_chat_widget'),
+      );
+
+  Widget? _desktopChatWidgetCache;
+  Widget get _desktopChatWidget =>
+      _desktopChatWidgetCache ??= const DesktopChatWidget();
 
   // Presence system for online status (like Slack)
   Timer? _inactivityTimer;
@@ -816,11 +850,6 @@ class _NavBarPageState extends State<NavBarPage> with WidgetsBindingObserver {
     WidgetsBinding.instance.addObserver(this);
     _currentPageName = widget.initialPage ?? _currentPageName;
     _currentPage = widget.page;
-
-    // Initialize MobileChatWidget once to preserve its state
-    _mobileChatWidget = const MobileChatWidget(
-      key: ValueKey('mobile_chat_widget'),
-    );
 
     // Initialize presence system after a delay to ensure user is loaded
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -842,7 +871,14 @@ class _NavBarPageState extends State<NavBarPage> with WidgetsBindingObserver {
   // Track user activity and reset inactivity timer
   void _trackActivity() {
     _resetInactivityTimer();
-    if (currentUserReference != null) {
+    if (currentUserReference == null) return;
+    if (useWindowsFirestoreRest) {
+      fsTryGetUserOnce(currentUserReference!).then((user) {
+        if (user != null && !user.isOnline) {
+          _updateOnlineStatus(true);
+        }
+      });
+    } else {
       UsersRecord.getDocumentOnce(currentUserReference!).then((user) {
         if (!user.isOnline) {
           _updateOnlineStatus(true);
@@ -864,9 +900,13 @@ class _NavBarPageState extends State<NavBarPage> with WidgetsBindingObserver {
     if (currentUserReference == null) return;
 
     try {
-      await currentUserReference!.update({
-        'is_online': isOnline,
-      });
+      if (useWindowsFirestoreRest) {
+        await fsPatchDocument(currentUserReference!, {'is_online': isOnline});
+      } else {
+        await currentUserReference!.update({
+          'is_online': isOnline,
+        });
+      }
     } catch (e) {
       // Silently fail - don't spam console
     }
@@ -925,7 +965,7 @@ class _NavBarPageState extends State<NavBarPage> with WidgetsBindingObserver {
       'Home': const HomeWidget(),
       // 'Chat': const ChatWidget(), // Commented out - using MobileChat (now called Chat) instead
       'MobileChat': _mobileChatWidget, // Use stored instance to preserve state
-      'DesktopChat': DesktopChatWidget(), // Desktop chat for macOS
+      'DesktopChat': _desktopChatWidget, // Desktop chat for macOS / Windows
       'Gmail': const GmailWidget(), // Gmail page for macOS
       'GmailMobile': const GmailMobileWidget(), // Gmail mobile page for iOS
       'AIAssistant': const AIAssistantWidget(),
@@ -1047,6 +1087,54 @@ class _NavBarPageState extends State<NavBarPage> with WidgetsBindingObserver {
   }
 
   Widget _buildNewsUnreadIndicator() {
+    Widget buildFromPosts(List<PostsRecord>? newsPosts) {
+      if (newsPosts == null || newsPosts.isEmpty) {
+        return SizedBox.shrink();
+      }
+
+      final latestNews = newsPosts.first;
+      final newsCreatedAt = latestNews.createdAt;
+      if (newsCreatedAt == null) {
+        return SizedBox.shrink();
+      }
+
+      final cutoff = DateTime.now().subtract(const Duration(hours: 48));
+      if (newsCreatedAt.isBefore(cutoff)) {
+        return SizedBox.shrink();
+      }
+
+      final lastOpened = FFAppState().newsPageLastOpened;
+      if (lastOpened != null && lastOpened.isAfter(newsCreatedAt)) {
+        return SizedBox.shrink();
+      }
+
+      return Positioned(
+        right: -6,
+        top: -6,
+        child: Container(
+          width: 8,
+          height: 8,
+          decoration: BoxDecoration(
+            color: Colors.red,
+            shape: BoxShape.circle,
+            border: Border.all(
+              color: Colors.white,
+              width: 1.5,
+            ),
+          ),
+        ),
+      );
+    }
+
+    if (useWindowsFirestoreRest) {
+      return RestPollBuilder<List<PostsRecord>>(
+        interval: const Duration(minutes: 2),
+        fetch: () => fsQueryLatestNewsPosts(),
+        builder: (context, snapshot) =>
+            buildFromPosts(snapshot.data),
+      );
+    }
+
     return StreamBuilder<List<PostsRecord>>(
       stream: queryPostsRecord(
         queryBuilder: (posts) => posts
@@ -1058,53 +1146,18 @@ class _NavBarPageState extends State<NavBarPage> with WidgetsBindingObserver {
         if (!snapshot.hasData) {
           return SizedBox.shrink();
         }
-
-        final newsPosts = snapshot.data!;
-        if (newsPosts.isEmpty) {
-          return SizedBox.shrink();
-        }
-
-        final latestNews = newsPosts.first;
-        final newsCreatedAt = latestNews.createdAt;
-        if (newsCreatedAt == null) {
-          return SizedBox.shrink();
-        }
-
-        // Check if there's new news within 48 hours
-        final cutoff = DateTime.now().subtract(const Duration(hours: 48));
-        if (newsCreatedAt.isBefore(cutoff)) {
-          return SizedBox.shrink();
-        }
-
-        // Check if News page was opened after the latest news was posted
-        final lastOpened = FFAppState().newsPageLastOpened;
-        if (lastOpened != null && lastOpened.isAfter(newsCreatedAt)) {
-          return SizedBox.shrink();
-        }
-
-        // Show red dot indicator
-        return Positioned(
-          right: -6,
-          top: -6,
-          child: Container(
-            width: 8,
-            height: 8,
-            decoration: BoxDecoration(
-              color: Colors.red,
-              shape: BoxShape.circle,
-              border: Border.all(
-                color: Colors.white,
-                width: 1.5,
-              ),
-            ),
-          ),
-        );
+        return buildFromPosts(snapshot.data);
       },
     );
   }
 
   Widget _buildChatUnreadIndicator() {
     if (currentUserReference == null) {
+      return SizedBox.shrink();
+    }
+
+    // Defer ChatController on Windows until user opens Chat (avoids post-login crash).
+    if (!kIsWeb && Platform.isWindows) {
       return SizedBox.shrink();
     }
 
@@ -1159,52 +1212,181 @@ class _NavBarPageState extends State<NavBarPage> with WidgetsBindingObserver {
       return SizedBox.shrink();
     }
 
-    return StreamBuilder<UsersRecord>(
-      stream: UsersRecord.getDocument(currentUserReference!),
-      builder: (context, snapshot) {
-        if (!snapshot.hasData) {
-          return SizedBox.shrink();
-        }
+    Widget buildBadge(UsersRecord? user) {
+      if (user == null) {
+        return SizedBox.shrink();
+      }
 
-        final user = snapshot.data!;
-        final requestCount = user.friendRequests.length;
+      final requestCount = user.friendRequests.length;
 
-        if (requestCount == 0) {
-          return SizedBox.shrink();
-        }
+      if (requestCount == 0) {
+        return SizedBox.shrink();
+      }
 
-        // Show blue badge with count
-        return Positioned(
-          right: -6,
-          top: -6,
-          child: Container(
-            padding: EdgeInsets.all(3),
-            decoration: BoxDecoration(
-              color: Color(0xFF3B82F6),
-              shape: BoxShape.circle,
-              border: Border.all(
+      return Positioned(
+        right: -6,
+        top: -6,
+        child: Container(
+          padding: EdgeInsets.all(3),
+          decoration: BoxDecoration(
+            color: Color(0xFF3B82F6),
+            shape: BoxShape.circle,
+            border: Border.all(
+              color: Colors.white,
+              width: 1.5,
+            ),
+          ),
+          constraints: BoxConstraints(
+            minWidth: 16,
+            minHeight: 16,
+          ),
+          child: Center(
+            child: Text(
+              requestCount > 99 ? '99+' : '$requestCount',
+              style: TextStyle(
                 color: Colors.white,
-                width: 1.5,
+                fontSize: 9,
+                fontWeight: FontWeight.w700,
               ),
+              textAlign: TextAlign.center,
             ),
-            constraints: BoxConstraints(
-              minWidth: 16,
-              minHeight: 16,
+          ),
+        ),
+      );
+    }
+
+    return DesktopSafeUserPollBuilder(
+      userRef: currentUserReference!,
+      fetchOnce: fsGetUserOnce,
+      builder: (context, user) => buildBadge(user),
+    );
+  }
+
+  Widget _buildSidebarUserAvatar({required bool isOnline}) {
+    return Stack(
+      clipBehavior: Clip.none,
+      children: [
+        Container(
+          width: 48,
+          height: 48,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            border: Border.all(
+              color: Colors.white,
+              width: 2,
             ),
-            child: Center(
-              child: Text(
-                requestCount > 99 ? '99+' : '$requestCount',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 9,
-                  fontWeight: FontWeight.w700,
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.08),
+                blurRadius: 8,
+                offset: Offset(0, 2),
+              ),
+            ],
+          ),
+          child: currentUserPhoto.isNotEmpty
+              ? ClipOval(
+                  child: CachedNetworkImage(
+                    imageUrl: currentUserPhoto,
+                    width: 48,
+                    height: 48,
+                    fit: BoxFit.cover,
+                    placeholder: (context, url) => Container(
+                      width: 48,
+                      height: 48,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: Color(0xFFE8EBED),
+                      ),
+                      child: Icon(
+                        Icons.person,
+                        color: Color(0xFF6B7280),
+                        size: 24,
+                      ),
+                    ),
+                    errorWidget: (context, url, error) => Container(
+                      width: 48,
+                      height: 48,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        gradient: LinearGradient(
+                          colors: [
+                            Color(0xFF2563EB),
+                            Color(0xFF1D4ED8),
+                          ],
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                        ),
+                      ),
+                      child: Center(
+                        child: Text(
+                          currentUserDisplayName.isNotEmpty
+                              ? currentUserDisplayName[0].toUpperCase()
+                              : 'U',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 18,
+                            fontWeight: FontWeight.w600,
+                            letterSpacing: 0.5,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                )
+              : Container(
+                  width: 48,
+                  height: 48,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    gradient: LinearGradient(
+                      colors: [
+                        Color(0xFF2563EB),
+                        Color(0xFF1D4ED8),
+                      ],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                    ),
+                  ),
+                  child: Center(
+                    child: Text(
+                      currentUserDisplayName.isNotEmpty
+                          ? currentUserDisplayName[0].toUpperCase()
+                          : 'U',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 18,
+                        fontWeight: FontWeight.w600,
+                        letterSpacing: 0.5,
+                      ),
+                    ),
+                  ),
                 ),
-                textAlign: TextAlign.center,
+        ),
+        if (isOnline)
+          Positioned(
+            right: 0,
+            bottom: 0,
+            child: Container(
+              width: 14,
+              height: 14,
+              decoration: BoxDecoration(
+                color: Color(0xFF10B981),
+                shape: BoxShape.circle,
+                border: Border.all(
+                  color: Colors.white,
+                  width: 2.5,
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: Color(0xFF10B981).withOpacity(0.3),
+                    blurRadius: 4,
+                    spreadRadius: 1,
+                  ),
+                ],
               ),
             ),
           ),
-        );
-      },
+      ],
     );
   }
 
@@ -1302,143 +1484,12 @@ class _NavBarPageState extends State<NavBarPage> with WidgetsBindingObserver {
                   hoverColor: Color(0xFFE8EBED).withOpacity(0.5),
                   child: Container(
                     padding: EdgeInsets.all(2),
-                    child: StreamBuilder<UsersRecord>(
-                      stream: UsersRecord.getDocument(currentUserReference!),
-                      builder: (context, userSnapshot) {
-                        final isOnline = userSnapshot.hasData &&
-                            userSnapshot.data != null &&
-                            userSnapshot.data!.isOnline;
-
-                        return Stack(
-                          clipBehavior: Clip.none,
-                          children: [
-                            Container(
-                              width: 48,
-                              height: 48,
-                              decoration: BoxDecoration(
-                                shape: BoxShape.circle,
-                                border: Border.all(
-                                  color: Colors.white,
-                                  width: 2,
-                                ),
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: Colors.black.withOpacity(0.08),
-                                    blurRadius: 8,
-                                    offset: Offset(0, 2),
-                                  ),
-                                ],
-                              ),
-                              child: currentUserPhoto.isNotEmpty
-                                  ? ClipOval(
-                                      child: CachedNetworkImage(
-                                        imageUrl: currentUserPhoto,
-                                        width: 48,
-                                        height: 48,
-                                        fit: BoxFit.cover,
-                                        placeholder: (context, url) =>
-                                            Container(
-                                          width: 48,
-                                          height: 48,
-                                          decoration: BoxDecoration(
-                                            shape: BoxShape.circle,
-                                            color: Color(0xFFE8EBED),
-                                          ),
-                                          child: Icon(
-                                            Icons.person,
-                                            color: Color(0xFF6B7280),
-                                            size: 24,
-                                          ),
-                                        ),
-                                        errorWidget: (context, url, error) =>
-                                            Container(
-                                          width: 48,
-                                          height: 48,
-                                          decoration: BoxDecoration(
-                                            shape: BoxShape.circle,
-                                            gradient: LinearGradient(
-                                              colors: [
-                                                Color(0xFF2563EB),
-                                                Color(0xFF1D4ED8),
-                                              ],
-                                              begin: Alignment.topLeft,
-                                              end: Alignment.bottomRight,
-                                            ),
-                                          ),
-                                          child: Center(
-                                            child: Text(
-                                              currentUserDisplayName.isNotEmpty
-                                                  ? currentUserDisplayName[0]
-                                                      .toUpperCase()
-                                                  : 'U',
-                                              style: TextStyle(
-                                                color: Colors.white,
-                                                fontSize: 18,
-                                                fontWeight: FontWeight.w600,
-                                                letterSpacing: 0.5,
-                                              ),
-                                            ),
-                                          ),
-                                        ),
-                                      ),
-                                    )
-                                  : Container(
-                                      width: 48,
-                                      height: 48,
-                                      decoration: BoxDecoration(
-                                        shape: BoxShape.circle,
-                                        gradient: LinearGradient(
-                                          colors: [
-                                            Color(0xFF2563EB),
-                                            Color(0xFF1D4ED8),
-                                          ],
-                                          begin: Alignment.topLeft,
-                                          end: Alignment.bottomRight,
-                                        ),
-                                      ),
-                                      child: Center(
-                                        child: Text(
-                                          currentUserDisplayName.isNotEmpty
-                                              ? currentUserDisplayName[0]
-                                                  .toUpperCase()
-                                              : 'U',
-                                          style: TextStyle(
-                                            color: Colors.white,
-                                            fontSize: 18,
-                                            fontWeight: FontWeight.w600,
-                                            letterSpacing: 0.5,
-                                          ),
-                                        ),
-                                      ),
-                                    ),
-                            ),
-                            // Online status indicator - Teams style
-                            if (isOnline)
-                              Positioned(
-                                right: 0,
-                                bottom: 0,
-                                child: Container(
-                                  width: 14,
-                                  height: 14,
-                                  decoration: BoxDecoration(
-                                    color: Color(0xFF10B981),
-                                    shape: BoxShape.circle,
-                                    border: Border.all(
-                                      color: Colors.white,
-                                      width: 2.5,
-                                    ),
-                                    boxShadow: [
-                                      BoxShadow(
-                                        color:
-                                            Color(0xFF10B981).withOpacity(0.3),
-                                        blurRadius: 4,
-                                        spreadRadius: 1,
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ),
-                          ],
+                    child: DesktopSafeUserPollBuilder(
+                      userRef: currentUserReference!,
+                      fetchOnce: fsGetUserOnce,
+                      builder: (context, user) {
+                        return _buildSidebarUserAvatar(
+                          isOnline: user?.isOnline ?? false,
                         );
                       },
                     ),
@@ -2037,7 +2088,7 @@ class _NavItemWithTooltipState extends State<_NavItemWithTooltip> {
                                       size: 24,
                                     )
                                   : FaIcon(
-                                      widget.item['icon'] as IconData,
+                                      widget.item['icon'] as FaIconData,
                                       color: widget.isSelected
                                           ? Color(0xFF2563EB)
                                           : Color(0xFF6B7280),

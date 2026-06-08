@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '/backend/backend.dart';
+import '/backend/firestore/firestore_desktop_adapter.dart';
+import '/pages/desktop_chat/rest_poll_builder.dart';
 import '/auth/firebase_auth/auth_util.dart';
 import '/flutter_flow/flutter_flow_util.dart';
 
@@ -47,18 +49,18 @@ class _GroupAnnouncementsWidgetState extends State<GroupAnnouncementsWidget> {
     setState(() => _isSending = true);
 
     try {
-      // Un-pin all existing announcements
-      final existing = await widget.chatDoc!.reference
-          .collection('announcements')
-          .where('is_pinned', isEqualTo: true)
-          .get();
-      for (final doc in existing.docs) {
-        await doc.reference.update({'is_pinned': false});
+      final pinned = await fsQueryPinnedAnnouncements(
+        widget.chatDoc!.reference,
+        limit: 50,
+      );
+      for (final ann in pinned) {
+        await fsPatchDocument(ann.reference, {'is_pinned': false});
       }
 
-      // Create new announcement (auto-pinned)
-      await AnnouncementsRecord.createDoc(widget.chatDoc!.reference).set(
-        createAnnouncementsRecordData(
+      await fsCreateSubcollectionDocument(
+        parentRef: widget.chatDoc!.reference,
+        collectionId: 'announcements',
+        data: createAnnouncementsRecordData(
           content: content,
           createdAt: getCurrentTimestamp,
           createdBy: currentUserReference,
@@ -99,23 +101,22 @@ class _GroupAnnouncementsWidgetState extends State<GroupAnnouncementsWidget> {
       ),
     );
     if (confirmed == true) {
-      await ann.reference.delete();
+      await fsDeleteDocument(ann.reference);
     }
   }
 
   Future<void> _togglePin(AnnouncementsRecord ann) async {
     if (ann.isPinned) {
-      await ann.reference.update({'is_pinned': false});
+      await fsPatchDocument(ann.reference, {'is_pinned': false});
     } else {
-      // Un-pin others
-      final existing = await widget.chatDoc!.reference
-          .collection('announcements')
-          .where('is_pinned', isEqualTo: true)
-          .get();
-      for (final doc in existing.docs) {
-        await doc.reference.update({'is_pinned': false});
+      final pinned = await fsQueryPinnedAnnouncements(
+        widget.chatDoc!.reference,
+        limit: 50,
+      );
+      for (final existing in pinned) {
+        await fsPatchDocument(existing.reference, {'is_pinned': false});
       }
-      await ann.reference.update({'is_pinned': true});
+      await fsPatchDocument(ann.reference, {'is_pinned': true});
     }
   }
 
@@ -124,13 +125,9 @@ class _GroupAnnouncementsWidgetState extends State<GroupAnnouncementsWidget> {
     if (uid == null) return;
 
     if (ann.confirmedBy.contains(uid)) {
-      await ann.reference.update({
-        'confirmed_by': FieldValue.arrayRemove([uid]),
-      });
+      await fsArrayRemove(ann.reference, 'confirmed_by', [uid]);
     } else {
-      await ann.reference.update({
-        'confirmed_by': FieldValue.arrayUnion([uid]),
-      });
+      await fsArrayUnion(ann.reference, 'confirmed_by', [uid]);
     }
   }
 
@@ -228,90 +225,105 @@ class _GroupAnnouncementsWidgetState extends State<GroupAnnouncementsWidget> {
         if (_isCreating) _buildCreateForm(),
         // Announcement list
         Expanded(
-          child: StreamBuilder<List<AnnouncementsRecord>>(
-            stream: queryAnnouncementsRecord(
-              parent: widget.chatDoc!.reference,
-              queryBuilder: (q) => q.orderBy('created_at', descending: true),
-            ),
-            builder: (context, snapshot) {
-              if (snapshot.hasError) {
-                print('❌ [Announcements] Stream error: ${snapshot.error}');
-                return Center(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(Icons.campaign_outlined,
-                          color: Color(0xFFD1D5DB), size: 48),
-                      const SizedBox(height: 12),
-                      Text(
-                        'No announcements yet',
-                        style: TextStyle(
-                          fontFamily: 'Inter',
-                          color: Color(0xFF9CA3AF),
-                          fontSize: 14,
-                        ),
-                      ),
-                      if (_isAdmin) ...[
-                        const SizedBox(height: 8),
-                        Text(
-                          'Tap "+ New" to create one',
-                          style: TextStyle(
-                            fontFamily: 'Inter',
-                            color: Color(0xFFD1D5DB),
-                            fontSize: 12,
-                          ),
-                        ),
-                      ],
-                    ],
+          child: useWindowsFirestoreRest
+              ? RestPollBuilder<List<AnnouncementsRecord>>(
+                  interval: const Duration(seconds: 30),
+                  fetch: () => fsQueryChatAnnouncements(
+                    widget.chatDoc!.reference,
                   ),
-                );
-              }
-              if (!snapshot.hasData) {
-                return const Center(child: CircularProgressIndicator());
-              }
-              final announcements = snapshot.data!;
-              if (announcements.isEmpty && !_isCreating) {
-                return Center(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(Icons.campaign_outlined,
-                          color: Color(0xFFD1D5DB), size: 48),
-                      const SizedBox(height: 12),
-                      Text(
-                        'No announcements yet',
-                        style: TextStyle(
-                          fontFamily: 'Inter',
-                          color: Color(0xFF9CA3AF),
-                          fontSize: 14,
-                        ),
-                      ),
-                      if (_isAdmin) ...[
-                        const SizedBox(height: 8),
-                        Text(
-                          'Tap "+ New" to create one',
-                          style: TextStyle(
-                            fontFamily: 'Inter',
-                            color: Color(0xFFD1D5DB),
-                            fontSize: 12,
-                          ),
-                        ),
-                      ],
-                    ],
+                  builder: (context, snapshot) =>
+                      _buildAnnouncementListBody(snapshot),
+                )
+              : StreamBuilder<List<AnnouncementsRecord>>(
+                  stream: queryAnnouncementsRecord(
+                    parent: widget.chatDoc!.reference,
+                    queryBuilder: (q) =>
+                        q.orderBy('created_at', descending: true),
                   ),
-                );
-              }
-              return ListView.separated(
-                padding: const EdgeInsets.all(16),
-                itemCount: announcements.length,
-                separatorBuilder: (_, __) => const SizedBox(height: 12),
-                itemBuilder: (context, index) =>
-                    _buildAnnouncementCard(announcements[index]),
-              );
-            },
-          ),
+                  builder: (context, snapshot) =>
+                      _buildAnnouncementListBody(snapshot),
+                ),
         ),
       ],
+    );
+  }
+
+  Widget _buildAnnouncementListBody(
+    AsyncSnapshot<List<AnnouncementsRecord>> snapshot,
+  ) {
+    if (snapshot.hasError) {
+      print('❌ [Announcements] Stream error: ${snapshot.error}');
+      return Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.campaign_outlined,
+                color: Color(0xFFD1D5DB), size: 48),
+            const SizedBox(height: 12),
+            Text(
+              'No announcements yet',
+              style: TextStyle(
+                fontFamily: 'Inter',
+                color: Color(0xFF9CA3AF),
+                fontSize: 14,
+              ),
+            ),
+            if (_isAdmin) ...[
+              const SizedBox(height: 8),
+              Text(
+                'Tap "+ New" to create one',
+                style: TextStyle(
+                  fontFamily: 'Inter',
+                  color: Color(0xFFD1D5DB),
+                  fontSize: 12,
+                ),
+              ),
+            ],
+          ],
+        ),
+      );
+    }
+    if (!snapshot.hasData) {
+      return const Center(child: CircularProgressIndicator());
+    }
+    final announcements = snapshot.data!;
+    if (announcements.isEmpty && !_isCreating) {
+      return Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.campaign_outlined,
+                color: Color(0xFFD1D5DB), size: 48),
+            const SizedBox(height: 12),
+            Text(
+              'No announcements yet',
+              style: TextStyle(
+                fontFamily: 'Inter',
+                color: Color(0xFF9CA3AF),
+                fontSize: 14,
+              ),
+            ),
+            if (_isAdmin) ...[
+              const SizedBox(height: 8),
+              Text(
+                'Tap "+ New" to create one',
+                style: TextStyle(
+                  fontFamily: 'Inter',
+                  color: Color(0xFFD1D5DB),
+                  fontSize: 12,
+                ),
+              ),
+            ],
+          ],
+        ),
+      );
+    }
+    return ListView.separated(
+      padding: const EdgeInsets.all(16),
+      itemCount: announcements.length,
+      separatorBuilder: (_, __) => const SizedBox(height: 12),
+      itemBuilder: (context, index) =>
+          _buildAnnouncementCard(announcements[index]),
     );
   }
 

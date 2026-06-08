@@ -1,4 +1,7 @@
+import 'dart:io' show Platform;
+
 import 'package:flutter/cupertino.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart'
     show canLaunchUrl, launchUrl, LaunchMode;
@@ -6,6 +9,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
 import '/auth/firebase_auth/auth_util.dart';
 import '/backend/backend.dart';
+import '/backend/firestore/firestore_desktop_adapter.dart';
 import '/custom_code/actions/index.dart' as actions;
 import '/flutter_flow/flutter_flow_util.dart';
 
@@ -45,8 +49,13 @@ class TodaysCalendarEvents extends StatefulWidget {
 
 class _TodaysCalendarEventsState extends State<TodaysCalendarEvents> {
   List<Map<String, dynamic>> _todayEvents = [];
-  bool _isLoading = false;
+  bool _isLoading = true;
   bool _hasError = false;
+  bool _gmailConnected = false;
+  bool _connectionResolved = false;
+  bool _loadInFlight = false;
+  bool _isConnectingGmail = false;
+  String? _errorMessage;
 
   // Cache keys
   static const String _cacheKey = 'calendar_events_today';
@@ -57,7 +66,19 @@ class _TodaysCalendarEventsState extends State<TodaysCalendarEvents> {
   @override
   void initState() {
     super.initState();
-    _loadTodaysEvents(forceRefresh: false);
+    _bootstrapCalendar();
+  }
+
+  Future<void> _bootstrapCalendar() async {
+    // Show cached events immediately so connected users never flash "Connect Google".
+    final cached = await _loadCachedEvents();
+    if (cached != null && mounted) {
+      setState(() {
+        _todayEvents = cached;
+        _gmailConnected = true;
+      });
+    }
+    await _loadTodaysEvents(forceRefresh: cached == null);
   }
 
   /// Load cached events if available and valid
@@ -113,42 +134,103 @@ class _TodaysCalendarEventsState extends State<TodaysCalendarEvents> {
     }
   }
 
-  Future<void> _loadTodaysEvents({bool forceRefresh = false}) async {
-    if (_isLoading || currentUser == null) return;
-
-    // Check if user has Gmail/Google account connected
-    final userDoc = await FirebaseFirestore.instance
-        .collection('users')
-        .doc(currentUserUid)
-        .get();
-
-    if (!userDoc.exists || !userDoc.data()?['gmail_connected']) {
-      setState(() {
-        _hasError = false; // Not an error, just not connected
-        _isLoading = false;
-      });
-      return;
-    }
-
-    // Try to load from cache first (unless force refresh)
-    if (!forceRefresh) {
-      final cachedEvents = await _loadCachedEvents();
-      if (cachedEvents != null) {
+  Future<void> _connectGoogleCalendar() async {
+    if (_isConnectingGmail) return;
+    setState(() => _isConnectingGmail = true);
+    try {
+      final ok = await actions.gmailOAuthConnect(context);
+      if (ok) {
+        await _loadTodaysEvents(forceRefresh: true);
+      } else if (mounted) {
         setState(() {
-          _todayEvents = cachedEvents;
-          _isLoading = false;
-          _hasError = false;
+          _hasError = true;
+          _errorMessage =
+              'Google connection was not completed. Try again and finish sign-in in your browser.';
         });
-        return; // Use cached data, no API call needed
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isConnectingGmail = false);
       }
     }
+  }
 
-    setState(() {
-      _isLoading = true;
-      _hasError = false;
-    });
+  Future<void> _loadTodaysEvents({bool forceRefresh = false}) async {
+    if (currentUser == null) {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+          _connectionResolved = true;
+        });
+      }
+      return;
+    }
+    if (_loadInFlight) return;
+    _loadInFlight = true;
+
+    final showLoadingSpinner = _todayEvents.isEmpty;
+    if (mounted && showLoadingSpinner) {
+      setState(() {
+        _isLoading = true;
+        _hasError = false;
+      });
+    }
 
     try {
+      // Check if user has Gmail/Google account connected
+      final gmailConnected = useWindowsFirestoreRest
+          ? (currentUserReference != null &&
+              (await fsFetchDocumentData(currentUserReference!))?[
+                      'gmail_connected'] ==
+                  true)
+          : (await FirebaseFirestore.instance
+                  .collection('users')
+                  .doc(currentUserUid)
+                  .get())
+              .data()?['gmail_connected'] ==
+              true;
+
+      if (!gmailConnected) {
+        if (mounted) {
+          setState(() {
+            _gmailConnected = false;
+            _hasError = false;
+            _errorMessage = null;
+            _isLoading = false;
+            _connectionResolved = true;
+            _todayEvents = [];
+          });
+        }
+        return;
+      }
+
+      if (mounted) {
+        setState(() => _gmailConnected = true);
+      }
+
+      // Try to load from cache first (unless force refresh)
+      if (!forceRefresh) {
+        final cachedEvents = await _loadCachedEvents();
+        if (cachedEvents != null) {
+          if (mounted) {
+            setState(() {
+              _todayEvents = cachedEvents;
+              _isLoading = false;
+              _hasError = false;
+              _connectionResolved = true;
+            });
+          }
+          return;
+        }
+      }
+
+      if (mounted && showLoadingSpinner) {
+        setState(() {
+          _isLoading = true;
+          _hasError = false;
+        });
+      }
+
       final now = DateTime.now();
       final startOfDay = DateTime(now.year, now.month, now.day, 0, 0, 0);
       final endOfDay =
@@ -219,20 +301,39 @@ class _TodaysCalendarEventsState extends State<TodaysCalendarEvents> {
         setState(() {
           _todayEvents = newEvents;
           _isLoading = false;
+          _connectionResolved = true;
         });
       } else {
+        final err = result?['error']?.toString() ?? 'Could not load calendar';
+        final code = result?['errorCode']?.toString() ?? '';
         setState(() {
           _isLoading = false;
           _hasError = true;
+          _connectionResolved = true;
+          _errorMessage = code.isNotEmpty ? '$err ($code)' : err;
         });
       }
     } catch (e) {
       setState(() {
         _isLoading = false;
         _hasError = true;
+        _connectionResolved = true;
+        _errorMessage = e.toString();
       });
+    } finally {
+      _loadInFlight = false;
     }
   }
+
+  bool get _needsGoogleConnect =>
+      _connectionResolved && !_gmailConnected && !_isLoading;
+
+  bool get _shouldShowReconnect =>
+      _hasError &&
+      (_errorMessage?.toLowerCase().contains('reconnect') == true ||
+          _errorMessage?.toLowerCase().contains('not connected') == true ||
+          _errorMessage?.toLowerCase().contains('unauthenticated') == true ||
+          _errorMessage?.toLowerCase().contains('invalid_grant') == true);
 
   String _formatEventTime(Map<String, dynamic> event) {
     final start = event['start'];
@@ -599,11 +700,120 @@ class _TodaysCalendarEventsState extends State<TodaysCalendarEvents> {
     );
   }
 
+  Widget _buildConnectGooglePanel(BuildContext context) {
+    final isDesktop = !kIsWeb && (Platform.isWindows || Platform.isMacOS);
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
+      child: Column(
+        children: [
+          const Icon(
+            CupertinoIcons.calendar,
+            color: CupertinoColors.systemBlue,
+            size: 32,
+          ),
+          const SizedBox(height: 10),
+          Text(
+            'Connect Google Calendar',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontFamily: '.SF Pro Text',
+              fontSize: 16,
+              fontWeight: FontWeight.w600,
+              color: CupertinoColors.label,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            isDesktop
+                ? 'Lona sign-in is separate from Calendar access. Authorize Gmail + Calendar in your browser (includes calendar read scope).'
+                : 'Authorize Gmail and Calendar to show today\'s meetings here.',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontFamily: '.SF Pro Text',
+              fontSize: 14,
+              color: CupertinoColors.secondaryLabel,
+            ),
+          ),
+          const SizedBox(height: 14),
+          CupertinoButton.filled(
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+            onPressed: _isConnectingGmail ? null : _connectGoogleCalendar,
+            child: Text(
+              _isConnectingGmail ? 'Connecting…' : 'Connect Google account',
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildErrorPanel(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        children: [
+          const Icon(
+            CupertinoIcons.exclamationmark_triangle,
+            color: CupertinoColors.systemRed,
+            size: 32,
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Failed to load events',
+            style: TextStyle(
+              fontFamily: '.SF Pro Text',
+              fontSize: 15,
+              fontWeight: FontWeight.w600,
+              color: CupertinoColors.label,
+            ),
+          ),
+          if (_errorMessage != null && _errorMessage!.isNotEmpty) ...[
+            const SizedBox(height: 6),
+            Text(
+              _errorMessage!,
+              textAlign: TextAlign.center,
+              maxLines: 3,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontFamily: '.SF Pro Text',
+                fontSize: 13,
+                color: CupertinoColors.secondaryLabel,
+              ),
+            ),
+          ],
+          const SizedBox(height: 12),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              CupertinoButton(
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+                onPressed:
+                    _isLoading ? null : () => _loadTodaysEvents(forceRefresh: true),
+                child: const Text('Retry'),
+              ),
+              if (_shouldShowReconnect)
+                CupertinoButton.filled(
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                  onPressed: _isConnectingGmail ? null : _connectGoogleCalendar,
+                  child: Text(
+                    _isConnectingGmail ? 'Connecting…' : 'Reconnect',
+                  ),
+                ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    // Don't show if user is not connected to Google or if there are no events
-    if (!_isLoading && _todayEvents.isEmpty && !_hasError) {
-      return SizedBox.shrink();
+    // Hide only when connected, loaded, and there are no events today
+    if (!_isLoading &&
+        _todayEvents.isEmpty &&
+        !_hasError &&
+        _gmailConnected) {
+      return const SizedBox.shrink();
     }
 
     return Column(
@@ -662,31 +872,10 @@ class _TodaysCalendarEventsState extends State<TodaysCalendarEvents> {
                 ),
               ),
             )
+          else if (_needsGoogleConnect)
+            _buildConnectGooglePanel(context)
           else if (_hasError)
-            Center(
-              child: Padding(
-                padding: EdgeInsets.all(20),
-                child: Column(
-                  children: [
-                    Icon(
-                      CupertinoIcons.exclamationmark_triangle,
-                      color: CupertinoColors.systemRed,
-                      size: 32,
-                    ),
-                    SizedBox(height: 8),
-                    Text(
-                      'Failed to load events',
-                      style: TextStyle(
-                        fontFamily: '.SF Pro Text',
-                        fontSize: 15,
-                        color: CupertinoColors.secondaryLabel,
-                        letterSpacing: -0.2,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            )
+            _buildErrorPanel(context)
           else if (_todayEvents.isEmpty)
             const SizedBox.shrink() // Hide completely if no events
           else ...[ 

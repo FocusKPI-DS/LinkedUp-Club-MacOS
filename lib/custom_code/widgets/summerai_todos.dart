@@ -4,7 +4,9 @@ import 'package:flutter/foundation.dart';
 import 'package:intl/intl.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '/backend/backend.dart';
+import '/backend/firestore/firestore_desktop_adapter.dart';
 import '/auth/firebase_auth/auth_util.dart';
+import '/pages/desktop_chat/rest_poll_builder.dart';
 import 'dart:async';
 import 'dart:ui';
 
@@ -29,6 +31,7 @@ class _SummerAITodosState extends State<SummerAITodos> {
   // Cache of user's group chat IDs for filtering
   Set<String>? _userGroupChatIds;
   StreamSubscription? _chatsSubscription;
+  Timer? _groupsPollTimer;
 
   // Filter state
   String? _selectedPriority; // null, 'high', 'moderate', 'low'
@@ -45,13 +48,42 @@ class _SummerAITodosState extends State<SummerAITodos> {
   @override
   void dispose() {
     _chatsSubscription?.cancel();
+    _groupsPollTimer?.cancel();
     super.dispose();
+  }
+
+  Future<void> _refreshUserGroups() async {
+    if (currentUserReference == null) return;
+    try {
+      final chats = await fsQueryMemberChats(currentUserReference!);
+      final groupIds = chats
+          .where((c) => c.isGroup)
+          .map((c) => c.reference.id)
+          .toSet();
+      if (mounted) {
+        setState(() {
+          _userGroupChatIds = groupIds;
+        });
+        print(
+            '🔍 Loaded ${groupIds.length} groups for user. Group IDs: ${groupIds.toList()}');
+      }
+    } catch (error) {
+      print('❌ Error loading user groups: $error');
+    }
   }
 
   void _loadUserGroups() {
     if (currentUserReference == null) return;
 
-    // Load user's group chats to verify membership
+    if (useWindowsFirestoreRest) {
+      _refreshUserGroups();
+      _groupsPollTimer = Timer.periodic(
+        const Duration(seconds: 30),
+        (_) => _refreshUserGroups(),
+      );
+      return;
+    }
+
     _chatsSubscription = queryChatsRecord(
       queryBuilder: (chatsRecord) => chatsRecord
           .where('members', arrayContains: currentUserReference)
@@ -79,12 +111,7 @@ class _SummerAITodosState extends State<SummerAITodos> {
 
     // Query ALL tasks (we'll filter client-side to ensure user is involved)
     // This is necessary because involved_people might have name variations
-    return StreamBuilder<List<ActionItemsRecord>>(
-      stream: queryActionItemsRecord(
-        queryBuilder: (actionItemsRecord) => actionItemsRecord
-            .orderBy('created_time', descending: true)
-            .limit(200), // Get more tasks to filter from
-      ),
+    return _buildActionItemsStream(
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting &&
             _cachedTodos == null) {
@@ -594,8 +621,7 @@ class _SummerAITodosState extends State<SummerAITodos> {
       return;
     }
 
-    final currentUser =
-        await UsersRecord.getDocumentOnce(currentUserReference!);
+    final currentUser = await fsGetUserOnce(currentUserReference!);
 
     // Note: Group assignment removed for iOS-native dialog simplicity
 
@@ -875,6 +901,29 @@ class _SummerAITodosState extends State<SummerAITodos> {
     );
   }
 
+  Widget _buildActionItemsStream({
+    required Widget Function(
+      BuildContext context,
+      AsyncSnapshot<List<ActionItemsRecord>> snapshot,
+    ) builder,
+  }) {
+    if (useWindowsFirestoreRest) {
+      return RestPollBuilder<List<ActionItemsRecord>>(
+        interval: const Duration(seconds: 20),
+        fetch: () => fsQueryRecentActionItems(limit: 200),
+        builder: builder,
+      );
+    }
+    return StreamBuilder<List<ActionItemsRecord>>(
+      stream: queryActionItemsRecord(
+        queryBuilder: (actionItemsRecord) => actionItemsRecord
+            .orderBy('created_time', descending: true)
+            .limit(200),
+      ),
+      builder: builder,
+    );
+  }
+
   Widget _buildTodoList(List<ActionItemsRecord> todos) {
     // On mobile, the list should expand to fill available space
     // On desktop, use calculated height based on screen size
@@ -940,10 +989,7 @@ class _SummerAITodosState extends State<SummerAITodos> {
         }
 
         // Update task in Firebase
-        await todo.reference.update({
-          'status': 'completed',
-          'completed_time': FieldValue.serverTimestamp(),
-        });
+        await fsMarkActionItemDone(todo.reference);
 
         // Wait a bit before hiding the task
         await Future.delayed(const Duration(milliseconds: 200));
@@ -957,10 +1003,8 @@ class _SummerAITodosState extends State<SummerAITodos> {
         }
       } else {
         // Uncheck - change status back to pending
-        await todo.reference.update({
-          'status': 'pending',
-          'completed_time': null,
-        });
+        await fsPatchDocument(todo.reference, {'status': 'pending'});
+        await fsDeleteDocumentField(todo.reference, 'completed_time');
 
         if (mounted) {
           setState(() {
@@ -1150,81 +1194,64 @@ class _SummerAITodosState extends State<SummerAITodos> {
   }
 
   Widget _buildGroupChip(ActionItemsRecord todo) {
-    return Builder(
-      builder: (context) {
-        if (todo.groupName.isNotEmpty || todo.chatRef == null) {
-          if (todo.groupName.isEmpty) {
-            return const SizedBox.shrink();
-          }
-          return Container(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-            decoration: BoxDecoration(
-              color: const Color(0xFFF1F5F9),
-              borderRadius: BorderRadius.circular(6),
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(
-                  CupertinoIcons.group_solid,
-                  size: 11,
-                  color: const Color(0xFF64748B),
-                ),
-                const SizedBox(width: 4),
-                Text(
-                  todo.groupName,
-                  style: const TextStyle(
-                    fontFamily: '.SF Pro Text',
-                    fontSize: 12,
-                    fontWeight: FontWeight.w500,
-                    color: Color(0xFF64748B),
-                    letterSpacing: -0.1,
-                  ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ],
-            ),
-          );
-        }
-        return StreamBuilder<ChatsRecord>(
-          stream: ChatsRecord.getDocument(todo.chatRef!),
-          builder: (context, chatSnap) {
-            final name = chatSnap.data?.title ?? '';
-            if (name.isEmpty) return const SizedBox.shrink();
-            return Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-              decoration: BoxDecoration(
-                color: const Color(0xFFF1F5F9),
-                borderRadius: BorderRadius.circular(6),
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(
-                    CupertinoIcons.group_solid,
-                    size: 11,
-                    color: const Color(0xFF64748B),
-                  ),
-                  const SizedBox(width: 4),
-                  Text(
-                    name,
-                    style: const TextStyle(
-                      fontFamily: '.SF Pro Text',
-                      fontSize: 12,
-                      fontWeight: FontWeight.w500,
-                      color: Color(0xFF64748B),
-                      letterSpacing: -0.1,
-                    ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ],
-              ),
-            );
-          },
-        );
+    if (todo.groupName.isNotEmpty || todo.chatRef == null) {
+      if (todo.groupName.isEmpty) {
+        return const SizedBox.shrink();
+      }
+      return _buildGroupChipContent(todo.groupName);
+    }
+
+    if (useWindowsFirestoreRest) {
+      return FutureBuilder<ChatsRecord>(
+        future: fsGetChatOnce(todo.chatRef!),
+        builder: (context, chatSnap) {
+          final name = chatSnap.data?.title ?? '';
+          if (name.isEmpty) return const SizedBox.shrink();
+          return _buildGroupChipContent(name);
+        },
+      );
+    }
+
+    return StreamBuilder<ChatsRecord>(
+      stream: ChatsRecord.getDocument(todo.chatRef!),
+      builder: (context, chatSnap) {
+        final name = chatSnap.data?.title ?? '';
+        if (name.isEmpty) return const SizedBox.shrink();
+        return _buildGroupChipContent(name);
       },
+    );
+  }
+
+  Widget _buildGroupChipContent(String name) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF1F5F9),
+        borderRadius: BorderRadius.circular(6),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            CupertinoIcons.group_solid,
+            size: 11,
+            color: const Color(0xFF64748B),
+          ),
+          const SizedBox(width: 4),
+          Text(
+            name,
+            style: const TextStyle(
+              fontFamily: '.SF Pro Text',
+              fontSize: 12,
+              fontWeight: FontWeight.w500,
+              color: Color(0xFF64748B),
+              letterSpacing: -0.1,
+            ),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ],
+      ),
     );
   }
 

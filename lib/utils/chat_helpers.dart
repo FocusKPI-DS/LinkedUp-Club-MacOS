@@ -1,5 +1,6 @@
 import '/auth/firebase_auth/auth_util.dart';
 import '/backend/backend.dart';
+import '/backend/firestore/firestore_desktop_adapter.dart';
 import '/flutter_flow/flutter_flow_util.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
@@ -68,7 +69,7 @@ class ChatHelpers {
       }
 
       // 2. No existing chat found — create one
-      final newChatRef = await ChatsRecord.collection.add({
+      final newChatRef = await fsCreateChat({
         ...createChatsRecordData(
           isGroup: false,
           title: '',
@@ -81,7 +82,7 @@ class ChatHelpers {
         'last_message_seen': [currentRef],
       });
 
-      return await ChatsRecord.getDocumentOnce(newChatRef);
+      return await fsGetChatOnce(newChatRef);
     } finally {
       _inProgress.remove(targetId);
     }
@@ -95,11 +96,7 @@ class ChatHelpers {
     DocumentReference currentRef,
     DocumentReference targetRef,
   ) async {
-    final allDirectChats = await queryChatsRecordOnce(
-      queryBuilder: (chatsRecord) => chatsRecord
-          .where('members', arrayContains: currentRef)
-          .where('is_group', isEqualTo: false),
-    );
+    final allDirectChats = await fsQueryMemberDmChats(memberRef: currentRef);
 
     // Client-side filter: target user must be a member, exactly 2 members
     final matches = allDirectChats.where((chat) {

@@ -8,6 +8,7 @@ import '../base_auth_user_provider.dart';
 import '../../flutter_flow/flutter_flow_util.dart';
 
 import '/backend/backend.dart';
+import '/backend/firestore/windows_firestore_rest.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:stream_transform/stream_transform.dart';
 import 'firebase_auth_manager.dart';
@@ -47,14 +48,31 @@ DocumentReference? get currentUserReference =>
     loggedIn ? UsersRecord.collection.doc(currentUser!.uid) : null;
 
 UsersRecord? currentUserDocument;
+
+Stream<UsersRecord?> _pollUsersRecord(String uid) async* {
+  final ref = UsersRecord.collection.doc(uid);
+  while (true) {
+    try {
+      yield await WindowsFirestoreRest.getUsersRecord(ref);
+    } catch (_) {
+      yield currentUserDocument;
+    }
+    await Future.delayed(const Duration(seconds: 90));
+  }
+}
+
 final authenticatedUserStream = FirebaseAuth.instance
     .authStateChanges()
     .map<String>((user) => user?.uid ?? '')
     .switchMap(
-      (uid) => uid.isEmpty
-          ? Stream.value(null)
-          : UsersRecord.getDocument(UsersRecord.collection.doc(uid))
-              .handleError((_) {}),
+      (uid) {
+        if (uid.isEmpty) return Stream.value(null);
+        if (useWindowsFirestoreRest) {
+          return _pollUsersRecord(uid).handleError((_) {});
+        }
+        return UsersRecord.getDocument(UsersRecord.collection.doc(uid))
+            .handleError((_) {});
+      },
     )
     .map((user) {
   currentUserDocument = user;

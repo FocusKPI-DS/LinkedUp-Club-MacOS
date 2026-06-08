@@ -8,6 +8,8 @@ import '/flutter_flow/flutter_flow_util.dart';
 import '/custom_code/widgets/summerai_todos.dart';
 import '/custom_code/widgets/todays_calendar_events.dart';
 import '/custom_code/widgets/task_stats.dart';
+import '/pages/desktop_chat/desktop_safe_user_builder.dart';
+import '/backend/firestore/firestore_desktop_adapter.dart';
 // import '/custom_code/widgets/productivity_trend_chart.dart';
 import 'dart:async';
 import 'dart:io' show Platform;
@@ -34,6 +36,9 @@ import 'package:adaptive_platform_ui/adaptive_platform_ui.dart';
 import 'package:liquid_glass_renderer/liquid_glass_renderer.dart';
 import 'package:share_plus/share_plus.dart';
 
+/// Staged load phases for Windows (avoids concurrent Firestore + shader crash).
+enum _WindowsHomeLoadPhase { shell, stats, calendar, full }
+
 /// Beautiful Home Page with Hero Section, Quick Actions, and Activity Feed
 class HomeWidget extends StatefulWidget {
   const HomeWidget({
@@ -54,10 +59,29 @@ class _HomeWidgetState extends State<HomeWidget> with TickerProviderStateMixin {
 
   final animationsMap = <String, AnimationInfo>{};
 
+  _WindowsHomeLoadPhase _windowsHomePhase = _WindowsHomeLoadPhase.shell;
+
   @override
   void initState() {
     super.initState();
     _model = createModel(context, () => HomeModel());
+
+    if (!kIsWeb && Platform.isWindows) {
+      _windowsHomePhase = _WindowsHomeLoadPhase.shell;
+      SchedulerBinding.instance.addPostFrameCallback((_) async {
+        for (final phase in [
+          _WindowsHomeLoadPhase.stats,
+          _WindowsHomeLoadPhase.calendar,
+          _WindowsHomeLoadPhase.full,
+        ]) {
+          await Future.delayed(const Duration(milliseconds: 600));
+          if (!mounted) return;
+          setState(() => _windowsHomePhase = phase);
+        }
+      });
+    } else {
+      _windowsHomePhase = _WindowsHomeLoadPhase.full;
+    }
 
     // On page load action.
     SchedulerBinding.instance.addPostFrameCallback((_) async {
@@ -73,7 +97,7 @@ class _HomeWidgetState extends State<HomeWidget> with TickerProviderStateMixin {
           );
         }(),
       );
-      if (loggedIn) {
+      if (loggedIn && !kIsWeb && !Platform.isWindows && !Platform.isLinux) {
         unawaited(
           () async {
             _model.isSuccess = await actions.ensureFcmToken(
@@ -82,11 +106,13 @@ class _HomeWidgetState extends State<HomeWidget> with TickerProviderStateMixin {
           }(),
         );
       }
-      unawaited(
-        () async {
-          await actions.updateAppBadge();
-        }(),
-      );
+      if (!kIsWeb && !Platform.isWindows && !Platform.isLinux) {
+        unawaited(
+          () async {
+            await actions.updateAppBadge();
+          }(),
+        );
+      }
       await action_blocks.homeCheck(context);
       if (!(await getPermissionStatus(locationPermission))) {
         await requestPermission(locationPermission);
@@ -158,6 +184,52 @@ class _HomeWidgetState extends State<HomeWidget> with TickerProviderStateMixin {
   void dispose() {
     _model.dispose();
     super.dispose();
+  }
+
+  bool get _isWindowsDesktop => !kIsWeb && Platform.isWindows;
+
+  /// Header actions: liquid_glass shaders crash on Windows desktop.
+  Widget _buildHeaderActionButton({
+    required bool isMobile,
+    required VoidCallback onPressed,
+    required IconData icon,
+  }) {
+    if (_isWindowsDesktop) {
+      return Material(
+        color: Colors.white,
+        shape: const CircleBorder(),
+        elevation: 1,
+        shadowColor: const Color(0xFF0F172A).withOpacity(0.08),
+        child: InkWell(
+          customBorder: const CircleBorder(),
+          onTap: onPressed,
+          child: Padding(
+            padding: EdgeInsets.all(isMobile ? 9 : 10),
+            child: Icon(
+              icon,
+              size: isMobile ? 16 : 17,
+              color: const Color(0xFF007AFF),
+            ),
+          ),
+        ),
+      );
+    }
+
+    return LiquidStretch(
+      stretch: 0.5,
+      interactionScale: 1.05,
+      child: GlassGlow(
+        glowColor: Colors.white24,
+        glowRadius: 1.0,
+        child: AdaptiveFloatingActionButton(
+          mini: true,
+          backgroundColor: Colors.white,
+          foregroundColor: const Color(0xFF007AFF),
+          onPressed: onPressed,
+          child: Icon(icon, size: isMobile ? 16 : 17),
+        ),
+      ),
+    );
   }
 
   // Helper method to detect if we're on mobile (iOS or mobile web)
@@ -260,44 +332,55 @@ class _HomeWidgetState extends State<HomeWidget> with TickerProviderStateMixin {
 
   // Desktop two-column layout (original)
   Widget _buildDesktopLayout(BuildContext context) {
+    if (_isWindowsDesktop && _windowsHomePhase == _WindowsHomeLoadPhase.shell) {
+      return const SizedBox(
+        height: 120,
+        child: Center(
+          child: SizedBox(
+            width: 24,
+            height: 24,
+            child: CircularProgressIndicator(strokeWidth: 2),
+          ),
+        ),
+      );
+    }
+
+    final showCalendar = !_isWindowsDesktop ||
+        _windowsHomePhase.index >= _WindowsHomeLoadPhase.calendar.index;
+    final showSummerAi = !_isWindowsDesktop ||
+        _windowsHomePhase.index >= _WindowsHomeLoadPhase.full.index;
+    final showStats = !_isWindowsDesktop ||
+        _windowsHomePhase.index >= _WindowsHomeLoadPhase.stats.index;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        // Two-column section
         IntrinsicHeight(
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              // Left Column
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    // Today's Schedule Card
-                    _buildTodaysCalendarSection(context),
-
-                    const SizedBox(height: 28),
-
-                    // Task Stats Section
-                    const TaskStats(),
+                    if (showCalendar) ...[
+                      _buildTodaysCalendarSection(context),
+                      const SizedBox(height: 28),
+                    ],
+                    if (showStats) const TaskStats(),
                   ],
                 ),
               ),
-
               const SizedBox(width: 28),
-
-              // Right Column - matches left column height
               Expanded(
-                child: _buildSummerAITasksSection(context),
+                child: showSummerAi
+                    ? _buildSummerAITasksSection(context)
+                    : const SizedBox(height: 200),
               ),
             ],
           ),
         ),
-
         const SizedBox(height: 28),
-
-        // Productivity Trend Chart - Full Width
-        // const ProductivityTrendChart(),
       ],
     );
   }
@@ -309,14 +392,14 @@ class _HomeWidgetState extends State<HomeWidget> with TickerProviderStateMixin {
         // Add top spacing
         SizedBox(height: isMobile ? 20.0 : 32.0),
         if (currentUserReference != null)
-          StreamBuilder<UsersRecord>(
-            stream: UsersRecord.getDocument(currentUserReference!),
-            builder: (context, snapshot) {
-              if (!snapshot.hasData) {
+          DesktopSafeUserBuilder(
+            userRef: currentUserReference!,
+            fetchOnce: fsGetUserOnce,
+            builder: (context, user) {
+              if (user == null) {
                 return SizedBox(height: isMobile ? 10 : 20);
               }
 
-              final user = snapshot.data!;
               final userName = user.displayName.isNotEmpty
                   ? user.displayName
                   : user.email.split('@')[0];
@@ -355,42 +438,16 @@ class _HomeWidgetState extends State<HomeWidget> with TickerProviderStateMixin {
                       Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          LiquidStretch(
-                            stretch: 0.5,
-                            interactionScale: 1.05,
-                            child: GlassGlow(
-                              glowColor: Colors.white24,
-                              glowRadius: 1.0,
-                              child: AdaptiveFloatingActionButton(
-                                mini: true,
-                                backgroundColor: Colors.white,
-                                foregroundColor: Color(0xFF007AFF),
-                                onPressed: () => _showEmailInviteDialog(),
-                                child: Icon(
-                                  CupertinoIcons.mail_solid,
-                                  size: isMobile ? 16 : 17,
-                                ),
-                              ),
-                            ),
+                          _buildHeaderActionButton(
+                            isMobile: isMobile,
+                            onPressed: () => _showEmailInviteDialog(),
+                            icon: CupertinoIcons.mail_solid,
                           ),
                           SizedBox(width: isMobile ? 8.0 : 12.0),
-                          LiquidStretch(
-                            stretch: 0.5,
-                            interactionScale: 1.05,
-                            child: GlassGlow(
-                              glowColor: Colors.white24,
-                              glowRadius: 1.0,
-                              child: AdaptiveFloatingActionButton(
-                                mini: true,
-                                backgroundColor: Colors.white,
-                                foregroundColor: Color(0xFF007AFF),
-                                onPressed: () => _showInviteDialog(context),
-                                child: Icon(
-                                  CupertinoIcons.person_add_solid,
-                                  size: isMobile ? 16 : 17,
-                                ),
-                              ),
-                            ),
+                          _buildHeaderActionButton(
+                            isMobile: isMobile,
+                            onPressed: () => _showInviteDialog(context),
+                            icon: CupertinoIcons.person_add_solid,
                           ),
                         ],
                       ),

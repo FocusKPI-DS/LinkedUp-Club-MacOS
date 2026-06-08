@@ -222,9 +222,13 @@ dependencies:
   flutter_highlighter: ^0.1.1
   markdown: ^7.3.0
   speech_to_text: ^7.3.0
+  google_sign_in_all_platforms: ^1.2.1
 
 
 dependency_overrides:
+  page_transition: ^2.2.2
+  font_awesome_flutter: ^11.0.0
+  google_fonts: ^8.1.0
   http: 1.4.0
   uuid: ^4.0.0
   device_info_plus: 11.5.0

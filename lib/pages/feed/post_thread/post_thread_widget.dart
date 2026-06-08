@@ -1,5 +1,6 @@
 import '/auth/firebase_auth/auth_util.dart';
 import '/backend/backend.dart';
+import '/backend/firestore/firestore_desktop_adapter.dart';
 import '/flutter_flow/flutter_flow_animations.dart';
 import '/flutter_flow/flutter_flow_expanded_image_view.dart';
 import '/flutter_flow/flutter_flow_icon_button.dart';
@@ -212,13 +213,7 @@ class _PostThreadWidgetState extends State<PostThreadWidget>
                     hoverColor: Colors.transparent,
                     highlightColor: Colors.transparent,
                     onTap: () async {
-                      _model.user = await queryUsersRecordOnce(
-                        queryBuilder: (usersRecord) => usersRecord.where(
-                          'uid',
-                          isEqualTo: widget.userRef?.id,
-                        ),
-                        singleRecord: true,
-                      ).then((s) => s.firstOrNull);
+                      _model.user = await fsGetUserOnce(widget.userRef!);
 
                       context.pushNamed(
                         UserProfileDetailWidget.routeName,
@@ -385,15 +380,13 @@ class _PostThreadWidgetState extends State<PostThreadWidget>
                           }),
                         ]);
 
-                        await widget.postRef!.reference.update({
-                          ...mapToFirestore(
-                            {
-                              'like_count': FieldValue.increment(1),
-                              'liked_by':
-                                  FieldValue.arrayUnion([currentUserReference]),
-                            },
-                          ),
-                        });
+                        await fsIncrementDocumentField(
+                            widget.postRef!.reference, 'like_count', 1);
+                        await fsArrayUnion(
+                          widget.postRef!.reference,
+                          'liked_by',
+                          [currentUserReference],
+                        );
                       } else {
                         await Future.wait([
                           Future(() async {
@@ -533,17 +526,16 @@ class _PostThreadWidgetState extends State<PostThreadWidget>
                                                       .forward(from: 0.0));
                                         }
 
-                                        await widget.postRef!.reference
-                                            .update({
-                                          ...mapToFirestore(
-                                            {
-                                              'liked_by': FieldValue.arrayUnion(
-                                                  [currentUserReference]),
-                                              'like_count':
-                                                  FieldValue.increment(1),
-                                            },
-                                          ),
-                                        });
+                                        await fsArrayUnion(
+                                          widget.postRef!.reference,
+                                          'liked_by',
+                                          [currentUserReference],
+                                        );
+                                        await fsIncrementDocumentField(
+                                          widget.postRef!.reference,
+                                          'like_count',
+                                          1,
+                                        );
                                       },
                                     ),
                                   if (_model.islike == true)
@@ -561,18 +553,16 @@ class _PostThreadWidgetState extends State<PostThreadWidget>
                                         _model.likeNum = _model.likeNum! + -1;
                                         safeSetState(() {});
 
-                                        await widget.postRef!.reference
-                                            .update({
-                                          ...mapToFirestore(
-                                            {
-                                              'like_count':
-                                                  FieldValue.increment(-(1)),
-                                              'liked_by':
-                                                  FieldValue.arrayRemove(
-                                                      [currentUserReference]),
-                                            },
-                                          ),
-                                        });
+                                        await fsIncrementDocumentField(
+                                          widget.postRef!.reference,
+                                          'like_count',
+                                          -1,
+                                        );
+                                        await fsArrayRemove(
+                                          widget.postRef!.reference,
+                                          'liked_by',
+                                          [currentUserReference],
+                                        );
                                       },
                                     ).animateOnActionTrigger(
                                         animationsMap[
@@ -697,14 +687,11 @@ class _PostThreadWidgetState extends State<PostThreadWidget>
                                           .forward(from: 0.0));
                                 }
 
-                                await widget.postRef!.reference.update({
-                                  ...mapToFirestore(
-                                    {
-                                      'saved_by': FieldValue.arrayUnion(
-                                          [widget.userRef]),
-                                    },
-                                  ),
-                                });
+                                await fsArrayUnion(
+                                  widget.postRef!.reference,
+                                  'saved_by',
+                                  [widget.userRef],
+                                );
                               },
                             ),
                           if (_model.isSaved == true)
@@ -720,14 +707,11 @@ class _PostThreadWidgetState extends State<PostThreadWidget>
                                 _model.isSaved = false;
                                 _model.updatePage(() {});
 
-                                await widget.postRef!.reference.update({
-                                  ...mapToFirestore(
-                                    {
-                                      'saved_by': FieldValue.arrayRemove(
-                                          [widget.userRef]),
-                                    },
-                                  ),
-                                });
+                                await fsArrayRemove(
+                                  widget.postRef!.reference,
+                                  'saved_by',
+                                  [widget.userRef],
+                                );
                               },
                             ).animateOnActionTrigger(
                                 animationsMap[

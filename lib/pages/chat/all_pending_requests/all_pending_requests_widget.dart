@@ -1,5 +1,6 @@
 import '/auth/firebase_auth/auth_util.dart';
 import '/backend/backend.dart';
+import '/backend/firestore/firestore_desktop_adapter.dart';
 import '/component/empty_friend_list/empty_friend_list_widget.dart';
 import '/flutter_flow/flutter_flow_animations.dart';
 import '/flutter_flow/flutter_flow_util.dart';
@@ -14,6 +15,7 @@ import 'package:flutter/scheduler.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
+import '/pages/desktop_chat/desktop_safe_user_builder.dart';
 import 'all_pending_requests_model.dart';
 export 'all_pending_requests_model.dart';
 
@@ -44,7 +46,7 @@ class _AllPendingRequestsWidgetState extends State<AllPendingRequestsWidget>
 
     // On page load action.
     SchedulerBinding.instance.addPostFrameCallback((_) async {
-      _model.users = await queryUsersRecordOnce();
+      _model.users = await fsQueryUsers(limit: 200);
       _model.addToMember(currentUserReference!);
       safeSetState(() {});
       _model.usersDoc = _model.users!.toList().cast<UsersRecord>();
@@ -154,12 +156,11 @@ class _AllPendingRequestsWidgetState extends State<AllPendingRequestsWidget>
                                   (friendRequestIndex) {
                                 final friendRequestItem =
                                     friendRequest[friendRequestIndex];
-                                return StreamBuilder<UsersRecord>(
-                                  stream: UsersRecord.getDocument(
-                                      friendRequestItem),
-                                  builder: (context, snapshot) {
-                                    // Customize what your widget looks like when it's loading.
-                                    if (!snapshot.hasData) {
+                                return DesktopSafeUserPollBuilder(
+                                  userRef: friendRequestItem,
+                                  fetchOnce: fsGetUserOnce,
+                                  builder: (context, user) {
+                                    if (user == null) {
                                       return Center(
                                         child: SizedBox(
                                           width: 50.0,
@@ -175,7 +176,7 @@ class _AllPendingRequestsWidgetState extends State<AllPendingRequestsWidget>
                                       );
                                     }
 
-                                    final containerUsersRecord = snapshot.data!;
+                                    final containerUsersRecord = user;
 
                                     return Container(
                                       decoration: const BoxDecoration(),
@@ -267,39 +268,27 @@ class _AllPendingRequestsWidgetState extends State<AllPendingRequestsWidget>
                                                   children: [
                                                     FFButtonWidget(
                                                       onPressed: () async {
-                                                        await currentUserReference!
-                                                            .update({
-                                                          ...mapToFirestore(
-                                                            {
-                                                              'friends': FieldValue
-                                                                  .arrayUnion([
-                                                                friendRequestItem
-                                                              ]),
-                                                              'friend_requests':
-                                                                  FieldValue
-                                                                      .arrayRemove([
-                                                                friendRequestItem
-                                                              ]),
-                                                            },
-                                                          ),
-                                                        });
+                                                        await fsArrayUnion(
+                                                          currentUserReference!,
+                                                          'friends',
+                                                          [friendRequestItem],
+                                                        );
+                                                        await fsArrayRemove(
+                                                          currentUserReference!,
+                                                          'friend_requests',
+                                                          [friendRequestItem],
+                                                        );
 
-                                                        await friendRequestItem
-                                                            .update({
-                                                          ...mapToFirestore(
-                                                            {
-                                                              'sent_requests':
-                                                                  FieldValue
-                                                                      .arrayRemove([
-                                                                currentUserReference
-                                                              ]),
-                                                              'friends': FieldValue
-                                                                  .arrayUnion([
-                                                                currentUserReference
-                                                              ]),
-                                                            },
-                                                          ),
-                                                        });
+                                                        await fsArrayRemove(
+                                                          friendRequestItem,
+                                                          'sent_requests',
+                                                          [currentUserReference!],
+                                                        );
+                                                        await fsArrayUnion(
+                                                          friendRequestItem,
+                                                          'friends',
+                                                          [currentUserReference!],
+                                                        );
                                                         await Future.wait([
                                                           Future(() async {
                                                             await UserMemoRecord
@@ -386,18 +375,11 @@ class _AllPendingRequestsWidgetState extends State<AllPendingRequestsWidget>
                                                     ),
                                                     FFButtonWidget(
                                                       onPressed: () async {
-                                                        await currentUserReference!
-                                                            .update({
-                                                          ...mapToFirestore(
-                                                            {
-                                                              'friend_requests':
-                                                                  FieldValue
-                                                                      .arrayRemove([
-                                                                friendRequestItem
-                                                              ]),
-                                                            },
-                                                          ),
-                                                        });
+                                                        await fsArrayRemove(
+                                                          currentUserReference!,
+                                                          'friend_requests',
+                                                          [friendRequestItem],
+                                                        );
                                                       },
                                                       text: 'Decline',
                                                       options: FFButtonOptions(
