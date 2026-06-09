@@ -32,6 +32,12 @@ class WindowsUpdateInstaller {
     return p.join(programData, 'Lona', 'lona-update.msi');
   }
 
+  /// Post-exit installer script lives next to the staged MSI (not user Temp).
+  static String get updateScriptPath {
+    final programData = Platform.environment['ProgramData'] ?? r'C:\ProgramData';
+    return p.join(programData, 'Lona', 'lona_apply_update.ps1');
+  }
+
   static String _psQuote(String value) => value.replaceAll("'", "''");
 
   /// Download [msiUrl] to a temp file. Returns the local path.
@@ -87,8 +93,7 @@ class WindowsUpdateInstaller {
     required String msiPath,
     String exePath = defaultExePath,
   }) async {
-    final dir = await getTemporaryDirectory();
-    final scriptPath = p.join(dir.path, 'lona_apply_update.ps1');
+    final scriptPath = updateScriptPath;
     final logPath = _psQuote(logFilePath);
     final msiLogPath = _psQuote(msiLogFilePath);
     final normalizedMsi = _psQuote(p.normalize(msiPath));
@@ -161,14 +166,28 @@ if (-not (Test-Path '$stagedMsi')) {
 Log "Staged MSI size: \$((Get-Item '$stagedMsi').Length) bytes"
 
 Log 'Starting elevated msiexec'
-\$p = Start-Process -FilePath 'msiexec.exe' -Verb RunAs -PassThru -Wait -ArgumentList @(
-  '/i', '$stagedMsi',
-  '/quiet',
-  '/norestart',
-  '/L*v', \$msiLog,
-  "INSTALLDESKTOPSHORTCUT=\$desktopShortcutFlag"
-)
-\$code = \$p.ExitCode
+try {
+  \$p = Start-Process -FilePath 'msiexec.exe' -Verb RunAs -PassThru -Wait -ArgumentList @(
+    '/i', '$stagedMsi',
+    '/quiet',
+    '/norestart',
+    '/L*v', \$msiLog,
+    "INSTALLDESKTOPSHORTCUT=\$desktopShortcutFlag"
+  )
+  \$code = \$p.ExitCode
+} catch {
+  Log "Start-Process msiexec failed: \$(\$_.Exception.Message)"
+  try {
+    Add-Type -AssemblyName PresentationFramework
+    [System.Windows.MessageBox]::Show(
+      "Could not start the Lona installer (UAC denied or blocked).`n`nLog:`n\$log",
+      'Lona Update',
+      'OK',
+      'Warning'
+    ) | Out-Null
+  } catch {}
+  exit 1
+}
 Log "msiexec exit code: \$code"
 
 if (\$code -ne 0 -and \$code -ne 3010) {
@@ -235,11 +254,21 @@ Log '=== done ==='
 exit 0
 ''';
 
+    final scriptDir = p.dirname(scriptPath);
+    await Directory(scriptDir).create(recursive: true);
     await File(scriptPath).writeAsString(script);
 
+    // cmd /c start breaks out of Flutter's process tree so the script keeps
+    // running after this app calls exit(0). Direct detached powershell often
+    // dies with the parent on Windows.
     await Process.start(
-      'powershell.exe',
+      'cmd.exe',
       [
+        '/c',
+        'start',
+        '',
+        '/min',
+        'powershell.exe',
         '-NoProfile',
         '-ExecutionPolicy',
         'Bypass',
@@ -251,6 +280,7 @@ exit 0
       mode: ProcessStartMode.detached,
     );
 
+    await Future<void>.delayed(const Duration(milliseconds: 500));
     exit(0);
   }
 }
