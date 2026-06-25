@@ -52,6 +52,7 @@ import 'package:linkedup/backend/schema/structs/index.dart';
 import 'package:linkedup/custom_code/services/web_notification_service.dart';
 import 'package:linkedup/custom_code/services/app_update_service.dart';
 import 'package:linkedup/custom_code/widgets/app_update_dialog.dart';
+import 'package:linkedup/custom_code/widgets/windows_tray_host.dart';
 import 'package:linkedup/utils/debug_log.dart';
 import 'package:linkedup/utils/qurio_embedded.dart';
 import 'package:adaptive_platform_ui/adaptive_platform_ui.dart';
@@ -60,6 +61,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  await WindowsTrayHost.prepareWindow();
 
   FlutterError.onError = (details) {
     FlutterError.presentError(details);
@@ -790,7 +792,7 @@ class _MyAppState extends State<MyApp> {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp.router(
+    final app = MaterialApp.router(
       debugShowCheckedModeBanner: false,
       title: 'Lona',
       scrollBehavior: MyAppScrollBehavior(),
@@ -822,6 +824,10 @@ class _MyAppState extends State<MyApp> {
       themeMode: _themeMode,
       routerConfig: _router,
     );
+    if (WindowsTrayHost.isEnabled) {
+      return WindowsTrayHost(child: app);
+    }
+    return app;
   }
 }
 

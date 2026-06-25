@@ -17,10 +17,13 @@ list(APPEND FLUTTER_PLUGIN_LIST
   pdfx
   permission_handler_windows
   record_windows
+  screen_retriever_windows
   share_plus
   speech_to_text_windows
   super_native_extensions
+  tray_manager
   url_launcher_windows
+  window_manager
   zego_express_engine
 )
 
