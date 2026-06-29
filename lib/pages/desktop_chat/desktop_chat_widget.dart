@@ -52,6 +52,7 @@ import 'package:branchio_dynamic_linking_akp5u6/custom_code/actions/index.dart'
 import 'package:branchio_dynamic_linking_akp5u6/flutter_flow/custom_functions.dart'
     as branchio_dynamic_linking_akp5u6_functions;
 import '/custom_code/actions/index.dart' as actions;
+import '/utils/markdown_to_quill_delta.dart';
 
 class DesktopChatWidget extends StatefulWidget {
   const DesktopChatWidget({Key? key}) : super(key: key);
@@ -1500,17 +1501,6 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
       return ListView(
         padding: EdgeInsets.zero,
         children: [
-          // Matching chats section
-          if (chatResults.isNotEmpty) ...[
-            _buildSearchSectionHeader(
-              'Chats',
-              chatResults.length,
-              Icons.chat_bubble_outline,
-            ),
-            for (final chat in chatResults)
-              _buildSearchChatItem(chat),
-          ],
-
           // Message results section
           if (isSearching)
             Padding(
@@ -1552,7 +1542,7 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
           ],
 
           // No results at all
-          if (!isSearching && chatResults.isEmpty && messageResults.isEmpty)
+          if (!isSearching && messageResults.isEmpty)
             Padding(
               padding: EdgeInsets.symmetric(vertical: 40),
               child: Center(
@@ -1643,6 +1633,7 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
         onMute: _handleMuteNotifications,
         onMarkUnread: (chat) => chatController.markChatAsUnread(chat),
         onMoveToFolder: _showMoveToFolderMenu,
+        onToggleInactive: (chat) => chatController.toggleManualInactive(chat),
         getOrCreateUserFuture: _getOrCreateUserFuture,
       );
     });
@@ -2339,6 +2330,7 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
         onMute: _handleMuteNotifications,
         onMarkUnread: (chat) => chatController.markChatAsUnread(chat),
         onMoveToFolder: _showMoveToFolderMenu,
+        onToggleInactive: (chat) => chatController.toggleManualInactive(chat),
         getOrCreateUserFuture: _getOrCreateUserFuture,
       );
     });
@@ -4952,110 +4944,111 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
                     ),
                     itemBuilder: (context, index) {
                       final msg = pinnedMessages[index];
-                      final senderName = msg.senderName.isNotEmpty
-                          ? msg.senderName
-                          : 'Unknown';
-                      final content = msg.content.isNotEmpty
-                          ? msg.content
-                          : (msg.attachmentUrl.isNotEmpty
-                              ? '📎 Attachment'
-                              : (msg.image.isNotEmpty
-                                  ? '🖼️ Image'
-                                  : '💬 Message'));
-                      final timestamp = msg.createdAt;
-                      final timeStr = timestamp != null
-                          ? '${timestamp.month}/${timestamp.day}/${timestamp.year} ${timestamp.hour}:${timestamp.minute.toString().padLeft(2, '0')}'
-                          : '';
+                      // Resolve sender name: use senderName if available, otherwise look up from senderRef
+                      final hasSenderRef = msg.senderRef != null;
+                      final rawSenderName = msg.senderName;
 
-                      return InkWell(
-                        onTap: () {
-                          final messageId = msg.reference.id;
-                          // Close popup and scroll to the pinned message in the chat thread
-                          setState(() {
-                            _model.showPinnedMessagesPopup = false;
-                            _model.pinnedMessagesPopupChat = null;
-                          });
-                          WidgetsBinding.instance.addPostFrameCallback((_) {
-                            _chatThreadKey.currentState?.scrollToMessage(messageId);
-                          });
-                        },
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 16,
-                            vertical: 12,
-                          ),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Row(
-                                children: [
-                                  Icon(
-                                    Icons.push_pin,
-                                    size: 14,
-                                    color: Color(0xFF3B82F6),
-                                  ),
-                                  SizedBox(width: 6),
-                                  Text(
-                                    senderName,
-                                    style: TextStyle(
-                                      fontFamily: 'Inter',
-                                      fontSize: 13,
-                                      fontWeight: FontWeight.w600,
-                                      color: Color(0xFF111827),
-                                    ),
-                                  ),
-                                  Spacer(),
-                                  Text(
-                                    timeStr,
-                                    style: TextStyle(
-                                      fontFamily: 'Inter',
-                                      fontSize: 11,
-                                      color: Color(0xFF9CA3AF),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                              SizedBox(height: 6),
-                              Text(
-                                content.length > 200
-                                    ? '${content.substring(0, 200)}...'
-                                    : content,
-                                style: TextStyle(
-                                  fontFamily: 'Inter',
-                                  fontSize: 13.5,
-                                  color: Color(0xFF374151),
-                                  height: 1.4,
-                                ),
-                                maxLines: 4,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                              if (msg.image.isNotEmpty || msg.images.isNotEmpty)
-                                Padding(
-                                  padding: const EdgeInsets.only(top: 6),
-                                  child: Row(
-                                    children: [
-                                      Icon(Icons.image, size: 14, color: Color(0xFF9CA3AF)),
-                                      SizedBox(width: 4),
-                                      Text(
-                                        '${1 + msg.images.length} image(s)',
-                                        style: TextStyle(
-                                          fontFamily: 'Inter',
-                                          fontSize: 12,
-                                          color: Color(0xFF9CA3AF),
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                            ],
-                          ),
-                        ),
-                      );
+                      // If senderName is empty but we have a senderRef, resolve it
+                      if (rawSenderName.isEmpty && hasSenderRef) {
+                        return FutureBuilder<UsersRecord>(
+                          future: _getOrCreateUserFuture(msg.senderRef!),
+                          builder: (context, userSnapshot) {
+                            final resolvedName = userSnapshot.data?.displayName ?? 'Unknown';
+                            return _buildPinnedMessageTile(msg, resolvedName);
+                          },
+                        );
+                      }
+                      return _buildPinnedMessageTile(msg, rawSenderName.isNotEmpty ? rawSenderName : 'Unknown');
                     },
                   );
                 },
               ),
             ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildPinnedMessageTile(MessagesRecord msg, String senderName) {
+    final content = msg.content.isNotEmpty
+        ? msg.content
+        : (msg.attachmentUrl.isNotEmpty
+            ? '📎 Attachment'
+            : (msg.image.isNotEmpty
+                ? '🖼️ Image'
+                : '💬 Message'));
+    final timestamp = msg.createdAt;
+    final timeStr = timestamp != null
+        ? '${timestamp.month}/${timestamp.day}/${timestamp.year} ${timestamp.hour}:${timestamp.minute.toString().padLeft(2, '0')}'
+        : '';
+
+    return InkWell(
+      onTap: () {
+        final messageId = msg.reference.id;
+        setState(() {
+          _model.showPinnedMessagesPopup = false;
+          _model.pinnedMessagesPopupChat = null;
+        });
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          _chatThreadKey.currentState?.scrollToMessage(messageId);
+        });
+      },
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(Icons.push_pin, size: 14, color: Color(0xFF3B82F6)),
+                SizedBox(width: 6),
+                Text(
+                  senderName,
+                  style: TextStyle(
+                    fontFamily: 'Inter',
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: Color(0xFF111827),
+                  ),
+                ),
+                Spacer(),
+                Text(
+                  timeStr,
+                  style: TextStyle(
+                    fontFamily: 'Inter',
+                    fontSize: 11,
+                    color: Color(0xFF9CA3AF),
+                  ),
+                ),
+              ],
+            ),
+            SizedBox(height: 6),
+            Text(
+              content.length > 200 ? '${content.substring(0, 200)}...' : content,
+              style: TextStyle(
+                fontFamily: 'Inter',
+                fontSize: 13.5,
+                color: Color(0xFF374151),
+                height: 1.4,
+              ),
+              maxLines: 4,
+              overflow: TextOverflow.ellipsis,
+            ),
+            if (msg.image.isNotEmpty || msg.images.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.only(top: 6),
+                child: Row(
+                  children: [
+                    Icon(Icons.image, size: 14, color: Color(0xFF9CA3AF)),
+                    SizedBox(width: 4),
+                    Text(
+                      '${1 + msg.images.length} image(s)',
+                      style: TextStyle(fontFamily: 'Inter', fontSize: 12, color: Color(0xFF9CA3AF)),
+                    ),
+                  ],
+                ),
+              ),
           ],
         ),
       ),
@@ -5365,16 +5358,16 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
               // Pinned Announcement Banner (only for group chats)
               if (_model.selectedChat!.isGroup)
                 _buildAnnouncementBanner(_model.selectedChat!),
-              // Action Items Stats Section (only for group chats)
-              if (_model.selectedChat!.isGroup)
-                _buildActionItemsStats(_model.selectedChat!),
+              // Action Items Stats Section removed
               // Tasks panel or Chat thread component
               Expanded(
-                child: _model.showTasksPanel && _model.selectedChat!.isGroup
-                    ? Stack(
-                        children: [
-                          // Show chat thread behind
-                          ChatThreadComponentWidget(
+                child: Stack(
+                  children: [
+                    // Always show chat thread
+                    Column(
+                      children: [
+                        Expanded(
+                          child: ChatThreadComponentWidget(
                             key: _chatThreadKey,
                             chatReference: _model.selectedChat,
                             activeSelectionId: ValueNotifier(null),
@@ -5383,75 +5376,66 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
                             selectedMessages: _selectedMessages,
                             onMessageToggled: _toggleMessageSelection,
                           ),
-                          // Semi-transparent overlay background
-                          Positioned.fill(
-                            child: GestureDetector(
-                              onTap: () {
-                                setState(() {
-                                  _model.showTasksPanel = false;
-                                });
-                              },
-                              child: Container(
-                                color: Colors.black.withOpacity(0.3),
-                              ),
-                            ),
+                        ),
+                        if (_isSelectionMode)
+                          _buildSelectionBar(),
+                      ],
+                    ),
+                    // Tasks panel overlay (only for group chats when toggled)
+                    if (_model.showTasksPanel && _model.selectedChat!.isGroup) ...[
+                      // Semi-transparent overlay background
+                      Positioned.fill(
+                        child: GestureDetector(
+                          onTap: () {
+                            setState(() {
+                              _model.showTasksPanel = false;
+                            });
+                          },
+                          child: Container(
+                            color: Colors.black.withOpacity(0.3),
                           ),
-                          // Tasks panel on the right (30% width)
-                          Positioned(
-                            right: 0,
-                            top: 0,
-                            bottom: 0,
-                            child: Container(
-                              width: MediaQuery.of(context).size.width * 0.4,
-                              constraints: BoxConstraints(
-                                minWidth: 300,
-                                maxWidth: 500,
-                              ),
-                              decoration: BoxDecoration(
-                                color: FlutterFlowTheme.of(context)
-                                    .secondaryBackground,
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: Colors.black.withOpacity(0.2),
-                                    blurRadius: 10,
-                                    offset: Offset(-2, 0),
-                                  ),
-                                ],
-                              ),
-                              child: GroupActionTasksWidget(
-                                chatDoc: _model.selectedChat,
-                                onClose: () {
-                                  setState(() {
-                                    _model.showTasksPanel = false;
-                                  });
-                                },
-                              ),
-                            ).animate().slideX(
-                                  begin: 1.0,
-                                  end: 0.0,
-                                  duration: Duration(milliseconds: 300),
-                                  curve: Curves.easeOut,
-                                ),
-                          ),
-                        ],
-                      )
-                    : Column(
-                        children: [
-                          Expanded(
-                            child: ChatThreadComponentWidget(
-                              key: _chatThreadKey,
-                              chatReference: _model.selectedChat,
-                              activeSelectionId: ValueNotifier(null),
-                              onMessageAction: _handleDesktopMessageAction,
-                              isSelectionMode: _isSelectionMode,
-                              selectedMessages: _selectedMessages,
-                              onMessageToggled: _toggleMessageSelection,
-                            ),
-                          ),
-                          if (_isSelectionMode)
-                            _buildSelectionBar(),
-                        ],
+                        ),
                       ),
+                      // Tasks panel on the right
+                      Positioned(
+                        right: 0,
+                        top: 0,
+                        bottom: 0,
+                        child: Container(
+                          width: MediaQuery.of(context).size.width * 0.4,
+                          constraints: BoxConstraints(
+                            minWidth: 300,
+                            maxWidth: 500,
+                          ),
+                          decoration: BoxDecoration(
+                            color: FlutterFlowTheme.of(context)
+                                .secondaryBackground,
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withOpacity(0.2),
+                                blurRadius: 10,
+                                offset: Offset(-2, 0),
+                              ),
+                            ],
+                          ),
+                          child: GroupActionTasksWidget(
+                            chatDoc: _model.selectedChat,
+                            onClose: () {
+                              setState(() {
+                                _model.showTasksPanel = false;
+                              });
+                            },
+                          ),
+                        ).animate().slideX(
+                              begin: 1.0,
+                              end: 0.0,
+                              duration: Duration(milliseconds: 300),
+                              curve: Curves.easeOut,
+                            ),
+                      ),
+                    ],
+                  ],
+                ),
               ),
             ],
           )
@@ -5459,24 +5443,116 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Icon(
-                      Icons.chat_bubble_outline,
-                      color: Color(0xFF9CA3AF),
-                      size: 64,
+                    // Gradient circle backdrop with chat icon
+                    Container(
+                      width: 120,
+                      height: 120,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        gradient: LinearGradient(
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                          colors: [
+                            Color(0xFFE0E7FF).withOpacity(0.6),
+                            Color(0xFFEDE9FE).withOpacity(0.6),
+                            Color(0xFFF0F4FF).withOpacity(0.4),
+                          ],
+                        ),
+                      ),
+                      child: Stack(
+                        alignment: Alignment.center,
+                        children: [
+                          // Overlapping chat bubbles
+                          Icon(
+                            Icons.forum_rounded,
+                            color: Color(0xFF94A3B8),
+                            size: 48,
+                          ),
+                          // Sparkle accent
+                          Positioned(
+                            top: 24,
+                            right: 24,
+                            child: Icon(
+                              Icons.auto_awesome,
+                              color: Color(0xFFA78BFA),
+                              size: 18,
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
-                    SizedBox(height: 16),
+                    SizedBox(height: 24),
+                    // Title
                     Text(
-                      'Select a chat to start messaging',
+                      'Start a conversation',
                       style: TextStyle(
                         fontFamily: 'Inter',
-                        color: Color(0xFF6B7280),
-                        fontSize: 18,
-                        fontWeight: FontWeight.w500,
+                        color: Color(0xFF374151),
+                        fontSize: 20,
+                        fontWeight: FontWeight.w600,
+                        letterSpacing: -0.3,
                       ),
+                    ),
+                    SizedBox(height: 8),
+                    // Subtitle
+                    Text(
+                      'Choose a chat from the sidebar to begin messaging',
+                      style: TextStyle(
+                        fontFamily: 'Inter',
+                        color: Color(0xFF9CA3AF),
+                        fontSize: 14,
+                        fontWeight: FontWeight.w400,
+                      ),
+                    ),
+                    SizedBox(height: 24),
+                    // Keyboard shortcut tips
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        _buildShortcutPill('⌘N', 'New Message'),
+                        SizedBox(width: 8),
+                        _buildShortcutPill('⌘K', 'Search'),
+                      ],
                     ),
                   ],
                 ),
               );
+  }
+
+  Widget _buildShortcutPill(String shortcut, String label) {
+    return Container(
+      padding: EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      decoration: BoxDecoration(
+        color: Color(0xFFF1F5F9),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: Color(0xFFE2E8F0), width: 0.5),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            shortcut,
+            style: TextStyle(
+              fontFamily: 'Inter',
+              fontSize: 11,
+              fontWeight: FontWeight.w600,
+              color: Color(0xFF94A3B8),
+              letterSpacing: 0.3,
+            ),
+          ),
+          SizedBox(width: 6),
+          Text(
+            label,
+            style: TextStyle(
+              fontFamily: 'Inter',
+              fontSize: 12,
+              fontWeight: FontWeight.w400,
+              color: Color(0xFF94A3B8),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   Widget _buildRightSidePanel(Widget content, VoidCallback onClose,
@@ -7240,9 +7316,16 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
 
   void _navigateToMedia(ChatsRecord chat) {
     if (!chat.isGroup) return;
-    Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (context) => GroupMediaLinksDocsWidget(chatDoc: chat),
+    showDialog(
+      context: context,
+      builder: (ctx) => Dialog(
+        backgroundColor: Colors.white,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+        insetPadding: const EdgeInsets.symmetric(horizontal: 80, vertical: 40),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 700, maxHeight: 600),
+          child: _MediaPopupContent(chatDoc: chat),
+        ),
       ),
     );
   }
@@ -7891,26 +7974,76 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
 
   Future<void> _executeForward(ChatsRecord targetChat, MessagesRecord message) async {
     try {
-      final forwardData = createMessagesRecordData(
-        senderRef: currentUserReference,
-        content: message.content,
-        createdAt: getCurrentTimestamp,
-        messageType: message.messageType,
-        image: message.image,
-        video: message.video,
-        audio: message.audio,
-        attachmentUrl: message.attachmentUrl,
-        senderName: currentUserDisplayName,
-        senderPhoto: currentUserPhoto,
-      );
+      // Build forward data as a raw map to include all fields
+      // (createMessagesRecordData doesn't support images list, file_name, etc.)
+      final Map<String, dynamic> forwardData = {
+        'sender_ref': currentUserReference,
+        'content': message.content,
+        'created_at': getCurrentTimestamp,
+        'message_type': message.messageType?.serialize(),
+        'sender_name': currentUserDisplayName,
+        'sender_photo': currentUserPhoto,
+        'is_pinned': false,
+        'is_system_message': false,
+      };
+
+      // Copy media fields if present
+      if (message.image.isNotEmpty) {
+        forwardData['image'] = message.image;
+      }
+      if (message.images.isNotEmpty) {
+        forwardData['images'] = message.images;
+      }
+      if (message.video.isNotEmpty) {
+        forwardData['video'] = message.video;
+      }
+      if (message.audio.isNotEmpty) {
+        forwardData['audio'] = message.audio;
+      }
+      if (message.audioPath.isNotEmpty) {
+        forwardData['audio_path'] = message.audioPath;
+      }
+      if (message.attachmentUrl.isNotEmpty) {
+        forwardData['attachment_url'] = message.attachmentUrl;
+      }
+      // Copy file_name if present (used by file message rendering)
+      final fileName = message.snapshotData['file_name'];
+      if (fileName is String && fileName.isNotEmpty) {
+        forwardData['file_name'] = fileName;
+      }
+      // Copy message_format if present (e.g. 'markdown')
+      final messageFormat = message.snapshotData['message_format'];
+      if (messageFormat is String && messageFormat.isNotEmpty) {
+        forwardData['message_format'] = messageFormat;
+      }
 
       await MessagesRecord.createDoc(targetChat.reference)
           .set(forwardData);
 
-      // Update last_message on target chat
-      final previewText = message.content.length > 100
-          ? message.content.substring(0, 100)
-          : message.content;
+      // Build a meaningful last_message preview
+      String previewText = message.content;
+      if (previewText.isEmpty) {
+        switch (message.messageType) {
+          case MessageType.video:
+            previewText = '🎬 Video';
+            break;
+          case MessageType.image:
+            previewText = '📷 Photo';
+            break;
+          case MessageType.voice:
+            previewText = '🎤 Voice message';
+            break;
+          case MessageType.file:
+            previewText = '📎 File';
+            break;
+          default:
+            previewText = 'Message';
+            break;
+        }
+      } else if (previewText.length > 100) {
+        previewText = previewText.substring(0, 100);
+      }
+
       await targetChat.reference.update({
         'last_message': previewText,
         'last_message_at': getCurrentTimestamp,
@@ -8100,6 +8233,7 @@ class _ChatListItem extends StatefulWidget {
   final Function(ChatsRecord) onMute;
   final Function(ChatsRecord) onMarkUnread;
   final Function(Offset, ChatsRecord)? onMoveToFolder;
+  final Function(ChatsRecord)? onToggleInactive;
   final Future<UsersRecord> Function(DocumentReference) getOrCreateUserFuture;
 
   const _ChatListItem({
@@ -8114,6 +8248,7 @@ class _ChatListItem extends StatefulWidget {
     required this.onMute,
     required this.onMarkUnread,
     this.onMoveToFolder,
+    this.onToggleInactive,
     required this.getOrCreateUserFuture,
   }) : super(key: key);
 
@@ -8230,6 +8365,33 @@ class _ChatListItemState extends State<_ChatListItem>
               ],
             ),
           ),
+        if (widget.onToggleInactive != null)
+          PopupMenuItem<String>(
+            value: 'toggle_inactive',
+            child: Row(
+              children: [
+                Icon(
+                  widget.chatController.isManuallyInactive(widget.chat)
+                      ? Icons.unarchive_outlined
+                      : Icons.archive_outlined,
+                  color: Color(0xFF374151),
+                  size: 18,
+                ),
+                SizedBox(width: 12),
+                Text(
+                  widget.chatController.isManuallyInactive(widget.chat)
+                      ? 'Move to Active'
+                      : 'Move to Inactive',
+                  style: TextStyle(
+                    fontFamily: 'Inter',
+                    color: Color(0xFF111827),
+                    fontSize: 14,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ],
+            ),
+          ),
         PopupMenuItem<String>(
           value: 'delete',
           child: Row(
@@ -8268,6 +8430,8 @@ class _ChatListItemState extends State<_ChatListItem>
         }
       } else if (value == 'move_to_folder') {
         widget.onMoveToFolder?.call(position, widget.chat);
+      } else if (value == 'toggle_inactive') {
+        widget.onToggleInactive?.call(widget.chat);
       }
     });
   }
@@ -8772,10 +8936,7 @@ class _ChatListItemState extends State<_ChatListItem>
                   ),
                 ),
                 TextSpan(
-                  text: chat.lastMessage.replaceAllMapped(
-                    RegExp(r'<@[^|]+\|([^>]+)>'),
-                    (m) => '@${m.group(1)}',
-                  ),
+                  text: stripMarkdownFormatting(chat.lastMessage),
                   style: TextStyle(
                     fontFamily: 'Inter',
                     color: isSelected ? Color(0xFF9CA3AF) : Color(0xFF6B7280),
@@ -8793,10 +8954,7 @@ class _ChatListItemState extends State<_ChatListItem>
 
     // For DMs, just show the message
     return Text(
-      chat.lastMessage.replaceAllMapped(
-        RegExp(r'<@[^|]+\|([^>]+)>'),
-        (m) => '@${m.group(1)}',
-      ),
+      stripMarkdownFormatting(chat.lastMessage),
       style: TextStyle(
         fontFamily: 'Inter',
         color: isSelected ? Color(0xFF9CA3AF) : Color(0xFF6B7280),
@@ -8868,6 +9026,341 @@ class _ForwardModeOption extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+}
+
+/// Compact media popup shown as a dialog overlay instead of full-screen page.
+class _MediaPopupContent extends StatefulWidget {
+  final ChatsRecord chatDoc;
+  const _MediaPopupContent({required this.chatDoc});
+
+  @override
+  State<_MediaPopupContent> createState() => _MediaPopupContentState();
+}
+
+class _MediaPopupContentState extends State<_MediaPopupContent>
+    with SingleTickerProviderStateMixin {
+  late TabController _tabController;
+  List<MessagesRecord>? _messages;
+
+  @override
+  void initState() {
+    super.initState();
+    _tabController = TabController(length: 3, vsync: this);
+    _loadMessages();
+  }
+
+  Future<void> _loadMessages() async {
+    final msgs = await queryMessagesRecordOnce(
+      parent: widget.chatDoc.reference,
+    );
+    if (mounted) setState(() => _messages = msgs);
+  }
+
+  @override
+  void dispose() {
+    _tabController.dispose();
+    super.dispose();
+  }
+
+  List<String> _getImages() {
+    if (_messages == null) return [];
+    final allImages = <String>[];
+    for (final msg in _messages!) {
+      if (msg.messageType == MessageType.image ||
+          msg.image != '' ||
+          msg.images.isNotEmpty) {
+        if (msg.image != '') allImages.add(msg.image);
+        if (msg.images.isNotEmpty) allImages.addAll(msg.images);
+      }
+    }
+    return allImages;
+  }
+
+  List<Map<String, dynamic>> _getLinks() {
+    if (_messages == null) return [];
+    final links = <Map<String, dynamic>>[];
+    final urlRegex = RegExp(r'https?://[^\s<>"{}|\\^`\[\]]+', caseSensitive: false);
+    for (final msg in _messages!) {
+      if (msg.content.isNotEmpty) {
+        for (final match in urlRegex.allMatches(msg.content)) {
+          final url = match.group(0)!;
+          if (!links.any((l) => l['url'] == url)) {
+            links.add({
+              'url': url,
+              'preview': msg.content.length > 80
+                  ? msg.content.substring(0, 80) + '...'
+                  : msg.content,
+            });
+          }
+        }
+      }
+    }
+    return links;
+  }
+
+  List<Map<String, dynamic>> _getDocs() {
+    if (_messages == null) return [];
+    final docs = <Map<String, dynamic>>[];
+    for (final msg in _messages!) {
+      if (msg.attachmentUrl.isNotEmpty) {
+        docs.add({
+          'url': msg.attachmentUrl,
+          'fileName': msg.content.isNotEmpty ? msg.content : 'file_${msg.reference.id}',
+          'sender': msg.senderName.isNotEmpty ? msg.senderName : null,
+        });
+      }
+    }
+    return docs;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        // Header
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+          decoration: BoxDecoration(
+            color: Color(0xFFFAFBFC),
+            borderRadius: BorderRadius.only(
+              topLeft: Radius.circular(14),
+              topRight: Radius.circular(14),
+            ),
+            border: Border(bottom: BorderSide(color: Color(0xFFE5E7EB), width: 1)),
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: 32, height: 32,
+                decoration: BoxDecoration(
+                  color: Color(0xFFEFF6FF),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Center(child: Icon(Icons.photo_library_rounded, size: 18, color: Color(0xFF3B82F6))),
+              ),
+              SizedBox(width: 10),
+              Text('Media, Links & Docs', style: TextStyle(fontFamily: 'Inter', fontSize: 16, fontWeight: FontWeight.w600, color: Color(0xFF111827))),
+              Spacer(),
+              InkWell(
+                onTap: () => Navigator.of(context).pop(),
+                borderRadius: BorderRadius.circular(8),
+                child: Container(
+                  padding: const EdgeInsets.all(5),
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: Color(0xFFE5E7EB)),
+                  ),
+                  child: Icon(Icons.close, size: 16, color: Color(0xFF6B7280)),
+                ),
+              ),
+            ],
+          ),
+        ),
+        // Tabs
+        Container(
+          decoration: BoxDecoration(
+            border: Border(bottom: BorderSide(color: Color(0xFFF3F4F6), width: 1)),
+          ),
+          child: TabBar(
+            controller: _tabController,
+            labelColor: Color(0xFF3B82F6),
+            unselectedLabelColor: Color(0xFF9CA3AF),
+            labelStyle: TextStyle(fontFamily: 'Inter', fontSize: 13, fontWeight: FontWeight.w600),
+            unselectedLabelStyle: TextStyle(fontFamily: 'Inter', fontSize: 13, fontWeight: FontWeight.w400),
+            indicatorColor: Color(0xFF3B82F6),
+            indicatorWeight: 2,
+            tabs: const [Tab(text: 'Media'), Tab(text: 'Docs'), Tab(text: 'Links')],
+          ),
+        ),
+        // Content
+        Expanded(
+          child: _messages == null
+              ? Center(child: SizedBox(width: 28, height: 28, child: CircularProgressIndicator(strokeWidth: 2.5, valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF3B82F6)))))
+              : TabBarView(
+                  controller: _tabController,
+                  children: [
+                    _buildMediaGrid(),
+                    _buildDocsList(),
+                    _buildLinksList(),
+                  ],
+                ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildMediaGrid() {
+    final images = _getImages();
+    if (images.isEmpty) {
+      return Center(
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          Icon(Icons.photo_library_outlined, size: 48, color: Color(0xFFD1D5DB)),
+          SizedBox(height: 12),
+          Text('No media shared yet', style: TextStyle(fontFamily: 'Inter', fontSize: 14, color: Color(0xFF9CA3AF))),
+        ]),
+      );
+    }
+    return GridView.builder(
+      padding: const EdgeInsets.all(12),
+      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: 4,
+        crossAxisSpacing: 6,
+        mainAxisSpacing: 6,
+      ),
+      itemCount: images.length,
+      itemBuilder: (context, index) {
+        final url = images[index];
+        return InkWell(
+          onTap: () => showDialog(
+            context: context,
+            builder: (_) => Dialog(
+              backgroundColor: Colors.black,
+              insetPadding: EdgeInsets.zero,
+              child: Stack(
+                children: [
+                  Center(
+                    child: InteractiveViewer(
+                      child: CachedNetworkImage(imageUrl: url, fit: BoxFit.contain),
+                    ),
+                  ),
+                  Positioned(
+                    top: 16, right: 16,
+                    child: IconButton(
+                      icon: Icon(Icons.close, color: Colors.white, size: 28),
+                      onPressed: () => Navigator.of(context).pop(),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          borderRadius: BorderRadius.circular(8),
+          child: Hero(
+            tag: url,
+            transitionOnUserGestures: true,
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(8),
+              child: CachedNetworkImage(
+                imageUrl: url,
+                fit: BoxFit.cover,
+                placeholder: (_, __) => Container(color: Color(0xFFF3F4F6)),
+                errorWidget: (_, __, ___) => Container(
+                  color: Color(0xFFF3F4F6),
+                  child: Icon(Icons.broken_image_outlined, color: Color(0xFFD1D5DB), size: 24),
+                ),
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildDocsList() {
+    final docs = _getDocs();
+    if (docs.isEmpty) {
+      return Center(
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          Icon(Icons.folder_open_outlined, size: 48, color: Color(0xFFD1D5DB)),
+          SizedBox(height: 12),
+          Text('No documents shared yet', style: TextStyle(fontFamily: 'Inter', fontSize: 14, color: Color(0xFF9CA3AF))),
+        ]),
+      );
+    }
+    return ListView.builder(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      itemCount: docs.length,
+      itemBuilder: (context, index) {
+        final doc = docs[index];
+        final fileName = doc['fileName'] as String;
+        final url = doc['url'] as String;
+        final sender = doc['sender'] as String?;
+        final ext = fileName.split('.').last.toLowerCase();
+        IconData icon;
+        Color iconColor;
+        if (ext == 'pdf') { icon = Icons.picture_as_pdf_rounded; iconColor = Color(0xFFDC2626); }
+        else if (['doc', 'docx'].contains(ext)) { icon = Icons.description_rounded; iconColor = Color(0xFF2563EB); }
+        else if (['xls', 'xlsx', 'csv'].contains(ext)) { icon = Icons.table_chart_rounded; iconColor = Color(0xFF059669); }
+        else { icon = Icons.insert_drive_file_rounded; iconColor = Color(0xFF6B7280); }
+
+        return InkWell(
+          onTap: () async {
+            final uri = Uri.parse(url);
+            if (await canLaunchUrl(uri)) await launchUrl(uri, mode: LaunchMode.externalApplication);
+          },
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+            decoration: BoxDecoration(border: Border(bottom: BorderSide(color: Color(0xFFF3F4F6), width: 1))),
+            child: Row(children: [
+              Container(
+                width: 38, height: 38,
+                decoration: BoxDecoration(color: iconColor.withOpacity(0.1), borderRadius: BorderRadius.circular(8)),
+                child: Center(child: Icon(icon, size: 20, color: iconColor)),
+              ),
+              SizedBox(width: 12),
+              Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Text(fileName, style: TextStyle(fontFamily: 'Inter', fontSize: 13, fontWeight: FontWeight.w500, color: Color(0xFF111827)), maxLines: 1, overflow: TextOverflow.ellipsis),
+                if (sender != null) ...[
+                  SizedBox(height: 2),
+                  Text(sender, style: TextStyle(fontFamily: 'Inter', fontSize: 11, color: Color(0xFF9CA3AF))),
+                ],
+              ])),
+              Icon(Icons.download_rounded, size: 18, color: Color(0xFF3B82F6)),
+            ]),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildLinksList() {
+    final links = _getLinks();
+    if (links.isEmpty) {
+      return Center(
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          Icon(Icons.link_off_rounded, size: 48, color: Color(0xFFD1D5DB)),
+          SizedBox(height: 12),
+          Text('No links shared yet', style: TextStyle(fontFamily: 'Inter', fontSize: 14, color: Color(0xFF9CA3AF))),
+        ]),
+      );
+    }
+    return ListView.builder(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      itemCount: links.length,
+      itemBuilder: (context, index) {
+        final link = links[index];
+        final url = link['url'] as String;
+        final preview = link['preview'] as String?;
+        return InkWell(
+          onTap: () async {
+            final uri = Uri.parse(url);
+            if (await canLaunchUrl(uri)) await launchUrl(uri, mode: LaunchMode.externalApplication);
+          },
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+            decoration: BoxDecoration(border: Border(bottom: BorderSide(color: Color(0xFFF3F4F6), width: 1))),
+            child: Row(children: [
+              Container(
+                width: 38, height: 38,
+                decoration: BoxDecoration(color: Color(0xFFEFF6FF), borderRadius: BorderRadius.circular(8)),
+                child: Center(child: Icon(Icons.link_rounded, size: 20, color: Color(0xFF3B82F6))),
+              ),
+              SizedBox(width: 12),
+              Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Text(url, style: TextStyle(fontFamily: 'Inter', fontSize: 13, fontWeight: FontWeight.w500, color: Color(0xFF3B82F6)), maxLines: 1, overflow: TextOverflow.ellipsis),
+                if (preview != null) ...[
+                  SizedBox(height: 2),
+                  Text(preview, style: TextStyle(fontFamily: 'Inter', fontSize: 11, color: Color(0xFF9CA3AF)), maxLines: 1, overflow: TextOverflow.ellipsis),
+                ],
+              ])),
+              Icon(Icons.open_in_new_rounded, size: 16, color: Color(0xFF9CA3AF)),
+            ]),
+          ),
+        );
+      },
     );
   }
 }

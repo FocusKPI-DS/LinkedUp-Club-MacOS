@@ -45,6 +45,9 @@ class ChatController extends GetxController {
   // Pending notification chat: set when notification arrives before controller is ready
   static ChatsRecord? pendingNotificationChat;
 
+  // Flag to auto-select the most recent chat on first load
+  bool _hasAutoSelected = false;
+
   // Observable variables
   final Rx<ChatState> chatState = ChatState.loading.obs;
   final RxList<ChatsRecord> chats = <ChatsRecord>[].obs;
@@ -292,9 +295,16 @@ class ChatController extends GetxController {
       }
     }
 
-    // Sort chats client-side by last_message_at (handles null values)
+    // Sort chats: unread first, then by last_message_at descending within each group
     // Falls back to created_at so new/legacy chats without messages still sort properly
     combinedChats.sort((a, b) {
+      // Priority 1: Unread chats come first
+      final aUnread = hasUnreadMessages(a);
+      final bUnread = hasUnreadMessages(b);
+      if (aUnread && !bUnread) return -1; // a is unread, goes first
+      if (!aUnread && bUnread) return 1;  // b is unread, goes first
+
+      // Priority 2: Within same group (both unread or both read), sort by time
       final aTime = a.lastMessageAt ?? a.createdAt;
       final bTime = b.lastMessageAt ?? b.createdAt;
 
@@ -325,6 +335,17 @@ class ChatController extends GetxController {
       pendingNotificationChat = null;
       selectChat(pending);
       print('✅ [ChatController] Auto-selected pending notification chat: ${pending.reference.id}');
+    }
+
+    // Auto-select the most recent chat on first load (desktop behavior)
+    // This eliminates the empty state — users land directly in their latest conversation
+    if (!_hasAutoSelected && selectedChat.value == null && combinedChats.isNotEmpty) {
+      _hasAutoSelected = true;
+      // Filter out inactive chats first, pick the most recent active chat
+      final activeChats = combinedChats.where((c) => !_isInactive(c)).toList();
+      final chatToSelect = activeChats.isNotEmpty ? activeChats.first : combinedChats.first;
+      selectChat(chatToSelect);
+      print('✅ [ChatController] Auto-selected most recent chat: ${chatToSelect.reference.id}');
     }
   }
 
@@ -664,11 +685,46 @@ class ChatController extends GetxController {
   /// and hidden from the All tab (shown only in the Inactive tab).
   static const int inactiveDays = 30;
 
-  /// Returns true if the chat has had no new messages in the last [inactiveDays].
+  /// Returns true if the chat has had no new messages in the last [inactiveDays],
+  /// OR if the current user has manually moved it to inactive.
   bool _isInactive(ChatsRecord chat) {
+    // Check if manually moved to inactive by the current user
+    if (currentUserReference != null) {
+      final manuallyInactiveBy = chat.snapshotData['manually_inactive_by'] as List<dynamic>?;
+      if (manuallyInactiveBy != null && manuallyInactiveBy.contains(currentUserReference)) {
+        return true;
+      }
+    }
     final lastActivity = chat.lastMessageAt ?? chat.createdAt;
     if (lastActivity == null) return true; // no timestamp → inactive
     return DateTime.now().difference(lastActivity).inDays >= inactiveDays;
+  }
+
+  /// Check if the current user has manually marked a chat as inactive.
+  bool isManuallyInactive(ChatsRecord chat) {
+    if (currentUserReference == null) return false;
+    final manuallyInactiveBy = chat.snapshotData['manually_inactive_by'] as List<dynamic>?;
+    return manuallyInactiveBy != null && manuallyInactiveBy.contains(currentUserReference);
+  }
+
+  /// Toggle a chat's manually-inactive status for the current user.
+  Future<void> toggleManualInactive(ChatsRecord chat) async {
+    if (currentUserReference == null) return;
+    try {
+      if (isManuallyInactive(chat)) {
+        // Remove from inactive
+        await chat.reference.update({
+          'manually_inactive_by': FieldValue.arrayRemove([currentUserReference!]),
+        });
+      } else {
+        // Add to inactive
+        await chat.reference.update({
+          'manually_inactive_by': FieldValue.arrayUnion([currentUserReference!]),
+        });
+      }
+    } catch (e) {
+      print('❌ Error toggling inactive: $e');
+    }
   }
 
   // Get filtered chats based on search and tab

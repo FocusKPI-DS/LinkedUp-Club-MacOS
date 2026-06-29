@@ -67,22 +67,21 @@ async function sendLonaAnnouncement() {
     // ═══════════════════════════════════════════════════════════════
     // ANNOUNCEMENT MESSAGE - EDIT THIS!
     // ═══════════════════════════════════════════════════════════════
-    const announcementMessage = `📂 Chat Folders Update — Simplified Navigation
+    const announcementMessage = `Lona v1.9.31 - Update (iOS & macOS)
 
-Based on your feedback, we've heard that chat folders can make it harder to find conversations when you have a large number of chats. Here's what's changed:
+This update brings improvements to both iOS and macOS versions:
 
-✅ Pinned Chats Only (Default View)
-By default, the chat list now only shows a "Pinned" section at the top for quick access. This keeps your sidebar clean and focused.
+What's New:
 
-📁 Detailed Folders (On Demand)
-Want your custom folders back? Simply tap the folder icon button to toggle the full folder view on or off — it's just one click away.
+1. App Store Version Check — Lona now automatically checks the App Store for the latest version on both iOS and macOS. If your app is outdated, you'll see a prompt to update.
 
-🕐 Inactive Chats
-Chats with no new messages for over 30 days are now automatically moved to an "Inactive" tab. This keeps your active conversations front and center without losing any history.
+2. Cleaner Group Chat View (iOS) — Removed the Action Items stats bar from group chat headers for a cleaner, more focused chat experience.
 
-These updates are now live on iOS, Web, and macOS. We hope this makes your daily experience smoother!
+3. macOS UI Improvements — Updated various UI elements to match macOS native design patterns, including the Group Info panel and profile settings.
 
-— The Lona Team 💙`;
+Please update to the latest version. If you encounter any issues, feel free to reach out.
+
+-- The Lona Team`;
     // ═══════════════════════════════════════════════════════════════
 
     try {

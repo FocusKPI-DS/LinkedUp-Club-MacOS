@@ -9,6 +9,7 @@ import '/flutter_flow/flutter_flow_expanded_image_view.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
+import '/utils/markdown_to_quill_delta.dart';
 
 import 'chat_history_model.dart';
 export 'chat_history_model.dart';
@@ -412,7 +413,7 @@ class _ChatHistoryWidgetState extends State<ChatHistoryWidget> {
 
                   // Message Content
                   if (message.messageType == MessageType.text)
-                    _buildHighlightedText(message.content)
+                    _buildHighlightedText(stripMarkdownFormatting(message.content))
                   else if (message.messageType == MessageType.image)
                     Builder(builder: (context) {
                       String imageUrl = message.image;
@@ -522,7 +523,7 @@ class _ChatHistoryWidgetState extends State<ChatHistoryWidget> {
                   else if (message.content.contains('http'))
                     // Link handling could be better but this is a start
                     Text(
-                      message.content,
+                      stripMarkdownFormatting(message.content),
                       style: FlutterFlowTheme.of(context).bodyMedium.override(
                             fontFamily: 'Inter',
                             color: Colors.blue,
@@ -530,7 +531,7 @@ class _ChatHistoryWidgetState extends State<ChatHistoryWidget> {
                           ),
                     )
                   else
-                    Text(message.content),
+                    Text(stripMarkdownFormatting(message.content)),
                 ],
               ),
             ),

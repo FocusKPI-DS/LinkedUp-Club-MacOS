@@ -758,6 +758,10 @@ exports.sendMessageNotificationTrigger = functions
       let notificationTitle = senderName;
       let notificationText = messageData.content || 'sent a message';
 
+      // Strip mention markup: <@userId|displayName> → @displayName
+      // Without this, push notifications show raw IDs like "<@LJ6RK7...|Vertin>"
+      notificationText = notificationText.replace(/<@[^|>]+\|([^>]+)>/g, '@$1');
+
       // For group chats, use the group name as title and prepend sender name to text
       if (isGroup && chatData.title) {
         notificationTitle = chatData.title;
@@ -916,6 +920,10 @@ exports.updateChatLastMessageTrigger = functions.firestore.document('chats/{chat
 
       // Build preview text
       let previewText = content;
+      // Strip mention markup: <@userId|displayName> → @displayName
+      if (previewText) {
+        previewText = previewText.replace(/<@[^|>]+\|([^>]+)>/g, '@$1');
+      }
       if (!previewText || previewText.trim() === '') {
         const type = (typeof messageType === 'string' ? messageType : '').toLowerCase();
         if (type === 'image' || type === 'Image') previewText = '📷 Photo';

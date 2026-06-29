@@ -72,6 +72,85 @@ class MessageContentWidget extends StatelessWidget {
     return parts.join('```');
   }
 
+  /// Parse inline Markdown formatting in a text string.
+  /// Supports: ***bold italic***, **bold**, *italic*, ~~strikethrough~~, `code`
+  static List<InlineSpan> _parseInlineMarkdown(String text, TextStyle baseStyle) {
+    if (text.isEmpty) return [];
+
+    // Combined regex — order matters: bold+italic (***) before bold (**) before italic (*)
+    final inlineRegex = RegExp(
+      r'\*\*\*(.+?)\*\*\*'  // Bold+Italic (group 1)
+      r'|\*\*(.+?)\*\*'      // Bold (group 2)
+      r'|\*(.+?)\*'           // Italic (group 3)
+      r'|~~(.+?)~~'           // Strikethrough (group 4)
+      r'|`([^`]+)`',          // Inline code (group 5)
+    );
+
+    final spans = <InlineSpan>[];
+    int lastEnd = 0;
+
+    for (final match in inlineRegex.allMatches(text)) {
+      if (match.start > lastEnd) {
+        spans.add(TextSpan(
+          text: text.substring(lastEnd, match.start),
+          style: baseStyle,
+        ));
+      }
+
+      if (match.group(1) != null) {
+        // ***Bold+Italic***
+        spans.add(TextSpan(
+          text: match.group(1),
+          style: baseStyle.copyWith(
+            fontWeight: FontWeight.w700,
+            fontStyle: FontStyle.italic,
+          ),
+        ));
+      } else if (match.group(2) != null) {
+        // **Bold**
+        spans.add(TextSpan(
+          text: match.group(2),
+          style: baseStyle.copyWith(fontWeight: FontWeight.w700),
+        ));
+      } else if (match.group(3) != null) {
+        // *Italic*
+        spans.add(TextSpan(
+          text: match.group(3),
+          style: baseStyle.copyWith(fontStyle: FontStyle.italic),
+        ));
+      } else if (match.group(4) != null) {
+        // ~~Strikethrough~~
+        spans.add(TextSpan(
+          text: match.group(4),
+          style: baseStyle.copyWith(decoration: TextDecoration.lineThrough),
+        ));
+      } else if (match.group(5) != null) {
+        // `Code`
+        spans.add(TextSpan(
+          text: match.group(5),
+          style: baseStyle.copyWith(
+            fontFamily: 'monospace',
+            backgroundColor: const Color(0xFFE8E8E8),
+            fontSize: (baseStyle.fontSize ?? 14) - 1,
+          ),
+        ));
+      }
+
+      lastEnd = match.end;
+    }
+
+    if (lastEnd < text.length) {
+      spans.add(TextSpan(
+        text: text.substring(lastEnd),
+        style: baseStyle,
+      ));
+    }
+
+    return spans.isEmpty
+        ? [TextSpan(text: text, style: baseStyle)]
+        : spans;
+  }
+
   List<InlineSpan> _buildTextWithMentionsAndLinks() {
     final List<InlineSpan> spans = [];
 
@@ -202,20 +281,15 @@ class MessageContentWidget extends StatelessWidget {
     filteredMatches.sort((a, b) => a.start.compareTo(b.start));
 
     if (filteredMatches.isEmpty) {
-      return [
-        TextSpan(
-          text: content,
-          style: baseBlackStyle,
-        ),
-      ];
+      return _parseInlineMarkdown(content, baseBlackStyle);
     }
 
     int lastMatchEnd = 0;
     for (final match in filteredMatches) {
       if (match.start > lastMatchEnd) {
-        spans.add(TextSpan(
-          text: content.substring(lastMatchEnd, match.start),
-          style: baseBlackStyle,
+        spans.addAll(_parseInlineMarkdown(
+          content.substring(lastMatchEnd, match.start),
+          baseBlackStyle,
         ));
       }
 
@@ -254,9 +328,9 @@ class MessageContentWidget extends StatelessWidget {
     }
 
     if (lastMatchEnd < content.length) {
-      spans.add(TextSpan(
-        text: content.substring(lastMatchEnd),
-        style: baseBlackStyle,
+      spans.addAll(_parseInlineMarkdown(
+        content.substring(lastMatchEnd),
+        baseBlackStyle,
       ));
     }
 

@@ -48,6 +48,7 @@ import 'package:http/http.dart' as http;
 import 'package:permission_handler/permission_handler.dart';
 import 'package:image_gallery_saver_plus/image_gallery_saver_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
+import '/utils/markdown_to_quill_delta.dart';
 
 class MobileChatWidget extends StatefulWidget {
   const MobileChatWidget({
@@ -1510,10 +1511,11 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
   }
 
   Future<void> _copyMessage(MessagesRecord message) async {
-    final text = message.content.trim();
-    if (text.isEmpty) return;
+    final rawText = message.content.trim();
+    if (rawText.isEmpty) return;
 
-    await Clipboard.setData(ClipboardData(text: text));
+    // Strip mention markup so clipboard gets @DisplayName, not raw <@uid|DisplayName>
+    await Clipboard.setData(ClipboardData(text: stripMarkdownFormatting(rawText)));
     if (!mounted) return;
 
     ScaffoldMessenger.of(context).showSnackBar(
@@ -1848,7 +1850,7 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
                     ),
                     SizedBox(height: 4),
                     Text(
-                      message.content,
+                      stripMarkdownFormatting(message.content),
                       style: TextStyle(
                         fontFamily: 'System',
                         fontSize: 14,
@@ -2199,21 +2201,47 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
 
     if (selectedChat != null && currentUserReference != null) {
       try {
-        final messageData = createMessagesRecordData(
-          senderRef: currentUserReference,
-          content: message.content,
-          createdAt: getCurrentTimestamp,
-          messageType: message.messageType,
-          image: message.image,
-          video: message.video,
-          audio: message.audio,
-          isSystemMessage: false,
-          isPinned: false,
-        );
+        // Build forward data as a raw map to include all fields
+        // (createMessagesRecordData doesn't support images list, file_name, etc.)
+        final Map<String, dynamic> firestoreData = {
+          'sender_ref': currentUserReference,
+          'content': message.content,
+          'created_at': getCurrentTimestamp,
+          'message_type': message.messageType?.serialize(),
+          'sender_name': currentUserDisplayName,
+          'sender_photo': currentUserPhoto,
+          'is_pinned': false,
+          'is_system_message': false,
+        };
 
-        final firestoreData = messageData;
+        // Copy media fields if present
+        if (message.image.isNotEmpty) {
+          firestoreData['image'] = message.image;
+        }
         if (message.images.isNotEmpty) {
           firestoreData['images'] = message.images;
+        }
+        if (message.video.isNotEmpty) {
+          firestoreData['video'] = message.video;
+        }
+        if (message.audio.isNotEmpty) {
+          firestoreData['audio'] = message.audio;
+        }
+        if (message.audioPath.isNotEmpty) {
+          firestoreData['audio_path'] = message.audioPath;
+        }
+        if (message.attachmentUrl.isNotEmpty) {
+          firestoreData['attachment_url'] = message.attachmentUrl;
+        }
+        // Copy file_name if present (used by file message rendering)
+        final fileName = message.snapshotData['file_name'];
+        if (fileName is String && fileName.isNotEmpty) {
+          firestoreData['file_name'] = fileName;
+        }
+        // Copy message_format if present (e.g. 'markdown')
+        final messageFormat = message.snapshotData['message_format'];
+        if (messageFormat is String && messageFormat.isNotEmpty) {
+          firestoreData['message_format'] = messageFormat;
         }
 
         await MessagesRecord.createDoc(selectedChat.reference).set(firestoreData);
@@ -3109,9 +3137,18 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
     );
   }
 
-  /// Returns true if the chat has had no new messages in the last 30 days.
+  /// Returns true if the chat has had no new messages in the last 30 days,
+  /// OR if the current user has manually moved it to inactive.
   /// Mirrors ChatController._isInactive logic for parity with macOS.
   bool _isChatInactive(ChatsRecord chat) {
+    // Check if manually moved to inactive by the current user
+    final userRef = currentUserReference;
+    if (userRef != null) {
+      final manuallyInactiveBy = chat.snapshotData['manually_inactive_by'] as List<dynamic>?;
+      if (manuallyInactiveBy != null && manuallyInactiveBy.contains(userRef)) {
+        return true;
+      }
+    }
     final lastActivity = chat.lastMessageAt ?? chat.createdAt;
     if (lastActivity == null) return true;
     return DateTime.now().difference(lastActivity).inDays >= 30;
@@ -6805,7 +6842,7 @@ class _MobileChatListItemState extends State<_MobileChatListItem>
           } else if (snapshot.connectionState == ConnectionState.waiting) {
             // Show message without prefix while loading
             return Text(
-              chat.lastMessage,
+              stripMarkdownFormatting(chat.lastMessage),
               style: TextStyle(
                 fontFamily: 'SF Pro Text',
                 color: Color(0xFF8E8E93),
@@ -6829,7 +6866,7 @@ class _MobileChatListItemState extends State<_MobileChatListItem>
                   ),
                 ),
                 TextSpan(
-                  text: chat.lastMessage,
+                  text: stripMarkdownFormatting(chat.lastMessage),
                   style: TextStyle(
                     fontFamily: 'SF Pro Text',
                     color: Color(0xFF8E8E93),
@@ -6848,7 +6885,7 @@ class _MobileChatListItemState extends State<_MobileChatListItem>
 
     // For non-iOS or when lastMessageSent is not available, show message only
     return Text(
-      chat.lastMessage,
+      stripMarkdownFormatting(chat.lastMessage),
       style: TextStyle(
         fontFamily: 'SF Pro Text',
         color: Color(0xFF8E8E93),
@@ -6980,9 +7017,9 @@ class _FullScreenChatPageState extends State<_FullScreenChatPage> {
                     // Pinned Announcement Banner (only for group chats)
                     if (widget.chat.isGroup)
                       _buildAnnouncementBanner(widget.chat),
-                    // Action Items Stats (only for group chats)
-                    if (widget.chat.isGroup)
-                      _buildMobileActionItemsStats(widget.chat),
+                    // Action Items Stats - disabled
+                    // if (widget.chat.isGroup)
+                    //   _buildMobileActionItemsStats(widget.chat),
                     Expanded(
                       child: ChatThreadComponentWidget(
                         key: chatThreadComponentKey,

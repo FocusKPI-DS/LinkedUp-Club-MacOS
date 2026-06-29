@@ -233,8 +233,17 @@ class _ChatWidgetState extends State<ChatWidget> with TickerProviderStateMixin {
         chat.lastMessageSent != currentUserReference;
   }
 
-  /// Returns true if the chat is inactive (no messages for 30+ days).
+  /// Returns true if the chat is inactive (no messages for 30+ days)
+  /// or if the current user has manually moved it to inactive.
   bool _isInactive(ChatsRecord chat) {
+    // Check if manually moved to inactive by the current user
+    final userRef = currentUserReference;
+    if (userRef != null) {
+      final manuallyInactiveBy = chat.snapshotData['manually_inactive_by'] as List<dynamic>?;
+      if (manuallyInactiveBy != null && manuallyInactiveBy.contains(userRef)) {
+        return true;
+      }
+    }
     final lastActive = chat.lastMessageAt ?? chat.createdAt;
     if (lastActive == null) return true;
     return DateTime.now().difference(lastActive).inDays >= 30;

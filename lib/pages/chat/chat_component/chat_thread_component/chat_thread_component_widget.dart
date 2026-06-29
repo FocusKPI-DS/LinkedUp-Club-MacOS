@@ -22,6 +22,8 @@ import 'package:desktop_drop/desktop_drop.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:emoji_picker_flutter/emoji_picker_flutter.dart';
 import 'web_paste_handler_bridge.dart';
+import '/utils/screen_capture.dart';
+import '/utils/markdown_to_quill_delta.dart';
 
 export 'chat_thread_component_model.dart';
 
@@ -420,6 +422,11 @@ class ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget> {
   String _injectMentionMarkup(String plainText) {
     // Replace each @DisplayName with <@uid|DisplayName>
     var result = plainText;
+    print('🔍 [mention-inject] Input text: "$plainText"');
+    print('🔍 [mention-inject] Pending mentions count: ${_pendingMentions.length}');
+    for (final m in _pendingMentions) {
+      print('🔍 [mention-inject]   - uid=${m.uid}, displayName="${m.displayName}"');
+    }
     // Process longest names first to avoid partial matches
     final sorted = List<_MentionEntry>.from(_pendingMentions)
       ..sort((a, b) => b.displayName.length.compareTo(a.displayName.length));
@@ -430,16 +437,24 @@ class ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget> {
       final key = '${m.uid}_${m.displayName}';
       if (injected.contains(key)) continue;
       
+      final searchPattern = '@${m.displayName}';
+      final containsPattern = result.contains(searchPattern);
+      print('🔍 [mention-inject] Looking for "$searchPattern" in result: found=$containsPattern');
+      
       // Use replaceFirst to handle each mention occurrence
       final replaced = result.replaceFirst(
-        '@${m.displayName}',
+        searchPattern,
         '<@${m.uid}|${m.displayName}>',
       );
       if (replaced != result) {
         result = replaced;
         injected.add(key);
+        print('✅ [mention-inject] Replaced "$searchPattern" → markup');
+      } else {
+        print('❌ [mention-inject] FAILED to replace "$searchPattern" — not found in text!');
       }
     }
+    print('🔍 [mention-inject] Final result: "$result"');
     return result;
   }
 
@@ -561,9 +576,86 @@ class ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget> {
         _model.clearPendingAttachments();
         safeSetState(() {});
 
-        for (final att in attachments) {
+        // Separate image attachments from non-image (video, file)
+        final imageAttachments = attachments.where((a) => a.type == AttachmentType.image).toList();
+        final otherAttachments = attachments.where((a) => a.type != AttachmentType.image).toList();
+
+        // Upload all images in parallel and batch into one message
+        if (imageAttachments.isNotEmpty) {
+          // Safety check before upload
+          if (widget.chatReference?.reference.id != targetChatId) {
+            print('⚠️ [send] Chat switched before image upload — aborting');
+            return;
+          }
+
+          final uploadedImageUrls = <String>[];
+          final uploadFutures = imageAttachments.map((att) async {
+            try {
+              print('⬆️ [upload] Starting image upload: ${att.fileName} (${att.file.bytes.length} bytes)');
+              final downloadUrl = await uploadData(att.file.storagePath, att.file.bytes)
+                  .timeout(const Duration(seconds: 60));
+              if (downloadUrl != null) {
+                print('⬆️ [upload] Image upload complete: $downloadUrl');
+                return downloadUrl;
+              } else {
+                print('❌ Failed to upload image: ${att.fileName}');
+                return null;
+              }
+            } catch (e) {
+              print('❌ Error uploading image ${att.fileName}: $e');
+              return null;
+            }
+          });
+
+          final results = await Future.wait(uploadFutures);
+          for (final url in results) {
+            if (url != null) uploadedImageUrls.add(url);
+          }
+
+          // Safety check after uploads
+          if (widget.chatReference?.reference.id != targetChatId) {
+            print('⚠️ [send] Chat switched after image uploads — aborting');
+            return;
+          }
+
+          if (uploadedImageUrls.isNotEmpty) {
+            Map<String, dynamic> messageData;
+            if (uploadedImageUrls.length == 1) {
+              // Single image — use legacy `image` field
+              messageData = createMessagesRecordData(
+                senderRef: currentUserReference,
+                content: '',
+                createdAt: getCurrentTimestamp,
+                messageType: MessageType.image,
+                image: uploadedImageUrls.first,
+              );
+            } else {
+              // Multiple images — only use `images` array, NOT `image`
+              messageData = createMessagesRecordData(
+                senderRef: currentUserReference,
+                content: '',
+                createdAt: getCurrentTimestamp,
+                messageType: MessageType.image,
+              );
+              messageData['images'] = uploadedImageUrls;
+            }
+
+            await MessagesRecord.createDoc(targetChatRef).set(messageData);
+            await targetChatRef.update({
+              'last_message': uploadedImageUrls.length == 1
+                  ? '📷 Photo'
+                  : '📷 ${uploadedImageUrls.length} Photos',
+              'last_message_at': getCurrentTimestamp,
+              'last_message_sent': currentUserReference,
+              'last_message_type': MessageType.image.serialize(),
+              'last_message_seen': [currentUserReference],
+            });
+          }
+        }
+
+        // Send non-image attachments (video, file) individually
+        for (final att in otherAttachments) {
           try {
-            // Safety check: abort if user has switched to a different chat
             if (widget.chatReference?.reference.id != targetChatId) {
               print('⚠️ [send] Chat switched during upload — aborting send to $targetChatId');
               return;
@@ -578,7 +670,6 @@ class ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget> {
               continue;
             }
 
-            // Safety check again after upload completes
             if (widget.chatReference?.reference.id != targetChatId) {
               print('⚠️ [send] Chat switched after upload — aborting send to $targetChatId');
               return;
@@ -589,15 +680,7 @@ class ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget> {
 
             switch (att.type) {
               case AttachmentType.image:
-                msgType = MessageType.image;
-                messageData = createMessagesRecordData(
-                  senderRef: currentUserReference,
-                  content: '',
-                  createdAt: getCurrentTimestamp,
-                  messageType: msgType,
-                  image: downloadUrl,
-                );
-                break;
+                continue; // Already handled above
               case AttachmentType.video:
                 msgType = MessageType.video;
                 messageData = createMessagesRecordData(
@@ -607,6 +690,7 @@ class ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget> {
                   messageType: msgType,
                   video: downloadUrl,
                 );
+                messageData['file_name'] = att.fileName;
                 break;
               case AttachmentType.file:
                 msgType = MessageType.file;
@@ -617,15 +701,11 @@ class ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget> {
                   messageType: msgType,
                   attachmentUrl: downloadUrl,
                 );
-                // Store filename separately so the file card picks it up via _getResolvedFileName()
                 messageData['file_name'] = att.fileName;
                 break;
             }
 
-            // Use captured targetChatRef, not widget.chatReference
-            await MessagesRecord.createDoc(targetChatRef)
-                .set(messageData);
-
+            await MessagesRecord.createDoc(targetChatRef).set(messageData);
             await targetChatRef.update({
               'last_message': '📎 ${att.fileName}',
               'last_message_at': getCurrentTimestamp,
@@ -1136,7 +1216,10 @@ class ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget> {
                                 }
                               }
                               
-                              _quillController!.document.insert(0, display);
+                              // Convert markdown back to Quill Delta to preserve
+                              // formatting (bold, italic, etc.) in the editor
+                              final delta = markdownToQuillDelta(display);
+                              _quillController!.document = Document.fromDelta(delta);
                               _quillController!.moveCursorToEnd();
                             }
                           }
@@ -1288,10 +1371,7 @@ class ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget> {
                         const SizedBox(height: 2),
                         Text(
                           _model.editingMessage!.content.isNotEmpty
-                              ? _model.editingMessage!.content.replaceAllMapped(
-                                  RegExp(r'<@[^|]+\|([^>]+)>'),
-                                  (m) => '@${m.group(1)}',
-                                )
+                              ? stripMarkdownFormatting(_model.editingMessage!.content)
                               : '📎 Attachment',
                           style: TextStyle(
                             fontFamily: 'SF Pro Text',
@@ -1365,7 +1445,7 @@ class ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget> {
                         const SizedBox(height: 2),
                         Text(
                           _model.replyingToMessage!.content.isNotEmpty
-                              ? _model.replyingToMessage!.content
+                              ? stripMarkdownFormatting(_model.replyingToMessage!.content)
                               : (_model.replyingToMessage!.image.isNotEmpty
                                   ? '📷 Photo'
                                   : (_model.replyingToMessage!.video.isNotEmpty
@@ -1591,6 +1671,30 @@ class ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget> {
             },
             onCamera: () {
               // Camera logic
+            },
+            onScreenshot: () async {
+              print('📸 [onScreenshot] Taking screenshot...');
+              try {
+                final bytes = await ScreenCaptureWeb.captureScreenshot();
+                if (bytes != null && bytes.isNotEmpty) {
+                  final fileName = 'screenshot_${DateTime.now().millisecondsSinceEpoch}.png';
+                  final storagePath = 'users/$currentUserUid/uploads/${DateTime.now().millisecondsSinceEpoch}_$fileName';
+                  _model.addPendingAttachment(PendingAttachment(
+                    file: SelectedFile(
+                      storagePath: storagePath,
+                      bytes: bytes,
+                    ),
+                    fileName: fileName,
+                    type: AttachmentType.image,
+                  ));
+                  print('📸 [onScreenshot] Screenshot added as attachment: $fileName (${bytes.length} bytes)');
+                  safeSetState(() {});
+                } else {
+                  print('📸 [onScreenshot] Screenshot cancelled or empty');
+                }
+              } catch (e) {
+                print('❌ [onScreenshot] Error: $e');
+              }
             },
           ),
               ],

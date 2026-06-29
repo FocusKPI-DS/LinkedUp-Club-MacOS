@@ -167,6 +167,7 @@ String quillDeltaToMarkdownSimplified(Delta delta) {
   StringBuffer finalBuffer = StringBuffer();
   
   bool inCodeBlock = false;
+  int orderedListCounter = 0;
   
   for (int i = 0; i < lines.length; i++) {
     final line = lines[i];
@@ -180,19 +181,26 @@ String quillDeltaToMarkdownSimplified(Delta delta) {
     if (attrs.containsKey('header')) {
       int level = attrs['header'];
       prefix = '#' * level + ' ';
+      orderedListCounter = 0;
     }
     
     // Lists
     if (attrs.containsKey('list')) {
       if (attrs['list'] == 'ordered') {
-        prefix = '1. '; // Simple 1. for all, Markdown renderers handle numbering
-      } else if (attrs['list'] == 'bullet') {
-        prefix = '- ';
-      } else if (attrs['list'] == 'checked') {
-        prefix = '- [x] ';
-      } else if (attrs['list'] == 'unchecked') {
-        prefix = '- [ ] ';
+        orderedListCounter++;
+        prefix = '$orderedListCounter. ';
+      } else {
+        orderedListCounter = 0;
+        if (attrs['list'] == 'bullet') {
+          prefix = '- ';
+        } else if (attrs['list'] == 'checked') {
+          prefix = '- [x] ';
+        } else if (attrs['list'] == 'unchecked') {
+          prefix = '- [ ] ';
+        }
       }
+    } else {
+      orderedListCounter = 0;
     }
     
     // Blockquote

@@ -41,6 +41,48 @@ Future<void> handleNotificationNavigation(RemoteMessage message) async {
       return;
     }
 
+    // On iOS, intercept ChatDetail/GroupChatDetail and redirect to MobileChat
+    // This ensures the notification opens the proper chat UI with tab bar and reply/reaction support
+    if (!kIsWeb && Platform.isIOS &&
+        (initialPageName == 'ChatDetail' || initialPageName == 'GroupChatDetail')) {
+      print('📱 iOS: Redirecting $initialPageName → MobileChat');
+      final paramData = getInitialParameterData(message.data);
+      final chatDocPath = paramData['chatDoc'] as String?;
+      if (chatDocPath != null && chatDocPath.isNotEmpty) {
+        print('   Chat doc path: $chatDocPath');
+        try {
+          final chatSnapshot = await FirebaseFirestore.instance.doc(chatDocPath).get();
+          if (chatSnapshot.exists) {
+            final chatRecord = ChatsRecord.fromSnapshot(chatSnapshot);
+            final navigatorContext = appNavigatorKey.currentContext;
+            if (navigatorContext != null) {
+              // Navigate to MobileChat route with chatDoc as extra parameter
+              // The MobileChat route wraps in NavBarPage and passes chatDoc as initialChat
+              navigatorContext.pushNamed(
+                'MobileChat',
+                extra: <String, dynamic>{
+                  'chatDoc': chatRecord,
+                },
+              );
+              print('✅ iOS: Navigated to MobileChat with chat ${chatRecord.reference.id}');
+              return;
+            }
+          }
+        } catch (e) {
+          print('❌ iOS: Error loading chat doc: $e');
+        }
+      }
+      // Fallback: just go to MobileChat tab
+      final navigatorContext = appNavigatorKey.currentContext;
+      if (navigatorContext != null) {
+        navigatorContext.goNamed(
+          '_initialize',
+          queryParameters: {'tab': 'MobileChat'},
+        );
+      }
+      return;
+    }
+
     // On macOS, intercept ChatDetail/GroupChatDetail and redirect to DesktopChat
     if (!kIsWeb && Platform.isMacOS &&
         (initialPageName == 'ChatDetail' || initialPageName == 'GroupChatDetail' || initialPageName == 'MobileChat')) {
@@ -92,6 +134,7 @@ Future<void> handleNotificationNavigation(RemoteMessage message) async {
       }
       return;
     }
+
 
     final initialParameterData = getInitialParameterData(message.data);
     print('   Initial parameter data: $initialParameterData');

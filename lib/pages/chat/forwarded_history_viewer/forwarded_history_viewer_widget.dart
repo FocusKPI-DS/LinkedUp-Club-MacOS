@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:intl/intl.dart';
+import '/utils/markdown_to_quill_delta.dart';
 
 class ForwardedHistoryViewerWidget extends StatefulWidget {
   final String historyJson;
@@ -129,7 +130,7 @@ class _ForwardedHistoryViewerWidgetState extends State<ForwardedHistoryViewerWid
                             // Render Content
                             if (content.isNotEmpty)
                               Text(
-                                content,
+                                stripMarkdownFormatting(content),
                                 style: const TextStyle(
                                   fontSize: 15,
                                   color: Colors.black,

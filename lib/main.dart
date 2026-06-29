@@ -691,11 +691,7 @@ class _MyAppState extends State<MyApp> {
         WidgetsBinding.instance.addPostFrameCallback((_) {
           final context = appNavigatorKey.currentContext;
           if (context != null && mounted) {
-            if (!kIsWeb && Platform.isMacOS) {
-              _showMacUpdateDialog(context);
-            } else {
-              _showUpdateDialog(context);
-            }
+            _showUpdateDialog(context);
           }
         });
       }
@@ -704,130 +700,175 @@ class _MyAppState extends State<MyApp> {
     }
   }
 
-  /// Show update dialog for macOS (GitHub Releases)
-  Future<void> _showMacUpdateDialog(BuildContext context) async {
+  /// Show a macOS-native styled update dialog pointing to the App Store
+  Future<void> _showUpdateDialog(BuildContext context) async {
     try {
-      // Fetch release details for the dialog
-      final releaseInfo = await AppUpdateService.fetchGitHubLatestRelease();
-      if (releaseInfo == null || !mounted) return;
+      final latestVersion =
+          await AppUpdateService.fetchLatestVersionFromAppStore();
+      if (latestVersion == null || !mounted) return;
 
-      final version = releaseInfo['version'] ?? '';
-      final downloadUrl = releaseInfo['downloadUrl'] ?? '';
-      final releaseNotes = releaseInfo['releaseNotes'] ?? '';
-
-      // Get current version for display
-      final packageInfo = await PackageInfo.fromPlatform();
-      final currentVersion = packageInfo.version;
+      final currentVersion = await AppUpdateService.getCurrentVersion();
 
       if (!mounted) return;
 
-      await showCupertinoDialog(
+      await showDialog(
         context: context,
         barrierDismissible: true,
-        builder: (dialogCtx) => CupertinoAlertDialog(
-          title: Row(
-            mainAxisSize: MainAxisSize.min,
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(Icons.system_update_rounded,
-                  color: Color(0xFF3B82F6), size: 22),
-              SizedBox(width: 8),
-              Text('Update Available'),
-            ],
-          ),
-          content: Padding(
-            padding: EdgeInsets.only(top: 12),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  'Lona v$version is available.\nYou are currently on v$currentVersion.',
-                  style: TextStyle(
-                    fontSize: 14,
-                    height: 1.5,
+        barrierColor: Colors.black.withOpacity(0.3),
+        builder: (dialogCtx) => Center(
+          child: Material(
+            color: Colors.transparent,
+            child: Container(
+              width: 360,
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(10),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.15),
+                    blurRadius: 20,
+                    offset: const Offset(0, 4),
                   ),
-                ),
-                if (releaseNotes.isNotEmpty) ...[
-                  SizedBox(height: 12),
-                  Container(
-                    constraints: BoxConstraints(maxHeight: 120),
-                    child: SingleChildScrollView(
-                      child: Text(
-                        releaseNotes,
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: CupertinoColors.secondaryLabel,
-                          height: 1.4,
+                ],
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  // Header
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(20, 20, 20, 0),
+                    child: Column(
+                      children: [
+                        Container(
+                          width: 40,
+                          height: 40,
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF007AFF).withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: const Icon(
+                            Icons.system_update_rounded,
+                            color: Color(0xFF007AFF),
+                            size: 22,
+                          ),
                         ),
-                        textAlign: TextAlign.left,
-                      ),
+                        const SizedBox(height: 12),
+                        const Text(
+                          'Update Available',
+                          style: TextStyle(
+                            fontFamily: 'SF Pro Text',
+                            fontSize: 15,
+                            fontWeight: FontWeight.w600,
+                            color: Color(0xFF1D1D1F),
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          'Lona v$latestVersion is now available.\nYou are currently on v$currentVersion.',
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(
+                            fontFamily: 'SF Pro Text',
+                            fontSize: 13,
+                            fontWeight: FontWeight.w400,
+                            color: Color(0xFF636366),
+                            height: 1.5,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+                  // Divider
+                  Container(height: 0.5, color: const Color(0xFFE5E5E5)),
+                  // Buttons
+                  IntrinsicHeight(
+                    child: Row(
+                      children: [
+                        // Skip This Version
+                        Expanded(
+                          child: InkWell(
+                            onTap: () {
+                              AppUpdateService.skipVersion(latestVersion);
+                              Navigator.pop(dialogCtx);
+                            },
+                            borderRadius: const BorderRadius.only(
+                              bottomLeft: Radius.circular(10),
+                            ),
+                            child: const Padding(
+                              padding: EdgeInsets.symmetric(vertical: 12),
+                              child: Text(
+                                'Skip',
+                                textAlign: TextAlign.center,
+                                style: TextStyle(
+                                  fontFamily: 'SF Pro Text',
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w400,
+                                  color: Color(0xFF8E8E93),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                        Container(width: 0.5, color: const Color(0xFFE5E5E5)),
+                        // Later
+                        Expanded(
+                          child: InkWell(
+                            onTap: () => Navigator.pop(dialogCtx),
+                            child: const Padding(
+                              padding: EdgeInsets.symmetric(vertical: 12),
+                              child: Text(
+                                'Later',
+                                textAlign: TextAlign.center,
+                                style: TextStyle(
+                                  fontFamily: 'SF Pro Text',
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w400,
+                                  color: Color(0xFF636366),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                        Container(width: 0.5, color: const Color(0xFFE5E5E5)),
+                        // Update
+                        Expanded(
+                          child: InkWell(
+                            onTap: () async {
+                              Navigator.pop(dialogCtx);
+                              final appStoreUrl =
+                                  AppUpdateService.getAppStoreUrl();
+                              final uri = Uri.parse(appStoreUrl);
+                              if (await canLaunchUrl(uri)) {
+                                await launchUrl(uri,
+                                    mode: LaunchMode.externalApplication);
+                              }
+                            },
+                            borderRadius: const BorderRadius.only(
+                              bottomRight: Radius.circular(10),
+                            ),
+                            child: const Padding(
+                              padding: EdgeInsets.symmetric(vertical: 12),
+                              child: Text(
+                                'Update',
+                                textAlign: TextAlign.center,
+                                style: TextStyle(
+                                  fontFamily: 'SF Pro Text',
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w600,
+                                  color: Color(0xFF007AFF),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                 ],
-              ],
+              ),
             ),
           ),
-          actions: [
-            CupertinoDialogAction(
-              child: Text('Skip This Version'),
-              onPressed: () {
-                AppUpdateService.skipVersion(version);
-                Navigator.pop(dialogCtx);
-              },
-            ),
-            CupertinoDialogAction(
-              child: Text('Later'),
-              onPressed: () => Navigator.pop(dialogCtx),
-            ),
-            CupertinoDialogAction(
-              isDefaultAction: true,
-              child: Text('Download Update'),
-              onPressed: () async {
-                Navigator.pop(dialogCtx);
-                if (downloadUrl.isNotEmpty) {
-                  final uri = Uri.parse(downloadUrl);
-                  if (await canLaunchUrl(uri)) {
-                    await launchUrl(uri,
-                        mode: LaunchMode.externalApplication);
-                  }
-                }
-              },
-            ),
-          ],
         ),
-      );
-    } catch (e) {
-      print('Error showing macOS update dialog: $e');
-    }
-  }
-
-  /// Show update alert dialog for iOS (App Store)
-  Future<void> _showUpdateDialog(BuildContext context) async {
-    try {
-      await AdaptiveAlertDialog.show(
-        context: context,
-        title: 'Update Available',
-        message:
-            'A new version of Lona is available on the App Store. Please update to continue using the latest features and improvements.',
-        icon: 'arrow.down.circle.fill',
-        actions: [
-          AlertAction(
-            title: 'Later',
-            style: AlertActionStyle.cancel,
-            onPressed: () {},
-          ),
-          AlertAction(
-            title: 'Update',
-            style: AlertActionStyle.primary,
-            onPressed: () async {
-              final appStoreUrl = AppUpdateService.getAppStoreUrl();
-              final uri = Uri.parse(appStoreUrl);
-              if (await canLaunchUrl(uri)) {
-                await launchUrl(uri, mode: LaunchMode.externalApplication);
-              }
-            },
-          ),
-        ],
       );
     } catch (e) {
       print('Error showing update dialog: $e');
@@ -867,6 +908,15 @@ class _MyAppState extends State<MyApp> {
       ),
       themeMode: _themeMode,
       routerConfig: _router,
+      builder: (context, child) {
+        final scale = FFAppState().uiScale;
+        return MediaQuery(
+          data: MediaQuery.of(context).copyWith(
+            textScaler: TextScaler.linear(scale),
+          ),
+          child: child ?? const SizedBox.shrink(),
+        );
+      },
     );
   }
 }
@@ -889,7 +939,7 @@ class NavBarPage extends StatefulWidget {
 
 /// This is the private State class that goes with NavBarPage.
 class _NavBarPageState extends State<NavBarPage> with WidgetsBindingObserver {
-  String _currentPageName = 'Home';
+  String _currentPageName = 'DesktopChat'; // Default to Chat (Home is hidden)
   late Widget? _currentPage;
 
   // Persistent MobileChatWidget to preserve state across parent rebuilds
@@ -903,6 +953,10 @@ class _NavBarPageState extends State<NavBarPage> with WidgetsBindingObserver {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    // Set platform-appropriate default page (Home is hidden)
+    if (!kIsWeb && Platform.isIOS) {
+      _currentPageName = 'MobileChat';
+    }
     _currentPageName = widget.initialPage ?? _currentPageName;
     _currentPage = widget.page;
 
@@ -1001,7 +1055,8 @@ class _NavBarPageState extends State<NavBarPage> with WidgetsBindingObserver {
         FFAppState().chatPageLastOpened = DateTime.now();
       }
     } else {
-      _currentPageName = 'Home';
+      // Default to Chat instead of Home
+      _currentPageName = (!kIsWeb && Platform.isIOS) ? 'MobileChat' : 'DesktopChat';
     }
   }
 
@@ -1029,20 +1084,13 @@ class _NavBarPageState extends State<NavBarPage> with WidgetsBindingObserver {
 
     // Create a mapping for the navbar items to their corresponding tab indices
     final navItemToIndex = {
-      'Home': 0,
-      // 'Chat': 1, // Commented out - using MobileChat instead
-      'MobileChat': 1, // Chat (renamed from Mobile Chat) - for iOS
-      'DesktopChat': 1, // Desktop Chat - for macOS
-      // 'Gmail': 2, // Gmail - for macOS
-      // 'GmailMobile': 2, // Gmail Mobile - for iOS
-      // 'AIAssistant': 3, // Desktop AI Assistant - Removed
-      // 'MobileAssistant': 3, // Mobile AI Assistant - Removed
-      // 'Discover': 3, // Commented out
-      // 'Announcements':
-      //    5, // News - for desktop (Index 5 to avoid collision with Connections)
-      'Connections': 2, // Connections - for iOS and Desktop (Index 2)
-      'ProfileSettings': 3, // Settings - for macOS
-      'MobileSettings': 3, // Settings - for iOS (updated to index 3)
+      // Home is hidden — not in navigation
+      // 'Home': 0,
+      'MobileChat': 0, // Chat - for iOS (now first item)
+      'DesktopChat': 0, // Desktop Chat - for macOS (now first item)
+      'Connections': 1, // Connections - for iOS and Desktop
+      'ProfileSettings': 2, // Settings - for macOS
+      'MobileSettings': 2, // Settings - for iOS
     };
 
     final currentIndex = navItemToIndex[_currentPageName] ?? 0;
@@ -1061,9 +1109,8 @@ class _NavBarPageState extends State<NavBarPage> with WidgetsBindingObserver {
             connectionRequestCount = userSnapshot.data!.friendRequests.length;
           }
 
-          // Map tab indices to page names (3 items: Home, Chat, Connections, Settings)
+          // Map tab indices to page names (3 items: Chat, Connections, Settings — Home hidden)
           final pageNames = [
-            'Home',
             'MobileChat',
             // 'GmailMobile',
             'Connections',
@@ -1072,10 +1119,6 @@ class _NavBarPageState extends State<NavBarPage> with WidgetsBindingObserver {
 
           // Build items with dynamic label for Connections
           final items = <AdaptiveNavigationDestination>[
-            AdaptiveNavigationDestination(
-              icon: 'house.fill',
-              label: 'Home',
-            ),
             AdaptiveNavigationDestination(
               icon: 'message.fill',
               label: 'Chat',
@@ -1100,7 +1143,7 @@ class _NavBarPageState extends State<NavBarPage> with WidgetsBindingObserver {
           ];
 
           return AdaptiveScaffold(
-            body: _currentPage ?? tabs[_currentPageName] ?? tabs['Home']!,
+            body: _currentPage ?? tabs[_currentPageName] ?? tabs['MobileChat']!,
             bottomNavigationBar: AdaptiveBottomNavigationBar(
               useNativeBottomBar: true,
               items: items,
@@ -1127,7 +1170,7 @@ class _NavBarPageState extends State<NavBarPage> with WidgetsBindingObserver {
             _buildVerticalNavBar(tabs, currentIndex, navItemToIndex),
             // Main Content Area
             Expanded(
-              child: _currentPage ?? tabs[_currentPageName] ?? tabs['Home']!,
+              child: _currentPage ?? tabs[_currentPageName] ?? tabs['DesktopChat']!,
             ),
           ],
         ),
@@ -1322,40 +1365,22 @@ class _NavBarPageState extends State<NavBarPage> with WidgetsBindingObserver {
   Widget _buildVerticalNavBar(Map<String, Widget> tabs, int currentIndex,
       Map<String, int> navItemToIndex) {
     final navItems = [
-      {
-        'icon': Icons.home_rounded,
-        'label': 'Home',
-        'page': 'Home',
-      },
+      // Home is hidden — not in navigation
       // {
-      //   'icon': Icons.chat_rounded,
-      //   'label': 'Chat',
-      //   'page': 'Chat',
-      // }, // Commented out - using DesktopChat for macOS and web
+      //   'icon': Icons.home_rounded,
+      //   'label': 'Home',
+      //   'page': 'Home',
+      // },
       {
         'icon': Icons.chat_bubble_outline_rounded,
         'label': 'Chat',
         'page': 'DesktopChat', // Desktop chat for macOS and web
       },
-      /*
-      {
-        'icon': Icons.mail_outline_rounded,
-        'label': 'Gmail',
-        'page': 'Gmail', // Gmail for macOS and web
-      },
-      */
       {
         'icon': Icons.people_rounded,
         'label': 'Connections',
         'page': 'Connections',
       },
-      /*
-      {
-        'icon': Icons.campaign_rounded,
-        'label': 'News',
-        'page': 'Announcements',
-      },
-      */
       {
         'icon': Icons.settings_outlined,
         'label': 'Settings',
@@ -2215,8 +2240,8 @@ class _AppUpdateButtonState extends State<_AppUpdateButton> {
                   if (mounted && !_updateAvailable) {
                     ScaffoldMessenger.of(context).showSnackBar(
                       SnackBar(
-                        content: Text('You\'re on the latest version!', style: TextStyle(fontFamily: 'Inter')),
-                        backgroundColor: Color(0xFF3B82F6),
+                        content: Text('You\'re on the latest version!', style: TextStyle(fontFamily: 'SF Pro Text')),
+                        backgroundColor: Color(0xFF007AFF),
                         duration: Duration(seconds: 2),
                       ),
                     );
@@ -2235,13 +2260,13 @@ class _AppUpdateButtonState extends State<_AppUpdateButton> {
                     color: _isHovered
                         ? (_updateAvailable ? Color(0xFFDBEAFE) : Color(0xFFE8EBED).withOpacity(0.5))
                         : Colors.transparent,
-                    borderRadius: BorderRadius.circular(12),
+                    borderRadius: BorderRadius.circular(8),
                   ),
                   child: Center(
                     child: Icon(
                       Icons.system_update_rounded,
                       color: _updateAvailable
-                          ? Color(0xFF3B82F6)
+                          ? Color(0xFF007AFF)
                           : (_isHovered ? Color(0xFF374151) : Color(0xFF6B7280)),
                       size: 22,
                     ),
@@ -2256,7 +2281,7 @@ class _AppUpdateButtonState extends State<_AppUpdateButton> {
                       width: 10,
                       height: 10,
                       decoration: BoxDecoration(
-                        color: Color(0xFF3B82F6),
+                        color: Color(0xFF007AFF),
                         shape: BoxShape.circle,
                         border: Border.all(color: Color(0xFFF8F9FA), width: 2),
                       ),

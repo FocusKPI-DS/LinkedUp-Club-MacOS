@@ -80,6 +80,9 @@ class FFAppState extends ChangeNotifier {
       _safeInit(() {
         _chatFontSize = prefs.getDouble('ff_chatFontSize') ?? _chatFontSize;
       });
+      _safeInit(() {
+        _uiScale = prefs.getDouble('ff_uiScale') ?? _uiScale;
+      });
     });
   }
 
@@ -477,6 +480,16 @@ class FFAppState extends ChangeNotifier {
   set chatFontSize(double value) {
     _chatFontSize = value;
     prefs.setDouble('ff_chatFontSize', value);
+    notifyListeners();
+  }
+
+  // UI Scale preference (global text & widget scaling)
+  // 0.8 = compact, 1.0 = default, 1.4 = large
+  double _uiScale = 1.0;
+  double get uiScale => _uiScale;
+  set uiScale(double value) {
+    _uiScale = value.clamp(0.8, 1.4);
+    prefs.setDouble('ff_uiScale', _uiScale);
     notifyListeners();
   }
 }

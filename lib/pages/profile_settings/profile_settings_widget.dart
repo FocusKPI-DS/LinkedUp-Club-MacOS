@@ -142,41 +142,29 @@ class _ProfileSettingsWidgetState extends State<ProfileSettingsWidget>
       color: Colors.transparent,
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(6),
+        hoverColor: Color(0xFFF5F5F7),
         child: Container(
-          padding: EdgeInsets.all(20),
+          padding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
           decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(
-              color: Color(0xFFE5E7EB),
-              width: 1,
-            ),
+            border: Border(bottom: BorderSide(color: Color(0xFFF2F2F2), width: 0.5)),
           ),
           child: Row(
             children: [
-              Icon(
-                icon,
-                size: 24,
-                color: Color(0xFF0077B5),
-              ),
-              SizedBox(width: 16),
+              Icon(icon, size: 16, color: Color(0xFF007AFF)),
+              SizedBox(width: 12),
               Expanded(
                 child: Text(
                   title,
                   style: TextStyle(
-                    fontFamily: 'SF Pro Display',
-                    fontSize: 16,
-                    fontWeight: FontWeight.w500,
-                    color: Color(0xFF1A1A1A),
+                    fontFamily: 'SF Pro Text',
+                    fontSize: 13,
+                    fontWeight: FontWeight.w400,
+                    color: Color(0xFF1D1D1F),
                   ),
                 ),
               ),
-              Icon(
-                CupertinoIcons.chevron_right,
-                size: 20,
-                color: Color(0xFF999999),
-              ),
+              Icon(CupertinoIcons.chevron_right, size: 14, color: Color(0xFFC7C7CC)),
             ],
           ),
         ),
@@ -195,39 +183,36 @@ class _ProfileSettingsWidgetState extends State<ProfileSettingsWidget>
       color: Colors.transparent,
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(10),
+        borderRadius: BorderRadius.circular(6),
+        hoverColor: Color(0xFFF5F5F7),
         child: Container(
-          padding: EdgeInsets.all(16),
+          padding: EdgeInsets.symmetric(horizontal: 14, vertical: 10),
           decoration: BoxDecoration(
-            color: isSelected ? Color(0xFFE3F2FD) : Color(0xFFF5F5F5),
-            borderRadius: BorderRadius.circular(10),
+            color: isSelected ? Color(0xFF007AFF).withOpacity(0.06) : Colors.transparent,
+            borderRadius: BorderRadius.circular(6),
             border: Border.all(
-              color: isSelected ? Color(0xFF0077B5) : Color(0xFFE5E7EB),
-              width: isSelected ? 2 : 1,
+              color: isSelected ? Color(0xFF007AFF).withOpacity(0.3) : Color(0xFFE5E5E5),
+              width: 0.5,
             ),
           ),
           child: Row(
             children: [
               Container(
-                width: 22,
-                height: 22,
+                width: 16,
+                height: 16,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  color: isSelected ? Color(0xFF0077B5) : Colors.transparent,
+                  color: isSelected ? Color(0xFF007AFF) : Colors.transparent,
                   border: Border.all(
-                    color: isSelected ? Color(0xFF0077B5) : Color(0xFF999999),
-                    width: 2,
+                    color: isSelected ? Color(0xFF007AFF) : Color(0xFFC7C7CC),
+                    width: 1.5,
                   ),
                 ),
                 child: isSelected
-                    ? Icon(
-                        Icons.check,
-                        size: 14,
-                        color: Colors.white,
-                      )
+                    ? Icon(Icons.check, size: 10, color: Colors.white)
                     : null,
               ),
-              SizedBox(width: 14),
+              SizedBox(width: 10),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -235,20 +220,18 @@ class _ProfileSettingsWidgetState extends State<ProfileSettingsWidget>
                     Text(
                       title,
                       style: TextStyle(
-                        fontFamily: 'SF Pro Display',
-                        fontSize: 15,
-                        fontWeight: FontWeight.w600,
-                        color:
-                            isSelected ? Color(0xFF0077B5) : Color(0xFF1A1A1A),
+                        fontFamily: 'SF Pro Text',
+                        fontSize: 13,
+                        fontWeight: FontWeight.w500,
+                        color: isSelected ? Color(0xFF007AFF) : Color(0xFF1D1D1F),
                       ),
                     ),
-                    SizedBox(height: 2),
                     Text(
                       subtitle,
                       style: TextStyle(
-                        fontFamily: 'SF Pro Display',
-                        fontSize: 13,
-                        color: Color(0xFF666666),
+                        fontFamily: 'SF Pro Text',
+                        fontSize: 11,
+                        color: Color(0xFF8E8E93),
                       ),
                     ),
                   ],
@@ -263,126 +246,326 @@ class _ProfileSettingsWidgetState extends State<ProfileSettingsWidget>
 
   // Show Privacy Policy
   void _showPrivacyPolicy(BuildContext context) {
-    showCupertinoDialog(
+    showDialog(
       context: context,
-      builder: (context) => CupertinoAlertDialog(
-        title: Text('Privacy Policy'),
-        content: SingleChildScrollView(
-          child: Padding(
-            padding: EdgeInsets.only(top: 16),
-            child: Text(
-              'Last updated: January 2024\n\n'
-              'At Lona Club, we are committed to protecting your privacy. This Privacy Policy explains how we collect, use, and safeguard your personal information.\n\n'
-              'Information We Collect:\n'
-              '• Account information (name, email, phone number)\n'
-              '• Messages and communications\n'
-              '• Device information and usage data\n\n'
-              'How We Use Your Information:\n'
-              '• To provide and improve our services\n'
-              '• To communicate with you\n'
-              '• To ensure security and prevent fraud\n\n'
-              'Data Security:\n'
-              'All your data is encrypted and stored securely. We use industry-standard security measures to protect your information.\n\n'
-              'Your Rights:\n'
-              'You have the right to access, update, or delete your personal information at any time through your account settings.',
-              style: TextStyle(
-                fontFamily: 'SF Pro Display',
-                fontSize: 14,
-                color: Color(0xFF1A1A1A),
-                height: 1.5,
-              ),
+      barrierColor: Colors.black38,
+      builder: (context) => Center(
+        child: Material(
+          color: Colors.transparent,
+          child: Container(
+            width: 480,
+            constraints: BoxConstraints(maxHeight: 520),
+            decoration: BoxDecoration(
+              color: Color(0xFFFAFAFA),
+              borderRadius: BorderRadius.circular(10),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.15),
+                  blurRadius: 20,
+                  offset: Offset(0, 6),
+                ),
+              ],
             ),
-          ),
-        ),
-        actions: [
-          CupertinoDialogAction(
-            child: Text('Close'),
-            onPressed: () => Navigator.pop(context),
-          ),
-        ],
-      ),
-    );
-  }
-
-  // Show Customer Support
-  void _showCustomerSupport(BuildContext context) {
-    showCupertinoDialog(
-      context: context,
-      builder: (context) => CupertinoAlertDialog(
-        title: Text('Customer Support'),
-        content: SingleChildScrollView(
-          child: Padding(
-            padding: EdgeInsets.only(top: 16),
             child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisSize: MainAxisSize.min,
               children: [
-                Text(
-                  'We\'re here to help!',
-                  style: TextStyle(
-                    fontFamily: 'SF Pro Display',
-                    fontSize: 16,
-                    fontWeight: FontWeight.w600,
-                    color: Color(0xFF1A1A1A),
+                // Title bar
+                Container(
+                  padding: EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+                  decoration: BoxDecoration(
+                    border: Border(bottom: BorderSide(color: Color(0xFFE5E5E5), width: 0.5)),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(CupertinoIcons.lock_shield, size: 16, color: Color(0xFF007AFF)),
+                      SizedBox(width: 8),
+                      Text(
+                        'Privacy Policy',
+                        style: TextStyle(
+                          fontFamily: 'SF Pro Text',
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                          color: Color(0xFF1D1D1F),
+                        ),
+                      ),
+                      Spacer(),
+                      GestureDetector(
+                        onTap: () => Navigator.pop(context),
+                        child: Container(
+                          width: 20,
+                          height: 20,
+                          decoration: BoxDecoration(
+                            color: Color(0xFFE5E5E5),
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: Icon(Icons.close, size: 12, color: Color(0xFF8E8E93)),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
-                SizedBox(height: 16),
-                Text(
-                  'Contact Options:',
-                  style: TextStyle(
-                    fontFamily: 'SF Pro Display',
-                    fontSize: 14,
-                    fontWeight: FontWeight.w600,
-                    color: Color(0xFF1A1A1A),
-                  ),
-                ),
-                SizedBox(height: 8),
-                Text(
-                  'Email: support@lonaclub.com\n'
-                  'Phone: +1 (555) 123-4567\n'
-                  'Hours: Monday - Friday, 9 AM - 6 PM EST\n\n'
-                  'For urgent issues, please email us and we\'ll respond within 24 hours.',
-                  style: TextStyle(
-                    fontFamily: 'SF Pro Display',
-                    fontSize: 14,
-                    color: Color(0xFF666666),
-                    height: 1.5,
-                  ),
-                ),
-                SizedBox(height: 16),
-                Text(
-                  'Frequently Asked Questions:',
-                  style: TextStyle(
-                    fontFamily: 'SF Pro Display',
-                    fontSize: 14,
-                    fontWeight: FontWeight.w600,
-                    color: Color(0xFF1A1A1A),
-                  ),
-                ),
-                SizedBox(height: 8),
-                Text(
-                  '• How do I reset my password?\n'
-                  '• How do I delete my account?\n'
-                  '• How do I report a problem?\n\n'
-                  'Visit our help center for more answers.',
-                  style: TextStyle(
-                    fontFamily: 'SF Pro Display',
-                    fontSize: 14,
-                    color: Color(0xFF666666),
-                    height: 1.5,
+                // Content
+                Flexible(
+                  child: SingleChildScrollView(
+                    padding: EdgeInsets.all(20),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Last updated: January 2024',
+                          style: TextStyle(fontFamily: 'SF Pro Text', fontSize: 11, color: Color(0xFF8E8E93)),
+                        ),
+                        SizedBox(height: 16),
+                        Text(
+                          'At Lona Club, we are committed to protecting your privacy. This Privacy Policy explains how we collect, use, and safeguard your personal information.',
+                          style: TextStyle(fontFamily: 'SF Pro Text', fontSize: 12, color: Color(0xFF636366), height: 1.5),
+                        ),
+                        SizedBox(height: 16),
+                        _buildPolicySection('Information We Collect', [
+                          'Account information (name, email, phone number)',
+                          'Messages and communications',
+                          'Device information and usage data',
+                        ]),
+                        SizedBox(height: 12),
+                        _buildPolicySection('How We Use Your Information', [
+                          'To provide and improve our services',
+                          'To communicate with you',
+                          'To ensure security and prevent fraud',
+                        ]),
+                        SizedBox(height: 12),
+                        _buildPolicySection('Data Security', [
+                          'All your data is encrypted and stored securely',
+                          'We use industry-standard security measures',
+                        ]),
+                        SizedBox(height: 12),
+                        _buildPolicySection('Your Rights', [
+                          'Access, update, or delete your personal information',
+                          'Manage preferences through account settings',
+                        ]),
+                      ],
+                    ),
                   ),
                 ),
               ],
             ),
           ),
         ),
-        actions: [
-          CupertinoDialogAction(
-            child: Text('Close'),
-            onPressed: () => Navigator.pop(context),
-          ),
-        ],
       ),
+    );
+  }
+
+  Widget _buildPolicySection(String title, List<String> items) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          title,
+          style: TextStyle(
+            fontFamily: 'SF Pro Text',
+            fontSize: 12,
+            fontWeight: FontWeight.w600,
+            color: Color(0xFF1D1D1F),
+          ),
+        ),
+        SizedBox(height: 4),
+        ...items.map((item) => Padding(
+          padding: EdgeInsets.only(left: 8, top: 2),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('•  ', style: TextStyle(fontSize: 12, color: Color(0xFF8E8E93))),
+              Expanded(
+                child: Text(
+                  item,
+                  style: TextStyle(fontFamily: 'SF Pro Text', fontSize: 12, color: Color(0xFF636366), height: 1.4),
+                ),
+              ),
+            ],
+          ),
+        )),
+      ],
+    );
+  }
+
+  // Show Customer Support
+  void _showCustomerSupport(BuildContext context) {
+    showDialog(
+      context: context,
+      barrierColor: Colors.black38,
+      builder: (context) => Center(
+        child: Material(
+          color: Colors.transparent,
+          child: Container(
+            width: 480,
+            constraints: BoxConstraints(maxHeight: 480),
+            decoration: BoxDecoration(
+              color: Color(0xFFFAFAFA),
+              borderRadius: BorderRadius.circular(10),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.15),
+                  blurRadius: 20,
+                  offset: Offset(0, 6),
+                ),
+              ],
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // Title bar
+                Container(
+                  padding: EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+                  decoration: BoxDecoration(
+                    border: Border(bottom: BorderSide(color: Color(0xFFE5E5E5), width: 0.5)),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(CupertinoIcons.chat_bubble_text, size: 16, color: Color(0xFF007AFF)),
+                      SizedBox(width: 8),
+                      Text(
+                        'Customer Support',
+                        style: TextStyle(
+                          fontFamily: 'SF Pro Text',
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                          color: Color(0xFF1D1D1F),
+                        ),
+                      ),
+                      Spacer(),
+                      GestureDetector(
+                        onTap: () => Navigator.pop(context),
+                        child: Container(
+                          width: 20,
+                          height: 20,
+                          decoration: BoxDecoration(
+                            color: Color(0xFFE5E5E5),
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: Icon(Icons.close, size: 12, color: Color(0xFF8E8E93)),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                // Content
+                Flexible(
+                  child: SingleChildScrollView(
+                    padding: EdgeInsets.all(20),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // Contact info card
+                        Container(
+                          width: double.infinity,
+                          padding: EdgeInsets.all(16),
+                          decoration: BoxDecoration(
+                            color: Color(0xFFF2F2F7),
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'CONTACT',
+                                style: TextStyle(
+                                  fontFamily: 'SF Pro Text',
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.w500,
+                                  color: Color(0xFF8E8E93),
+                                  letterSpacing: 0.5,
+                                ),
+                              ),
+                              SizedBox(height: 8),
+                              _buildContactRow(CupertinoIcons.mail, 'support@lonaclub.com'),
+                              SizedBox(height: 6),
+                              _buildContactRow(CupertinoIcons.phone, '+1 (555) 123-4567'),
+                              SizedBox(height: 6),
+                              _buildContactRow(CupertinoIcons.clock, 'Mon – Fri, 9 AM – 6 PM EST'),
+                            ],
+                          ),
+                        ),
+                        SizedBox(height: 12),
+                        Padding(
+                          padding: EdgeInsets.symmetric(horizontal: 4),
+                          child: Text(
+                            'For urgent issues, email us and we\'ll respond within 24 hours.',
+                            style: TextStyle(fontFamily: 'SF Pro Text', fontSize: 11, color: Color(0xFF8E8E93)),
+                          ),
+                        ),
+                        SizedBox(height: 20),
+                        // FAQ
+                        Text(
+                          'FREQUENTLY ASKED QUESTIONS',
+                          style: TextStyle(
+                            fontFamily: 'SF Pro Text',
+                            fontSize: 10,
+                            fontWeight: FontWeight.w500,
+                            color: Color(0xFF8E8E93),
+                            letterSpacing: 0.5,
+                          ),
+                        ),
+                        SizedBox(height: 8),
+                        Container(
+                          width: double.infinity,
+                          padding: EdgeInsets.all(16),
+                          decoration: BoxDecoration(
+                            color: Color(0xFFF2F2F7),
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              _buildFaqItem('How do I reset my password?'),
+                              SizedBox(height: 6),
+                              _buildFaqItem('How do I delete my account?'),
+                              SizedBox(height: 6),
+                              _buildFaqItem('How do I report a problem?'),
+                            ],
+                          ),
+                        ),
+                        SizedBox(height: 12),
+                        Padding(
+                          padding: EdgeInsets.symmetric(horizontal: 4),
+                          child: Text(
+                            'Visit our help center for more answers.',
+                            style: TextStyle(fontFamily: 'SF Pro Text', fontSize: 11, color: Color(0xFF8E8E93)),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildContactRow(IconData icon, String text) {
+    return Row(
+      children: [
+        Icon(icon, size: 13, color: Color(0xFF636366)),
+        SizedBox(width: 8),
+        Text(
+          text,
+          style: TextStyle(fontFamily: 'SF Pro Text', fontSize: 12, color: Color(0xFF1D1D1F)),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildFaqItem(String question) {
+    return Row(
+      children: [
+        Icon(CupertinoIcons.question_circle, size: 13, color: Color(0xFF007AFF)),
+        SizedBox(width: 8),
+        Text(
+          question,
+          style: TextStyle(fontFamily: 'SF Pro Text', fontSize: 12, color: Color(0xFF1D1D1F)),
+        ),
+      ],
     );
   }
 
@@ -535,7 +718,7 @@ class _ProfileSettingsWidgetState extends State<ProfileSettingsWidget>
     required bool isSelected,
   }) {
     return Container(
-      margin: EdgeInsets.only(bottom: 4),
+      margin: EdgeInsets.only(bottom: 1),
       child: Material(
         color: Colors.transparent,
         child: InkWell(
@@ -543,33 +726,33 @@ class _ProfileSettingsWidgetState extends State<ProfileSettingsWidget>
             setState(() {
               _model.selectedTab = tab;
             });
-            // Reload notification status when switching to notifications tab
             if (tab == SettingsTab.notifications) {
               _loadNotificationStatus();
             }
           },
-          borderRadius: BorderRadius.circular(8),
+          borderRadius: BorderRadius.circular(5),
+          hoverColor: Color(0xFFF5F5F7),
           child: Container(
-            padding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            padding: EdgeInsets.symmetric(horizontal: 10, vertical: 7),
             decoration: BoxDecoration(
-              color: isSelected ? Color(0xFFE3F2FD) : Colors.transparent,
-              borderRadius: BorderRadius.circular(8),
+              color: isSelected ? Color(0xFF007AFF).withOpacity(0.1) : Colors.transparent,
+              borderRadius: BorderRadius.circular(5),
             ),
             child: Row(
               children: [
                 Icon(
                   icon,
-                  size: 20,
-                  color: isSelected ? Color(0xFF0077B5) : Color(0xFF666666),
+                  size: 15,
+                  color: isSelected ? Color(0xFF007AFF) : Color(0xFF8E8E93),
                 ),
-                SizedBox(width: 12),
+                SizedBox(width: 8),
                 Text(
                   title,
                   style: TextStyle(
-                    fontFamily: 'SF Pro Display',
-                    fontSize: 15,
+                    fontFamily: 'SF Pro Text',
+                    fontSize: 13,
                     fontWeight: isSelected ? FontWeight.w600 : FontWeight.w400,
-                    color: isSelected ? Color(0xFF0077B5) : Color(0xFF333333),
+                    color: isSelected ? Color(0xFF007AFF) : Color(0xFF1D1D1F),
                   ),
                 ),
               ],
@@ -1201,64 +1384,48 @@ class _ProfileSettingsWidgetState extends State<ProfileSettingsWidget>
 
   Widget _buildApiKeysContent() {
     return SingleChildScrollView(
-      padding: EdgeInsets.all(40),
+      padding: EdgeInsets.symmetric(horizontal: 32, vertical: 24),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            children: [
-              Icon(
-                CupertinoIcons.lock_shield_fill,
-                size: 32,
-                color: Color(0xFF0077B5),
-              ),
-              SizedBox(width: 12),
-              Text(
-                'API Keys',
-                style: TextStyle(
-                  fontFamily: 'SF Pro Display',
-                  fontSize: 28,
-                  fontWeight: FontWeight.w700,
-                  color: Color(0xFF1A1A1A),
-                ),
-              ),
-            ],
-          ),
-          SizedBox(height: 8),
           Text(
-            'Manage API keys for AI integrations. Personal keys send as you; System keys send as Qurio AI.',
+            'API Keys',
             style: TextStyle(
-              fontFamily: 'SF Pro Display',
-              fontSize: 14,
-              color: Color(0xFF666666),
-              height: 1.4,
+              fontFamily: 'SF Pro Text',
+              fontSize: 20,
+              fontWeight: FontWeight.w600,
+              color: Color(0xFF1D1D1F),
             ),
-          ),
-          SizedBox(height: 28),
-
-          // ── System Key Section ──
-          Row(
-            children: [
-              Icon(CupertinoIcons.bolt_circle_fill, size: 22, color: Color(0xFF0077B5)),
-              SizedBox(width: 8),
-              Text(
-                'System Key',
-                style: TextStyle(
-                  fontFamily: 'SF Pro Display',
-                  fontSize: 18,
-                  fontWeight: FontWeight.w600,
-                  color: Color(0xFF1A1A1A),
-                ),
-              ),
-            ],
           ),
           SizedBox(height: 4),
           Text(
-            'Messages sent via system key appear from "Qurio AI" instead of your personal account.',
+            'Manage API keys for AI integrations.',
             style: TextStyle(
-              fontFamily: 'SF Pro Display',
-              fontSize: 13,
-              color: Color(0xFF666666),
+              fontFamily: 'SF Pro Text',
+              fontSize: 12,
+              color: Color(0xFF8E8E93),
+            ),
+          ),
+          SizedBox(height: 24),
+
+          // ── System Key Section ──
+          Text(
+            'SYSTEM KEY',
+            style: TextStyle(
+              fontFamily: 'SF Pro Text',
+              fontSize: 11,
+              fontWeight: FontWeight.w500,
+              color: Color(0xFF8E8E93),
+              letterSpacing: 0.5,
+            ),
+          ),
+          SizedBox(height: 4),
+          Text(
+            'Messages sent via system key appear from "Qurio AI".',
+            style: TextStyle(
+              fontFamily: 'SF Pro Text',
+              fontSize: 12,
+              color: Color(0xFF636366),
               height: 1.4,
             ),
           ),
@@ -1266,51 +1433,49 @@ class _ProfileSettingsWidgetState extends State<ProfileSettingsWidget>
 
           // System key info card
           Container(
-            padding: EdgeInsets.all(14),
+            padding: EdgeInsets.symmetric(horizontal: 14, vertical: 10),
             decoration: BoxDecoration(
-              color: Color(0xFFE3F2FD),
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: Color(0xFFBBDEFB), width: 1),
+              color: Color(0xFFF2F2F7),
+              borderRadius: BorderRadius.circular(6),
             ),
             child: Row(
               children: [
-                Icon(CupertinoIcons.person_crop_circle_badge_checkmark, size: 18, color: Color(0xFF0077B5)),
-                SizedBox(width: 10),
+                Icon(CupertinoIcons.person_crop_circle_badge_checkmark, size: 14, color: Color(0xFF8E8E93)),
+                SizedBox(width: 8),
                 Expanded(
                   child: Text(
                     'Qurio AI will appear as a separate bot account in chats, not as you.',
                     style: TextStyle(
-                      fontFamily: 'SF Pro Display',
-                      fontSize: 13,
-                      color: Color(0xFF1A1A1A),
-                      height: 1.4,
+                      fontFamily: 'SF Pro Text',
+                      fontSize: 12,
+                      color: Color(0xFF636366),
                     ),
                   ),
                 ),
               ],
             ),
           ),
-          SizedBox(height: 14),
+          SizedBox(height: 12),
 
           // Generate System Key button
           SizedBox(
             width: double.infinity,
             child: CupertinoButton(
-              padding: EdgeInsets.symmetric(vertical: 14),
-              color: Color(0xFF0077B5),
-              borderRadius: BorderRadius.circular(12),
+              padding: EdgeInsets.symmetric(vertical: 8),
+              color: Color(0xFF007AFF),
+              borderRadius: BorderRadius.circular(6),
               onPressed: _showGenerateSystemKeyDialog,
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Icon(CupertinoIcons.plus_circle_fill, size: 20, color: Colors.white),
-                  SizedBox(width: 10),
+                  Icon(CupertinoIcons.plus, size: 14, color: Colors.white),
+                  SizedBox(width: 6),
                   Text(
                     'Generate System Key',
                     style: TextStyle(
-                      fontFamily: 'SF Pro Display',
-                      fontSize: 16,
-                      fontWeight: FontWeight.w600,
+                      fontFamily: 'SF Pro Text',
+                      fontSize: 13,
+                      fontWeight: FontWeight.w500,
                       color: Colors.white,
                     ),
                   ),
@@ -1339,27 +1504,15 @@ class _ProfileSettingsWidgetState extends State<ProfileSettingsWidget>
 
               if (docs.isEmpty) {
                 return Container(
-                  padding: EdgeInsets.all(24),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: Color(0xFFE5E7EB), width: 1),
-                  ),
+                  padding: EdgeInsets.symmetric(vertical: 20),
                   child: Center(
-                    child: Column(
-                      children: [
-                        Icon(CupertinoIcons.bolt, size: 28, color: Color(0xFFCCCCCC)),
-                        SizedBox(height: 8),
-                        Text(
-                          'No system keys yet',
-                          style: TextStyle(
-                            fontFamily: 'SF Pro Display',
-                            fontSize: 14,
-                            fontWeight: FontWeight.w600,
-                            color: Color(0xFF999999),
-                          ),
-                        ),
-                      ],
+                    child: Text(
+                      'No system keys yet',
+                      style: TextStyle(
+                        fontFamily: 'SF Pro Text',
+                        fontSize: 12,
+                        color: Color(0xFFAEAEB2),
+                      ),
                     ),
                   ),
                 );
@@ -1367,9 +1520,9 @@ class _ProfileSettingsWidgetState extends State<ProfileSettingsWidget>
 
               return Container(
                 decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: Color(0xFFE5E7EB), width: 1),
+                  color: Color(0xFFFAFAFA),
+                  borderRadius: BorderRadius.circular(6),
+                  border: Border.all(color: Color(0xFFE5E5E5), width: 0.5),
                 ),
                 child: Column(
                   children: docs.asMap().entries.map((entry) {
@@ -1564,23 +1717,23 @@ class _ProfileSettingsWidgetState extends State<ProfileSettingsWidget>
                             );
                           },
                           child: Padding(
-                            padding: EdgeInsets.all(14),
+                            padding: EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                             child: Row(
                               children: [
                                 Container(
-                                  width: 36,
-                                  height: 36,
+                                  width: 28,
+                                  height: 28,
                                   decoration: BoxDecoration(
-                                    color: isActive ? Color(0xFFE3F2FD) : Color(0xFFFBE9E7),
-                                    borderRadius: BorderRadius.circular(8),
+                                    color: isActive ? Color(0xFF007AFF).withOpacity(0.1) : Color(0xFFF2F2F7),
+                                    borderRadius: BorderRadius.circular(6),
                                   ),
                                   child: Icon(
-                                    CupertinoIcons.bolt_fill,
-                                    size: 16,
-                                    color: isActive ? Color(0xFF0077B5) : Color(0xFFBF360C),
+                                    CupertinoIcons.bolt,
+                                    size: 14,
+                                    color: isActive ? Color(0xFF007AFF) : Color(0xFFC7C7CC),
                                   ),
                                 ),
-                                SizedBox(width: 14),
+                                SizedBox(width: 10),
                                 Expanded(
                                   child: Column(
                                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -1590,26 +1743,26 @@ class _ProfileSettingsWidgetState extends State<ProfileSettingsWidget>
                                           Text(
                                             name,
                                             style: TextStyle(
-                                              fontFamily: 'SF Pro Display',
-                                              fontSize: 15,
-                                              fontWeight: FontWeight.w600,
-                                              color: Color(0xFF1A1A1A),
+                                              fontFamily: 'SF Pro Text',
+                                              fontSize: 13,
+                                              fontWeight: FontWeight.w500,
+                                              color: Color(0xFF1D1D1F),
                                             ),
                                           ),
-                                          SizedBox(width: 8),
+                                          SizedBox(width: 6),
                                           Container(
-                                            padding: EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                            padding: EdgeInsets.symmetric(horizontal: 6, vertical: 1),
                                             decoration: BoxDecoration(
-                                              color: isActive ? Color(0xFFE8F5E9) : Color(0xFFFFEBEE),
-                                              borderRadius: BorderRadius.circular(4),
+                                              color: isActive ? Color(0xFF34C759).withOpacity(0.12) : Color(0xFFFF3B30).withOpacity(0.12),
+                                              borderRadius: BorderRadius.circular(3),
                                             ),
                                             child: Text(
                                               isActive ? 'Active' : 'Revoked',
                                               style: TextStyle(
-                                                fontFamily: 'SF Pro Display',
-                                                fontSize: 11,
-                                                fontWeight: FontWeight.w600,
-                                                color: isActive ? Color(0xFF2E7D32) : Color(0xFFC62828),
+                                                fontFamily: 'SF Pro Text',
+                                                fontSize: 10,
+                                                fontWeight: FontWeight.w500,
+                                                color: isActive ? Color(0xFF34C759) : Color(0xFFFF3B30),
                                               ),
                                             ),
                                           ),
@@ -1620,17 +1773,16 @@ class _ProfileSettingsWidgetState extends State<ProfileSettingsWidget>
                                         preview,
                                         style: TextStyle(
                                           fontFamily: 'SF Mono, Courier',
-                                          fontSize: 12,
-                                          color: Color(0xFF888888),
+                                          fontSize: 11,
+                                          color: Color(0xFF8E8E93),
                                         ),
                                       ),
-                                      SizedBox(height: 2),
                                       Text(
                                         'Created ${createdAt != null ? DateFormat('MMM d, yyyy').format(createdAt.toDate()) : 'Unknown'}',
                                         style: TextStyle(
-                                          fontFamily: 'SF Pro Display',
-                                          fontSize: 12,
-                                          color: Color(0xFFBBBBBB),
+                                          fontFamily: 'SF Pro Text',
+                                          fontSize: 11,
+                                          color: Color(0xFFAEAEB2),
                                         ),
                                       ),
                                     ],
@@ -1638,8 +1790,8 @@ class _ProfileSettingsWidgetState extends State<ProfileSettingsWidget>
                                 ),
                                 if (isActive && keyHash != null)
                                   CupertinoButton(
-                                    padding: EdgeInsets.all(8),
-                                    minSize: 32,
+                                    padding: EdgeInsets.all(6),
+                                    minSize: 24,
                                     onPressed: () async {
                                       final confirm = await showCupertinoDialog<bool>(
                                         context: context,
@@ -1664,7 +1816,7 @@ class _ProfileSettingsWidgetState extends State<ProfileSettingsWidget>
                                         await FirebaseFirestore.instance.collection('api_key_hashes').doc(keyHash).update({'is_active': false});
                                       }
                                     },
-                                    child: Icon(CupertinoIcons.xmark_circle, size: 20, color: Color(0xFFCC3333)),
+                                    child: Icon(CupertinoIcons.xmark_circle, size: 16, color: Color(0xFFFF3B30)),
                                   ),
                               ],
                             ),
@@ -1678,57 +1830,51 @@ class _ProfileSettingsWidgetState extends State<ProfileSettingsWidget>
             },
           ),
 
-          SizedBox(height: 32),
-          Divider(color: Color(0xFFE5E7EB)),
           SizedBox(height: 24),
+          Divider(color: Color(0xFFE5E5E5), height: 1),
+          SizedBox(height: 20),
 
           // ── Personal Key Section (existing) ──
-          Row(
-            children: [
-              Icon(CupertinoIcons.person_crop_circle_fill, size: 22, color: Color(0xFF0077B5)),
-              SizedBox(width: 8),
-              Text(
-                'Personal Keys',
-                style: TextStyle(
-                  fontFamily: 'SF Pro Display',
-                  fontSize: 18,
-                  fontWeight: FontWeight.w600,
-                  color: Color(0xFF1A1A1A),
-                ),
-              ),
-            ],
+          Text(
+            'PERSONAL KEYS',
+            style: TextStyle(
+              fontFamily: 'SF Pro Text',
+              fontSize: 11,
+              fontWeight: FontWeight.w500,
+              color: Color(0xFF8E8E93),
+              letterSpacing: 0.5,
+            ),
           ),
           SizedBox(height: 4),
           Text(
-            'Messages sent via personal keys appear from your own account, tagged "via Qurio AI".',
+            'Messages appear from your account, tagged "via Qurio AI".',
             style: TextStyle(
-              fontFamily: 'SF Pro Display',
-              fontSize: 13,
-              color: Color(0xFF666666),
+              fontFamily: 'SF Pro Text',
+              fontSize: 12,
+              color: Color(0xFF636366),
               height: 1.4,
             ),
           ),
-          SizedBox(height: 16),
+          SizedBox(height: 12),
 
           // Info card
           Container(
-            padding: EdgeInsets.all(16),
+            padding: EdgeInsets.symmetric(horizontal: 14, vertical: 10),
             decoration: BoxDecoration(
-              color: Color(0xFFE3F2FD),
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: Color(0xFFBBDEFB), width: 1),
+              color: Color(0xFFF2F2F7),
+              borderRadius: BorderRadius.circular(6),
             ),
             child: Row(
               children: [
-                Icon(CupertinoIcons.info_circle_fill, size: 20, color: Color(0xFF0077B5)),
-                SizedBox(width: 12),
+                Icon(CupertinoIcons.info_circle, size: 14, color: Color(0xFF8E8E93)),
+                SizedBox(width: 8),
                 Expanded(
                   child: Text(
-                    'Your API key allows AI to access only chats you are a member of. Messages sent via API will be tagged "via Qurio AI".',
+                    'Your API key allows AI to access only chats you are a member of.',
                     style: TextStyle(
-                      fontFamily: 'SF Pro Display',
-                      fontSize: 13,
-                      color: Color(0xFF1A1A1A),
+                      fontFamily: 'SF Pro Text',
+                      fontSize: 12,
+                      color: Color(0xFF636366),
                       height: 1.4,
                     ),
                   ),
@@ -1742,21 +1888,21 @@ class _ProfileSettingsWidgetState extends State<ProfileSettingsWidget>
           SizedBox(
             width: double.infinity,
             child: CupertinoButton(
-              padding: EdgeInsets.symmetric(vertical: 14),
-              color: Color(0xFF0077B5),
-              borderRadius: BorderRadius.circular(12),
+              padding: EdgeInsets.symmetric(vertical: 8),
+              color: Color(0xFF007AFF),
+              borderRadius: BorderRadius.circular(6),
               onPressed: _showGenerateKeyDialog,
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Icon(CupertinoIcons.plus_circle_fill, size: 20, color: Colors.white),
-                  SizedBox(width: 10),
+                  Icon(CupertinoIcons.plus, size: 14, color: Colors.white),
+                  SizedBox(width: 6),
                   Text(
                     'Generate New API Key',
                     style: TextStyle(
-                      fontFamily: 'SF Pro Display',
-                      fontSize: 16,
-                      fontWeight: FontWeight.w600,
+                      fontFamily: 'SF Pro Text',
+                      fontSize: 13,
+                      fontWeight: FontWeight.w500,
                       color: Colors.white,
                     ),
                   ),
@@ -1768,24 +1914,25 @@ class _ProfileSettingsWidgetState extends State<ProfileSettingsWidget>
 
           // Existing keys list
           Text(
-            'Your Keys',
+            'YOUR KEYS',
             style: TextStyle(
-              fontFamily: 'SF Pro Display',
-              fontSize: 18,
-              fontWeight: FontWeight.w600,
-              color: Color(0xFF1A1A1A),
+              fontFamily: 'SF Pro Text',
+              fontSize: 11,
+              fontWeight: FontWeight.w500,
+              color: Color(0xFF8E8E93),
+              letterSpacing: 0.5,
             ),
           ),
           SizedBox(height: 4),
           Text(
             'Manage your existing API keys',
             style: TextStyle(
-              fontFamily: 'SF Pro Display',
-              fontSize: 14,
-              color: Color(0xFF666666),
+              fontFamily: 'SF Pro Text',
+              fontSize: 12,
+              color: Color(0xFF636366),
             ),
           ),
-          SizedBox(height: 16),
+          SizedBox(height: 8),
 
           StreamBuilder<QuerySnapshot>(
             stream: FirebaseFirestore.instance
@@ -1805,36 +1952,15 @@ class _ProfileSettingsWidgetState extends State<ProfileSettingsWidget>
 
               if (docs.isEmpty) {
                 return Container(
-                  padding: EdgeInsets.all(32),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: Color(0xFFE5E7EB), width: 1),
-                  ),
+                  padding: EdgeInsets.symmetric(vertical: 20),
                   child: Center(
-                    child: Column(
-                      children: [
-                        Icon(CupertinoIcons.lock_open, size: 32, color: Color(0xFFCCCCCC)),
-                        SizedBox(height: 12),
-                        Text(
-                          'No API keys yet',
-                          style: TextStyle(
-                            fontFamily: 'SF Pro Display',
-                            fontSize: 15,
-                            fontWeight: FontWeight.w600,
-                            color: Color(0xFF999999),
-                          ),
-                        ),
-                        SizedBox(height: 4),
-                        Text(
-                          'Generate your first key to get started with AI integrations.',
-                          style: TextStyle(
-                            fontFamily: 'SF Pro Display',
-                            fontSize: 13,
-                            color: Color(0xFFBBBBBB),
-                          ),
-                        ),
-                      ],
+                    child: Text(
+                      'No API keys yet. Generate your first key above.',
+                      style: TextStyle(
+                        fontFamily: 'SF Pro Text',
+                        fontSize: 12,
+                        color: Color(0xFFAEAEB2),
+                      ),
                     ),
                   ),
                 );
@@ -1842,9 +1968,9 @@ class _ProfileSettingsWidgetState extends State<ProfileSettingsWidget>
 
               return Container(
                 decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: Color(0xFFE5E7EB), width: 1),
+                  color: Color(0xFFFAFAFA),
+                  borderRadius: BorderRadius.circular(6),
+                  border: Border.all(color: Color(0xFFE5E5E5), width: 0.5),
                 ),
                 child: Column(
                   children: docs.asMap().entries.map((entry) {
@@ -2002,23 +2128,23 @@ class _ProfileSettingsWidgetState extends State<ProfileSettingsWidget>
                           child: MouseRegion(
                             cursor: SystemMouseCursors.click,
                             child: Padding(
-                              padding: EdgeInsets.all(16),
+                              padding: EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                               child: Row(
                                 children: [
                                   Container(
-                                    width: 36,
-                                    height: 36,
+                                    width: 28,
+                                    height: 28,
                                     decoration: BoxDecoration(
-                                      color: isActive ? Color(0xFFE3F2FD) : Color(0xFFFBE9E7),
-                                      borderRadius: BorderRadius.circular(8),
+                                      color: isActive ? Color(0xFF007AFF).withOpacity(0.1) : Color(0xFFF2F2F7),
+                                      borderRadius: BorderRadius.circular(6),
                                     ),
                                     child: Icon(
-                                      CupertinoIcons.lock_fill,
-                                      size: 16,
-                                      color: isActive ? Color(0xFF0077B5) : Color(0xFFBF360C),
+                                      CupertinoIcons.lock,
+                                      size: 14,
+                                      color: isActive ? Color(0xFF007AFF) : Color(0xFFC7C7CC),
                                     ),
                                   ),
-                                  SizedBox(width: 14),
+                                  SizedBox(width: 10),
                                   Expanded(
                                     child: Column(
                                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -2028,26 +2154,26 @@ class _ProfileSettingsWidgetState extends State<ProfileSettingsWidget>
                                             Text(
                                               name,
                                               style: TextStyle(
-                                                fontFamily: 'SF Pro Display',
-                                                fontSize: 15,
-                                                fontWeight: FontWeight.w600,
-                                                color: Color(0xFF1A1A1A),
+                                                fontFamily: 'SF Pro Text',
+                                                fontSize: 13,
+                                                fontWeight: FontWeight.w500,
+                                                color: Color(0xFF1D1D1F),
                                               ),
                                             ),
-                                            SizedBox(width: 8),
+                                            SizedBox(width: 6),
                                             Container(
-                                              padding: EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                              padding: EdgeInsets.symmetric(horizontal: 6, vertical: 1),
                                               decoration: BoxDecoration(
-                                                color: isActive ? Color(0xFFE8F5E9) : Color(0xFFFFEBEE),
-                                                borderRadius: BorderRadius.circular(4),
+                                                color: isActive ? Color(0xFF34C759).withOpacity(0.12) : Color(0xFFFF3B30).withOpacity(0.12),
+                                                borderRadius: BorderRadius.circular(3),
                                               ),
                                               child: Text(
                                                 isActive ? 'Active' : 'Revoked',
                                                 style: TextStyle(
-                                                  fontFamily: 'SF Pro Display',
-                                                  fontSize: 11,
-                                                  fontWeight: FontWeight.w600,
-                                                  color: isActive ? Color(0xFF2E7D32) : Color(0xFFC62828),
+                                                  fontFamily: 'SF Pro Text',
+                                                  fontSize: 10,
+                                                  fontWeight: FontWeight.w500,
+                                                  color: isActive ? Color(0xFF34C759) : Color(0xFFFF3B30),
                                                 ),
                                               ),
                                             ),
@@ -2058,18 +2184,17 @@ class _ProfileSettingsWidgetState extends State<ProfileSettingsWidget>
                                           preview,
                                           style: TextStyle(
                                             fontFamily: 'SF Mono, Courier',
-                                            fontSize: 12,
-                                            color: Color(0xFF888888),
+                                            fontSize: 11,
+                                            color: Color(0xFF8E8E93),
                                           ),
                                         ),
-                                        SizedBox(height: 2),
                                         Text(
                                           'Created ${createdAt != null ? DateFormat('MMM d, yyyy').format(createdAt.toDate()) : 'Unknown'}'
                                           '${lastUsed != null ? '  ·  Used ${DateFormat('MMM d').format(lastUsed.toDate())}' : ''}',
                                           style: TextStyle(
-                                            fontFamily: 'SF Pro Display',
-                                            fontSize: 12,
-                                            color: Color(0xFFBBBBBB),
+                                            fontFamily: 'SF Pro Text',
+                                            fontSize: 11,
+                                            color: Color(0xFFAEAEB2),
                                           ),
                                         ),
                                       ],
@@ -2077,8 +2202,8 @@ class _ProfileSettingsWidgetState extends State<ProfileSettingsWidget>
                                   ),
                               if (isActive)
                                 CupertinoButton(
-                                  padding: EdgeInsets.all(8),
-                                  minSize: 32,
+                                  padding: EdgeInsets.all(6),
+                                  minSize: 24,
                                   onPressed: () async {
                                     final confirm = await showDialog<bool>(
                                       context: context,
@@ -2180,8 +2305,8 @@ class _ProfileSettingsWidgetState extends State<ProfileSettingsWidget>
                                   },
                                   child: Icon(
                                     CupertinoIcons.trash,
-                                    size: 16,
-                                    color: Color(0xFFCC0000),
+                                    size: 14,
+                                    color: Color(0xFFFF3B30),
                                   ),
                                 ),
                             ],
@@ -2203,45 +2328,51 @@ class _ProfileSettingsWidgetState extends State<ProfileSettingsWidget>
 
   Widget _buildSidebar() {
     return Container(
-      width: 240,
+      width: 200,
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: Color(0xFFFAFAFA),
         border: Border(
-          right: BorderSide(
-            color: Color(0xFFE5E7EB),
-            width: 1,
-          ),
+          right: BorderSide(color: Color(0xFFE5E5E5), width: 0.5),
         ),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Padding(
-            padding: EdgeInsets.all(20),
+          // Compact header
+          Container(
+            height: 52,
+            padding: EdgeInsets.symmetric(horizontal: 16),
+            alignment: Alignment.centerLeft,
+            decoration: BoxDecoration(
+              border: Border(
+                bottom: BorderSide(color: Color(0xFFE5E5E5), width: 0.5),
+              ),
+            ),
             child: Text(
               'Settings',
               style: TextStyle(
-                fontFamily: 'SF Pro Display',
-                fontSize: 24,
-                fontWeight: FontWeight.w700,
-                color: Color(0xFF1A1A1A),
+                fontFamily: 'SF Pro Text',
+                fontSize: 15,
+                fontWeight: FontWeight.w600,
+                color: Color(0xFF1D1D1F),
               ),
             ),
           ),
+          SizedBox(height: 8),
           Padding(
-            padding: EdgeInsets.symmetric(horizontal: 12),
+            padding: EdgeInsets.symmetric(horizontal: 8),
             child: Column(
               children: [
                 _buildSidebarItem(
                   tab: SettingsTab.yourProfile,
-                  title: 'Your Profile',
-                  icon: CupertinoIcons.person_fill,
+                  title: 'Profile',
+                  icon: CupertinoIcons.person,
                   isSelected: _model.selectedTab == SettingsTab.yourProfile,
                 ),
                 _buildSidebarItem(
                   tab: SettingsTab.notifications,
                   title: 'Notifications',
-                  icon: CupertinoIcons.bell_fill,
+                  icon: CupertinoIcons.bell,
                   isSelected: _model.selectedTab == SettingsTab.notifications,
                 ),
                 _buildSidebarItem(
@@ -2253,22 +2384,25 @@ class _ProfileSettingsWidgetState extends State<ProfileSettingsWidget>
                 _buildSidebarItem(
                   tab: SettingsTab.apiKeys,
                   title: 'API Keys',
-                  icon: CupertinoIcons.lock_shield_fill,
+                  icon: CupertinoIcons.lock,
                   isSelected: _model.selectedTab == SettingsTab.apiKeys,
                 ),
                 _buildSidebarItem(
                   tab: SettingsTab.helpFeedback,
-                  title: 'Help & Feedback',
-                  icon: CupertinoIcons.question_circle_fill,
+                  title: 'Help',
+                  icon: CupertinoIcons.question_circle,
                   isSelected: _model.selectedTab == SettingsTab.helpFeedback,
                 ),
-                SizedBox(height: 8),
-                Divider(height: 1, color: Color(0xFFE5E7EB)),
-                SizedBox(height: 8),
+                SizedBox(height: 6),
+                Container(
+                  margin: EdgeInsets.symmetric(horizontal: 10),
+                  child: Divider(height: 1, color: Color(0xFFE5E5E5)),
+                ),
+                SizedBox(height: 6),
                 _buildSidebarItem(
                   tab: SettingsTab.logout,
-                  title: 'Logout',
-                  icon: CupertinoIcons.arrow_right_square_fill,
+                  title: 'Sign Out',
+                  icon: CupertinoIcons.arrow_right_square,
                   isSelected: _model.selectedTab == SettingsTab.logout,
                 ),
               ],
@@ -2301,163 +2435,109 @@ class _ProfileSettingsWidgetState extends State<ProfileSettingsWidget>
         }
 
         return SingleChildScrollView(
-          padding: EdgeInsets.all(40),
+          padding: EdgeInsets.symmetric(horizontal: 32, vertical: 24),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Row(
-                children: [
-                  Icon(
-                    CupertinoIcons.bell_fill,
-                    size: 32,
-                    color: Color(0xFF0077B5),
-                  ),
-                  SizedBox(width: 12),
-                  Text(
-                    'Notifications',
-                    style: TextStyle(
-                      fontFamily: 'SF Pro Display',
-                      fontSize: 28,
-                      fontWeight: FontWeight.w700,
-                      color: Color(0xFF1A1A1A),
-                    ),
-                  ),
-                ],
+              Text(
+                'Notifications',
+                style: TextStyle(
+                  fontFamily: 'SF Pro Text',
+                  fontSize: 20,
+                  fontWeight: FontWeight.w600,
+                  color: Color(0xFF1D1D1F),
+                ),
               ),
-              SizedBox(height: 24),
-              // Suggestion box
+              SizedBox(height: 4),
+              Text(
+                'Manage how you receive notifications.',
+                style: TextStyle(
+                  fontFamily: 'SF Pro Text',
+                  fontSize: 12,
+                  color: Color(0xFF8E8E93),
+                ),
+              ),
+              SizedBox(height: 20),
               if (!kIsWeb && Platform.isMacOS)
                 Container(
-                  padding: EdgeInsets.all(16),
+                  padding: EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                  margin: EdgeInsets.only(bottom: 16),
                   decoration: BoxDecoration(
-                    color: Color(0xFFE3F2FD),
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(
-                      color: Color(0xFFBBDEFB),
-                      width: 1,
-                    ),
+                    color: Color(0xFFF2F2F7),
+                    borderRadius: BorderRadius.circular(6),
                   ),
                   child: Row(
                     children: [
-                      Icon(
-                        CupertinoIcons.info_circle_fill,
-                        size: 20,
-                        color: Color(0xFF0077B5),
-                      ),
-                      SizedBox(width: 12),
+                      Icon(CupertinoIcons.info_circle, size: 14, color: Color(0xFF8E8E93)),
+                      SizedBox(width: 8),
                       Expanded(
                         child: Text(
-                          'To enable notifications go to Settings/Notifications/Lona Club and allow',
+                          'Enable in System Settings → Notifications → Lona Club',
                           style: TextStyle(
-                            fontFamily: 'SF Pro Display',
-                            fontSize: 14,
-                            color: Color(0xFF1A1A1A),
-                            height: 1.4,
+                            fontFamily: 'SF Pro Text',
+                            fontSize: 12,
+                            color: Color(0xFF636366),
                           ),
                         ),
                       ),
                     ],
                   ),
                 ),
-              SizedBox(height: 24),
               if (_isLoadingNotificationStatus)
-                Center(
-                  child: CupertinoActivityIndicator(),
-                )
+                Center(child: CupertinoActivityIndicator())
               else
                 Container(
-                  padding: EdgeInsets.all(20),
+                  padding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                   decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(
-                      color: Color(0xFFE5E7EB),
-                      width: 1,
-                    ),
+                    color: Color(0xFFFAFAFA),
+                    borderRadius: BorderRadius.circular(6),
+                    border: Border.all(color: Color(0xFFE5E5E5), width: 0.5),
                   ),
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              'Allow Notifications',
-                              style: TextStyle(
-                                fontFamily: 'SF Pro Display',
-                                fontSize: 16,
-                                fontWeight: FontWeight.w600,
-                                color: Color(0xFF1A1A1A),
-                              ),
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Allow Notifications',
+                            style: TextStyle(
+                              fontFamily: 'SF Pro Text',
+                              fontSize: 13,
+                              fontWeight: FontWeight.w500,
+                              color: Color(0xFF1D1D1F),
                             ),
-                            SizedBox(height: 4),
-                            Text(
-                              _notificationsEnabled
-                                  ? 'Notifications enabled'
-                                  : 'Notifications disabled',
-                              style: TextStyle(
-                                fontFamily: 'SF Pro Display',
-                                fontSize: 14,
-                                color: Color(0xFF666666),
-                              ),
+                          ),
+                          SizedBox(height: 2),
+                          Text(
+                            _notificationsEnabled ? 'Enabled' : 'Disabled',
+                            style: TextStyle(
+                              fontFamily: 'SF Pro Text',
+                              fontSize: 11,
+                              color: Color(0xFF8E8E93),
                             ),
-                          ],
-                        ),
+                          ),
+                        ],
                       ),
-                      GestureDetector(
-                        onTap: () {
-                          _handleNotificationToggle(!_notificationsEnabled);
-                        },
-                        child: AnimatedContainer(
-                          duration: Duration(milliseconds: 200),
-                          width: 51,
-                          height: 31,
-                          padding: EdgeInsets.all(2),
-                          decoration: BoxDecoration(
-                            borderRadius: BorderRadius.circular(16),
-                            color: _notificationsEnabled
-                                ? Color(0xFF0077B5)
-                                : Color(0xFFE0E0E0),
-                          ),
-                          child: AnimatedAlign(
-                            duration: Duration(milliseconds: 200),
-                            curve: Curves.easeInOut,
-                            alignment: _notificationsEnabled
-                                ? Alignment.centerRight
-                                : Alignment.centerLeft,
-                            child: Container(
-                              width: 27,
-                              height: 27,
-                              decoration: BoxDecoration(
-                                shape: BoxShape.circle,
-                                color: Colors.white,
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: Colors.black.withOpacity(0.15),
-                                    blurRadius: 4,
-                                    offset: Offset(0, 2),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ),
-                        ),
+                      CupertinoSwitch(
+                        value: _notificationsEnabled,
+                        activeTrackColor: Color(0xFF007AFF),
+                        onChanged: (val) => _handleNotificationToggle(val),
                       ),
                     ],
                   ),
                 ),
               if (!_isLoadingNotificationStatus)
                 Padding(
-                  padding: EdgeInsets.only(top: 16),
+                  padding: EdgeInsets.only(top: 10),
                   child: Text(
                     _notificationsEnabled
                         ? 'You will receive notifications for new messages, connection requests, and other updates.'
-                        : 'Notifications are turned off. You will not receive any push notifications.',
+                        : 'Notifications are turned off.',
                     style: TextStyle(
-                      fontFamily: 'SF Pro Display',
-                      fontSize: 13,
-                      color: Color(0xFF999999),
+                      fontFamily: 'SF Pro Text',
+                      fontSize: 11,
+                      color: Color(0xFFAEAEB2),
                     ),
                   ),
                 ),
@@ -2467,50 +2547,38 @@ class _ProfileSettingsWidgetState extends State<ProfileSettingsWidget>
 
       case SettingsTab.preferences:
         return SingleChildScrollView(
-          padding: EdgeInsets.all(40),
+          padding: EdgeInsets.symmetric(horizontal: 32, vertical: 24),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Row(
-                children: [
-                  Icon(
-                    CupertinoIcons.slider_horizontal_3,
-                    size: 32,
-                    color: Color(0xFF0077B5),
-                  ),
-                  SizedBox(width: 12),
-                  Text(
-                    'Preferences',
-                    style: TextStyle(
-                      fontFamily: 'SF Pro Display',
-                      fontSize: 28,
-                      fontWeight: FontWeight.w700,
-                      color: Color(0xFF1A1A1A),
-                    ),
-                  ),
-                ],
-              ),
-              SizedBox(height: 24),
-              // Chat Display Section
               Text(
-                'Chat Display',
+                'Preferences',
                 style: TextStyle(
-                  fontFamily: 'SF Pro Display',
-                  fontSize: 18,
+                  fontFamily: 'SF Pro Text',
+                  fontSize: 20,
                   fontWeight: FontWeight.w600,
-                  color: Color(0xFF1A1A1A),
+                  color: Color(0xFF1D1D1F),
                 ),
               ),
-              SizedBox(height: 16),
+              SizedBox(height: 20),
+              // Section header
+              Text(
+                'CHAT DISPLAY',
+                style: TextStyle(
+                  fontFamily: 'SF Pro Text',
+                  fontSize: 11,
+                  fontWeight: FontWeight.w500,
+                  color: Color(0xFF8E8E93),
+                  letterSpacing: 0.5,
+                ),
+              ),
+              SizedBox(height: 8),
               Container(
-                padding: EdgeInsets.all(20),
+                padding: EdgeInsets.all(16),
                 decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(
-                    color: Color(0xFFE5E7EB),
-                    width: 1,
-                  ),
+                  color: Color(0xFFFAFAFA),
+                  borderRadius: BorderRadius.circular(6),
+                  border: Border.all(color: Color(0xFFE5E5E5), width: 0.5),
                 ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -2521,42 +2589,42 @@ class _ProfileSettingsWidgetState extends State<ProfileSettingsWidget>
                         Text(
                           'Message Font Size',
                           style: TextStyle(
-                            fontFamily: 'SF Pro Display',
-                            fontSize: 16,
-                            fontWeight: FontWeight.w600,
-                            color: Color(0xFF1A1A1A),
+                            fontFamily: 'SF Pro Text',
+                            fontSize: 13,
+                            fontWeight: FontWeight.w500,
+                            color: Color(0xFF1D1D1F),
                           ),
                         ),
                         Text(
                           '${FFAppState().chatFontSize.toInt()}pt',
                           style: TextStyle(
-                            fontFamily: 'SF Pro Display',
-                            fontSize: 14,
+                            fontFamily: 'SF Pro Text',
+                            fontSize: 12,
                             fontWeight: FontWeight.w600,
-                            color: Color(0xFF0077B5),
+                            color: Color(0xFF007AFF),
                           ),
                         ),
                       ],
                     ),
-                    SizedBox(height: 8),
+                    SizedBox(height: 4),
                     Text(
                       'Adjust the size of text in your chat messages',
                       style: TextStyle(
-                        fontFamily: 'SF Pro Display',
-                        fontSize: 14,
-                        color: Color(0xFF666666),
+                        fontFamily: 'SF Pro Text',
+                        fontSize: 11,
+                        color: Color(0xFF8E8E93),
                       ),
                     ),
-                    SizedBox(height: 16),
+                    SizedBox(height: 12),
                     Row(
                       children: [
                         Text(
                           'A',
                           style: TextStyle(
-                            fontFamily: 'SF Pro Display',
-                            fontSize: 12,
+                            fontFamily: 'SF Pro Text',
+                            fontSize: 10,
                             fontWeight: FontWeight.w500,
-                            color: Color(0xFF666666),
+                            color: Color(0xFF8E8E93),
                           ),
                         ),
                         Expanded(
@@ -2565,7 +2633,7 @@ class _ProfileSettingsWidgetState extends State<ProfileSettingsWidget>
                             min: 12.0,
                             max: 24.0,
                             divisions: 12,
-                            activeColor: Color(0xFF0077B5),
+                            activeColor: Color(0xFF007AFF),
                             onChanged: (value) {
                               setState(() {
                                 FFAppState().chatFontSize = value;
@@ -2576,32 +2644,27 @@ class _ProfileSettingsWidgetState extends State<ProfileSettingsWidget>
                         Text(
                           'A',
                           style: TextStyle(
-                            fontFamily: 'SF Pro Display',
-                            fontSize: 24,
+                            fontFamily: 'SF Pro Text',
+                            fontSize: 18,
                             fontWeight: FontWeight.w500,
-                            color: Color(0xFF666666),
+                            color: Color(0xFF8E8E93),
                           ),
                         ),
                       ],
                     ),
-                    SizedBox(height: 16),
+                    SizedBox(height: 12),
                     Container(
-                      padding: EdgeInsets.all(16),
+                      padding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                       decoration: BoxDecoration(
-                        color: Color(0xFFF3F4F6),
-                        borderRadius: BorderRadius.only(
-                          topLeft: Radius.circular(16),
-                          topRight: Radius.circular(16),
-                          bottomLeft: Radius.circular(4),
-                          bottomRight: Radius.circular(16),
-                        ),
+                        color: Color(0xFFF2F2F7),
+                        borderRadius: BorderRadius.circular(6),
                       ),
                       child: Text(
                         'This is how your messages will look.',
                         style: TextStyle(
                           fontFamily: 'SF Pro Text',
                           fontSize: FFAppState().chatFontSize,
-                          color: Color(0xFF1F2937),
+                          color: Color(0xFF1D1D1F),
                         ),
                       ),
                     ),
@@ -2609,26 +2672,142 @@ class _ProfileSettingsWidgetState extends State<ProfileSettingsWidget>
                 ),
               ),
               SizedBox(height: 24),
-              // Keyboard Shortcuts Section
+              // UI Scale Section
               Text(
-                'Keyboard Shortcuts',
+                'UI SCALE',
                 style: TextStyle(
-                  fontFamily: 'SF Pro Display',
-                  fontSize: 18,
-                  fontWeight: FontWeight.w600,
-                  color: Color(0xFF1A1A1A),
+                  fontFamily: 'SF Pro Text',
+                  fontSize: 11,
+                  fontWeight: FontWeight.w500,
+                  color: Color(0xFF8E8E93),
+                  letterSpacing: 0.5,
                 ),
               ),
-              SizedBox(height: 16),
+              SizedBox(height: 8),
               Container(
-                padding: EdgeInsets.all(20),
+                padding: EdgeInsets.all(16),
                 decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(
-                    color: Color(0xFFE5E7EB),
-                    width: 1,
-                  ),
+                  color: Color(0xFFFAFAFA),
+                  borderRadius: BorderRadius.circular(6),
+                  border: Border.all(color: Color(0xFFE5E5E5), width: 0.5),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          'Interface Scale',
+                          style: TextStyle(
+                            fontFamily: 'SF Pro Text',
+                            fontSize: 13,
+                            fontWeight: FontWeight.w500,
+                            color: Color(0xFF1D1D1F),
+                          ),
+                        ),
+                        Row(
+                          children: [
+                            Text(
+                              '${(FFAppState().uiScale * 100).toInt()}%',
+                              style: TextStyle(
+                                fontFamily: 'SF Pro Text',
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600,
+                                color: Color(0xFF007AFF),
+                              ),
+                            ),
+                            if (FFAppState().uiScale != 1.0) ...[
+                              SizedBox(width: 8),
+                              GestureDetector(
+                                onTap: () {
+                                  setState(() {
+                                    FFAppState().uiScale = 1.0;
+                                  });
+                                },
+                                child: Text(
+                                  'Reset',
+                                  style: TextStyle(
+                                    fontFamily: 'SF Pro Text',
+                                    fontSize: 11,
+                                    color: Color(0xFF8E8E93),
+                                    decoration: TextDecoration.underline,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ],
+                        ),
+                      ],
+                    ),
+                    SizedBox(height: 4),
+                    Text(
+                      'Adjust the overall size of text and UI elements',
+                      style: TextStyle(
+                        fontFamily: 'SF Pro Text',
+                        fontSize: 11,
+                        color: Color(0xFF8E8E93),
+                      ),
+                    ),
+                    SizedBox(height: 12),
+                    Row(
+                      children: [
+                        Text(
+                          'Aa',
+                          style: TextStyle(
+                            fontFamily: 'SF Pro Text',
+                            fontSize: 10,
+                            fontWeight: FontWeight.w500,
+                            color: Color(0xFF8E8E93),
+                          ),
+                        ),
+                        Expanded(
+                          child: CupertinoSlider(
+                            value: FFAppState().uiScale,
+                            min: 0.8,
+                            max: 1.4,
+                            divisions: 12,
+                            activeColor: Color(0xFF007AFF),
+                            onChanged: (value) {
+                              setState(() {
+                                FFAppState().uiScale = value;
+                              });
+                            },
+                          ),
+                        ),
+                        Text(
+                          'Aa',
+                          style: TextStyle(
+                            fontFamily: 'SF Pro Text',
+                            fontSize: 18,
+                            fontWeight: FontWeight.w500,
+                            color: Color(0xFF8E8E93),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+              SizedBox(height: 24),
+              // Keyboard Shortcuts Section
+              Text(
+                'KEYBOARD SHORTCUTS',
+                style: TextStyle(
+                  fontFamily: 'SF Pro Text',
+                  fontSize: 11,
+                  fontWeight: FontWeight.w500,
+                  color: Color(0xFF8E8E93),
+                  letterSpacing: 0.5,
+                ),
+              ),
+              SizedBox(height: 8),
+              Container(
+                padding: EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Color(0xFFFAFAFA),
+                  borderRadius: BorderRadius.circular(6),
+                  border: Border.all(color: Color(0xFFE5E5E5), width: 0.5),
                 ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -2636,23 +2815,22 @@ class _ProfileSettingsWidgetState extends State<ProfileSettingsWidget>
                     Text(
                       'Send Message Shortcut',
                       style: TextStyle(
-                        fontFamily: 'SF Pro Display',
-                        fontSize: 16,
-                        fontWeight: FontWeight.w600,
-                        color: Color(0xFF1A1A1A),
+                        fontFamily: 'SF Pro Text',
+                        fontSize: 13,
+                        fontWeight: FontWeight.w500,
+                        color: Color(0xFF1D1D1F),
                       ),
                     ),
-                    SizedBox(height: 4),
+                    SizedBox(height: 2),
                     Text(
                       'Choose how you want to send messages in chat',
                       style: TextStyle(
-                        fontFamily: 'SF Pro Display',
-                        fontSize: 14,
-                        color: Color(0xFF666666),
+                        fontFamily: 'SF Pro Text',
+                        fontSize: 11,
+                        color: Color(0xFF8E8E93),
                       ),
                     ),
-                    SizedBox(height: 16),
-                    // Option 1: Enter to send
+                    SizedBox(height: 12),
                     _buildKeyboardShortcutOption(
                       title: 'Return (↵) to send',
                       subtitle: 'Shift + Return for new line',
@@ -2663,8 +2841,7 @@ class _ProfileSettingsWidgetState extends State<ProfileSettingsWidget>
                         });
                       },
                     ),
-                    SizedBox(height: 12),
-                    // Option 2: Shift+Enter to send
+                    SizedBox(height: 6),
                     _buildKeyboardShortcutOption(
                       title: 'Shift + Return to send',
                       subtitle: 'Return (↵) for new line',
@@ -2675,8 +2852,7 @@ class _ProfileSettingsWidgetState extends State<ProfileSettingsWidget>
                         });
                       },
                     ),
-                    SizedBox(height: 12),
-                    // Option 3: Command+Enter to send
+                    SizedBox(height: 6),
                     _buildKeyboardShortcutOption(
                       title: 'Command (⌘) + Return to send',
                       subtitle: 'Return (↵) for new line',
@@ -2690,30 +2866,19 @@ class _ProfileSettingsWidgetState extends State<ProfileSettingsWidget>
                   ],
                 ),
               ),
-              SizedBox(height: 16),
-              // Info text
-              Container(
-                padding: EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: Color(0xFFF5F5F5),
-                  borderRadius: BorderRadius.circular(12),
-                ),
+              SizedBox(height: 8),
+              Padding(
+                padding: EdgeInsets.symmetric(horizontal: 4),
                 child: Row(
                   children: [
-                    Icon(
-                      CupertinoIcons.info_circle_fill,
-                      size: 18,
-                      color: Color(0xFF666666),
-                    ),
-                    SizedBox(width: 12),
-                    Expanded(
-                      child: Text(
-                        'This setting applies to all chat conversations',
-                        style: TextStyle(
-                          fontFamily: 'SF Pro Display',
-                          fontSize: 13,
-                          color: Color(0xFF666666),
-                        ),
+                    Icon(CupertinoIcons.info_circle, size: 12, color: Color(0xFFAEAEB2)),
+                    SizedBox(width: 6),
+                    Text(
+                      'This setting applies to all chat conversations',
+                      style: TextStyle(
+                        fontFamily: 'SF Pro Text',
+                        fontSize: 11,
+                        color: Color(0xFFAEAEB2),
                       ),
                     ),
                   ],
@@ -2722,24 +2887,22 @@ class _ProfileSettingsWidgetState extends State<ProfileSettingsWidget>
               SizedBox(height: 24),
               // Translation Language Section
               Text(
-                'Translation Language',
+                'TRANSLATION',
                 style: TextStyle(
-                  fontFamily: 'SF Pro Display',
-                  fontSize: 18,
-                  fontWeight: FontWeight.w600,
-                  color: Color(0xFF1A1A1A),
+                  fontFamily: 'SF Pro Text',
+                  fontSize: 11,
+                  fontWeight: FontWeight.w500,
+                  color: Color(0xFF8E8E93),
+                  letterSpacing: 0.5,
                 ),
               ),
-              SizedBox(height: 16),
+              SizedBox(height: 8),
               Container(
-                padding: EdgeInsets.all(20),
+                padding: EdgeInsets.all(16),
                 decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(
-                    color: Color(0xFFE5E7EB),
-                    width: 1,
-                  ),
+                  color: Color(0xFFFAFAFA),
+                  borderRadius: BorderRadius.circular(6),
+                  border: Border.all(color: Color(0xFFE5E5E5), width: 0.5),
                 ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -2747,28 +2910,27 @@ class _ProfileSettingsWidgetState extends State<ProfileSettingsWidget>
                     Text(
                       'Target Language',
                       style: TextStyle(
-                        fontFamily: 'SF Pro Display',
-                        fontSize: 16,
-                        fontWeight: FontWeight.w600,
-                        color: Color(0xFF1A1A1A),
+                        fontFamily: 'SF Pro Text',
+                        fontSize: 13,
+                        fontWeight: FontWeight.w500,
+                        color: Color(0xFF1D1D1F),
                       ),
                     ),
-                    SizedBox(height: 4),
+                    SizedBox(height: 2),
                     Text(
-                      'Select the language you want messages to be translated into',
+                      'Select the language for message translation',
                       style: TextStyle(
-                        fontFamily: 'SF Pro Display',
-                        fontSize: 14,
-                        color: Color(0xFF666666),
+                        fontFamily: 'SF Pro Text',
+                        fontSize: 11,
+                        color: Color(0xFF8E8E93),
                       ),
                     ),
-                    SizedBox(height: 16),
+                    SizedBox(height: 10),
                     Container(
-                      padding: EdgeInsets.symmetric(horizontal: 16),
+                      padding: EdgeInsets.symmetric(horizontal: 12),
                       decoration: BoxDecoration(
-                        color: Color(0xFFF9FAFB),
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: Color(0xFFE5E7EB)),
+                        color: Color(0xFFF2F2F7),
+                        borderRadius: BorderRadius.circular(6),
                       ),
                       child: DropdownButtonHideUnderline(
                         child: DropdownButton<String>(
@@ -2778,16 +2940,16 @@ class _ProfileSettingsWidgetState extends State<ProfileSettingsWidget>
                               : 'system',
                           isExpanded: true,
                           icon: Icon(Icons.keyboard_arrow_down,
-                              color: Color(0xFF666666)),
+                              size: 16, color: Color(0xFF8E8E93)),
                           items: _translationLanguages.entries.map((entry) {
                             return DropdownMenuItem<String>(
                               value: entry.key,
                               child: Text(
                                 entry.value,
                                 style: TextStyle(
-                                  fontFamily: 'SF Pro Display',
-                                  fontSize: 15,
-                                  color: Color(0xFF1A1A1A),
+                                  fontFamily: 'SF Pro Text',
+                                  fontSize: 13,
+                                  color: Color(0xFF1D1D1F),
                                 ),
                               ),
                             );
@@ -2805,48 +2967,44 @@ class _ProfileSettingsWidgetState extends State<ProfileSettingsWidget>
                   ],
                 ),
               ),
-              SizedBox(height: 16),
+              SizedBox(height: 8),
               // Auto Translate Toggle
               Container(
-                padding: EdgeInsets.all(20),
+                padding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                 decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(
-                    color: Color(0xFFE5E7EB),
-                    width: 1,
-                  ),
+                  color: Color(0xFFFAFAFA),
+                  borderRadius: BorderRadius.circular(6),
+                  border: Border.all(color: Color(0xFFE5E5E5), width: 0.5),
                 ),
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'Auto Translate',
-                            style: TextStyle(
-                              fontFamily: 'SF Pro Display',
-                              fontSize: 16,
-                              fontWeight: FontWeight.w600,
-                              color: Color(0xFF1A1A1A),
-                            ),
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Auto Translate',
+                          style: TextStyle(
+                            fontFamily: 'SF Pro Text',
+                            fontSize: 13,
+                            fontWeight: FontWeight.w500,
+                            color: Color(0xFF1D1D1F),
                           ),
-                          SizedBox(height: 4),
-                          Text(
-                            'Automatically translate all messages to the selected language',
-                            style: TextStyle(
-                              fontFamily: 'SF Pro Display',
-                              fontSize: 14,
-                              color: Color(0xFF666666),
-                            ),
+                        ),
+                        SizedBox(height: 2),
+                        Text(
+                          'Translate all incoming messages automatically',
+                          style: TextStyle(
+                            fontFamily: 'SF Pro Text',
+                            fontSize: 11,
+                            color: Color(0xFF8E8E93),
                           ),
-                        ],
-                      ),
+                        ),
+                      ],
                     ),
                     CupertinoSwitch(
                       value: FFAppState().autoTranslate,
+                      activeTrackColor: Color(0xFF007AFF),
                       onChanged: (value) {
                         setState(() {
                           FFAppState().autoTranslate = value;
@@ -2859,29 +3017,26 @@ class _ProfileSettingsWidgetState extends State<ProfileSettingsWidget>
               SizedBox(height: 24),
               // Outgoing Translation Section
               Text(
-                'Outgoing Translation',
+                'OUTGOING TRANSLATION',
                 style: TextStyle(
-                  fontFamily: 'SF Pro Display',
-                  fontSize: 18,
-                  fontWeight: FontWeight.w600,
-                  color: Color(0xFF1A1A1A),
+                  fontFamily: 'SF Pro Text',
+                  fontSize: 11,
+                  fontWeight: FontWeight.w500,
+                  color: Color(0xFF8E8E93),
+                  letterSpacing: 0.5,
                 ),
               ),
-              SizedBox(height: 16),
+              SizedBox(height: 8),
               Container(
-                padding: EdgeInsets.all(20),
+                padding: EdgeInsets.all(16),
                 decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(
-                    color: Color(0xFFE5E7EB),
-                    width: 1,
-                  ),
+                  color: Color(0xFFFAFAFA),
+                  borderRadius: BorderRadius.circular(6),
+                  border: Border.all(color: Color(0xFFE5E5E5), width: 0.5),
                 ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // Enable AI Translation Switch
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
@@ -2892,28 +3047,19 @@ class _ProfileSettingsWidgetState extends State<ProfileSettingsWidget>
                               Text(
                                 'Enable Outgoing Translation',
                                 style: TextStyle(
-                                  fontFamily: 'SF Pro Display',
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.w600,
-                                  color: Color(0xFF1A1A1A),
-                                ),
-                              ),
-                              SizedBox(height: 4),
-                              Text(
-                                'Automatically translate outgoing messages using free translation',
-                                style: TextStyle(
-                                  fontFamily: 'SF Pro Display',
-                                  fontSize: 14,
-                                  color: Color(0xFF666666),
-                                ),
-                              ),
-                              SizedBox(height: 6),
-                              Text(
-                                '⚠️ Translation results may not be accurate — please use with caution.',
-                                style: TextStyle(
-                                  fontFamily: 'SF Pro Display',
+                                  fontFamily: 'SF Pro Text',
                                   fontSize: 13,
-                                  color: Color(0xFFD97706),
+                                  fontWeight: FontWeight.w500,
+                                  color: Color(0xFF1D1D1F),
+                                ),
+                              ),
+                              SizedBox(height: 2),
+                              Text(
+                                'Auto-translate outgoing messages using free translation',
+                                style: TextStyle(
+                                  fontFamily: 'SF Pro Text',
+                                  fontSize: 11,
+                                  color: Color(0xFF8E8E93),
                                 ),
                               ),
                             ],
@@ -2921,6 +3067,7 @@ class _ProfileSettingsWidgetState extends State<ProfileSettingsWidget>
                         ),
                         CupertinoSwitch(
                           value: FFAppState().aiTranslationEnabled,
+                          activeTrackColor: Color(0xFF007AFF),
                           onChanged: (value) {
                             setState(() {
                               FFAppState().aiTranslationEnabled = value;
@@ -2929,33 +3076,45 @@ class _ProfileSettingsWidgetState extends State<ProfileSettingsWidget>
                         ),
                       ],
                     ),
-                    Divider(height: 32, color: Color(0xFFE5E7EB)),
-                    // Target Language
+                    if (FFAppState().aiTranslationEnabled) ...[
+                      SizedBox(height: 8),
+                      Padding(
+                        padding: EdgeInsets.only(left: 2),
+                        child: Text(
+                          '⚠️ Results may not be accurate — use with caution.',
+                          style: TextStyle(
+                            fontFamily: 'SF Pro Text',
+                            fontSize: 11,
+                            color: Color(0xFFD97706),
+                          ),
+                        ),
+                      ),
+                    ],
+                    Divider(height: 24, color: Color(0xFFE5E5E5)),
                     Text(
                       'Target Language',
                       style: TextStyle(
-                        fontFamily: 'SF Pro Display',
-                        fontSize: 16,
-                        fontWeight: FontWeight.w600,
-                        color: Color(0xFF1A1A1A),
+                        fontFamily: 'SF Pro Text',
+                        fontSize: 13,
+                        fontWeight: FontWeight.w500,
+                        color: Color(0xFF1D1D1F),
                       ),
                     ),
-                    SizedBox(height: 4),
+                    SizedBox(height: 2),
                     Text(
-                      'Select the language you want your messages to be translated into',
+                      'Select the language for outgoing message translation',
                       style: TextStyle(
-                        fontFamily: 'SF Pro Display',
-                        fontSize: 14,
-                        color: Color(0xFF666666),
+                        fontFamily: 'SF Pro Text',
+                        fontSize: 11,
+                        color: Color(0xFF8E8E93),
                       ),
                     ),
-                    SizedBox(height: 16),
+                    SizedBox(height: 10),
                     Container(
-                      padding: EdgeInsets.symmetric(horizontal: 16),
+                      padding: EdgeInsets.symmetric(horizontal: 12),
                       decoration: BoxDecoration(
-                        color: Color(0xFFF9FAFB),
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: Color(0xFFE5E7EB)),
+                        color: Color(0xFFF2F2F7),
+                        borderRadius: BorderRadius.circular(6),
                       ),
                       child: DropdownButtonHideUnderline(
                         child: DropdownButton<String>(
@@ -2965,16 +3124,16 @@ class _ProfileSettingsWidgetState extends State<ProfileSettingsWidget>
                               : 'system',
                           isExpanded: true,
                           icon: Icon(Icons.keyboard_arrow_down,
-                              color: Color(0xFF666666)),
+                              size: 16, color: Color(0xFF8E8E93)),
                           items: _translationLanguages.entries.map((entry) {
                             return DropdownMenuItem<String>(
                               value: entry.key,
                               child: Text(
                                 entry.value,
                                 style: TextStyle(
-                                  fontFamily: 'SF Pro Display',
-                                  fontSize: 15,
-                                  color: Color(0xFF1A1A1A),
+                                  fontFamily: 'SF Pro Text',
+                                  fontSize: 13,
+                                  color: Color(0xFF1D1D1F),
                                 ),
                               ),
                             );
@@ -2996,61 +3155,67 @@ class _ProfileSettingsWidgetState extends State<ProfileSettingsWidget>
               SizedBox(height: 24),
               // Account
               Text(
-                'Account',
+                'ACCOUNT',
                 style: TextStyle(
-                  fontFamily: 'SF Pro Display',
-                  fontSize: 18,
-                  fontWeight: FontWeight.w600,
-                  color: Color(0xFF1A1A1A),
+                  fontFamily: 'SF Pro Text',
+                  fontSize: 11,
+                  fontWeight: FontWeight.w500,
+                  color: Color(0xFF8E8E93),
+                  letterSpacing: 0.5,
                 ),
               ),
-              SizedBox(height: 16),
-              InkWell(
-                onTap: () async {
-                  await showModalBottomSheet(
-                    context: context,
-                    backgroundColor: Colors.transparent,
-                    isScrollControlled: true,
-                    builder: (context) => Padding(
-                      padding: MediaQuery.viewInsetsOf(context),
-                      child: DeleteAccountWidget(),
-                    ),
-                  );
-                },
-                child: Container(
-                  padding: EdgeInsets.all(20),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: Color(0xFFE5E7EB), width: 1),
-                  ),
-                  child: Row(
-                    children: [
-                      Icon(Icons.person_remove_outlined,
-                          size: 24, color: Color(0xFFDC2626)),
-                      SizedBox(width: 16),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text('Account Deletion',
-                                style: TextStyle(
-                                    fontFamily: 'SF Pro Display',
-                                    fontSize: 16,
-                                    fontWeight: FontWeight.w600,
-                                    color: Color(0xFF1A1A1A))),
-                            SizedBox(height: 4),
-                            Text('Permanently delete your account',
-                                style: TextStyle(
-                                    fontFamily: 'SF Pro Display',
-                                    fontSize: 14,
-                                    color: Color(0xFF666666))),
-                          ],
-                        ),
+              SizedBox(height: 8),
+              Material(
+                color: Colors.transparent,
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(6),
+                  hoverColor: Color(0xFFF5F5F7),
+                  onTap: () async {
+                    await showModalBottomSheet(
+                      context: context,
+                      backgroundColor: Colors.transparent,
+                      isScrollControlled: true,
+                      builder: (context) => Padding(
+                        padding: MediaQuery.viewInsetsOf(context),
+                        child: DeleteAccountWidget(),
                       ),
-                      Icon(CupertinoIcons.chevron_right,
-                          size: 20, color: Color(0xFF999999)),
-                    ],
+                    );
+                  },
+                  child: Container(
+                    padding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                    decoration: BoxDecoration(
+                      color: Color(0xFFFAFAFA),
+                      borderRadius: BorderRadius.circular(6),
+                      border: Border.all(color: Color(0xFFE5E5E5), width: 0.5),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(CupertinoIcons.person_badge_minus,
+                            size: 16, color: Color(0xFFFF3B30)),
+                        SizedBox(width: 10),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text('Delete Account',
+                                  style: TextStyle(
+                                      fontFamily: 'SF Pro Text',
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w500,
+                                      color: Color(0xFFFF3B30))),
+                              SizedBox(height: 2),
+                              Text('Permanently delete your account and data',
+                                  style: TextStyle(
+                                      fontFamily: 'SF Pro Text',
+                                      fontSize: 11,
+                                      color: Color(0xFF8E8E93))),
+                            ],
+                          ),
+                        ),
+                        Icon(CupertinoIcons.chevron_right,
+                            size: 14, color: Color(0xFFC7C7CC)),
+                      ],
+                    ),
                   ),
                 ),
               ),
@@ -3063,88 +3228,49 @@ class _ProfileSettingsWidgetState extends State<ProfileSettingsWidget>
 
       case SettingsTab.helpFeedback:
         return SingleChildScrollView(
-          padding: EdgeInsets.all(40),
+          padding: EdgeInsets.symmetric(horizontal: 32, vertical: 24),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Row(
-                children: [
-                  Icon(
-                    CupertinoIcons.question_circle_fill,
-                    size: 32,
-                    color: Color(0xFF0077B5),
-                  ),
-                  SizedBox(width: 12),
-                  Text(
-                    'Help & Feedback',
-                    style: TextStyle(
-                      fontFamily: 'SF Pro Display',
-                      fontSize: 28,
-                      fontWeight: FontWeight.w700,
-                      color: Color(0xFF1A1A1A),
-                    ),
-                  ),
-                ],
+              Text(
+                'Help',
+                style: TextStyle(
+                  fontFamily: 'SF Pro Text',
+                  fontSize: 20,
+                  fontWeight: FontWeight.w600,
+                  color: Color(0xFF1D1D1F),
+                ),
               ),
-              SizedBox(height: 32),
-              // Privacy Policy
+              SizedBox(height: 20),
               _buildHelpItem(
-                icon: CupertinoIcons.lock_shield_fill,
+                icon: CupertinoIcons.lock_shield,
                 title: 'Privacy Policy',
                 onTap: () => _showPrivacyPolicy(context),
               ),
-              SizedBox(height: 12),
-              // Customer Support
               _buildHelpItem(
-                icon: CupertinoIcons.chat_bubble_text_fill,
+                icon: CupertinoIcons.chat_bubble_text,
                 title: 'Customer Support',
                 onTap: () => _showCustomerSupport(context),
               ),
-              SizedBox(height: 32),
-              // Security Message
+              SizedBox(height: 20),
               Container(
-                padding: EdgeInsets.all(20),
+                padding: EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                 decoration: BoxDecoration(
-                  color: Color(0xFFF5F5F5),
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(
-                    color: Color(0xFFE5E7EB),
-                    width: 1,
-                  ),
+                  color: Color(0xFFF2F2F7),
+                  borderRadius: BorderRadius.circular(6),
                 ),
                 child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Icon(
-                      CupertinoIcons.lock_shield_fill,
-                      size: 24,
-                      color: Color(0xFF0077B5),
-                    ),
-                    SizedBox(width: 12),
+                    Icon(CupertinoIcons.lock_shield, size: 14, color: Color(0xFF8E8E93)),
+                    SizedBox(width: 8),
                     Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'Your data is encrypted and secure',
-                            style: TextStyle(
-                              fontFamily: 'SF Pro Display',
-                              fontSize: 16,
-                              fontWeight: FontWeight.w600,
-                              color: Color(0xFF1A1A1A),
-                            ),
-                          ),
-                          SizedBox(height: 8),
-                          Text(
-                            'All your messages, calls, and shared content are protected with end-to-end encryption. Your privacy is our priority.',
-                            style: TextStyle(
-                              fontFamily: 'SF Pro Display',
-                              fontSize: 14,
-                              color: Color(0xFF666666),
-                              height: 1.5,
-                            ),
-                          ),
-                        ],
+                      child: Text(
+                        'Your data is encrypted and protected with end-to-end encryption.',
+                        style: TextStyle(
+                          fontFamily: 'SF Pro Text',
+                          fontSize: 12,
+                          color: Color(0xFF636366),
+                        ),
                       ),
                     ),
                   ],
@@ -3159,59 +3285,59 @@ class _ProfileSettingsWidgetState extends State<ProfileSettingsWidget>
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(
-                CupertinoIcons.arrow_right_square_fill,
-                size: 64,
-                color: Color(0xFFFF3B30),
-              ),
-              SizedBox(height: 16),
               Text(
-                'Logout',
+                'Sign Out',
                 style: TextStyle(
-                  fontFamily: 'SF Pro Display',
-                  fontSize: 24,
+                  fontFamily: 'SF Pro Text',
+                  fontSize: 18,
                   fontWeight: FontWeight.w600,
-                  color: Color(0xFF1A1A1A),
+                  color: Color(0xFF1D1D1F),
                 ),
               ),
-              SizedBox(height: 24),
-              Container(
-                width: 200,
-                height: 44,
-                decoration: BoxDecoration(
-                  color: Color(0xFFFF3B30),
-                  borderRadius: BorderRadius.circular(22),
+              SizedBox(height: 8),
+              Text(
+                'You will be signed out of your account.',
+                style: TextStyle(
+                  fontFamily: 'SF Pro Text',
+                  fontSize: 13,
+                  color: Color(0xFF8E8E93),
                 ),
-                child: Material(
-                  color: Colors.transparent,
-                  child: InkWell(
-                    borderRadius: BorderRadius.circular(22),
-                    onTap: () async {
-                      try {
-                        await authManager.signOut();
-                        if (context.mounted) {
-                          context.goNamedAuth('Welcome', context.mounted);
-                        }
-                      } catch (e) {
-                        if (context.mounted) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(
-                              content: Text('Failed to log out: $e'),
-                              backgroundColor: Color(0xFFFF3B30),
-                            ),
-                          );
-                        }
+              ),
+              SizedBox(height: 20),
+              Material(
+                color: Colors.transparent,
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(6),
+                  onTap: () async {
+                    try {
+                      await authManager.signOut();
+                      if (context.mounted) {
+                        context.goNamedAuth('Welcome', context.mounted);
                       }
-                    },
-                    child: Center(
-                      child: Text(
-                        'Logout',
-                        style: TextStyle(
-                          fontFamily: 'SF Pro Display',
-                          fontSize: 16,
-                          fontWeight: FontWeight.w600,
-                          color: Colors.white,
-                        ),
+                    } catch (e) {
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text('Failed to sign out: $e'),
+                            backgroundColor: Color(0xFFFF3B30),
+                          ),
+                        );
+                      }
+                    }
+                  },
+                  child: Container(
+                    padding: EdgeInsets.symmetric(horizontal: 24, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: Color(0xFFFF3B30),
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: Text(
+                      'Sign Out',
+                      style: TextStyle(
+                        fontFamily: 'SF Pro Text',
+                        fontSize: 13,
+                        fontWeight: FontWeight.w500,
+                        color: Colors.white,
                       ),
                     ),
                   ),

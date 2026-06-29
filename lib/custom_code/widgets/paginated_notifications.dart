@@ -452,8 +452,9 @@ class _PaginatedNotificationsState extends State<PaginatedNotifications> {
                                 // For group chat notifications, show group name on line 1
                                 if (isGroupChatNotification)
                                   TextSpan(
-                                    text: notification['notification_title'] ??
-                                        '',
+                                    text: _stripMentionMarkup(
+                                        notification['notification_title'] ??
+                                            ''),
                                     style: const TextStyle(
                                         fontWeight: FontWeight.w600),
                                   )
@@ -469,7 +470,7 @@ class _PaginatedNotificationsState extends State<PaginatedNotifications> {
                                     !isGroupChatNotification)
                                   TextSpan(
                                     text:
-                                        ' ${notification['notification_title'] ?? ''}',
+                                        ' ${_stripMentionMarkup(notification['notification_title'] ?? '')}',
                                     style: const TextStyle(
                                         fontWeight: FontWeight.normal),
                                   ),
@@ -521,6 +522,14 @@ class _PaginatedNotificationsState extends State<PaginatedNotifications> {
     );
   }
 
+  /// Strip Slack-style mention markup: <@uid|DisplayName> → @DisplayName
+  String _stripMentionMarkup(String text) {
+    return text.replaceAllMapped(
+      RegExp(r'<@[^|>]+\|([^>]+)>'),
+      (m) => '@${m.group(1)}',
+    );
+  }
+
   String _getNotificationText(Map<String, dynamic> notification,
       {String? senderName, bool isGroupChat = false}) {
     String? pageName = notification['initial_page_name'];
@@ -528,16 +537,16 @@ class _PaginatedNotificationsState extends State<PaginatedNotifications> {
     // For group chat notifications, show "SenderName: message"
     if (isGroupChat && senderName != null) {
       String messageText = notification['notification_text'] ?? '';
-      return '$senderName: $messageText';
+      return '$senderName: ${_stripMentionMarkup(messageText)}';
     }
 
     // For other chat notifications (DMs), just show the message
     if (pageName?.toLowerCase() == 'chatdetail') {
-      return notification['notification_text'] ?? '';
+      return _stripMentionMarkup(notification['notification_text'] ?? '');
     }
 
     // For other notifications, use the original text
-    return notification['notification_text'] ?? '';
+    return _stripMentionMarkup(notification['notification_text'] ?? '');
   }
 
   @override

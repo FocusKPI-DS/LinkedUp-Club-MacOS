@@ -71,236 +71,373 @@ class _ConnectionsWidgetState extends State<ConnectionsWidget> {
     });
   }
 
+  // Count only refs that point to existing users (filters out deleted accounts)
+  Future<int> _countValidRefs(List<DocumentReference> refs) async {
+    int count = 0;
+    for (final ref in refs) {
+      try {
+        final doc = await ref.get();
+        if (doc.exists) count++;
+      } catch (_) {
+        // Skip invalid refs
+      }
+    }
+    return count;
+  }
+
+  // Helper to detect mobile
+  bool _isMobile(BuildContext context) {
+    final width = MediaQuery.of(context).size.width;
+    return width < 600 || Theme.of(context).platform == TargetPlatform.iOS;
+  }
+
   @override
   Widget build(BuildContext context) {
-    return CupertinoPageScaffold(
+    if (_isMobile(context)) {
+      return _buildMobileLayout(context);
+    } else {
+      return _buildDesktopLayout(context);
+    }
+  }
+
+  // ─── Mobile (iOS) Layout ───
+  Widget _buildMobileLayout(BuildContext context) {
+    return Scaffold(
       backgroundColor: Colors.white,
-      child: SafeArea(
-        child: Container(
-          color: Colors.white,
-          child: Column(
-            children: [
-              // Header with title and Add new button
+      body: SafeArea(
+        child: Column(
+          children: [
+            // Title + Add button
+            Padding(
+              padding: EdgeInsets.fromLTRB(20, 12, 20, 8),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    'Connections',
+                    style: TextStyle(
+                      fontFamily: 'SF Pro Display',
+                      fontSize: 28,
+                      fontWeight: FontWeight.w700,
+                      color: Color(0xFF1D1D1F),
+                      letterSpacing: -0.5,
+                    ),
+                  ),
+                  GestureDetector(
+                    onTap: () => context.pushNamed(AddConnectionsWidget.routeName),
+                    child: Container(
+                      width: 32,
+                      height: 32,
+                      decoration: BoxDecoration(
+                        color: Color(0xFF007AFF),
+                        shape: BoxShape.circle,
+                      ),
+                      child: Icon(CupertinoIcons.plus, color: Colors.white, size: 18),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            // Tab bar
+            if (currentUserReference != null)
+              StreamBuilder<UsersRecord>(
+                stream: UsersRecord.getDocument(currentUserReference!),
+                builder: (context, snap) {
+                  final cCount = snap.hasData ? snap.data!.friends.length : 0;
+                  if (!snap.hasData) {
+                    return _buildMobileTabBar(0, 0, 0);
+                  }
+                  return FutureBuilder<int>(
+                    future: _countValidRefs(snap.data!.friendRequests),
+                    builder: (context, countSnap) {
+                      final rCount = countSnap.data ?? 0;
+                      return _buildMobileTabBar(cCount, rCount, 0);
+                    },
+                  );
+                },
+              )
+            else
+              _buildMobileTabBar(0, 0, 0),
+            // Content
+            Expanded(
+              child: _buildTabContent(),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildMobileTabBar(int allCount, int requestCount, int sentCount) {
+    return Container(
+      padding: EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+      child: Row(
+        children: [
+          _buildMobileTab('All', allCount, 0),
+          SizedBox(width: 6),
+          _buildMobileTab('Requests', requestCount, 1),
+          SizedBox(width: 6),
+          _buildMobileTab('Sent', sentCount, 2),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMobileTab(String label, int count, int index) {
+    final isSelected = _selectedTabIndex == index;
+    return GestureDetector(
+      onTap: () => setState(() => _selectedTabIndex = index),
+      child: Container(
+        padding: EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+        decoration: BoxDecoration(
+          color: isSelected ? Color(0xFF007AFF) : Color(0xFFF2F2F7),
+          borderRadius: BorderRadius.circular(18),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              label,
+              style: TextStyle(
+                fontFamily: 'SF Pro Text',
+                fontSize: 14,
+                fontWeight: FontWeight.w500,
+                color: isSelected ? Colors.white : Color(0xFF8E8E93),
+              ),
+            ),
+            if (count > 0) ...[
+              SizedBox(width: 5),
               Container(
-                color: Colors.white,
-                padding: EdgeInsets.fromLTRB(16, 16, 16, 0),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        'Connections',
-                        style: CupertinoTheme.of(context)
-                            .textTheme
-                            .navLargeTitleTextStyle
-                            .copyWith(
-                              fontSize: 34,
-                              fontWeight: FontWeight.bold,
-                            ),
-                      ),
-                    ),
-                    Material(
-                      color: Colors.transparent,
-                      child: InkWell(
-                        onTap: () {
-                          context.pushNamed(AddConnectionsWidget.routeName);
-                        },
-                        borderRadius: BorderRadius.circular(12),
-                        child: Container(
-                          padding:
-                              EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                          decoration: BoxDecoration(
-                            color: Colors.white,
-                            borderRadius: BorderRadius.circular(12),
-                            border: Border.all(
-                              color: Color(0xFFE5E7EB),
-                              width: 1,
-                            ),
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors.black.withOpacity(0.05),
-                                blurRadius: 4,
-                                offset: Offset(0, 2),
-                              ),
-                            ],
-                          ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Icon(
-                                CupertinoIcons.add,
-                                color: Color(0xFF007AFF),
-                                size: 18,
-                              ),
-                              SizedBox(width: 8),
-                              Text(
-                                'Add New',
-                                style: TextStyle(
-                                  fontFamily: 'SF Pro Text',
-                                  color: Color(0xFF007AFF),
-                                  fontSize: 14,
-                                  fontWeight: FontWeight.w600,
-                                  decoration: TextDecoration.none,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
+                padding: EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+                decoration: BoxDecoration(
+                  color: isSelected ? Colors.white.withOpacity(0.3) : Color(0xFFE5E5EA),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Text(
+                  '$count',
+                  style: TextStyle(
+                    fontFamily: 'SF Pro Text',
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: isSelected ? Colors.white : Color(0xFF8E8E93),
+                  ),
                 ),
               ),
-              SizedBox(height: 20),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
 
-              // Filter Segmented Control
-              if (currentUserReference != null)
-                StreamBuilder<UsersRecord>(
-                  stream: UsersRecord.getDocument(currentUserReference!),
-                  builder: (context, userSnapshot) {
-                    final connectionsCount = userSnapshot.hasData
-                        ? userSnapshot.data!.friends.length
-                        : 0;
-                    final incomingRequestsCount = userSnapshot.hasData
-                        ? userSnapshot.data!.friendRequests.length
-                        : 0;
-
-                    return Padding(
-                      padding:
-                          EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                      child: Container(
-                        width: double.infinity,
-                        child: CupertinoSlidingSegmentedControl<int>(
-                          backgroundColor: Color(0xFFF1F5F9),
-                          thumbColor: Colors.white,
-                          groupValue: _selectedTabIndex,
-                          children: {
-                            0: _buildSegment(
-                                'My Connections', connectionsCount, 0),
-                            1: _buildSegment(
-                                'Requests', incomingRequestsCount, 1),
-                            2: _buildSegment('Sent', 0, 2),
-                          },
-                          onValueChanged: (value) {
-                            if (value != null) {
-                              setState(() {
-                                _selectedTabIndex = value;
-                              });
-                            }
-                          },
-                        ),
-                      ),
-                    );
-                  },
-                )
-              else
-                Padding(
-                  padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                  child: Container(
-                    width: double.infinity,
-                    child: CupertinoSlidingSegmentedControl<int>(
-                      backgroundColor: Color(0xFFF1F5F9),
-                      thumbColor: Colors.white,
-                      groupValue: _selectedTabIndex,
-                      children: {
-                        0: _buildSegment('My Connections', 0, 0),
-                        1: _buildSegment('Requests', 0, 1),
-                        2: _buildSegment('Sent', 0, 2),
-                      },
-                      onValueChanged: (value) {
-                        if (value != null) {
-                          setState(() {
-                            _selectedTabIndex = value;
-                          });
-                        }
-                      },
-                    ),
+  // ─── Desktop (macOS) Layout ───
+  Widget _buildDesktopLayout(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.white,
+      body: Column(
+        children: [
+          // macOS-style toolbar
+          Container(
+            height: 52,
+            padding: EdgeInsets.symmetric(horizontal: 20),
+            decoration: BoxDecoration(
+              color: Color(0xFFFAFAFA),
+              border: Border(
+                bottom: BorderSide(color: Color(0xFFE5E5E5), width: 0.5),
+              ),
+            ),
+            child: Row(
+              children: [
+                // Title
+                Text(
+                  'Connections',
+                  style: TextStyle(
+                    fontFamily: 'SF Pro Text',
+                    fontSize: 15,
+                    fontWeight: FontWeight.w600,
+                    color: Color(0xFF1D1D1F),
                   ),
                 ),
-              SizedBox(height: 16),
-
-              // Search bar
-              Container(
-                width: double.infinity,
-                padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                color: Colors.white,
-                child: Container(
-                  height: 44,
-                  decoration: BoxDecoration(
-                    color: CupertinoColors.systemGrey6,
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(
-                      color: CupertinoColors.separator,
-                      width: 0.5,
-                    ),
+                SizedBox(width: 24),
+                // Tab buttons in toolbar
+                if (currentUserReference != null)
+                  StreamBuilder<UsersRecord>(
+                    stream: UsersRecord.getDocument(currentUserReference!),
+                    builder: (context, snap) {
+                      final cCount = snap.hasData ? snap.data!.friends.length : 0;
+                      if (!snap.hasData) {
+                        return Row(
+                          children: [
+                            _buildToolbarTab('All', 0, 0),
+                            SizedBox(width: 2),
+                            _buildToolbarTab('Requests', 0, 1),
+                            SizedBox(width: 2),
+                            _buildToolbarTab('Sent', 0, 2),
+                          ],
+                        );
+                      }
+                      return FutureBuilder<int>(
+                        future: _countValidRefs(snap.data!.friendRequests),
+                        builder: (context, countSnap) {
+                          final rCount = countSnap.data ?? 0;
+                          return Row(
+                            children: [
+                              _buildToolbarTab('All', cCount, 0),
+                              SizedBox(width: 2),
+                              _buildToolbarTab('Requests', rCount, 1),
+                              SizedBox(width: 2),
+                              _buildToolbarTab('Sent', 0, 2),
+                            ],
+                          );
+                        },
+                      );
+                    },
+                  )
+                else
+                  Row(
+                    children: [
+                      _buildToolbarTab('All', 0, 0),
+                      SizedBox(width: 2),
+                      _buildToolbarTab('Requests', 0, 1),
+                      SizedBox(width: 2),
+                      _buildToolbarTab('Sent', 0, 2),
+                    ],
                   ),
+                Spacer(),
+                // Search field in toolbar
+                Container(
+                  width: 200,
+                  height: 28,
                   child: CupertinoTextField(
                     controller: _searchController,
-                    onChanged: (value) {
-                      setState(() {
-                        _searchQuery = value.toLowerCase();
-                      });
-                    },
-                    placeholder: 'Search connections',
+                    onChanged: (v) => setState(() => _searchQuery = v.toLowerCase()),
+                    placeholder: 'Search',
                     placeholderStyle: TextStyle(
                       fontFamily: 'SF Pro Text',
-                      color: CupertinoColors.systemGrey,
-                      fontSize: 14,
-                      fontWeight: FontWeight.w400,
-                      decoration: TextDecoration.none,
+                      color: Color(0xFF8E8E93),
+                      fontSize: 12,
                     ),
-                    padding: EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                    padding: EdgeInsets.symmetric(horizontal: 6, vertical: 5),
                     prefix: Padding(
-                      padding: EdgeInsets.only(left: 12, right: 8),
-                      child: Icon(
-                        CupertinoIcons.search,
-                        color: CupertinoColors.systemBlue,
-                        size: 18,
-                      ),
+                      padding: EdgeInsets.only(left: 6),
+                      child: Icon(CupertinoIcons.search, size: 14, color: Color(0xFF8E8E93)),
                     ),
                     suffix: _searchQuery.isNotEmpty
                         ? GestureDetector(
-                            onTap: () {
-                              setState(() {
-                                _searchController.clear();
-                                _searchQuery = '';
-                              });
-                            },
+                            onTap: () => setState(() {
+                              _searchController.clear();
+                              _searchQuery = '';
+                            }),
                             child: Padding(
-                              padding: EdgeInsets.only(right: 12),
-                              child: Icon(
-                                CupertinoIcons.xmark_circle_fill,
-                                color: CupertinoColors.systemGrey,
-                                size: 16,
-                              ),
+                              padding: EdgeInsets.only(right: 6),
+                              child: Icon(CupertinoIcons.xmark_circle_fill, size: 13, color: Color(0xFFC7C7CC)),
                             ),
                           )
                         : null,
                     style: TextStyle(
                       fontFamily: 'SF Pro Text',
-                      color: CupertinoColors.label,
-                      fontSize: 14,
-                      fontWeight: FontWeight.w400,
-                      decoration: TextDecoration.none,
+                      color: Color(0xFF1D1D1F),
+                      fontSize: 12,
                     ),
                     decoration: BoxDecoration(
-                      color: Colors.transparent,
-                      borderRadius: BorderRadius.circular(12),
+                      color: Color(0xFFF2F2F7),
+                      borderRadius: BorderRadius.circular(6),
                     ),
                   ),
                 ),
-              ),
-              SizedBox(height: 8),
+                SizedBox(width: 12),
+                // Add button
+                Material(
+                  color: Colors.transparent,
+                  child: InkWell(
+                    onTap: () => context.pushNamed(AddConnectionsWidget.routeName),
+                    borderRadius: BorderRadius.circular(6),
+                    child: Container(
+                      padding: EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                      decoration: BoxDecoration(
+                        color: Color(0xFF007AFF),
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(CupertinoIcons.plus, color: Colors.white, size: 13),
+                          SizedBox(width: 4),
+                          Text(
+                            'Add Connect',
+                            style: TextStyle(
+                              fontFamily: 'SF Pro Text',
+                              color: Colors.white,
+                              fontSize: 12,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          // Content
+          Expanded(
+            child: _buildTabContent(),
+          ),
+        ],
+      ),
+    );
+  }
 
-              // Content area
-              Expanded(
-                child: _buildTabContent(),
+  Widget _buildToolbarTab(String label, int count, int index) {
+    final isSelected = _selectedTabIndex == index;
+    return GestureDetector(
+      onTap: () => setState(() => _selectedTabIndex = index),
+      child: Container(
+        padding: EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+        decoration: BoxDecoration(
+          color: isSelected ? Color(0xFF007AFF).withOpacity(0.12) : Colors.transparent,
+          borderRadius: BorderRadius.circular(5),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              label,
+              style: TextStyle(
+                fontFamily: 'SF Pro Text',
+                fontSize: 12,
+                fontWeight: isSelected ? FontWeight.w600 : FontWeight.w400,
+                color: isSelected ? Color(0xFF007AFF) : Color(0xFF8E8E93),
+              ),
+            ),
+            if (count > 0) ...[
+              SizedBox(width: 4),
+              Container(
+                padding: EdgeInsets.symmetric(horizontal: 5, vertical: 0),
+                decoration: BoxDecoration(
+                  color: isSelected ? Color(0xFF007AFF) : Color(0xFFE5E5EA),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Text(
+                  '$count',
+                  style: TextStyle(
+                    fontFamily: 'SF Pro Text',
+                    fontSize: 10,
+                    fontWeight: FontWeight.w600,
+                    color: isSelected ? Colors.white : Color(0xFF8E8E93),
+                  ),
+                ),
               ),
             ],
-          ),
+          ],
         ),
       ),
     );
   }
+
+
+
 
   Widget _buildTabContent() {
     if (currentUserReference == null) {
@@ -348,41 +485,25 @@ class _ConnectionsWidgetState extends State<ConnectionsWidget> {
 
     return Column(
       children: [
-        // Connection count and sort by row - Enhanced styling
+        // Count header
         Container(
-          padding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          padding: EdgeInsets.symmetric(horizontal: 20, vertical: 8),
           decoration: BoxDecoration(
-            color: Colors.white,
+            color: Color(0xFFFAFAFA),
             border: Border(
-              bottom: BorderSide(
-                color: Color(0xFFF1F5F9),
-                width: 1,
-              ),
+              bottom: BorderSide(color: Color(0xFFE5E5E5), width: 0.5),
             ),
           ),
           child: Row(
-            mainAxisAlignment: MainAxisAlignment.start,
-            crossAxisAlignment: CrossAxisAlignment.center,
             children: [
               Text(
-                '${connections.length}',
+                '${connections.length} connection${connections.length == 1 ? '' : 's'}',
                 style: TextStyle(
-                  fontFamily: 'SF Pro Display',
-                  fontSize: 17,
-                  fontWeight: FontWeight.w600,
-                  color: Color(0xFF1A1F36),
-                  letterSpacing: -0.2,
-                ),
-              ),
-              SizedBox(width: 6),
-              Text(
-                'connection${connections.length == 1 ? '' : 's'}',
-                style: TextStyle(
-                  fontFamily: 'SF Pro Display',
-                  fontSize: 15,
-                  fontWeight: FontWeight.w400,
-                  color: Color(0xFF64748B),
-                  letterSpacing: -0.1,
+                  fontFamily: 'SF Pro Text',
+                  fontSize: 11,
+                  fontWeight: FontWeight.w500,
+                  color: Color(0xFF8E8E93),
+                  letterSpacing: 0.1,
                 ),
               ),
             ],
@@ -447,41 +568,24 @@ class _ConnectionsWidgetState extends State<ConnectionsWidget> {
 
     return Column(
       children: [
-        // Request count and sort by row - Enhanced styling
         Container(
-          padding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          padding: EdgeInsets.symmetric(horizontal: 20, vertical: 8),
           decoration: BoxDecoration(
-            color: Colors.white,
+            color: Color(0xFFFAFAFA),
             border: Border(
-              bottom: BorderSide(
-                color: Color(0xFFF1F5F9),
-                width: 1,
-              ),
+              bottom: BorderSide(color: Color(0xFFE5E5E5), width: 0.5),
             ),
           ),
           child: Row(
-            mainAxisAlignment: MainAxisAlignment.start,
-            crossAxisAlignment: CrossAxisAlignment.center,
             children: [
               Text(
-                '${requests.length}',
+                '${requests.length} request${requests.length == 1 ? '' : 's'}',
                 style: TextStyle(
-                  fontFamily: 'SF Pro Display',
-                  fontSize: 17,
-                  fontWeight: FontWeight.w600,
-                  color: Color(0xFF1A1F36),
-                  letterSpacing: -0.2,
-                ),
-              ),
-              SizedBox(width: 6),
-              Text(
-                'request${requests.length == 1 ? '' : 's'}',
-                style: TextStyle(
-                  fontFamily: 'SF Pro Display',
-                  fontSize: 15,
-                  fontWeight: FontWeight.w400,
-                  color: Color(0xFF64748B),
-                  letterSpacing: -0.1,
+                  fontFamily: 'SF Pro Text',
+                  fontSize: 11,
+                  fontWeight: FontWeight.w500,
+                  color: Color(0xFF8E8E93),
+                  letterSpacing: 0.1,
                 ),
               ),
             ],
@@ -545,41 +649,24 @@ class _ConnectionsWidgetState extends State<ConnectionsWidget> {
 
     return Column(
       children: [
-        // Sent request count and sort by row - Enhanced styling
         Container(
-          padding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          padding: EdgeInsets.symmetric(horizontal: 20, vertical: 8),
           decoration: BoxDecoration(
-            color: Colors.white,
+            color: Color(0xFFFAFAFA),
             border: Border(
-              bottom: BorderSide(
-                color: Color(0xFFF1F5F9),
-                width: 1,
-              ),
+              bottom: BorderSide(color: Color(0xFFE5E5E5), width: 0.5),
             ),
           ),
           child: Row(
-            mainAxisAlignment: MainAxisAlignment.start,
-            crossAxisAlignment: CrossAxisAlignment.center,
             children: [
               Text(
-                '${sentRequests.length}',
+                '${sentRequests.length} sent request${sentRequests.length == 1 ? '' : 's'}',
                 style: TextStyle(
-                  fontFamily: 'SF Pro Display',
-                  fontSize: 17,
-                  fontWeight: FontWeight.w600,
-                  color: Color(0xFF1A1F36),
-                  letterSpacing: -0.2,
-                ),
-              ),
-              SizedBox(width: 6),
-              Text(
-                'sent request${sentRequests.length == 1 ? '' : 's'}',
-                style: TextStyle(
-                  fontFamily: 'SF Pro Display',
-                  fontSize: 15,
-                  fontWeight: FontWeight.w400,
-                  color: Color(0xFF64748B),
-                  letterSpacing: -0.1,
+                  fontFamily: 'SF Pro Text',
+                  fontSize: 11,
+                  fontWeight: FontWeight.w500,
+                  color: Color(0xFF8E8E93),
+                  letterSpacing: 0.1,
                 ),
               ),
             ],
@@ -638,48 +725,46 @@ class _ConnectionsWidgetState extends State<ConnectionsWidget> {
       {bool isConnected = false,
       bool isSentRequest = false,
       bool hasIncomingRequest = false}) {
-    return GestureDetector(
-      onTap: () {
-        _viewUserProfile(user);
-      },
-      child: Container(
-        decoration: BoxDecoration(
-          color: Colors.white,
-          border: Border(
-            bottom: BorderSide(
-              color: Color(0xFFE5E7EB),
-              width: 1,
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: () {
+          _viewUserProfile(user);
+        },
+        hoverColor: Color(0xFFF5F5F7),
+        child: Container(
+          padding: EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+          decoration: BoxDecoration(
+            border: Border(
+              bottom: BorderSide(color: Color(0xFFF2F2F2), width: 0.5),
             ),
           ),
-        ),
-        child: Padding(
-          padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
           child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
+            crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              // User avatar
+              // Compact avatar
               Container(
-                width: 48,
-                height: 48,
+                width: 36,
+                height: 36,
                 child: ClipRRect(
-                  borderRadius: BorderRadius.circular(28),
+                  borderRadius: BorderRadius.circular(18),
                   child: user.photoUrl.isNotEmpty
                       ? CachedNetworkImage(
                           imageUrl: user.photoUrl,
-                          width: 48,
-                          height: 48,
+                          width: 36,
+                          height: 36,
                           fit: BoxFit.cover,
                           placeholder: (context, url) => Container(
-                            width: 48,
-                            height: 48,
+                            width: 36,
+                            height: 36,
                             decoration: BoxDecoration(
-                              color: Color(0xFFF1F5F9),
+                              color: Color(0xFFF2F2F7),
                               shape: BoxShape.circle,
                             ),
                             child: Icon(
                               CupertinoIcons.person_fill,
-                              color: Color(0xFF64748B),
-                              size: 24,
+                              color: Color(0xFF8E8E93),
+                              size: 18,
                             ),
                           ),
                           errorWidget: (context, url, error) =>
@@ -688,60 +773,45 @@ class _ConnectionsWidgetState extends State<ConnectionsWidget> {
                       : _buildInitialsAvatar(user),
                 ),
               ),
-              SizedBox(width: 10),
+              SizedBox(width: 12),
 
-              // User info
+              // Name
               Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      user.displayName.isNotEmpty
-                          ? user.displayName
-                          : 'Unknown User',
-                      style: TextStyle(
-                        fontFamily: 'SF Pro Display',
-                        color: Color(0xFF000000),
-                        fontSize: 15,
-                        fontWeight: FontWeight.w600,
-                        letterSpacing: -0.2,
-                        height: 1.2,
-                      ),
-                    ),
-                    SizedBox(height: 2),
+                flex: 3,
+                child: Text(
+                  user.displayName.isNotEmpty
+                      ? user.displayName
+                      : 'Unknown User',
+                  style: TextStyle(
+                    fontFamily: 'SF Pro Text',
+                    color: Color(0xFF1D1D1F),
+                    fontSize: 13,
+                    fontWeight: FontWeight.w500,
+                    decoration: TextDecoration.none,
+                  ),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              SizedBox(width: 12),
 
-                    // Bio or job title (can span multiple lines)
-                    if (user.bio.isNotEmpty)
-                      Text(
-                        user.bio,
-                        style: TextStyle(
-                          fontFamily: 'SF Pro Display',
-                          color: Color(0xFF666666),
-                          fontSize: 13,
-                          fontWeight: FontWeight.w400,
-                          height: 1.3,
-                        ),
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                      )
-                    else
-                      Text(
-                        user.email,
-                        style: TextStyle(
-                          fontFamily: 'SF Pro Display',
-                          color: Color(0xFF666666),
-                          fontSize: 13,
-                          fontWeight: FontWeight.w400,
-                          height: 1.3,
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                  ],
+              // Email / bio — secondary info
+              Expanded(
+                flex: 4,
+                child: Text(
+                  user.bio.isNotEmpty ? user.bio : user.email,
+                  style: TextStyle(
+                    fontFamily: 'SF Pro Text',
+                    color: Color(0xFF8E8E93),
+                    fontSize: 12,
+                    fontWeight: FontWeight.w400,
+                    decoration: TextDecoration.none,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                 ),
               ),
 
-              // Action buttons (icon buttons)
+              // Action buttons
               _buildActionButtons(user, currentUser,
                   isConnected: isConnected,
                   isSentRequest: isSentRequest,

@@ -28,6 +28,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '/utils/qurio_url_launcher.dart';
 import 'package:aligned_dialog/aligned_dialog.dart';
 import 'package:http/http.dart' as http;
+import '/utils/markdown_to_quill_delta.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:emoji_picker_flutter/emoji_picker_flutter.dart';
 import 'package:flutter/cupertino.dart';
@@ -497,12 +498,32 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
       raw = Uri.decodeComponent(raw);
 
       // Strip leading timestamp prefix: "1775578299259_filename.ext" → "filename.ext"
-      // Pattern: one or more digits followed by underscore(s) at the start
+      // Pattern: one or more digits (10+) followed by underscore(s) at the start
       final stripped = raw.replaceFirst(RegExp(r'^\d{10,}_'), '');
-      if (stripped.isNotEmpty && stripped.contains('.')) {
+      if (stripped.isNotEmpty && stripped != raw) {
+        // Successfully stripped timestamp prefix
         return stripped;
       }
-      // If stripping removed everything or there's no extension, return raw
+
+      // Check if the raw name is just a pure timestamp number (no underscore, no extension)
+      // e.g. "1781023277205000" — this means the file was uploaded without preserving its name
+      if (RegExp(r'^\d{10,}$').hasMatch(raw)) {
+        // Pure timestamp — return a friendly fallback instead of the raw number
+        return 'file';
+      }
+
+      // Check if it's a timestamp with extension but no underscore: "1781023277205000.msi"
+      final timestampWithExt = RegExp(r'^(\d{10,})\.(\w+)$').firstMatch(raw);
+      if (timestampWithExt != null) {
+        final ext = timestampWithExt.group(2)!;
+        return 'file.$ext';
+      }
+
+      // If raw has a dot (extension), return it as-is
+      if (raw.contains('.')) {
+        return raw;
+      }
+
       return raw.isNotEmpty ? raw : 'file';
     } catch (e) {
       return 'file';
@@ -725,8 +746,10 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
   }
 
   Future<void> _copyContentIfAny() async {
-    final text = widget.message?.content.trim();
-    if (text == null || text.isEmpty) return;
+    final rawText = widget.message?.content.trim();
+    if (rawText == null || rawText.isEmpty) return;
+    // Strip mention markup so clipboard gets @DisplayName, not raw <@uid|DisplayName>
+    final text = stripMarkdownFormatting(rawText);
     await Clipboard.setData(ClipboardData(text: text));
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
@@ -2647,7 +2670,7 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
                 final hasAudio = audio != null && audio.isNotEmpty;
                 final hasAttachment = attachment != null && attachment.isNotEmpty;
 
-                String displayContent = content;
+                String displayContent = stripMarkdownFormatting(content);
                 if (displayContent.isEmpty) {
                   if (hasImage || messageType == 'image') {
                     displayContent = '[Image]';
@@ -3133,7 +3156,7 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
                                                                               ),
                                                                               const SizedBox(height: 2.0),
                                                                               Text(
-                                                                                widget.message?.replyToContent ?? '',
+                                                                                stripMarkdownFormatting(widget.message?.replyToContent ?? ''),
                                                                                 style: const TextStyle(
                                                                                   fontFamily: 'SF Pro Text',
                                                                                   color: Color(0xFF667781),
@@ -3673,127 +3696,129 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
                                                                               ?.images)!
                                                                           .isNotEmpty) ==
                                                                   true)
-                                                                Material(
-                                                                  color: Colors
-                                                                      .transparent,
-                                                                  elevation:
-                                                                      0.0,
-                                                                  shape:
-                                                                      RoundedRectangleBorder(
-                                                                    borderRadius:
-                                                                        BorderRadius.circular(
-                                                                            8.0),
-                                                                  ),
-                                                                  child:
-                                                                      Container(
-                                                                    width:
-                                                                        200.0,
-                                                                    decoration:
-                                                                        BoxDecoration(
-                                                                      color: Colors
-                                                                          .transparent,
-                                                                      borderRadius:
-                                                                          BorderRadius.circular(
-                                                                              8.0),
-                                                                    ),
-                                                                    child:
-                                                                        Builder(
-                                                                      builder:
-                                                                          (context) {
-                                                                        final multipleImages =
-                                                                            widget.message?.images.toList() ??
-                                                                                [];
-                                                                        return Column(
-                                                                          mainAxisSize:
-                                                                              MainAxisSize.min,
-                                                                          children: List
-                                                                              .generate(
-                                                                            multipleImages.length,
-                                                                            (multipleImagesIndex) {
-                                                                              final multipleImagesItem = multipleImages[multipleImagesIndex];
-                                                                              return Stack(
-                                                                                clipBehavior: Clip.none,
-                                                                                children: [
-                                                                                  // Image container
-                                                                                  GestureDetector(
-                                                                                    onLongPressStart: (details) {
-                                                                                      if (widget.isSelectionMode) return;
-                                                                                      widget.onMessageLongPress?.call(
-                                                                                        widget.message!,
-                                                                                        details.globalPosition,
-                                                                                        null,
-                                                                                      );
-                                                                                    },
-                                                                                    onTap: () async {
-                                                                                      await Navigator.push(
-                                                                                        context,
-                                                                                        PageTransition(
-                                                                                          type: PageTransitionType.fade,
-                                                                                          child: FlutterFlowExpandedImageView(
-                                                                                            image: CachedNetworkImage(
-                                                                                              fadeInDuration: const Duration(milliseconds: 300),
-                                                                                              fadeOutDuration: const Duration(milliseconds: 300),
-                                                                                              imageUrl: valueOrDefault<String>(
-                                                                                                multipleImagesItem,
-                                                                                                'https://firebasestorage.googleapis.com/v0/b/linkedup-c3e29.firebasestorage.app/o/asset%2Fdefault-user.png?alt=media&token=35d4da12-13b0-4f43-8b8e-375e6e126683',
-                                                                                              ),
-                                                                                              fit: BoxFit.contain,
-                                                                                              errorWidget: (context, error, stackTrace) => Image.asset(
-                                                                                                'assets/images/error_image.png',
-                                                                                                fit: BoxFit.contain,
+                                                                Builder(
+                                                                  builder: (context) {
+                                                                    final allImages =
+                                                                        widget.message?.images.toList() ?? [];
+                                                                    final count = allImages.length;
+                                                                    const double tileSize = 90.0;
+                                                                    const double gap = 2.0;
+
+                                                                    // Determine grid columns
+                                                                    final cols = (count == 1) ? 1 : (count == 2 || count == 4) ? 2 : 3;
+                                                                    final displayImages = count > 9 ? allImages.sublist(0, 9) : allImages;
+                                                                    final displayCount = displayImages.length;
+                                                                    final rows = (displayCount / cols).ceil();
+                                                                    final showOverlay = count > 9;
+
+                                                                    Widget buildTile(String imageUrl, int index) {
+                                                                      return GestureDetector(
+                                                                        onLongPressStart: (details) {
+                                                                          if (widget.isSelectionMode) return;
+                                                                          widget.onMessageLongPress?.call(
+                                                                            widget.message!,
+                                                                            details.globalPosition,
+                                                                            null,
+                                                                          );
+                                                                        },
+                                                                        onTap: () async {
+                                                                          await Navigator.push(
+                                                                            context,
+                                                                            PageTransition(
+                                                                              type: PageTransitionType.fade,
+                                                                              child: FlutterFlowExpandedImageView(
+                                                                                image: CachedNetworkImage(
+                                                                                  fadeInDuration: const Duration(milliseconds: 300),
+                                                                                  fadeOutDuration: const Duration(milliseconds: 300),
+                                                                                  imageUrl: imageUrl,
+                                                                                  fit: BoxFit.contain,
+                                                                                ),
+                                                                                allowRotation: false,
+                                                                                tag: '${imageUrl}_${widget.message?.reference.id ?? ''}_$index',
+                                                                                useHeroAnimation: true,
+                                                                                imageUrl: imageUrl,
+                                                                              ),
+                                                                            ),
+                                                                          );
+                                                                        },
+                                                                        child: Hero(
+                                                                          tag: '${imageUrl}_${widget.message?.reference.id ?? ''}_$index',
+                                                                          transitionOnUserGestures: true,
+                                                                          child: ClipRRect(
+                                                                            borderRadius: BorderRadius.circular(4.0),
+                                                                            child: CachedNetworkImage(
+                                                                              fadeInDuration: const Duration(milliseconds: 300),
+                                                                              fadeOutDuration: const Duration(milliseconds: 300),
+                                                                              imageUrl: imageUrl,
+                                                                              width: count == 1 ? double.infinity : tileSize,
+                                                                              height: count == 1 ? 200.0 : tileSize,
+                                                                              fit: BoxFit.cover,
+                                                                              errorWidget: (context, error, stackTrace) => Image.asset(
+                                                                                'assets/images/error_image.png',
+                                                                                width: tileSize,
+                                                                                height: tileSize,
+                                                                                fit: BoxFit.cover,
+                                                                              ),
+                                                                            ),
+                                                                          ),
+                                                                        ),
+                                                                      );
+                                                                    }
+
+                                                                    if (count == 1) {
+                                                                      return buildTile(allImages[0], 0);
+                                                                    }
+
+                                                                    return Column(
+                                                                      mainAxisSize: MainAxisSize.min,
+                                                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                                                      children: List.generate(rows, (row) {
+                                                                        return Padding(
+                                                                          padding: EdgeInsets.only(top: row > 0 ? gap : 0),
+                                                                          child: Row(
+                                                                            mainAxisSize: MainAxisSize.min,
+                                                                            children: List.generate(cols, (col) {
+                                                                              final idx = row * cols + col;
+                                                                              if (idx >= displayCount) {
+                                                                                return const SizedBox.shrink();
+                                                                              }
+                                                                              final isLast = showOverlay && idx == displayCount - 1;
+                                                                              return Padding(
+                                                                                padding: EdgeInsets.only(left: col > 0 ? gap : 0),
+                                                                                child: SizedBox(
+                                                                                  width: tileSize,
+                                                                                  height: tileSize,
+                                                                                  child: isLast
+                                                                                      ? Stack(
+                                                                                          fit: StackFit.expand,
+                                                                                          children: [
+                                                                                            buildTile(displayImages[idx], idx),
+                                                                                            IgnorePointer(
+                                                                                              child: Container(
+                                                                                                color: Colors.black.withOpacity(0.55),
+                                                                                                alignment: Alignment.center,
+                                                                                                child: Text(
+                                                                                                  '+${count - displayCount}',
+                                                                                                  style: const TextStyle(
+                                                                                                    color: Colors.white,
+                                                                                                    fontSize: 20,
+                                                                                                    fontWeight: FontWeight.w600,
+                                                                                                    fontFamily: 'SF Pro Text',
+                                                                                                  ),
+                                                                                                ),
                                                                                               ),
                                                                                             ),
-                                                                                            allowRotation: false,
-                                                                                            tag: '${valueOrDefault<String>(
-                                                                                              multipleImagesItem,
-                                                                                              'https://firebasestorage.googleapis.com/v0/b/linkedup-c3e29.firebasestorage.app/o/asset%2Fdefault-user.png?alt=media&token=35d4da12-13b0-4f43-8b8e-375e6e126683$multipleImagesIndex',
-                                                                                            )}_${widget.message?.reference.id ?? ''}',
-                                                                                            useHeroAnimation: true,
-                                                                                            imageUrl: valueOrDefault<String>(
-                                                                                              multipleImagesItem,
-                                                                                              '',
-                                                                                            ),
-                                                                                          ),
-                                                                                        ),
-                                                                                      );
-                                                                                    },
-                                                                                    child: Hero(
-                                                                                      tag: '${valueOrDefault<String>(
-                                                                                        multipleImagesItem,
-                                                                                        'https://firebasestorage.googleapis.com/v0/b/linkedup-c3e29.firebasestorage.app/o/asset%2Fdefault-user.png?alt=media&token=35d4da12-13b0-4f43-8b8e-375e6e126683$multipleImagesIndex',
-                                                                                      )}_${widget.message?.reference.id ?? ''}',
-                                                                                      transitionOnUserGestures: true,
-                                                                                      child: ClipRRect(
-                                                                                        borderRadius: BorderRadius.circular(8.0),
-                                                                                        child: CachedNetworkImage(
-                                                                                          fadeInDuration: const Duration(milliseconds: 300),
-                                                                                          fadeOutDuration: const Duration(milliseconds: 300),
-                                                                                          imageUrl: valueOrDefault<String>(
-                                                                                            multipleImagesItem,
-                                                                                            'https://firebasestorage.googleapis.com/v0/b/linkedup-c3e29.firebasestorage.app/o/asset%2Fdefault-user.png?alt=media&token=35d4da12-13b0-4f43-8b8e-375e6e126683',
-                                                                                          ),
-                                                                                          width: double.infinity,
-                                                                                          height: 150.0,
-                                                                                          fit: BoxFit.cover,
-                                                                                          errorWidget: (context, error, stackTrace) => Image.asset(
-                                                                                            'assets/images/error_image.png',
-                                                                                            width: double.infinity,
-                                                                                            height: 150.0,
-                                                                                            fit: BoxFit.cover,
-                                                                                          ),
-                                                                                        ),
-                                                                                      ),
-                                                                                    ),
-                                                                                  ),
-                                                                                ],
+                                                                                          ],
+                                                                                        )
+                                                                                      : buildTile(displayImages[idx], idx),
+                                                                                ),
                                                                               );
-                                                                            },
-                                                                          ).divide(
-                                                                              const SizedBox(height: 8.0)),
+                                                                            }),
+                                                                          ),
                                                                         );
-                                                                      },
-                                                                    ),
-                                                                  ),
+                                                                      }),
+                                                                    );
+                                                                  },
                                                                 ),
                                                               if (widget.message
                                                                           ?.audio !=
@@ -4219,7 +4244,7 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
                                                                               ),
                                                                               const SizedBox(height: 2.0),
                                                                               Text(
-                                                                                widget.message?.replyToContent ?? '',
+                                                                                stripMarkdownFormatting(widget.message?.replyToContent ?? ''),
                                                                                 style: const TextStyle(
                                                                                   fontFamily: 'SF Pro Text',
                                                                                   color: Color(0xFF667781),
@@ -4737,127 +4762,128 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
                                                                               ?.images)!
                                                                           .isNotEmpty) ==
                                                                   true)
-                                                                Material(
-                                                                  color: Colors
-                                                                      .transparent,
-                                                                  elevation:
-                                                                      0.0,
-                                                                  shape:
-                                                                      RoundedRectangleBorder(
-                                                                    borderRadius:
-                                                                        BorderRadius.circular(
-                                                                            8.0),
-                                                                  ),
-                                                                  child:
-                                                                      Container(
-                                                                    width:
-                                                                        200.0,
-                                                                    decoration:
-                                                                        BoxDecoration(
-                                                                      color: Colors
-                                                                          .transparent,
-                                                                      borderRadius:
-                                                                          BorderRadius.circular(
-                                                                              8.0),
-                                                                    ),
-                                                                    child:
-                                                                        Builder(
-                                                                      builder:
-                                                                          (context) {
-                                                                        final multipleImages =
-                                                                            widget.message?.images.toList() ??
-                                                                                [];
-                                                                        return Column(
-                                                                          mainAxisSize:
-                                                                              MainAxisSize.min,
-                                                                          children: List
-                                                                              .generate(
-                                                                            multipleImages.length,
-                                                                            (multipleImagesIndex) {
-                                                                              final multipleImagesItem = multipleImages[multipleImagesIndex];
-                                                                              return Stack(
-                                                                                clipBehavior: Clip.none,
-                                                                                children: [
-                                                                                  // Image container
-                                                                                  GestureDetector(
-                                                                                    onLongPressStart: (details) {
-                                                                                      if (widget.isSelectionMode) return;
-                                                                                      widget.onMessageLongPress?.call(
-                                                                                        widget.message!,
-                                                                                        details.globalPosition,
-                                                                                        null,
-                                                                                      );
-                                                                                    },
-                                                                                    onTap: () async {
-                                                                                      await Navigator.push(
-                                                                                        context,
-                                                                                        PageTransition(
-                                                                                          type: PageTransitionType.fade,
-                                                                                          child: FlutterFlowExpandedImageView(
-                                                                                            image: CachedNetworkImage(
-                                                                                              fadeInDuration: const Duration(milliseconds: 300),
-                                                                                              fadeOutDuration: const Duration(milliseconds: 300),
-                                                                                              imageUrl: valueOrDefault<String>(
-                                                                                                multipleImagesItem,
-                                                                                                'https://firebasestorage.googleapis.com/v0/b/linkedup-c3e29.firebasestorage.app/o/asset%2Fdefault-user.png?alt=media&token=35d4da12-13b0-4f43-8b8e-375e6e126683',
-                                                                                              ),
-                                                                                              fit: BoxFit.contain,
-                                                                                              errorWidget: (context, error, stackTrace) => Image.asset(
-                                                                                                'assets/images/error_image.png',
-                                                                                                fit: BoxFit.contain,
+                                                                Builder(
+                                                                  builder: (context) {
+                                                                    final allImages =
+                                                                        widget.message?.images.toList() ?? [];
+                                                                    final count = allImages.length;
+                                                                    const double tileSize = 90.0;
+                                                                    const double gap = 2.0;
+
+                                                                    final cols = (count == 1) ? 1 : (count == 2 || count == 4) ? 2 : 3;
+                                                                    final displayImages = count > 9 ? allImages.sublist(0, 9) : allImages;
+                                                                    final displayCount = displayImages.length;
+                                                                    final rows = (displayCount / cols).ceil();
+                                                                    final showOverlay = count > 9;
+
+                                                                    Widget buildTile(String imageUrl, int index) {
+                                                                      return GestureDetector(
+                                                                        onLongPressStart: (details) {
+                                                                          if (widget.isSelectionMode) return;
+                                                                          widget.onMessageLongPress?.call(
+                                                                            widget.message!,
+                                                                            details.globalPosition,
+                                                                            null,
+                                                                          );
+                                                                        },
+                                                                        onTap: () async {
+                                                                          await Navigator.push(
+                                                                            context,
+                                                                            PageTransition(
+                                                                              type: PageTransitionType.fade,
+                                                                              child: FlutterFlowExpandedImageView(
+                                                                                image: CachedNetworkImage(
+                                                                                  fadeInDuration: const Duration(milliseconds: 300),
+                                                                                  fadeOutDuration: const Duration(milliseconds: 300),
+                                                                                  imageUrl: imageUrl,
+                                                                                  fit: BoxFit.contain,
+                                                                                ),
+                                                                                allowRotation: false,
+                                                                                tag: '${imageUrl}_${widget.message?.reference.id ?? ''}_$index',
+                                                                                useHeroAnimation: true,
+                                                                                imageUrl: imageUrl,
+                                                                              ),
+                                                                            ),
+                                                                          );
+                                                                        },
+                                                                        child: Hero(
+                                                                          tag: '${imageUrl}_${widget.message?.reference.id ?? ''}_$index',
+                                                                          transitionOnUserGestures: true,
+                                                                          child: ClipRRect(
+                                                                            borderRadius: BorderRadius.circular(4.0),
+                                                                            child: CachedNetworkImage(
+                                                                              fadeInDuration: const Duration(milliseconds: 300),
+                                                                              fadeOutDuration: const Duration(milliseconds: 300),
+                                                                              imageUrl: imageUrl,
+                                                                              width: count == 1 ? double.infinity : tileSize,
+                                                                              height: count == 1 ? 200.0 : tileSize,
+                                                                              fit: BoxFit.cover,
+                                                                              errorWidget: (context, error, stackTrace) => Image.asset(
+                                                                                'assets/images/error_image.png',
+                                                                                width: tileSize,
+                                                                                height: tileSize,
+                                                                                fit: BoxFit.cover,
+                                                                              ),
+                                                                            ),
+                                                                          ),
+                                                                        ),
+                                                                      );
+                                                                    }
+
+                                                                    if (count == 1) {
+                                                                      return buildTile(allImages[0], 0);
+                                                                    }
+
+                                                                    return Column(
+                                                                      mainAxisSize: MainAxisSize.min,
+                                                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                                                      children: List.generate(rows, (row) {
+                                                                        return Padding(
+                                                                          padding: EdgeInsets.only(top: row > 0 ? gap : 0),
+                                                                          child: Row(
+                                                                            mainAxisSize: MainAxisSize.min,
+                                                                            children: List.generate(cols, (col) {
+                                                                              final idx = row * cols + col;
+                                                                              if (idx >= displayCount) {
+                                                                                return const SizedBox.shrink();
+                                                                              }
+                                                                              final isLast = showOverlay && idx == displayCount - 1;
+                                                                              return Padding(
+                                                                                padding: EdgeInsets.only(left: col > 0 ? gap : 0),
+                                                                                child: SizedBox(
+                                                                                  width: tileSize,
+                                                                                  height: tileSize,
+                                                                                  child: isLast
+                                                                                      ? Stack(
+                                                                                          fit: StackFit.expand,
+                                                                                          children: [
+                                                                                            buildTile(displayImages[idx], idx),
+                                                                                            IgnorePointer(
+                                                                                              child: Container(
+                                                                                                color: Colors.black.withOpacity(0.55),
+                                                                                                alignment: Alignment.center,
+                                                                                                child: Text(
+                                                                                                  '+${count - displayCount}',
+                                                                                                  style: const TextStyle(
+                                                                                                    color: Colors.white,
+                                                                                                    fontSize: 20,
+                                                                                                    fontWeight: FontWeight.w600,
+                                                                                                    fontFamily: 'SF Pro Text',
+                                                                                                  ),
+                                                                                                ),
                                                                                               ),
                                                                                             ),
-                                                                                            allowRotation: false,
-                                                                                            tag: '${valueOrDefault<String>(
-                                                                                              multipleImagesItem,
-                                                                                              'https://firebasestorage.googleapis.com/v0/b/linkedup-c3e29.firebasestorage.app/o/asset%2Fdefault-user.png?alt=media&token=35d4da12-13b0-4f43-8b8e-375e6e126683$multipleImagesIndex',
-                                                                                            )}_${widget.message?.reference.id ?? ''}',
-                                                                                            useHeroAnimation: true,
-                                                                                            imageUrl: valueOrDefault<String>(
-                                                                                              multipleImagesItem,
-                                                                                              '',
-                                                                                            ),
-                                                                                          ),
-                                                                                        ),
-                                                                                      );
-                                                                                    },
-                                                                                    child: Hero(
-                                                                                      tag: '${valueOrDefault<String>(
-                                                                                        multipleImagesItem,
-                                                                                        'https://firebasestorage.googleapis.com/v0/b/linkedup-c3e29.firebasestorage.app/o/asset%2Fdefault-user.png?alt=media&token=35d4da12-13b0-4f43-8b8e-375e6e126683$multipleImagesIndex',
-                                                                                      )}_${widget.message?.reference.id ?? ''}',
-                                                                                      transitionOnUserGestures: true,
-                                                                                      child: ClipRRect(
-                                                                                        borderRadius: BorderRadius.circular(8.0),
-                                                                                        child: CachedNetworkImage(
-                                                                                          fadeInDuration: const Duration(milliseconds: 300),
-                                                                                          fadeOutDuration: const Duration(milliseconds: 300),
-                                                                                          imageUrl: valueOrDefault<String>(
-                                                                                            multipleImagesItem,
-                                                                                            'https://firebasestorage.googleapis.com/v0/b/linkedup-c3e29.firebasestorage.app/o/asset%2Fdefault-user.png?alt=media&token=35d4da12-13b0-4f43-8b8e-375e6e126683',
-                                                                                          ),
-                                                                                          width: double.infinity,
-                                                                                          height: 150.0,
-                                                                                          fit: BoxFit.cover,
-                                                                                          errorWidget: (context, error, stackTrace) => Image.asset(
-                                                                                            'assets/images/error_image.png',
-                                                                                            width: double.infinity,
-                                                                                            height: 150.0,
-                                                                                            fit: BoxFit.cover,
-                                                                                          ),
-                                                                                        ),
-                                                                                      ),
-                                                                                    ),
-                                                                                  ),
-                                                                                ],
+                                                                                          ],
+                                                                                        )
+                                                                                      : buildTile(displayImages[idx], idx),
+                                                                                ),
                                                                               );
-                                                                            },
-                                                                          ).divide(
-                                                                              const SizedBox(height: 8.0)),
+                                                                            }),
+                                                                          ),
                                                                         );
-                                                                      },
-                                                                    ),
-                                                                  ),
+                                                                      }),
+                                                                    );
+                                                                  },
                                                                 ),
                                                               if (widget.message
                                                                           ?.audio !=

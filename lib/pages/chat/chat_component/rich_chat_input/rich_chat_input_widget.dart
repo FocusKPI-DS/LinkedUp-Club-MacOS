@@ -75,7 +75,7 @@ class _RichChatInputWidgetState extends State<RichChatInputWidget> {
   late QuillController _controller;
   late FocusNode _focusNode;
   bool _isComposing = false;
-  bool _showToolbar = false;
+  bool _showToolbar = !kIsWeb && Platform.isMacOS;
   bool _showScheduleOverlay = false;
   DateTime? _scheduledDate;
   TimeOfDay? _scheduledTime;
@@ -250,7 +250,10 @@ class _RichChatInputWidgetState extends State<RichChatInputWidget> {
     _controller.clear();
 
     setState(() {
-      _showToolbar = false;
+      // On macOS, keep the formatting toolbar open after sending
+      if (kIsWeb || !Platform.isMacOS) {
+        _showToolbar = false;
+      }
       _isComposing = false;
     });
   }

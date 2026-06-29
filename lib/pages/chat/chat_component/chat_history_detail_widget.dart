@@ -3,6 +3,7 @@ import 'package:ff_theme/flutter_flow/flutter_flow_theme.dart';
 import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:intl/intl.dart';
+import '/utils/markdown_to_quill_delta.dart';
 
 class ChatHistoryDetailWidget extends StatelessWidget {
   final List<dynamic> messages;
@@ -195,7 +196,7 @@ class ChatHistoryDetailWidget extends StatelessWidget {
 
     // Default to text
     return Text(
-      content,
+      stripMarkdownFormatting(content),
       style: FlutterFlowTheme.of(context).bodyMedium.override(
             fontFamily: 'Inter',
           ),

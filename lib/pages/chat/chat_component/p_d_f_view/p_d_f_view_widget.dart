@@ -557,6 +557,11 @@ class _PDFViewWidgetState extends State<PDFViewWidget> {
               safeFileName.replaceAll('/', '_').replaceAll('\\', '_');
           safeFileName = safeFileName.split('/').last.split('\\').last;
 
+          // Extract the actual file extension for the save dialog
+          final fileExt = safeFileName.contains('.')
+              ? safeFileName.split('.').last.toLowerCase()
+              : '';
+
           // Download the file first
           debugPrint('Downloading from URL: $url');
           final response = await http.get(Uri.parse(url));
@@ -567,11 +572,12 @@ class _PDFViewWidgetState extends State<PDFViewWidget> {
           }
 
           // Use file_picker's saveFile to handle macOS sandboxing properly
+          // Use the actual file extension, not hardcoded 'pdf'
           final result = await FilePicker.platform.saveFile(
             dialogTitle: 'Save File',
             fileName: safeFileName,
-            type: FileType.custom,
-            allowedExtensions: ['pdf'],
+            type: fileExt.isNotEmpty ? FileType.custom : FileType.any,
+            allowedExtensions: fileExt.isNotEmpty ? [fileExt] : null,
           );
 
           if (result != null && result.isNotEmpty) {
@@ -618,10 +624,10 @@ class _PDFViewWidgetState extends State<PDFViewWidget> {
               safeFileName.replaceAll('/', '_').replaceAll('\\', '_');
           safeFileName = safeFileName.split('/').last.split('\\').last;
 
-          // Ensure filename has .pdf extension
-          if (!safeFileName.toLowerCase().endsWith('.pdf')) {
-            safeFileName = '$safeFileName.pdf';
-          }
+          // Extract the actual file extension for the save dialog
+          final fileExt = safeFileName.contains('.')
+              ? safeFileName.split('.').last.toLowerCase()
+              : '';
 
           // Download the file first
           final response = await http.get(Uri.parse(url));
@@ -631,11 +637,12 @@ class _PDFViewWidgetState extends State<PDFViewWidget> {
 
           // Use FilePicker to save file (this makes it accessible in Files app)
           // On iOS/Android, bytes parameter is required
+          // Use the actual file extension, not hardcoded 'pdf'
           final result = await FilePicker.platform.saveFile(
             dialogTitle: 'Save File',
             fileName: safeFileName,
-            type: FileType.custom,
-            allowedExtensions: ['pdf'],
+            type: fileExt.isNotEmpty ? FileType.custom : FileType.any,
+            allowedExtensions: fileExt.isNotEmpty ? [fileExt] : null,
             bytes: response.bodyBytes, // Required on iOS/Android
           );
 

@@ -25,6 +25,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:ff_theme/flutter_flow/flutter_flow_theme.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter/foundation.dart' show kDebugMode, kIsWeb;
 import 'package:google_fonts/google_fonts.dart';
@@ -2933,57 +2934,55 @@ class _GroupChatDetailWidgetState extends State<GroupChatDetailWidget>
       child: Scaffold(
         key: scaffoldKey,
         backgroundColor: Colors.white,
-        appBar: AppBar(
-          backgroundColor: Colors.white,
-          automaticallyImplyLeading: false,
-          leading: widget.onClose != null
-              ? FlutterFlowIconButton(
-                  borderRadius: 20.0,
-                  buttonSize: 40.0,
-                  icon: Icon(
-                    Icons.close,
-                    color: const Color(0xFF1A1F36),
-                    size: 24.0,
-                  ),
-                  onPressed: () {
-                    widget.onClose?.call();
-                  },
-                )
-              : FlutterFlowIconButton(
-                  borderRadius: 20.0,
-                  buttonSize: 40.0,
-                  icon: Icon(
-                    Icons.arrow_back,
-                    color: const Color(0xFF1A1F36),
-                    size: 24.0,
-                  ),
-                  onPressed: () async {
-                    context.safePop();
-                  },
-                ),
-          title: Padding(
-            padding: EdgeInsetsDirectional.only(start: 16.0),
-            child: Text(
-              'Group Info',
-              style: FlutterFlowTheme.of(context).headlineMedium.override(
-                    font: GoogleFonts.inter(
-                      fontWeight: FontWeight.w600,
-                      fontStyle:
-                          FlutterFlowTheme.of(context).headlineMedium.fontStyle,
+        appBar: PreferredSize(
+          preferredSize: const Size.fromHeight(44),
+          child: AppBar(
+            backgroundColor: Colors.white,
+            automaticallyImplyLeading: false,
+            toolbarHeight: 44,
+            leading: widget.onClose != null
+                ? FlutterFlowIconButton(
+                    borderRadius: 16.0,
+                    buttonSize: 32.0,
+                    icon: const Icon(
+                      Icons.close,
+                      color: Color(0xFF8E8E93),
+                      size: 18.0,
                     ),
-                    color: const Color(0xFF1A1F36),
-                    fontSize: 20.0,
-                    letterSpacing: 0.0,
-                    fontWeight: FontWeight.w600,
-                    fontStyle:
-                        FlutterFlowTheme.of(context).headlineMedium.fontStyle,
+                    onPressed: () {
+                      widget.onClose?.call();
+                    },
+                  )
+                : FlutterFlowIconButton(
+                    borderRadius: 16.0,
+                    buttonSize: 32.0,
+                    icon: const Icon(
+                      Icons.arrow_back_ios_new,
+                      color: Color(0xFF8E8E93),
+                      size: 16.0,
+                    ),
+                    onPressed: () async {
+                      context.safePop();
+                    },
                   ),
+            title: const Text(
+              'Group Info',
+              style: TextStyle(
+                fontFamily: 'SF Pro Text',
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+                color: Color(0xFF1D1D1F),
+              ),
+            ),
+            actions: const [],
+            centerTitle: true,
+            elevation: 0.0,
+            titleSpacing: 0.0,
+            bottom: PreferredSize(
+              preferredSize: const Size.fromHeight(0.5),
+              child: Container(height: 0.5, color: const Color(0xFFE5E5E5)),
             ),
           ),
-          actions: const [],
-          centerTitle: false,
-          elevation: 0.0,
-          titleSpacing: 0.0,
         ),
         body: SafeArea(
           top: true,
@@ -3038,7 +3037,7 @@ class _GroupChatDetailWidgetState extends State<GroupChatDetailWidget>
                                     color: Colors.white,
                                   ),
                                   child: Padding(
-                                    padding: const EdgeInsets.all(24.0),
+                                    padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 16.0),
                                     child: Column(
                                       children: [
                                         // Group Image
@@ -3046,10 +3045,10 @@ class _GroupChatDetailWidgetState extends State<GroupChatDetailWidget>
                                           alignment: Alignment.center,
                                           children: [
                                             Container(
-                                              width: 60.0,
-                                              height: 60.0,
+                                              width: 52.0,
+                                              height: 52.0,
                                               decoration: BoxDecoration(
-                                                color: const Color(0xFFE0E7FF),
+                                                color: const Color(0xFFF2F2F7),
                                                 shape: BoxShape.circle,
                                               ),
                                               child: ClipOval(
@@ -3060,13 +3059,13 @@ class _GroupChatDetailWidgetState extends State<GroupChatDetailWidget>
                                                     'https://firebasestorage.googleapis.com/v0/b/linkedup-c3e29.firebasestorage.app/o/asset%2Fdiv.png?alt=media&token=85d5445a-3d2d-4dd5-879e-c4000b1fefd5',
                                                   ),
                                                   fit: BoxFit.cover,
-                                                  width: 60,
-                                                  height: 60,
+                                                  width: 52,
+                                                  height: 52,
                                                   errorBuilder: (_, __, ___) =>
                                                       const Icon(
                                                     Icons.group_rounded,
-                                                    size: 32,
-                                                    color: Color(0xFF9CA3AF),
+                                                    size: 26,
+                                                    color: Color(0xFFC7C7CC),
                                                   ),
                                                 ),
                                               ),
@@ -3227,7 +3226,7 @@ class _GroupChatDetailWidgetState extends State<GroupChatDetailWidget>
                                                     height: 18.0,
                                                     decoration: BoxDecoration(
                                                       color: const Color(
-                                                          0xFF3B82F6),
+                                                          0xFF007AFF),
                                                       shape: BoxShape.circle,
                                                       border: Border.all(
                                                         color: Colors.white,
@@ -3246,7 +3245,7 @@ class _GroupChatDetailWidgetState extends State<GroupChatDetailWidget>
                                               ),
                                           ],
                                         ),
-                                        const SizedBox(height: 16.0),
+                                        const SizedBox(height: 12.0),
 
                                         // Group Name
                                         Row(
@@ -3262,12 +3261,12 @@ class _GroupChatDetailWidgetState extends State<GroupChatDetailWidget>
                                                           TextAlign.center,
                                                       autofocus: true,
                                                       style: const TextStyle(
-                                                        fontFamily: 'Inter',
-                                                        fontSize: 24.0,
+                                                        fontFamily: 'SF Pro Text',
+                                                        fontSize: 18.0,
                                                         fontWeight:
                                                             FontWeight.w600,
                                                         color:
-                                                            Color(0xFF1A1F36),
+                                                            Color(0xFF1D1D1F),
                                                       ),
                                                       decoration:
                                                           const InputDecoration(
@@ -3294,12 +3293,12 @@ class _GroupChatDetailWidgetState extends State<GroupChatDetailWidget>
                                                       textAlign:
                                                           TextAlign.center,
                                                       style: const TextStyle(
-                                                        fontFamily: 'Inter',
-                                                        fontSize: 24.0,
+                                                        fontFamily: 'SF Pro Text',
+                                                        fontSize: 18.0,
                                                         fontWeight:
                                                             FontWeight.w600,
                                                         color:
-                                                            Color(0xFF1A1F36),
+                                                            Color(0xFF1D1D1F),
                                                       ),
                                                     ),
                                             ),
@@ -3324,15 +3323,15 @@ class _GroupChatDetailWidgetState extends State<GroupChatDetailWidget>
                                                         ? Icons.check
                                                         : Icons.edit,
                                                     color:
-                                                        const Color(0xFF3B82F6),
-                                                    size: 20.0,
+                                                        const Color(0xFF007AFF),
+                                                    size: 16.0,
                                                   ),
                                                 ),
                                               ),
                                           ],
                                         ),
 
-                                        const SizedBox(height: 8.0),
+                                        const SizedBox(height: 6.0),
 
                                         // Group Description
                                         Row(
@@ -3349,12 +3348,12 @@ class _GroupChatDetailWidgetState extends State<GroupChatDetailWidget>
                                                       autofocus: true,
                                                       maxLines: 3,
                                                       style: const TextStyle(
-                                                        fontFamily: 'Inter',
-                                                        fontSize: 16.0,
+                                                        fontFamily: 'SF Pro Text',
+                                                        fontSize: 13.0,
                                                         fontWeight:
                                                             FontWeight.w400,
                                                         color:
-                                                            Color(0xFF6B7280),
+                                                            Color(0xFF636366),
                                                       ),
                                                       decoration:
                                                           const InputDecoration(
@@ -3394,8 +3393,8 @@ class _GroupChatDetailWidgetState extends State<GroupChatDetailWidget>
                                                       textAlign:
                                                           TextAlign.center,
                                                       style: TextStyle(
-                                                        fontFamily: 'Inter',
-                                                        fontSize: 16.0,
+                                                        fontFamily: 'SF Pro Text',
+                                                        fontSize: 13.0,
                                                         fontWeight:
                                                             FontWeight.w400,
                                                         color: (currentChatDoc?.description == 'Internal Group' ||
@@ -3407,9 +3406,9 @@ class _GroupChatDetailWidgetState extends State<GroupChatDetailWidget>
                                                                         ?.isEmpty ==
                                                                     true)
                                                             ? const Color(
-                                                                0xFF9CA3AF)
+                                                                0xFFC7C7CC)
                                                             : const Color(
-                                                                0xFF6B7280),
+                                                                0xFF636366),
                                                       ),
                                                     ),
                                             ),
@@ -3436,8 +3435,8 @@ class _GroupChatDetailWidgetState extends State<GroupChatDetailWidget>
                                                         ? Icons.check
                                                         : Icons.edit,
                                                     color:
-                                                        const Color(0xFF3B82F6),
-                                                    size: 20.0,
+                                                        const Color(0xFF007AFF),
+                                                    size: 16.0,
                                                   ),
                                                 ),
                                               ),
@@ -3455,10 +3454,10 @@ class _GroupChatDetailWidgetState extends State<GroupChatDetailWidget>
                                           )} members',
                                           textAlign: TextAlign.center,
                                           style: const TextStyle(
-                                            fontFamily: 'Inter',
-                                            fontSize: 14.0,
+                                            fontFamily: 'SF Pro Text',
+                                            fontSize: 12.0,
                                             fontWeight: FontWeight.w400,
-                                            color: Color(0xFF6B7280),
+                                            color: Color(0xFF8E8E93),
                                           ),
                                         ),
                                       ],
@@ -3466,10 +3465,9 @@ class _GroupChatDetailWidgetState extends State<GroupChatDetailWidget>
                                   ),
                                 ),
 
-                                Divider(
-                                  height: 1,
-                                  thickness: 1,
-                                  color: const Color(0xFFE5E7EB),
+                                Container(
+                                  height: 0.5,
+                                  color: const Color(0xFFE5E5E5),
                                 ),
                                 Container(
                                   decoration: const BoxDecoration(
@@ -3519,41 +3517,19 @@ class _GroupChatDetailWidgetState extends State<GroupChatDetailWidget>
                                                     MainAxisAlignment
                                                         .spaceBetween,
                                                 children: [
-                                                  Text(
+                                                  const Text(
                                                     'Media, Links, and Docs',
-                                                    style: FlutterFlowTheme.of(
-                                                            context)
-                                                        .titleMedium
-                                                        .override(
-                                                          font:
-                                                              GoogleFonts.inter(
-                                                            fontWeight:
-                                                                FontWeight.w600,
-                                                            fontStyle:
-                                                                FlutterFlowTheme.of(
-                                                                        context)
-                                                                    .titleMedium
-                                                                    .fontStyle,
-                                                          ),
-                                                          color: const Color(
-                                                              0xFF1A1F36),
-                                                          fontSize: 16.0,
-                                                          letterSpacing: 0.0,
-                                                          fontWeight:
-                                                              FontWeight.w600,
-                                                          fontStyle:
-                                                              FlutterFlowTheme.of(
-                                                                      context)
-                                                                  .titleMedium
-                                                                  .fontStyle,
-                                                        ),
+                                                    style: TextStyle(
+                                                      fontFamily: 'SF Pro Text',
+                                                      color: Color(0xFF1D1D1F),
+                                                      fontSize: 13.0,
+                                                      fontWeight: FontWeight.w500,
+                                                    ),
                                                   ),
-                                                  Icon(
+                                                  const Icon(
                                                     Icons.chevron_right,
-                                                    color: FlutterFlowTheme.of(
-                                                            context)
-                                                        .secondaryText,
-                                                    size: 20.0,
+                                                    color: Color(0xFFC7C7CC),
+                                                    size: 18.0,
                                                   ),
                                                 ],
                                               ),
@@ -3938,30 +3914,16 @@ class _GroupChatDetailWidgetState extends State<GroupChatDetailWidget>
                                       crossAxisAlignment:
                                           CrossAxisAlignment.start,
                                       children: [
-                                        Text(
+                                        const Text(
                                           'Group\'s Action Tasks',
-                                          style: FlutterFlowTheme.of(context)
-                                              .titleMedium
-                                              .override(
-                                                font: GoogleFonts.inter(
-                                                  fontWeight: FontWeight.w600,
-                                                  fontStyle:
-                                                      FlutterFlowTheme.of(
-                                                              context)
-                                                          .titleMedium
-                                                          .fontStyle,
-                                                ),
-                                                color: Colors.black,
-                                                fontSize: 16.0,
-                                                letterSpacing: 0.0,
-                                                fontWeight: FontWeight.w600,
-                                                fontStyle:
-                                                    FlutterFlowTheme.of(context)
-                                                        .titleMedium
-                                                        .fontStyle,
-                                              ),
+                                          style: TextStyle(
+                                            fontFamily: 'SF Pro Text',
+                                            color: Color(0xFF1D1D1F),
+                                            fontSize: 13.0,
+                                            fontWeight: FontWeight.w500,
+                                          ),
                                         ),
-                                        const SizedBox(height: 16),
+                                        const SizedBox(height: 10),
                                         // Action Tasks Section - Inline
                                         StreamBuilder<List<ActionItemsRecord>>(
                                           stream: queryActionItemsRecord(
@@ -4059,17 +4021,17 @@ class _GroupChatDetailWidgetState extends State<GroupChatDetailWidget>
                                                   child: Container(
                                                     width: double.infinity,
                                                     padding:
-                                                        const EdgeInsets.all(
-                                                            12.0),
+                                                        const EdgeInsets.symmetric(
+                                                            horizontal: 12.0, vertical: 10.0),
                                                     decoration: BoxDecoration(
-                                                      color: Colors.white,
+                                                      color: const Color(0xFFFAFAFA),
                                                       borderRadius:
                                                           BorderRadius.circular(
-                                                              12.0),
+                                                              6.0),
                                                       border: Border.all(
                                                         color: const Color(
-                                                            0xFFE5E7EB),
-                                                        width: 1,
+                                                            0xFFE5E5E5),
+                                                        width: 0.5,
                                                       ),
                                                     ),
                                                     child: Row(
@@ -4082,28 +4044,28 @@ class _GroupChatDetailWidgetState extends State<GroupChatDetailWidget>
                                                             Container(
                                                               padding:
                                                                   const EdgeInsets
-                                                                      .all(8.0),
+                                                                      .all(6.0),
                                                               decoration:
                                                                   BoxDecoration(
                                                                 color: const Color(
-                                                                        0xFF3B82F6)
+                                                                        0xFF007AFF)
                                                                     .withOpacity(
                                                                         0.1),
                                                                 borderRadius:
                                                                     BorderRadius
                                                                         .circular(
-                                                                            8.0),
+                                                                            6.0),
                                                               ),
                                                               child: const Icon(
                                                                 Icons
                                                                     .task_alt_outlined,
-                                                                size: 20,
+                                                                size: 16,
                                                                 color: Color(
-                                                                    0xFF3B82F6),
+                                                                    0xFF007AFF),
                                                               ),
                                                             ),
                                                             const SizedBox(
-                                                                width: 12),
+                                                                width: 10),
                                                             Column(
                                                               crossAxisAlignment:
                                                                   CrossAxisAlignment
@@ -4114,14 +4076,14 @@ class _GroupChatDetailWidgetState extends State<GroupChatDetailWidget>
                                                                   style:
                                                                       const TextStyle(
                                                                     fontFamily:
-                                                                        'Inter',
+                                                                        'SF Pro Text',
                                                                     color: Color(
-                                                                        0xFF1A1F36),
+                                                                        0xFF1D1D1F),
                                                                     fontSize:
-                                                                        14.0,
+                                                                        13.0,
                                                                     fontWeight:
                                                                         FontWeight
-                                                                            .w600,
+                                                                            .w500,
                                                                   ),
                                                                 ),
                                                                 Text(
@@ -4129,11 +4091,11 @@ class _GroupChatDetailWidgetState extends State<GroupChatDetailWidget>
                                                                   style:
                                                                       const TextStyle(
                                                                     fontFamily:
-                                                                        'Inter',
+                                                                        'SF Pro Text',
                                                                     color: Color(
-                                                                        0xFF6B7280),
+                                                                        0xFF8E8E93),
                                                                     fontSize:
-                                                                        12.0,
+                                                                        11.0,
                                                                   ),
                                                                 ),
                                                               ],
@@ -4143,8 +4105,8 @@ class _GroupChatDetailWidgetState extends State<GroupChatDetailWidget>
                                                         const Icon(
                                                           Icons.chevron_right,
                                                           color:
-                                                              Color(0xFF6B7280),
-                                                          size: 24,
+                                                              Color(0xFFC7C7CC),
+                                                          size: 18,
                                                         ),
                                                       ],
                                                     ),
@@ -4154,7 +4116,7 @@ class _GroupChatDetailWidgetState extends State<GroupChatDetailWidget>
                                             );
                                           },
                                         ),
-                                        const SizedBox(height: 12),
+                                        const SizedBox(height: 10),
                                         // Auto Detect Tasks from transcripts
                                         Row(
                                           mainAxisAlignment:
@@ -4163,32 +4125,27 @@ class _GroupChatDetailWidgetState extends State<GroupChatDetailWidget>
                                             Expanded(
                                               child: Text(
                                                 'Auto Detect Tasks from transcripts',
-                                                style: FlutterFlowTheme.of(
-                                                        context)
-                                                    .bodyMedium
-                                                    .override(
-                                                      fontFamily: 'Inter',
-                                                      color: const Color(
-                                                          0xFF1A1F36),
-                                                      fontSize: 14,
-                                                      fontWeight:
-                                                          FontWeight.w500,
-                                                    ),
+                                                style: const TextStyle(
+                                                  fontFamily: 'SF Pro Text',
+                                                  color: Color(0xFF1D1D1F),
+                                                  fontSize: 13,
+                                                  fontWeight: FontWeight.w400,
+                                                ),
                                               ),
                                             ),
-                                            Switch.adaptive(
+                                            CupertinoSwitch(
                                               value:
                                                   _autoDetectTasksFromTranscripts,
                                               onChanged: (value) => setState(
                                                   () =>
                                                       _autoDetectTasksFromTranscripts =
                                                           value),
-                                              activeColor:
-                                                  const Color(0xFF3B82F6),
+                                              activeTrackColor:
+                                                  const Color(0xFF007AFF),
                                             ),
                                           ],
                                         ),
-                                        const SizedBox(height: 8),
+                                        const SizedBox(height: 6),
                                         // Task Reminders
                                         Row(
                                           mainAxisAlignment:
@@ -4197,26 +4154,21 @@ class _GroupChatDetailWidgetState extends State<GroupChatDetailWidget>
                                             Expanded(
                                               child: Text(
                                                 'Task Reminders',
-                                                style: FlutterFlowTheme.of(
-                                                        context)
-                                                    .bodyMedium
-                                                    .override(
-                                                      fontFamily: 'Inter',
-                                                      color: const Color(
-                                                          0xFF1A1F36),
-                                                      fontSize: 14,
-                                                      fontWeight:
-                                                          FontWeight.w500,
-                                                    ),
+                                                style: const TextStyle(
+                                                  fontFamily: 'SF Pro Text',
+                                                  color: Color(0xFF1D1D1F),
+                                                  fontSize: 13,
+                                                  fontWeight: FontWeight.w400,
+                                                ),
                                               ),
                                             ),
-                                            Switch.adaptive(
+                                            CupertinoSwitch(
                                               value: _taskReminders,
                                               onChanged: (value) =>
                                                   setState(() =>
                                                       _taskReminders = value),
-                                              activeColor:
-                                                  const Color(0xFF3B82F6),
+                                              activeTrackColor:
+                                                  const Color(0xFF007AFF),
                                             ),
                                           ],
                                         ),
@@ -4290,75 +4242,29 @@ class _GroupChatDetailWidgetState extends State<GroupChatDetailWidget>
                                                         MainAxisAlignment
                                                             .spaceBetween,
                                                     children: [
-                                                      Row(
+                                                       Row(
                                                         mainAxisSize:
                                                             MainAxisSize.max,
                                                         children: [
                                                           Text(
                                                             'Members ',
-                                                            style: FlutterFlowTheme
-                                                                    .of(context)
-                                                                .titleMedium
-                                                                .override(
-                                                                  font:
-                                                                      GoogleFonts
-                                                                          .inter(
-                                                                    fontWeight:
-                                                                        FontWeight
-                                                                            .w600,
-                                                                    fontStyle: FlutterFlowTheme.of(
-                                                                            context)
-                                                                        .titleMedium
-                                                                        .fontStyle,
-                                                                  ),
-                                                                  color: const Color(
-                                                                      0xFF111827),
-                                                                  fontSize:
-                                                                      16.0,
-                                                                  letterSpacing:
-                                                                      0.0,
-                                                                  fontWeight:
-                                                                      FontWeight
-                                                                          .w600,
-                                                                  fontStyle: FlutterFlowTheme.of(
-                                                                          context)
-                                                                      .titleMedium
-                                                                      .fontStyle,
-                                                                ),
+                                                            style: const TextStyle(
+                                                              fontFamily: 'SF Pro Text',
+                                                              color: Color(0xFF1D1D1F),
+                                                              fontSize: 13.0,
+                                                              fontWeight: FontWeight.w500,
+                                                            ),
                                                           ),
                                                           Text(
                                                             containerChatsRecord
                                                                 .members.length
                                                                 .toString(),
-                                                            style: FlutterFlowTheme
-                                                                    .of(context)
-                                                                .titleMedium
-                                                                .override(
-                                                                  font:
-                                                                      GoogleFonts
-                                                                          .inter(
-                                                                    fontWeight:
-                                                                        FontWeight
-                                                                            .w600,
-                                                                    fontStyle: FlutterFlowTheme.of(
-                                                                            context)
-                                                                        .titleMedium
-                                                                        .fontStyle,
-                                                                  ),
-                                                                  color: const Color(
-                                                                      0xFF111827),
-                                                                  fontSize:
-                                                                      16.0,
-                                                                  letterSpacing:
-                                                                      0.0,
-                                                                  fontWeight:
-                                                                      FontWeight
-                                                                          .w600,
-                                                                  fontStyle: FlutterFlowTheme.of(
-                                                                          context)
-                                                                      .titleMedium
-                                                                      .fontStyle,
-                                                                ),
+                                                            style: const TextStyle(
+                                                              fontFamily: 'SF Pro Text',
+                                                              color: Color(0xFF8E8E93),
+                                                              fontSize: 13.0,
+                                                              fontWeight: FontWeight.w400,
+                                                            ),
                                                           ),
                                                         ],
                                                       ),
@@ -4381,46 +4287,24 @@ class _GroupChatDetailWidgetState extends State<GroupChatDetailWidget>
                                                               mainAxisSize:
                                                                   MainAxisSize
                                                                       .max,
-                                                              children: [
-                                                                const Icon(
+                                                              children: const [
+                                                                Icon(
                                                                   Icons.add,
                                                                   color: Color(
-                                                                      0xFF4F46E5),
-                                                                  size: 16.0,
+                                                                      0xFF007AFF),
+                                                                  size: 14.0,
                                                                 ),
+                                                                SizedBox(width: 2),
                                                                 Text(
                                                                   'Add',
-                                                                  style: FlutterFlowTheme.of(
-                                                                          context)
-                                                                      .bodyMedium
-                                                                      .override(
-                                                                        font: GoogleFonts
-                                                                            .inter(
-                                                                          fontWeight:
-                                                                              FontWeight.w500,
-                                                                          fontStyle: FlutterFlowTheme.of(context)
-                                                                              .bodyMedium
-                                                                              .fontStyle,
-                                                                        ),
-                                                                        color: const Color(
-                                                                            0xFF4F46E5),
-                                                                        fontSize:
-                                                                            14.0,
-                                                                        letterSpacing:
-                                                                            0.0,
-                                                                        fontWeight:
-                                                                            FontWeight
-                                                                                .w500,
-                                                                        fontStyle: FlutterFlowTheme.of(
-                                                                                context)
-                                                                            .bodyMedium
-                                                                            .fontStyle,
-                                                                      ),
+                                                                  style: TextStyle(
+                                                                    fontFamily: 'SF Pro Text',
+                                                                    color: Color(0xFF007AFF),
+                                                                    fontSize: 12.0,
+                                                                    fontWeight: FontWeight.w500,
+                                                                  ),
                                                                 ),
-                                                              ].divide(
-                                                                  const SizedBox(
-                                                                      width:
-                                                                          4.0)),
+                                                              ],
                                                             ),
                                                           ),
                                                         ),
@@ -4557,14 +4441,14 @@ class _GroupChatDetailWidgetState extends State<GroupChatDetailWidget>
                                                                                   mainAxisSize: MainAxisSize.max,
                                                                                   children: [
                                                                                     ClipRRect(
-                                                                                      borderRadius: BorderRadius.circular(20.0),
+                                                                                      borderRadius: BorderRadius.circular(16.0),
                                                                                       child: Image.network(
                                                                                         valueOrDefault<String>(
                                                                                           rowUsersRecord.photoUrl,
                                                                                           'https://firebasestorage.googleapis.com/v0/b/linkedup-c3e29.firebasestorage.app/o/asset%2Fdiv.png?alt=media&token=85d5445a-3d2d-4dd5-879e-c4000b1fefd5',
                                                                                         ),
-                                                                                        width: 40.0,
-                                                                                        height: 40.0,
+                                                                                        width: 32.0,
+                                                                                        height: 32.0,
                                                                                         fit: BoxFit.cover,
                                                                                       ),
                                                                                     ),
@@ -4577,17 +4461,12 @@ class _GroupChatDetailWidgetState extends State<GroupChatDetailWidget>
                                                                                           children: [
                                                                                             Text(
                                                                                               rowUsersRecord.displayName,
-                                                                                              style: FlutterFlowTheme.of(context).bodyMedium.override(
-                                                                                                    font: GoogleFonts.inter(
-                                                                                                      fontWeight: FontWeight.w500,
-                                                                                                      fontStyle: FlutterFlowTheme.of(context).bodyMedium.fontStyle,
-                                                                                                    ),
-                                                                                                    color: Colors.black,
-                                                                                                    fontSize: 14.0,
-                                                                                                    letterSpacing: 0.0,
-                                                                                                    fontWeight: FontWeight.w500,
-                                                                                                    fontStyle: FlutterFlowTheme.of(context).bodyMedium.fontStyle,
-                                                                                                  ),
+                                                                                              style: const TextStyle(
+                                                                                                fontFamily: 'SF Pro Text',
+                                                                                                color: Color(0xFF1D1D1F),
+                                                                                                fontSize: 13.0,
+                                                                                                fontWeight: FontWeight.w500,
+                                                                                              ),
                                                                                             ),
                                                                                             if (ChatHelpers.isGroupOwner(widget.chatDoc, rowUsersRecord.reference))
                                                                                               Padding(
@@ -4595,22 +4474,17 @@ class _GroupChatDetailWidgetState extends State<GroupChatDetailWidget>
                                                                                                 child: Container(
                                                                                                   padding: const EdgeInsets.symmetric(horizontal: 6.0, vertical: 2.0),
                                                                                                   decoration: BoxDecoration(
-                                                                                                    color: const Color(0xFFF59E0B),
+                                                                                                    color: const Color(0xFFFF9500),
                                                                                                     borderRadius: BorderRadius.circular(4.0),
                                                                                                   ),
-                                                                                                  child: Text(
+                                                                                                  child: const Text(
                                                                                                     'Owner',
-                                                                                                    style: FlutterFlowTheme.of(context).bodySmall.override(
-                                                                                                          font: GoogleFonts.inter(
-                                                                                                            fontWeight: FontWeight.w600,
-                                                                                                            fontStyle: FlutterFlowTheme.of(context).bodySmall.fontStyle,
-                                                                                                          ),
-                                                                                                          color: Colors.white,
-                                                                                                          fontSize: 10.0,
-                                                                                                          letterSpacing: 0.0,
-                                                                                                          fontWeight: FontWeight.w600,
-                                                                                                          fontStyle: FlutterFlowTheme.of(context).bodySmall.fontStyle,
-                                                                                                        ),
+                                                                                                    style: TextStyle(
+                                                                                                      fontFamily: 'SF Pro Text',
+                                                                                                      color: Colors.white,
+                                                                                                      fontSize: 9.0,
+                                                                                                      fontWeight: FontWeight.w500,
+                                                                                                    ),
                                                                                                   ),
                                                                                                 ),
                                                                                               )
@@ -4620,22 +4494,17 @@ class _GroupChatDetailWidgetState extends State<GroupChatDetailWidget>
                                                                                                 child: Container(
                                                                                                   padding: const EdgeInsets.symmetric(horizontal: 6.0, vertical: 2.0),
                                                                                                   decoration: BoxDecoration(
-                                                                                                    color: const Color(0xFF3B82F6),
+                                                                                                    color: const Color(0xFF007AFF),
                                                                                                     borderRadius: BorderRadius.circular(4.0),
                                                                                                   ),
-                                                                                                  child: Text(
+                                                                                                  child: const Text(
                                                                                                     'Admin',
-                                                                                                    style: FlutterFlowTheme.of(context).bodySmall.override(
-                                                                                                          font: GoogleFonts.inter(
-                                                                                                            fontWeight: FontWeight.w500,
-                                                                                                            fontStyle: FlutterFlowTheme.of(context).bodySmall.fontStyle,
-                                                                                                          ),
-                                                                                                          color: Colors.white,
-                                                                                                          fontSize: 10.0,
-                                                                                                          letterSpacing: 0.0,
-                                                                                                          fontWeight: FontWeight.w500,
-                                                                                                          fontStyle: FlutterFlowTheme.of(context).bodySmall.fontStyle,
-                                                                                                        ),
+                                                                                                    style: TextStyle(
+                                                                                                      fontFamily: 'SF Pro Text',
+                                                                                                      color: Colors.white,
+                                                                                                      fontSize: 9.0,
+                                                                                                      fontWeight: FontWeight.w500,
+                                                                                                    ),
                                                                                                   ),
                                                                                                 ),
                                                                                               ),
@@ -4646,45 +4515,28 @@ class _GroupChatDetailWidgetState extends State<GroupChatDetailWidget>
                                                                                           children: [
                                                                                             Text(
                                                                                               'Chat',
-                                                                                              style: FlutterFlowTheme.of(context).bodySmall.override(
-                                                                                                    font: GoogleFonts.inter(
-                                                                                                      fontWeight: FontWeight.w500,
-                                                                                                      fontStyle: FlutterFlowTheme.of(context).bodySmall.fontStyle,
-                                                                                                    ),
-                                                                                                    color: Colors.black,
-                                                                                                    fontSize: 12.0,
-                                                                                                    letterSpacing: 0.0,
-                                                                                                    fontWeight: FontWeight.w500,
-                                                                                                    fontStyle: FlutterFlowTheme.of(context).bodySmall.fontStyle,
-                                                                                                  ),
+                                                                                              style: const TextStyle(
+                                                                                                fontFamily: 'SF Pro Text',
+                                                                                                color: Color(0xFF8E8E93),
+                                                                                                fontSize: 11.0,
+                                                                                                fontWeight: FontWeight.w400,
+                                                                                              ),
                                                                                             ),
-                                                                                            Text(
-                                                                                              '•',
-                                                                                              style: FlutterFlowTheme.of(context).bodySmall.override(
-                                                                                                    font: GoogleFonts.inter(
-                                                                                                      fontWeight: FontWeight.normal,
-                                                                                                      fontStyle: FlutterFlowTheme.of(context).bodySmall.fontStyle,
-                                                                                                    ),
-                                                                                                    color: Colors.black,
-                                                                                                    fontSize: 16.0,
-                                                                                                    letterSpacing: 0.0,
-                                                                                                    fontWeight: FontWeight.normal,
-                                                                                                    fontStyle: FlutterFlowTheme.of(context).bodySmall.fontStyle,
-                                                                                                  ),
+                                                                                            const Text(
+                                                                                              ' · ',
+                                                                                              style: TextStyle(
+                                                                                                color: Color(0xFFC7C7CC),
+                                                                                                fontSize: 11.0,
+                                                                                              ),
                                                                                             ),
                                                                                             Text(
                                                                                               rowUsersRecord.email,
-                                                                                              style: FlutterFlowTheme.of(context).bodySmall.override(
-                                                                                                    font: GoogleFonts.inter(
-                                                                                                      fontWeight: FontWeight.normal,
-                                                                                                      fontStyle: FlutterFlowTheme.of(context).bodySmall.fontStyle,
-                                                                                                    ),
-                                                                                                    color: Colors.black,
-                                                                                                    fontSize: 12.0,
-                                                                                                    letterSpacing: 0.0,
-                                                                                                    fontWeight: FontWeight.normal,
-                                                                                                    fontStyle: FlutterFlowTheme.of(context).bodySmall.fontStyle,
-                                                                                                  ),
+                                                                                              style: const TextStyle(
+                                                                                                fontFamily: 'SF Pro Text',
+                                                                                                color: Color(0xFF8E8E93),
+                                                                                                fontSize: 11.0,
+                                                                                                fontWeight: FontWeight.w400,
+                                                                                              ),
                                                                                             ),
                                                                                           ].divide(const SizedBox(width: 4.0)),
                                                                                         ),
