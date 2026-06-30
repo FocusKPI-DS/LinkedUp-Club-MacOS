@@ -2434,119 +2434,114 @@ class _ProfileSettingsWidgetState extends State<ProfileSettingsWidget>
           });
         }
 
-        return Container(
-          color: Color(0xFF1C1C1E),
-          child: SingleChildScrollView(
-            padding: EdgeInsets.symmetric(horizontal: 32, vertical: 24),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Notifications',
-                  style: TextStyle(
-                    fontFamily: 'SF Pro Display',
-                    fontSize: 22,
-                    fontWeight: FontWeight.w700,
-                    color: Colors.white,
-                    letterSpacing: -0.3,
-                  ),
+        return SingleChildScrollView(
+          padding: EdgeInsets.symmetric(horizontal: 32, vertical: 24),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Notifications',
+                style: TextStyle(
+                  fontFamily: 'SF Pro Text',
+                  fontSize: 20,
+                  fontWeight: FontWeight.w600,
+                  color: Color(0xFF1D1D1F),
                 ),
-                SizedBox(height: 4),
-                Text(
-                  'Manage how you receive notifications.',
-                  style: TextStyle(
-                    fontFamily: 'SF Pro Text',
-                    fontSize: 13,
-                    color: Color(0xFF8E8E93),
-                  ),
+              ),
+              SizedBox(height: 4),
+              Text(
+                'Manage how you receive notifications.',
+                style: TextStyle(
+                  fontFamily: 'SF Pro Text',
+                  fontSize: 12,
+                  color: Color(0xFF8E8E93),
                 ),
-                SizedBox(height: 24),
-                if (!kIsWeb && Platform.isMacOS)
-                  Container(
-                    padding: EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                    margin: EdgeInsets.only(bottom: 16),
-                    decoration: BoxDecoration(
-                      color: Color(0xFF2C2C2E),
-                      borderRadius: BorderRadius.circular(10),
-                      border: Border.all(color: Color(0xFF3A3A3C), width: 0.5),
-                    ),
-                    child: Row(
-                      children: [
-                        Icon(CupertinoIcons.info_circle_fill, size: 16, color: Color(0xFF007AFF)),
-                        SizedBox(width: 10),
-                        Expanded(
-                          child: Text(
-                            'Enable in System Settings → Notifications → Lona Club',
-                            style: TextStyle(
-                              fontFamily: 'SF Pro Text',
-                              fontSize: 12,
-                              color: Color(0xFFAEAEB2),
-                            ),
+              ),
+              SizedBox(height: 20),
+              if (!kIsWeb && Platform.isMacOS)
+                Container(
+                  padding: EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                  margin: EdgeInsets.only(bottom: 16),
+                  decoration: BoxDecoration(
+                    color: Color(0xFFF2F2F7),
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(CupertinoIcons.info_circle, size: 14, color: Color(0xFF8E8E93)),
+                      SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          'Enable in System Settings → Notifications → Lona Club',
+                          style: TextStyle(
+                            fontFamily: 'SF Pro Text',
+                            fontSize: 12,
+                            color: Color(0xFF636366),
                           ),
                         ),
-                      ],
-                    ),
-                  ),
-                if (_isLoadingNotificationStatus)
-                  Center(child: CupertinoActivityIndicator(color: Colors.white))
-                else
-                  Container(
-                    padding: EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                    decoration: BoxDecoration(
-                      color: Color(0xFF2C2C2E),
-                      borderRadius: BorderRadius.circular(10),
-                      border: Border.all(color: Color(0xFF3A3A3C), width: 0.5),
-                    ),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              'Allow Notifications',
-                              style: TextStyle(
-                                fontFamily: 'SF Pro Text',
-                                fontSize: 14,
-                                fontWeight: FontWeight.w500,
-                                color: Colors.white,
-                              ),
-                            ),
-                            SizedBox(height: 3),
-                            Text(
-                              _notificationsEnabled ? 'Enabled' : 'Disabled',
-                              style: TextStyle(
-                                fontFamily: 'SF Pro Text',
-                                fontSize: 12,
-                                color: _notificationsEnabled ? Color(0xFF30D158) : Color(0xFF8E8E93),
-                              ),
-                            ),
-                          ],
-                        ),
-                        CupertinoSwitch(
-                          value: _notificationsEnabled,
-                          activeTrackColor: Color(0xFF30D158),
-                          onChanged: (val) => _handleNotificationToggle(val),
-                        ),
-                      ],
-                    ),
-                  ),
-                if (!_isLoadingNotificationStatus)
-                  Padding(
-                    padding: EdgeInsets.only(top: 12),
-                    child: Text(
-                      _notificationsEnabled
-                          ? 'You will receive notifications for new messages, connection requests, and other updates.'
-                          : 'Notifications are turned off.',
-                      style: TextStyle(
-                        fontFamily: 'SF Pro Text',
-                        fontSize: 12,
-                        color: Color(0xFF636366),
                       ),
+                    ],
+                  ),
+                ),
+              if (_isLoadingNotificationStatus)
+                Center(child: CupertinoActivityIndicator())
+              else
+                Container(
+                  padding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  decoration: BoxDecoration(
+                    color: Color(0xFFFAFAFA),
+                    borderRadius: BorderRadius.circular(6),
+                    border: Border.all(color: Color(0xFFE5E5E5), width: 0.5),
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Allow Notifications',
+                            style: TextStyle(
+                              fontFamily: 'SF Pro Text',
+                              fontSize: 13,
+                              fontWeight: FontWeight.w500,
+                              color: Color(0xFF1D1D1F),
+                            ),
+                          ),
+                          SizedBox(height: 2),
+                          Text(
+                            _notificationsEnabled ? 'Enabled' : 'Disabled',
+                            style: TextStyle(
+                              fontFamily: 'SF Pro Text',
+                              fontSize: 11,
+                              color: Color(0xFF8E8E93),
+                            ),
+                          ),
+                        ],
+                      ),
+                      CupertinoSwitch(
+                        value: _notificationsEnabled,
+                        activeTrackColor: Color(0xFF007AFF),
+                        onChanged: (val) => _handleNotificationToggle(val),
+                      ),
+                    ],
+                  ),
+                ),
+              if (!_isLoadingNotificationStatus)
+                Padding(
+                  padding: EdgeInsets.only(top: 10),
+                  child: Text(
+                    _notificationsEnabled
+                        ? 'You will receive notifications for new messages, connection requests, and other updates.'
+                        : 'Notifications are turned off.',
+                    style: TextStyle(
+                      fontFamily: 'SF Pro Text',
+                      fontSize: 11,
+                      color: Color(0xFFAEAEB2),
                     ),
                   ),
-              ],
-            ),
+                ),
+            ],
           ),
         );
 
