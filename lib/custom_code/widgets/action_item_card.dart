@@ -258,33 +258,28 @@ class ActionItemCard extends StatelessWidget {
 
                 const SizedBox(height: 8),
 
-                // Edit button (requested to keep on this page)
+                // Edit and Delete buttons
                 Align(
                   alignment: Alignment.centerRight,
-                  child: Material(
-                    color: const Color(0xFF3B82F6),
-                    borderRadius: BorderRadius.circular(6),
-                    child: InkWell(
-                      onTap: onEdit,
-                      borderRadius: BorderRadius.circular(6),
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 10, vertical: 6),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFF3B82F6),
-                          borderRadius: BorderRadius.circular(6),
-                        ),
-                        child: const Text(
-                          'Edit',
-                          style: TextStyle(
-                            fontFamily: 'Inter',
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600,
-                            color: Colors.white,
-                          ),
-                        ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      _buildActionButton(
+                        label: 'Edit',
+                        backgroundColor: const Color(0xFF3B82F6),
+                        foregroundColor: Colors.white,
+                        onTap: onEdit,
                       ),
-                    ),
+                      if (onDelete != null) ...[
+                        const SizedBox(width: 8),
+                        _buildActionButton(
+                          label: 'Delete',
+                          backgroundColor: const Color(0xFFFEE2E2),
+                          foregroundColor: const Color(0xFFDC2626),
+                          onTap: onDelete!,
+                        ),
+                      ],
+                    ],
                   ),
                 ),
               ],
@@ -311,56 +306,60 @@ class ActionItemCard extends StatelessWidget {
                 ),
               ),
 
-            // Checkbox and Delete button
+            // Checkbox
             Positioned(
               top: -10,
               right: -10,
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  // Delete button
-                  if (onDelete != null)
-                    Material(
-                      color: Colors.transparent,
-                      child: InkWell(
-                        onTap: onDelete,
-                        borderRadius: BorderRadius.circular(4),
-                        child: const Padding(
-                          padding: EdgeInsets.all(4),
-                          child: Icon(
-                            Icons.delete_outline,
-                            size: 16,
-                            color: Color(0xFFDC2626),
-                          ),
-                        ),
-                      ),
-                    ),
-                  if (onDelete != null) const SizedBox(width: 6),
-                  // Checkbox
-                  Checkbox(
-                    value: displayCompleted && !isCompleting,
-                    onChanged: checkboxEnabled
-                        ? (v) => onToggleComplete(v ?? false)
-                        : null,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(4),
-                    ),
-                    checkColor: Colors.white,
-                    side: const BorderSide(
-                      color: Color(0xFF9CA3AF),
-                      width: 2,
-                    ),
-                    fillColor: WidgetStateProperty.resolveWith<Color>((states) {
-                      if (states.contains(WidgetState.selected)) {
-                        return const Color(0xFF10B981);
-                      }
-                      return Colors.white;
-                    }),
-                  ),
-                ],
+              child: Checkbox(
+                value: displayCompleted && !isCompleting,
+                onChanged: checkboxEnabled
+                    ? (v) => onToggleComplete(v ?? false)
+                    : null,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                checkColor: Colors.white,
+                side: const BorderSide(
+                  color: Color(0xFF9CA3AF),
+                  width: 2,
+                ),
+                fillColor: WidgetStateProperty.resolveWith<Color>((states) {
+                  if (states.contains(WidgetState.selected)) {
+                    return const Color(0xFF10B981);
+                  }
+                  return Colors.white;
+                }),
               ),
             ),
           ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildActionButton({
+    required String label,
+    required Color backgroundColor,
+    required Color foregroundColor,
+    required VoidCallback onTap,
+  }) {
+    return Material(
+      color: backgroundColor,
+      borderRadius: BorderRadius.circular(6),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(6),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+          child: Text(
+            label,
+            style: TextStyle(
+              fontFamily: 'Inter',
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              color: foregroundColor,
+            ),
+          ),
         ),
       ),
     );

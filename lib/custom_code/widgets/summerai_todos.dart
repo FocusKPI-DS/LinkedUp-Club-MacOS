@@ -3,7 +3,6 @@ import '/utils/debug_log.dart';
 import 'package:flutter/material.dart' as material;
 import 'package:flutter/foundation.dart';
 import 'package:intl/intl.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import '/backend/backend.dart';
 import '/backend/firestore/firestore_desktop_adapter.dart';
 import '/auth/firebase_auth/auth_util.dart';
@@ -12,9 +11,14 @@ import 'dart:async';
 import 'dart:ui';
 
 class SummerAITodos extends StatefulWidget {
-  const SummerAITodos({super.key, this.isMobile = false});
+  const SummerAITodos({
+    super.key,
+    this.isMobile = false,
+    this.onShowAnnouncement,
+  });
 
   final bool isMobile;
+  final void Function(String message)? onShowAnnouncement;
 
   @override
   State<SummerAITodos> createState() => _SummerAITodosState();
@@ -73,6 +77,36 @@ class _SummerAITodosState extends State<SummerAITodos> {
     }
   }
 
+  List<ActionItemsRecord> _mergeTodosWithCache(
+    List<ActionItemsRecord> serverTodos,
+    List<ActionItemsRecord>? cached,
+  ) {
+    if (cached == null || cached.isEmpty) {
+      return serverTodos;
+    }
+    final serverPaths = serverTodos.map((t) => t.reference.path).toSet();
+    final localOnly = cached
+        .where((t) => !serverPaths.contains(t.reference.path))
+        .toList();
+    final merged = [...localOnly, ...serverTodos];
+    merged.sort((a, b) {
+      final aTime = a.createdTime ?? DateTime.fromMillisecondsSinceEpoch(0);
+      final bTime = b.createdTime ?? DateTime.fromMillisecondsSinceEpoch(0);
+      return bTime.compareTo(aTime);
+    });
+    return merged;
+  }
+
+  void _prependCachedTodo(ActionItemsRecord todo) {
+    setState(() {
+      final existing = _cachedTodos ?? [];
+      if (existing.any((t) => t.reference.path == todo.reference.path)) {
+        return;
+      }
+      _cachedTodos = [todo, ...existing];
+    });
+  }
+
   void _loadUserGroups() {
     if (currentUserReference == null) return;
 
@@ -128,9 +162,16 @@ class _SummerAITodosState extends State<SummerAITodos> {
         // Use cached data if available during loading, otherwise use fresh data
         List<ActionItemsRecord> allTodos;
         try {
-          if (snapshot.hasData && snapshot.data!.isNotEmpty) {
-            _cachedTodos = snapshot.data!;
-            allTodos = snapshot.data!;
+          if (snapshot.hasData) {
+            final serverTodos = snapshot.data!;
+            if (serverTodos.isNotEmpty) {
+              allTodos = _mergeTodosWithCache(serverTodos, _cachedTodos);
+              _cachedTodos = allTodos;
+            } else if (_cachedTodos != null && _cachedTodos!.isNotEmpty) {
+              allTodos = _cachedTodos!;
+            } else {
+              return _buildEmptyState(context, filter: _selectedFilter);
+            }
           } else if (_cachedTodos != null && _cachedTodos!.isNotEmpty) {
             allTodos = _cachedTodos!;
           } else {
@@ -632,9 +673,10 @@ class _SummerAITodosState extends State<SummerAITodos> {
     // Track selected due date (nullable)
     DateTime? selectedDueDate;
 
-    return showCupertinoDialog(
+    final parentContext = context;
+    final createdItem = await showCupertinoDialog<ActionItemsRecord?>(
       context: context,
-      builder: (context) {
+      builder: (dialogContext) {
         return StatefulBuilder(
           builder: (context, setDialogState) {
             return CupertinoAlertDialog(
@@ -838,15 +880,13 @@ class _SummerAITodosState extends State<SummerAITodos> {
                     try {
                       final now = DateTime.now();
 
-                      // Automatically assign to current user
-                      final actionItemRef = ActionItemsRecord.collection.doc();
-
                       final actionItemData = createActionItemsRecordData(
                         title: titleController.text.trim(),
                         groupName: '',
                         priority: selectedPriority,
                         status: 'pending',
                         userRef: currentUser.reference,
+                        workspaceRef: currentUser.currentWorkspaceRef,
                         chatRef: null,
                         involvedPeople: [currentUser.displayName],
                         createdTime: now,
@@ -855,36 +895,26 @@ class _SummerAITodosState extends State<SummerAITodos> {
                         description: descriptionController.text.trim(),
                       );
 
-                      await actionItemRef.set(actionItemData);
+                      final ref = await fsCreateActionItem(actionItemData);
+                      final newItem = ActionItemsRecord.getDocumentFromData(
+                        actionItemData,
+                        ref,
+                      );
 
-                      if (mounted) {
-                        Navigator.pop(context);
-                        showCupertinoDialog(
-                          context: context,
-                          builder: (context) => CupertinoAlertDialog(
-                            title: const Text('Success'),
-                            content:
-                                const Text('Action item created successfully!'),
-                            actions: [
-                              CupertinoDialogAction(
-                                child: const Text('OK'),
-                                onPressed: () => Navigator.pop(context),
-                              ),
-                            ],
-                          ),
-                        );
+                      if (dialogContext.mounted) {
+                        Navigator.pop(dialogContext, newItem);
                       }
                     } catch (e) {
-                      if (mounted) {
+                      if (dialogContext.mounted) {
                         showCupertinoDialog(
-                          context: context,
-                          builder: (context) => CupertinoAlertDialog(
+                          context: dialogContext,
+                          builder: (errorContext) => CupertinoAlertDialog(
                             title: const Text('Error'),
                             content: Text('Error creating action item: $e'),
                             actions: [
                               CupertinoDialogAction(
                                 child: const Text('OK'),
-                                onPressed: () => Navigator.pop(context),
+                                onPressed: () => Navigator.pop(errorContext),
                               ),
                             ],
                           ),
@@ -900,6 +930,11 @@ class _SummerAITodosState extends State<SummerAITodos> {
         );
       },
     );
+
+    if (createdItem != null && parentContext.mounted) {
+      _prependCachedTodo(createdItem);
+      widget.onShowAnnouncement?.call('Action item added');
+    }
   }
 
   Widget _buildActionItemsStream({
@@ -1023,6 +1058,237 @@ class _SummerAITodosState extends State<SummerAITodos> {
     }
   }
 
+  Widget _buildTaskIconButton({
+    required IconData icon,
+    required Color color,
+    required Color backgroundColor,
+    required VoidCallback onTap,
+  }) {
+    return material.Material(
+      color: backgroundColor,
+      borderRadius: BorderRadius.circular(6),
+      child: material.InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(6),
+        child: Padding(
+          padding: const EdgeInsets.all(6),
+          child: Icon(icon, size: 14, color: color),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _handleDeleteTask(ActionItemsRecord todo) async {
+    final confirmed = await material.showDialog<bool>(
+      context: context,
+      builder: (context) => material.AlertDialog(
+        backgroundColor: Colors.white,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Text(
+          'Delete Task',
+          style: TextStyle(
+            fontFamily: '.SF Pro Display',
+            fontSize: 20,
+            fontWeight: FontWeight.w700,
+            color: Color(0xFF1F2937),
+          ),
+        ),
+        content: Text(
+          'Are you sure you want to delete "${todo.title}"? This action cannot be undone.',
+          style: const TextStyle(
+            fontFamily: '.SF Pro Display',
+            fontSize: 14,
+            color: Color(0xFF64748B),
+          ),
+        ),
+        actions: [
+          material.TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          material.ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: material.ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFFDC2626),
+              foregroundColor: Colors.white,
+            ),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true) return;
+
+    try {
+      await fsDeleteMatchingActionItems(todo);
+      final titleKey = todo.title.toLowerCase().trim();
+      final chatPath = todo.chatRef?.path;
+      setState(() {
+        _cachedTodos?.removeWhere(
+          (t) =>
+              t.title.toLowerCase().trim() == titleKey &&
+              (chatPath == null || t.chatRef?.path == chatPath),
+        );
+      });
+      if (mounted) {
+        widget.onShowAnnouncement?.call('Action item deleted');
+      }
+    } catch (e) {
+      if (mounted) {
+        material.ScaffoldMessenger.of(context).showSnackBar(
+          material.SnackBar(
+            content: Text('Error deleting task: $e'),
+            backgroundColor: material.Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _showEditDialog(ActionItemsRecord todo) async {
+    final titleController = material.TextEditingController(text: todo.title);
+    final validPriorities = ['low', 'medium', 'high', 'urgent'];
+    final priorityValue =
+        todo.priority.isNotEmpty ? todo.priority.toLowerCase() : 'low';
+    String selectedPriority =
+        validPriorities.contains(priorityValue) ? priorityValue : 'low';
+    DateTime? selectedDueDate = todo.dueDate;
+
+    await material.showDialog(
+      context: context,
+      builder: (context) {
+        return material.StatefulBuilder(
+          builder: (context, setDialogState) {
+            return material.AlertDialog(
+              backgroundColor: Colors.white,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+              ),
+              title: const Text('Edit Task'),
+              content: SizedBox(
+                width: double.maxFinite,
+                child: SingleChildScrollView(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      material.TextField(
+                        controller: titleController,
+                        autofocus: true,
+                        maxLines: 3,
+                        decoration: const material.InputDecoration(
+                          hintText: 'Enter task title',
+                          border: material.OutlineInputBorder(),
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      material.DropdownButtonFormField<String>(
+                        value: selectedPriority,
+                        decoration: const material.InputDecoration(
+                          labelText: 'Priority',
+                          border: material.OutlineInputBorder(),
+                        ),
+                        items: validPriorities
+                            .map(
+                              (p) => material.DropdownMenuItem(
+                                value: p,
+                                child: Text(
+                                  p[0].toUpperCase() + p.substring(1),
+                                ),
+                              ),
+                            )
+                            .toList(),
+                        onChanged: (value) {
+                          if (value != null) {
+                            setDialogState(() => selectedPriority = value);
+                          }
+                        },
+                      ),
+                      const SizedBox(height: 16),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: material.OutlinedButton.icon(
+                              onPressed: () async {
+                                final picked = await material.showDatePicker(
+                                  context: context,
+                                  initialDate:
+                                      selectedDueDate ?? DateTime.now(),
+                                  firstDate: DateTime(2020),
+                                  lastDate: DateTime(2100),
+                                );
+                                if (picked != null) {
+                                  setDialogState(
+                                      () => selectedDueDate = picked);
+                                }
+                              },
+                              icon: material.Icon(
+                                material.Icons.calendar_today_outlined,
+                              ),
+                              label: Text(
+                                selectedDueDate != null
+                                    ? DateFormat('MMM dd, yyyy')
+                                        .format(selectedDueDate!)
+                                    : 'Set due date',
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          material.OutlinedButton(
+                            onPressed: selectedDueDate == null
+                                ? null
+                                : () => setDialogState(
+                                      () => selectedDueDate = null,
+                                    ),
+                            child: const Text('Clear'),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              actions: [
+                material.TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text('Cancel'),
+                ),
+                material.ElevatedButton(
+                  onPressed: () async {
+                    final title = titleController.text.trim();
+                    if (title.isEmpty) return;
+
+                    try {
+                      await fsPatchDocument(todo.reference, {
+                        'title': title,
+                        'priority': selectedPriority,
+                        'due_date': selectedDueDate,
+                      });
+                      if (context.mounted) Navigator.pop(context);
+                    } catch (e) {
+                      if (context.mounted) {
+                        material.ScaffoldMessenger.of(context).showSnackBar(
+                          material.SnackBar(
+                            content: Text('Error updating task: $e'),
+                            backgroundColor: material.Colors.red,
+                          ),
+                        );
+                      }
+                    }
+                  },
+                  child: const Text('Save'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+
+    titleController.dispose();
+  }
+
   Widget _buildTodoRow(
       BuildContext context, ActionItemsRecord todo, int index) {
     final isCompleting = _completingTasks.containsKey(todo.reference.id);
@@ -1104,26 +1370,33 @@ class _SummerAITodosState extends State<SummerAITodos> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        // Task title
-                        Text(
-                          todo.title,
-                          style: TextStyle(
-                            fontFamily: '.SF Pro Display',
-                            fontSize: 16,
-                            fontWeight: FontWeight.w600,
-                            color: const Color(0xFF1E293B),
-                            decoration: todo.status == 'completed'
-                                ? TextDecoration.lineThrough
-                                : TextDecoration.none,
-                            decorationColor: const Color(0xFF94A3B8),
-                            letterSpacing: -0.3,
-                            height: 1.3,
-                          ),
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Expanded(
+                              child: Text(
+                                todo.title,
+                                style: TextStyle(
+                                  fontFamily: '.SF Pro Display',
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w600,
+                                  color: const Color(0xFF1E293B),
+                                  decoration: todo.status == 'completed'
+                                      ? TextDecoration.lineThrough
+                                      : TextDecoration.none,
+                                  decorationColor: const Color(0xFF94A3B8),
+                                  letterSpacing: -0.3,
+                                  height: 1.3,
+                                ),
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            _buildPeopleAvatars(todo),
+                          ],
                         ),
                         const SizedBox(height: 12),
-                        // Metadata row with better spacing - use Expanded to prevent overflow
                         Row(
                           crossAxisAlignment: CrossAxisAlignment.center,
                           children: [
@@ -1134,15 +1407,27 @@ class _SummerAITodosState extends State<SummerAITodos> {
                                 crossAxisAlignment: WrapCrossAlignment.center,
                                 children: [
                                   _buildPriorityBadge(todo.priority),
-                                  if (todo.groupName.isNotEmpty || todo.chatRef != null)
+                                  if (todo.groupName.isNotEmpty ||
+                                      todo.chatRef != null)
                                     _buildGroupChip(todo),
                                   _buildDueDateChip(todo),
                                 ],
                               ),
                             ),
                             const SizedBox(width: 8),
-                            // Overlapping people avatars - constrained width
-                            _buildPeopleAvatars(todo),
+                            _buildTaskIconButton(
+                              icon: CupertinoIcons.pencil,
+                              color: const Color(0xFF3B82F6),
+                              backgroundColor: const Color(0xFFEFF6FF),
+                              onTap: () => _showEditDialog(todo),
+                            ),
+                            const SizedBox(width: 6),
+                            _buildTaskIconButton(
+                              icon: CupertinoIcons.trash,
+                              color: const Color(0xFFDC2626),
+                              backgroundColor: const Color(0xFFFEE2E2),
+                              onTap: () => _handleDeleteTask(todo),
+                            ),
                           ],
                         ),
                       ],

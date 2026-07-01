@@ -289,6 +289,29 @@ Future<void> fsMarkActionItemDone(DocumentReference actionItemRef) async {
   });
 }
 
+/// Returns all action item docs that represent the same task (same chat + title).
+Future<List<ActionItemsRecord>> fsActionItemsMatchingTask(
+  ActionItemsRecord todo,
+) async {
+  if (todo.chatRef == null) {
+    return [todo];
+  }
+
+  final titleKey = todo.title.toLowerCase().trim();
+  final all = await fsQueryActionItemsByChat(todo.chatRef!);
+  return all
+      .where((t) => t.title.toLowerCase().trim() == titleKey)
+      .toList();
+}
+
+/// Deletes every action item doc that matches [todo] (same chat + title).
+Future<void> fsDeleteMatchingActionItems(ActionItemsRecord todo) async {
+  final tasks = await fsActionItemsMatchingTask(todo);
+  for (final task in tasks) {
+    await fsDeleteDocument(task.reference);
+  }
+}
+
 Future<DocumentReference> fsCreateChat(Map<String, dynamic> data) async {
   if (useWindowsFirestoreRest) {
     return WindowsFirestoreRest.createDocument(

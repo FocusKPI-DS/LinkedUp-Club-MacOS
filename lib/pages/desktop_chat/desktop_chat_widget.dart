@@ -5803,6 +5803,8 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
           Expanded(
             child: _buildHeaderName(chat),
           ),
+          if (chat.isGroup) _buildGroupMembersHeaderButton(chat),
+          _buildChatSearchHeaderButton(),
           // Google Meet icon
           if (chat.isGroup)
             Tooltip(
@@ -5861,15 +5863,7 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
               ? PopupMenuButton<String>(
                   onSelected: (String value) {
                     if (value == 'search') {
-                      setState(() {
-                        _model.showChatHistoryPanel = true;
-                        _model.showGroupCreation = false;
-                        _model.showNewMessageView = false;
-                        _model.showGroupInfoPanel = false;
-                        _model.groupInfoChat = null;
-                        _model.showUserProfilePanel = false;
-                        _model.userProfileUser = null;
-                      });
+                      _openChatSearchPanel();
                     } else if (value == 'add_members') {
                       _navigateToAddMembers(chat);
                     } else if (value == 'media') {
@@ -6126,15 +6120,7 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
               : PopupMenuButton<String>(
                   onSelected: (String value) {
                     if (value == 'search') {
-                      setState(() {
-                        _model.showChatHistoryPanel = true;
-                        _model.showGroupCreation = false;
-                        _model.showNewMessageView = false;
-                        _model.showGroupInfoPanel = false;
-                        _model.groupInfoChat = null;
-                        _model.showUserProfilePanel = false;
-                        _model.userProfileUser = null;
-                      });
+                      _openChatSearchPanel();
                     } else if (value == 'profile') {
                       _viewUserProfile(chat);
                     } else if (value == 'block_toggle') {
@@ -7252,6 +7238,462 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
         },
       );
     }
+  }
+
+  void _openChatSearchPanel() {
+    setState(() {
+      _model.showChatHistoryPanel = true;
+      _model.showGroupCreation = false;
+      _model.showNewMessageView = false;
+      _model.showGroupInfoPanel = false;
+      _model.groupInfoChat = null;
+      _model.showUserProfilePanel = false;
+      _model.userProfileUser = null;
+    });
+  }
+
+  Widget _buildChatSearchHeaderButton() {
+    return Tooltip(
+      message: 'Search in chat',
+      child: InkWell(
+        onTap: _openChatSearchPanel,
+        borderRadius: BorderRadius.circular(8),
+        child: Padding(
+          padding: EdgeInsetsDirectional.fromSTEB(0, 0, 12, 0),
+          child: Icon(
+            Icons.search_rounded,
+            color: Color(0xFF6B7280),
+            size: 22,
+          ),
+        ),
+      ),
+    );
+  }
+
+  List<DocumentReference> _sortGroupMembers(ChatsRecord chat) {
+    final sortedMembers = List<DocumentReference>.from(chat.members);
+    sortedMembers.sort((a, b) {
+      if (a == chat.admin) return -1;
+      if (b == chat.admin) return 1;
+      if (a == chat.createdBy) return -1;
+      if (b == chat.createdBy) return 1;
+      return 0;
+    });
+    return sortedMembers;
+  }
+
+  Widget _buildGroupMembersHeaderButton(ChatsRecord chat) {
+    final members = chat.members;
+    final displayCount = members.length > 3 ? 3 : members.length;
+    const double avatarSize = 24.0;
+    const double spacing = 14.0;
+    final double stackWidth =
+        displayCount > 0 ? avatarSize + (displayCount - 1) * spacing : 0;
+    final remaining = members.length - displayCount;
+
+    return Tooltip(
+      message: '${members.length} members',
+      child: InkWell(
+        onTap: () => _showGroupMembersDialog(chat),
+        borderRadius: BorderRadius.circular(8),
+        child: Padding(
+          padding: EdgeInsetsDirectional.fromSTEB(0, 0, 12, 0),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (members.isEmpty)
+                Icon(
+                  Icons.people_outline_rounded,
+                  size: 22,
+                  color: Color(0xFF6B7280),
+                )
+              else ...[
+                SizedBox(
+                  width: stackWidth + (remaining > 0 ? 18 : 0),
+                  height: avatarSize,
+                  child: Stack(
+                    clipBehavior: Clip.none,
+                    children: [
+                      for (int i = 0; i < displayCount; i++)
+                        Positioned(
+                          left: i * spacing,
+                          child: _buildMemberAvatarChip(
+                            members[i],
+                            avatarSize,
+                          ),
+                        ),
+                      if (remaining > 0)
+                        Positioned(
+                          left: displayCount * spacing,
+                          child: Container(
+                            width: avatarSize,
+                            height: avatarSize,
+                            decoration: BoxDecoration(
+                              color: Color(0xFFE5E7EB),
+                              shape: BoxShape.circle,
+                              border: Border.all(
+                                color: Colors.white,
+                                width: 1.5,
+                              ),
+                            ),
+                            alignment: Alignment.center,
+                            child: Text(
+                              '+$remaining',
+                              style: TextStyle(
+                                fontFamily: 'Inter',
+                                fontSize: 9,
+                                fontWeight: FontWeight.w600,
+                                color: Color(0xFF6B7280),
+                              ),
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildMemberAvatarChip(
+    DocumentReference userRef,
+    double size,
+  ) {
+    return Container(
+      width: size,
+      height: size,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        border: Border.all(color: Colors.white, width: 1.5),
+      ),
+      child: ClipOval(
+        child: DesktopSafeUserBuilder(
+          userRef: userRef,
+          fetchOnce: _getOrCreateUserFuture,
+          builder: (context, user) {
+            final imageUrl = userRef.path.contains('ai_agent_summerai')
+                ? 'https://firebasestorage.googleapis.com/v0/b/linkedup-c3e29.firebasestorage.app/o/asset%2Fsoftware-agent.png?alt=media&token=99761584-999d-4f8e-b3d1-f9d1baf86120'
+                : (user?.photoUrl ?? '');
+
+            return CachedNetworkImage(
+              imageUrl: imageUrl,
+              width: size,
+              height: size,
+              fit: BoxFit.cover,
+              memCacheWidth: (size * 2).round(),
+              memCacheHeight: (size * 2).round(),
+              placeholder: (context, url) => Container(
+                color: Color(0xFFF3F4F6),
+                child: Icon(
+                  Icons.person,
+                  color: Color(0xFF9CA3AF),
+                  size: size * 0.55,
+                ),
+              ),
+              errorWidget: (context, url, error) => Container(
+                color: Color(0xFFF3F4F6),
+                child: Icon(
+                  Icons.person,
+                  color: Color(0xFF9CA3AF),
+                  size: size * 0.55,
+                ),
+              ),
+            );
+          },
+        ),
+      ),
+    );
+  }
+
+  void _showGroupMembersDialog(ChatsRecord chat) {
+    final members = _sortGroupMembers(chat);
+
+    showDialog(
+      context: context,
+      builder: (dialogContext) {
+        return Dialog(
+          backgroundColor: Colors.transparent,
+          insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
+          child: Container(
+            width: 360,
+            constraints: const BoxConstraints(maxWidth: 360, maxHeight: 520),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(12),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.08),
+                  blurRadius: 24,
+                  offset: Offset(0, 8),
+                ),
+              ],
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+                  decoration: BoxDecoration(
+                    color: Color(0xFFFAFBFC),
+                    borderRadius: BorderRadius.only(
+                      topLeft: Radius.circular(12),
+                      topRight: Radius.circular(12),
+                    ),
+                    border: Border(
+                      bottom: BorderSide(color: Color(0xFFE5E7EB), width: 1),
+                    ),
+                  ),
+                  child: Row(
+                    children: [
+                      Container(
+                        width: 32,
+                        height: 32,
+                        decoration: BoxDecoration(
+                          color: Color(0xFFEFF6FF),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Icon(
+                          Icons.people_rounded,
+                          color: Color(0xFF3B82F6),
+                          size: 18,
+                        ),
+                      ),
+                      SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Group Members',
+                              style: TextStyle(
+                                fontFamily: 'Inter',
+                                color: Color(0xFF111827),
+                                fontSize: 15,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                            Text(
+                              '${members.length} members',
+                              style: TextStyle(
+                                fontFamily: 'Inter',
+                                color: Color(0xFF6B7280),
+                                fontSize: 12,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      IconButton(
+                        onPressed: () => Navigator.pop(dialogContext),
+                        icon: Icon(Icons.close_rounded,
+                            color: Color(0xFF9CA3AF), size: 20),
+                        padding: EdgeInsets.zero,
+                        constraints: BoxConstraints(),
+                      ),
+                    ],
+                  ),
+                ),
+                Flexible(
+                  child: ListView.separated(
+                    shrinkWrap: true,
+                    padding: const EdgeInsets.symmetric(vertical: 8),
+                    itemCount: members.length,
+                    separatorBuilder: (_, __) => Divider(
+                      height: 1,
+                      indent: 68,
+                      color: Color(0xFFF3F4F6),
+                    ),
+                    itemBuilder: (context, index) {
+                      return _buildGroupMemberRow(
+                        chat,
+                        members[index],
+                        dialogContext,
+                      );
+                    },
+                  ),
+                ),
+                if (ChatHelpers.isGroupAdmin(chat, currentUserReference))
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+                    decoration: BoxDecoration(
+                      border: Border(
+                        top: BorderSide(color: Color(0xFFE5E7EB), width: 1),
+                      ),
+                    ),
+                    child: TextButton.icon(
+                      onPressed: () {
+                        Navigator.pop(dialogContext);
+                        _navigateToAddMembers(chat);
+                      },
+                      icon: Icon(Icons.person_add_outlined,
+                          size: 18, color: Color(0xFF3B82F6)),
+                      label: Text(
+                        'Add members',
+                        style: TextStyle(
+                          fontFamily: 'Inter',
+                          color: Color(0xFF3B82F6),
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildGroupMemberRow(
+    ChatsRecord chat,
+    DocumentReference memberRef,
+    BuildContext dialogContext,
+  ) {
+    return DesktopSafeUserBuilder(
+      userRef: memberRef,
+      fetchOnce: _getOrCreateUserFuture,
+      builder: (context, user) {
+        if (user == null) {
+          return Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+            child: Row(
+              children: [
+                Container(
+                  width: 36,
+                  height: 36,
+                  decoration: BoxDecoration(
+                    color: Color(0xFFF3F4F6),
+                    shape: BoxShape.circle,
+                  ),
+                ),
+                SizedBox(width: 12),
+                Expanded(
+                  child: Container(
+                    height: 12,
+                    decoration: BoxDecoration(
+                      color: Color(0xFFF3F4F6),
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          );
+        }
+
+        final isOwner = ChatHelpers.isGroupOwner(chat, memberRef);
+        final isAdmin = ChatHelpers.isGroupAdmin(chat, memberRef);
+        final isCurrentUser = memberRef == currentUserReference;
+
+        return InkWell(
+          onTap: () {
+            Navigator.pop(dialogContext);
+            context.pushNamed(
+              UserSummaryWidget.routeName,
+              queryParameters: {
+                'userRef': serializeParam(memberRef, ParamType.DocumentReference),
+              }.withoutNulls,
+              extra: <String, dynamic>{
+                'userRef': memberRef,
+              },
+            );
+          },
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+            child: Row(
+              children: [
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(18),
+                  child: CachedNetworkImage(
+                    imageUrl: memberRef.path.contains('ai_agent_summerai')
+                        ? 'https://firebasestorage.googleapis.com/v0/b/linkedup-c3e29.firebasestorage.app/o/asset%2Fsoftware-agent.png?alt=media&token=99761584-999d-4f8e-b3d1-f9d1baf86120'
+                        : user.photoUrl,
+                    width: 36,
+                    height: 36,
+                    fit: BoxFit.cover,
+                    placeholder: (context, url) => Container(
+                      width: 36,
+                      height: 36,
+                      color: Color(0xFFF3F4F6),
+                      child: Icon(Icons.person,
+                          color: Color(0xFF9CA3AF), size: 18),
+                    ),
+                    errorWidget: (context, url, error) => Container(
+                      width: 36,
+                      height: 36,
+                      color: Color(0xFFF3F4F6),
+                      child: Icon(Icons.person,
+                          color: Color(0xFF9CA3AF), size: 18),
+                    ),
+                  ),
+                ),
+                SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Flexible(
+                            child: Text(
+                              user.displayName.isNotEmpty
+                                  ? user.displayName
+                                  : 'Unknown User',
+                              style: TextStyle(
+                                fontFamily: 'Inter',
+                                color: Color(0xFF111827),
+                                fontSize: 14,
+                                fontWeight: FontWeight.w500,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                          if (isCurrentUser) ...[
+                            SizedBox(width: 6),
+                            Text(
+                              '(You)',
+                              style: TextStyle(
+                                fontFamily: 'Inter',
+                                color: Color(0xFF9CA3AF),
+                                fontSize: 12,
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+                      if (isOwner || isAdmin)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 2),
+                          child: Text(
+                            isOwner ? 'Owner' : 'Admin',
+                            style: TextStyle(
+                              fontFamily: 'Inter',
+                              color: isOwner
+                                  ? Color(0xFFF59E0B)
+                                  : Color(0xFF3B82F6),
+                              fontSize: 11,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
   }
 
   // Generate daily summary using Summer
@@ -8613,7 +9055,20 @@ class _ChatListItemState extends State<_ChatListItem>
       },
       child: InkWell(
         onTap: widget.onTap,
-        child: Container(
+        child: IntrinsicHeight(
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              if (widget.isSelected)
+                Container(
+                  width: 3,
+                  decoration: BoxDecoration(
+                    color: Color(0xFF3B82F6),
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+              Expanded(
+                child: Container(
           width: double.infinity,
           padding: EdgeInsetsDirectional.fromSTEB(12, 8, 12, 8),
           decoration: BoxDecoration(
@@ -8677,6 +9132,10 @@ class _ChatListItemState extends State<_ChatListItem>
                     SizedBox(height: 2),
                     _getLastMessagePreview(widget.chat,
                         isSelected: widget.isSelected),
+                    if (widget.chat.isGroup && widget.chat.members.isNotEmpty) ...[
+                      SizedBox(height: 2),
+                      _buildGroupMemberCountBadge(widget.chat),
+                    ],
                   ],
                 ),
               ),
@@ -8739,6 +9198,10 @@ class _ChatListItemState extends State<_ChatListItem>
                     ],
                   ),
                 ],
+              ),
+            ],
+          ),
+        ),
               ),
             ],
           ),
@@ -8909,8 +9372,7 @@ class _ChatListItemState extends State<_ChatListItem>
         chat.title.isNotEmpty ? chat.title : 'Group Chat',
         style: TextStyle(
           fontFamily: 'Inter',
-          color:
-              Color(0xFF111827), // Dark text for both selected and unselected
+          color: Color(0xFF111827),
           fontSize: 13,
           fontWeight: FontWeight.w500,
         ),
@@ -8992,6 +9454,29 @@ class _ChatListItemState extends State<_ChatListItem>
         },
       );
     }
+  }
+
+  Widget _buildGroupMemberCountBadge(ChatsRecord chat) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(
+          Icons.people_outline,
+          size: 12,
+          color: Color(0xFF9CA3AF),
+        ),
+        SizedBox(width: 2),
+        Text(
+          '${chat.members.length}',
+          style: TextStyle(
+            fontFamily: 'Inter',
+            color: Color(0xFF9CA3AF),
+            fontSize: 11,
+            fontWeight: FontWeight.w500,
+          ),
+        ),
+      ],
+    );
   }
 
   Widget _getLastMessagePreview(ChatsRecord chat, {bool isSelected = false}) {

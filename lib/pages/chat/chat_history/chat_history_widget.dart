@@ -146,8 +146,12 @@ class _ChatHistoryWidgetState extends State<ChatHistoryWidget> {
               // Search Bar Area
               Container(
                 color: FlutterFlowTheme.of(context).secondaryBackground,
-                padding:
-                    const EdgeInsetsDirectional.fromSTEB(16.0, 0.0, 16.0, 12.0),
+                padding: EdgeInsetsDirectional.fromSTEB(
+                  16.0,
+                  widget.showAppBar ? 0.0 : 16.0,
+                  16.0,
+                  12.0,
+                ),
                 child: TextFormField(
                   controller: _model.textController,
                   focusNode: _model.textFieldFocusNode,

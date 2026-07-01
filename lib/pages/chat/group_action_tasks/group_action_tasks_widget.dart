@@ -753,12 +753,7 @@ class _GroupActionTasksWidgetState extends State<GroupActionTasksWidget> {
 
     if (confirmed == true) {
       try {
-        // Delete ALL task documents with the same chat_ref and title
-        // This ensures the task is removed for all involved users
-        final tasks = await _tasksMatchingTitle(todo);
-        for (final task in tasks) {
-          await fsDeleteDocument(task.reference);
-        }
+        await fsDeleteMatchingActionItems(todo);
 
         // Show success message
         if (mounted) {

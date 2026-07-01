@@ -107,6 +107,10 @@ foreach ($inappDir in $inappDirs) {
         Set-Content -Path $cmake -Value $content -NoNewline
         Write-Host "Patched add_dependencies: $cmake"
     }
+    Patch-FileLine $cmake `
+        '  target_compile_definitions(${TARGET} PRIVATE "_HAS_EXCEPTIONS=0")' `
+        '  target_compile_definitions(${TARGET} PRIVATE "_HAS_EXCEPTIONS=0")
+  target_compile_definitions(${TARGET} PRIVATE "_SILENCE_EXPERIMENTAL_COROUTINE_DEPRECATION_WARNINGS")' | Out-Null
 }
 
 # --- liquid_glass_renderer: strip shader assets (SkSL-incompatible on Windows; package is mobile-only) ---
