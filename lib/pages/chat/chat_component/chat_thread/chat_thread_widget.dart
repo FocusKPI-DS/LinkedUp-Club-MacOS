@@ -64,6 +64,7 @@ class ChatThreadWidget extends StatefulWidget {
     this.isGroup = false,
     this.mentionableUsers = const [],
     this.isConsecutive = false,
+    this.isFollowedByConsecutive = false,
     this.showTimestamp = true,
     this.onMessageAction,
     this.onMessagesMutated,
@@ -89,6 +90,8 @@ class ChatThreadWidget extends StatefulWidget {
   final List<UsersRecord> mentionableUsers;
   final bool
       isConsecutive; // Whether this message is part of a streak by the exact same sender
+  final bool
+      isFollowedByConsecutive; // Whether the next (newer) message is from the same sender
   final bool showTimestamp; // Whether to show the in-bubble timestamp
   final Function(String, MessagesRecord)? onMessageAction;
   final VoidCallback? onMessagesMutated;
@@ -102,6 +105,16 @@ class ChatThreadWidget extends StatefulWidget {
 }
 
 class _ChatThreadWidgetState extends State<ChatThreadWidget> {
+  static const double _groupedMessageSpacing = 2.0;
+  static const double _separateMessageSpacing = 14.0;
+
+  EdgeInsets get _messageRowPadding => EdgeInsets.fromLTRB(
+        8.0,
+        widget.isConsecutive ? 2.0 : 8.0,
+        8.0,
+        widget.isFollowedByConsecutive ? 2.0 : 8.0,
+      );
+
   late ChatThreadModel _model;
   final GlobalKey _menuIconKey = GlobalKey();
   String? _selectedReaction;
@@ -2871,7 +2884,7 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
                             ? const Color(0xFF007AFF).withOpacity(0.05)
                             : Colors.transparent,
                         child: Padding(
-                          padding: const EdgeInsets.all(8.0),
+                          padding: _messageRowPadding,
                           child: Row(
                             mainAxisSize: MainAxisSize.min,
                             mainAxisAlignment: MainAxisAlignment.end,
@@ -3919,8 +3932,7 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
                             ? const Color(0xFF007AFF).withOpacity(0.05)
                             : Colors.transparent,
                         child: Padding(
-                          padding: EdgeInsets.fromLTRB(
-                              8.0, widget.isConsecutive ? 2.0 : 8.0, 8.0, 8.0),
+                          padding: _messageRowPadding,
                           child: Row(
                             mainAxisSize: MainAxisSize.min,
                             mainAxisAlignment: MainAxisAlignment.start,
@@ -4975,8 +4987,14 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
               ),
           ]
               .divide(const SizedBox(height: 2.0))
-              .addToStart(const SizedBox(height: 8.0))
-              .addToEnd(const SizedBox(height: 8.0)),
+              .addToStart(SizedBox(
+                  height: widget.isConsecutive
+                      ? _groupedMessageSpacing
+                      : _separateMessageSpacing))
+              .addToEnd(SizedBox(
+                  height: widget.isFollowedByConsecutive
+                      ? _groupedMessageSpacing
+                      : 0.0)),
         );
       },
     );

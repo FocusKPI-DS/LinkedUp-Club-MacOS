@@ -1356,6 +1356,7 @@ class ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget> {
 
         bool showTimestamp = false;
         bool isConsecutive = false;
+        bool isFollowedByConsecutive = false;
 
         if (index == messages.length - 1) {
           showTimestamp = true;
@@ -1369,9 +1370,31 @@ class ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget> {
             }
           }
           if (!showTimestamp &&
+              !message.isSystemMessage &&
+              !previousMessage.isSystemMessage &&
               message.senderRef != null &&
               previousMessage.senderRef != null) {
             isConsecutive = message.senderRef == previousMessage.senderRef;
+          }
+        }
+
+        if (index > 0) {
+          final nextMessage = messages[index - 1];
+          var showTimestampBeforeNext = false;
+          if (message.createdAt != null && nextMessage.createdAt != null) {
+            final difference =
+                nextMessage.createdAt!.difference(message.createdAt!);
+            if (difference.inMinutes.abs() >= 5) {
+              showTimestampBeforeNext = true;
+            }
+          }
+          if (!showTimestampBeforeNext &&
+              !message.isSystemMessage &&
+              !nextMessage.isSystemMessage &&
+              message.senderRef != null &&
+              nextMessage.senderRef != null) {
+            isFollowedByConsecutive =
+                message.senderRef == nextMessage.senderRef;
           }
         }
 
@@ -1400,6 +1423,7 @@ class ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget> {
             onMessageToggled: widget.onMessageToggled,
             isGroup: widget.chatReference?.isGroup ?? false,
             isConsecutive: isConsecutive,
+            isFollowedByConsecutive: isFollowedByConsecutive,
             showTimestamp: showTimestamp,
             onReplyToMessage: (msg) {
               setState(() {

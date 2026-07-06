@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/services.dart';
+import '/utils/desktop_pointer.dart';
 import 'package:provider/provider.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_web_plugins/url_strategy.dart';
@@ -811,6 +812,18 @@ class _MyAppState extends State<MyApp> {
           seedColor: Colors.blue,
           brightness: Brightness.light,
         ),
+        textButtonTheme: TextButtonThemeData(
+          style: desktopClickableButtonStyle(null),
+        ),
+        elevatedButtonTheme: ElevatedButtonThemeData(
+          style: desktopClickableButtonStyle(null),
+        ),
+        outlinedButtonTheme: OutlinedButtonThemeData(
+          style: desktopClickableButtonStyle(null),
+        ),
+        iconButtonTheme: IconButtonThemeData(
+          style: desktopClickableButtonStyle(null),
+        ),
       ),
       darkTheme: ThemeData(
         brightness: Brightness.dark,
@@ -819,6 +832,18 @@ class _MyAppState extends State<MyApp> {
         colorScheme: ColorScheme.fromSeed(
           seedColor: Colors.blue,
           brightness: Brightness.dark,
+        ),
+        textButtonTheme: TextButtonThemeData(
+          style: desktopClickableButtonStyle(null),
+        ),
+        elevatedButtonTheme: ElevatedButtonThemeData(
+          style: desktopClickableButtonStyle(null),
+        ),
+        outlinedButtonTheme: OutlinedButtonThemeData(
+          style: desktopClickableButtonStyle(null),
+        ),
+        iconButtonTheme: IconButtonThemeData(
+          style: desktopClickableButtonStyle(null),
         ),
       ),
       themeMode: _themeMode,
@@ -1500,6 +1525,7 @@ class _NavBarPageState extends State<NavBarPage> with WidgetsBindingObserver {
               child: Material(
                 color: Colors.transparent,
                 child: InkWell(
+                  mouseCursor: MaterialStateMouseCursor.clickable,
                   onTap: () {
                     context.pushNamed(MobileSettingsWidget.routeName);
                   },
@@ -1551,6 +1577,7 @@ class _NavBarPageState extends State<NavBarPage> with WidgetsBindingObserver {
                 bool isHovered = false;
 
                 return MouseRegion(
+                  cursor: SystemMouseCursors.click,
                   onEnter: (_) => setState(() => isHovered = true),
                   onExit: (_) => setState(() => isHovered = false),
                   child: Stack(
@@ -1563,6 +1590,7 @@ class _NavBarPageState extends State<NavBarPage> with WidgetsBindingObserver {
                         child: Material(
                           color: Colors.transparent,
                           child: InkWell(
+                            mouseCursor: MaterialStateMouseCursor.clickable,
                             onTap: () async {
                               await authManager.signOut();
                               if (context.mounted) {
@@ -1751,7 +1779,7 @@ class _NavBarPageState extends State<NavBarPage> with WidgetsBindingObserver {
                     size: 20,
                   ),
                 ),
-              ),
+              ).withClickCursor(),
             ),
           ],
         ),
@@ -2025,6 +2053,7 @@ class _NavItemWithTooltipState extends State<_NavItemWithTooltip> {
   @override
   Widget build(BuildContext context) {
     return MouseRegion(
+      cursor: SystemMouseCursors.click,
       onEnter: (_) => _showTooltip(),
       onExit: (_) => _hideTooltip(),
       child: Stack(
@@ -2062,6 +2091,7 @@ class _NavItemWithTooltipState extends State<_NavItemWithTooltip> {
             child: Material(
               color: Colors.transparent,
               child: InkWell(
+                mouseCursor: MaterialStateMouseCursor.clickable,
                 onTap: widget.onTap,
                 borderRadius: BorderRadius.circular(12),
                 hoverColor: Color(0xFFE8EBED).withOpacity(0.6),
@@ -2193,6 +2223,7 @@ class _AppUpdateButtonState extends State<_AppUpdateButton> {
     return Container(
       margin: EdgeInsets.only(bottom: 8),
       child: MouseRegion(
+        cursor: SystemMouseCursors.click,
         onEnter: (_) => setState(() => _isHovered = true),
         onExit: (_) => setState(() => _isHovered = false),
         child: Tooltip(

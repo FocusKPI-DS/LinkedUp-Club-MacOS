@@ -1068,6 +1068,7 @@ class _SummerAITodosState extends State<SummerAITodos> {
       color: backgroundColor,
       borderRadius: BorderRadius.circular(6),
       child: material.InkWell(
+        mouseCursor: material.MaterialStateMouseCursor.clickable,
         onTap: onTap,
         borderRadius: BorderRadius.circular(6),
         child: Padding(

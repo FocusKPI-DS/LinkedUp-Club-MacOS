@@ -1,5 +1,6 @@
 import '/auth/firebase_auth/auth_util.dart';
 import '/utils/debug_log.dart';
+import '/utils/desktop_pointer.dart';
 import '/backend/backend.dart';
 import '/backend/schema/enums/enums.dart';
 import '/components/invite_friends_button_widget.dart';
@@ -178,7 +179,7 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
 
     _model.tabController = TabController(
       vsync: this,
-      length: 3, // All, Unread, Inactive
+      length: 2, // All, Unread
       initialIndex: 0,
     )..addListener(() {
         safeSetState(() {});
@@ -503,7 +504,7 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
                       size: 18,
                     ),
                   ),
-                ),
+                ).withClickCursor(),
               ),
             ),
           // Collapsed avatar list (shown when collapsed)
@@ -787,7 +788,8 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
   }
 
   Widget _buildHeader() {
-    final isChatMode = _model.sidebarMode == SidebarMode.chat;
+    final isChatMode =
+        !kShowFoldersSidebar || _model.sidebarMode == SidebarMode.chat;
     return Container(
       width: double.infinity,
       height: 80,
@@ -816,25 +818,30 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
               ),
             ),
             SizedBox(width: 8),
-            // Mode switch icons
-            Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                _buildModeIcon(
-                  icon: CupertinoIcons.chat_bubble_2_fill,
-                  tooltip: 'Chat',
-                  isActive: isChatMode,
-                  onTap: () => setState(() => _model.sidebarMode = SidebarMode.chat),
-                ),
-                SizedBox(width: 4),
-                _buildModeIcon(
-                  icon: CupertinoIcons.folder_fill,
-                  tooltip: 'Folders',
-                  isActive: !isChatMode,
-                  onTap: () => setState(() => _model.sidebarMode = SidebarMode.folders),
-                ),
-                SizedBox(width: 8),
-                // New chat menu
+            // Mode switch icons (folders toggle hidden via kShowFoldersSidebar)
+            if (kShowFoldersSidebar)
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  _buildModeIcon(
+                    icon: CupertinoIcons.chat_bubble_2_fill,
+                    tooltip: 'Chat',
+                    isActive: isChatMode,
+                    onTap: () =>
+                        setState(() => _model.sidebarMode = SidebarMode.chat),
+                  ),
+                  SizedBox(width: 4),
+                  _buildModeIcon(
+                    icon: CupertinoIcons.folder_fill,
+                    tooltip: 'Folders',
+                    isActive: !isChatMode,
+                    onTap: () => setState(
+                        () => _model.sidebarMode = SidebarMode.folders),
+                  ),
+                  SizedBox(width: 8),
+                ],
+              ),
+            // New chat menu
                 PopupMenuButton<int>(
                   offset: const Offset(0, 40),
                   shape: RoundedRectangleBorder(
@@ -915,8 +922,6 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
                     ),
                   ),
                 ),
-              ],
-            ),
           ],
         ),
       ),
@@ -1050,7 +1055,7 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
                       size: 16,
                     ),
                   ),
-                );
+                ).withClickCursor();
               }
               // Show ⌘K shortcut hint when not searching
               return Padding(
@@ -1081,7 +1086,7 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
 
   Widget _buildNavigationTabs() {
     // In folders mode, don't show tab bar
-    if (_model.sidebarMode == SidebarMode.folders) {
+    if (kShowFoldersSidebar && _model.sidebarMode == SidebarMode.folders) {
       return SizedBox.shrink();
     }
     return Container(
@@ -1099,8 +1104,6 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
             Expanded(child: _buildTab('All', 0)),
             SizedBox(width: 8),
             Expanded(child: _buildTab('Unread', 1)),
-            SizedBox(width: 8),
-            Expanded(child: _buildTab('Inactive', 2)),
           ],
         ),
       ),
@@ -1151,7 +1154,7 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
           overflow: TextOverflow.ellipsis,
         ),
       ),
-    );
+    ).withClickCursor();
   }
 
   bool get _sidebarListReady =>
@@ -1259,7 +1262,8 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
             return Stack(
               children: [
                 // Show flat chat list or folder view based on sidebar mode
-                _model.sidebarMode == SidebarMode.chat
+                !kShowFoldersSidebar ||
+                        _model.sidebarMode == SidebarMode.chat
                     ? _buildFlatChatListView(allChats)
                     : _buildFolderListView(allChats),
                 // Quick search dropdown overlay
@@ -1359,7 +1363,7 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
                     ],
                   ),
                 ),
-              ),
+              ).withClickCursor(),
               // Divider
               if (quickChats.isNotEmpty)
                 Divider(height: 1, color: Color(0xFFE5E7EB)),
@@ -1417,7 +1421,7 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
           ],
         ),
       ),
-    );
+    ).withClickCursor();
   }
 
   final GlobalKey<ChatThreadComponentWidgetState> _searchPreviewThreadKey =
@@ -1482,7 +1486,7 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
                   ),
                   child: Icon(Icons.close, size: 18, color: Color(0xFF6B7280)),
                 ),
-              ),
+              ).withClickCursor(),
             ],
           ),
         ),
@@ -1570,7 +1574,7 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
                                 ),
                               ),
                             ),
-                          ),
+                          ).withClickCursor(),
                           SizedBox(width: 8),
                           GestureDetector(
                             onTap: () {
@@ -1580,7 +1584,7 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
                               });
                             },
                             child: Icon(Icons.close, size: 16, color: Color(0xFF9CA3AF)),
-                          ),
+                          ).withClickCursor(),
                         ],
                       ),
                     ),
@@ -2008,16 +2012,11 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
 
     if (filteredChats.isEmpty) {
       final tabIndex = _model.tabController?.index ?? 0;
-      final emptyMessage = tabIndex == 2
-          ? 'No inactive chats'
-          : tabIndex == 1
-              ? 'No unread chats'
-              : 'No chats yet';
-      final emptyIcon = tabIndex == 2
-          ? Icons.archive_outlined
-          : tabIndex == 1
-              ? Icons.mark_email_read_outlined
-              : CupertinoIcons.chat_bubble_2;
+      final emptyMessage =
+          tabIndex == 1 ? 'No unread chats' : 'No chats yet';
+      final emptyIcon = tabIndex == 1
+          ? Icons.mark_email_read_outlined
+          : CupertinoIcons.chat_bubble_2;
       return Center(
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -2060,7 +2059,7 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
           Padding(
             padding: const EdgeInsets.fromLTRB(28, 12, 16, 4),
             child: Text(
-              _model.tabController?.index == 2 ? 'Inactive' : 'Recent',
+              'Recent',
               style: TextStyle(
                 fontFamily: 'Inter',
                 fontSize: 11,
@@ -2120,7 +2119,7 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
                 ),
               ),
             ),
-          ),
+          ).withClickCursor(),
         ),
 
         // Pinned (combined DM and Groups)
@@ -2226,7 +2225,7 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
           ],
         ),
       ),
-    );
+    ).withClickCursor();
   }
 
   Widget _buildFolderSection(
@@ -2371,7 +2370,7 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
           ],
         ),
       ),
-    );
+    ).withClickCursor().withClickCursor();
   }
 
   Widget _buildUnfiledHeader(int count) {
@@ -2426,7 +2425,7 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
           ],
         ),
       ),
-    );
+    ).withClickCursor();
   }
 
   Widget _buildFolderChatItem(ChatsRecord chat) {
@@ -2708,7 +2707,7 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
                           'Select All',
                           style: TextStyle(fontFamily: 'Inter', fontSize: 12, fontWeight: FontWeight.w500, color: Color(0xFF3B82F6)),
                         ),
-                      ),
+                      ).withClickCursor(),
                       Spacer(),
                       Text(
                         '${selectedIds.length} selected',
@@ -2831,6 +2830,7 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
     return Opacity(
       opacity: opacity,
       child: InkWell(
+        mouseCursor: MaterialStateMouseCursor.clickable,
         onTap: isAlreadyInFolder ? null : onTap,
         borderRadius: BorderRadius.circular(6),
         child: Padding(
@@ -3318,7 +3318,7 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
                     size: 20,
                   ),
                 ),
-              ),
+              ).withClickCursor(),
             ],
           ),
         ),
@@ -3465,7 +3465,7 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
                                       ],
                                     ),
                         ),
-                      ),
+                      ).withClickCursor(),
                       SizedBox(width: 16),
                       // Image controls
                       Expanded(
@@ -3737,6 +3737,7 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
                                 }
 
                                 return InkWell(
+                                  mouseCursor: MaterialStateMouseCursor.clickable,
                                   onTap: () {
                                     setState(() {
                                       if (isSelected) {
@@ -4234,7 +4235,7 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
                           size: 20,
                         ),
                       ),
-                    ),
+                    ).withClickCursor(),
                     SizedBox(width: 12),
                     Container(
                       padding: EdgeInsets.all(6),
@@ -4501,6 +4502,7 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
                                   child: Material(
                                     color: Colors.transparent,
                                     child: InkWell(
+                                      mouseCursor: MaterialStateMouseCursor.clickable,
                                       onTap: () async {
                                         await _startNewChatWithUser(user);
                                         setState(() {
@@ -4695,7 +4697,7 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
                   child: Container(
                     color: Colors.black.withOpacity(0.3),
                   ),
-                ),
+                ).withClickCursor(),
               ),
               // Right-side panels
               if (_model.showGroupCreation)
@@ -4813,10 +4815,10 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
                         onTap: () {},
                         behavior: HitTestBehavior.opaque,
                         child: _buildMeetingTranscriptsPopupCard(),
-                      ),
+                      ).withClickCursor(),
                     ),
                   ),
-                ),
+                ).withClickCursor(),
               ),
 
             // Pinned Messages popup overlay
@@ -4838,10 +4840,10 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
                         onTap: () {},
                         behavior: HitTestBehavior.opaque,
                         child: _buildPinnedMessagesPopupCard(),
-                      ),
+                      ).withClickCursor(),
                     ),
                   ),
-                ),
+                ).withClickCursor(),
               ),
             // Group Files popup overlay
             if (_model.showGroupFilesPopup &&
@@ -4862,10 +4864,10 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
                         onTap: () {},
                         behavior: HitTestBehavior.opaque,
                         child: _buildGroupFilesPopupCard(),
-                      ),
+                      ).withClickCursor(),
                     ),
                   ),
-                ),
+                ).withClickCursor(),
               ),
           ],
         ),
@@ -4982,6 +4984,7 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
                   ),
                   Spacer(),
                   InkWell(
+                    mouseCursor: MaterialStateMouseCursor.clickable,
                     onTap: () {
                       setState(() {
                         _model.showPinnedMessagesPopup = false;
@@ -5102,6 +5105,7 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
               : '';
 
           return InkWell(
+            mouseCursor: MaterialStateMouseCursor.clickable,
             onTap: () {
               final messageId = msg.reference.id;
               setState(() {
@@ -5284,6 +5288,7 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
                   ),
                   Spacer(),
                   InkWell(
+                    mouseCursor: MaterialStateMouseCursor.clickable,
                     onTap: () {
                       setState(() {
                         _model.showGroupFilesPopup = false;
@@ -5490,6 +5495,7 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
                 }
 
                 return InkWell(
+                  mouseCursor: MaterialStateMouseCursor.clickable,
                   onTap: isExpired
                       ? null
                       : () async {
@@ -5671,7 +5677,7 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
                               child: Container(
                                 color: Colors.black.withOpacity(0.3),
                               ),
-                            ),
+                            ).withClickCursor(),
                           ),
                           // Tasks panel on the right (30% width)
                           Positioned(
@@ -5812,6 +5818,7 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
                   ? 'Join active meeting'
                   : 'Start a Google Meet',
               child: InkWell(
+                mouseCursor: MaterialStateMouseCursor.clickable,
                 onTap: () async {
                   if (chat.hasActiveMeeting) {
                     // Join existing meeting
@@ -6457,6 +6464,7 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
                       ),
                       SizedBox(width: 8),
                       InkWell(
+                        mouseCursor: MaterialStateMouseCursor.clickable,
                         onTap: () {
                           setState(() {
                             _model.isActionItemsExpanded =
@@ -6671,6 +6679,7 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
             const SizedBox(height: 16),
             // Quick create button
             InkWell(
+              mouseCursor: MaterialStateMouseCursor.clickable,
               onTap: () async {
                 // Open meet.google.com/new in browser, user copies the link
                 await qurioLaunchUrl('https://meet.google.com/new');
@@ -6891,6 +6900,7 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
               const SizedBox(width: 8),
               if (!isConfirmed)
                 InkWell(
+                  mouseCursor: MaterialStateMouseCursor.clickable,
                   onTap: () async {
                     if (currentUserReference == null) return;
                     await fsArrayUnion(
@@ -6950,7 +6960,7 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
             ],
           ),
         ),
-      );
+      ).withClickCursor().withClickCursor();
     }
 
     if (useWindowsFirestoreRest) {
@@ -7053,6 +7063,7 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
           }
 
           return InkWell(
+            mouseCursor: MaterialStateMouseCursor.clickable,
             onTap: () {
               if (!otherUserRef.path.contains('ai_agent_summerai')) {
                 context.pushNamed(
@@ -7256,6 +7267,7 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
     return Tooltip(
       message: 'Search in chat',
       child: InkWell(
+        mouseCursor: MaterialStateMouseCursor.clickable,
         onTap: _openChatSearchPanel,
         borderRadius: BorderRadius.circular(8),
         child: Padding(
@@ -7294,6 +7306,7 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
     return Tooltip(
       message: '${members.length} members',
       child: InkWell(
+        mouseCursor: MaterialStateMouseCursor.clickable,
         onTap: () => _showGroupMembersDialog(chat),
         borderRadius: BorderRadius.circular(8),
         child: Padding(
@@ -7594,6 +7607,7 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
         final isCurrentUser = memberRef == currentUserReference;
 
         return InkWell(
+          mouseCursor: MaterialStateMouseCursor.clickable,
           onTap: () {
             Navigator.pop(dialogContext);
             context.pushNamed(
@@ -8717,6 +8731,7 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
     return Material(
       color: Colors.transparent,
       child: InkWell(
+        mouseCursor: MaterialStateMouseCursor.clickable,
         onTap: () => _showEmailInviteDialog(),
         borderRadius: BorderRadius.circular(20.0),
         child: ClipRRect(
@@ -8899,6 +8914,35 @@ class _ChatListItemState extends State<_ChatListItem>
   @override
   bool get wantKeepAlive => true;
 
+  Future<int>? _unreadCountFuture;
+
+  @override
+  void initState() {
+    super.initState();
+    _ensureUnreadCountFuture();
+  }
+
+  @override
+  void didUpdateWidget(covariant _ChatListItem oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    final chatChanged =
+        oldWidget.chat.reference.id != widget.chat.reference.id;
+    final becameUnread =
+        !oldWidget.hasUnreadMessages && widget.hasUnreadMessages;
+    if (chatChanged || becameUnread) {
+      _unreadCountFuture = null;
+      _ensureUnreadCountFuture();
+    }
+  }
+
+  void _ensureUnreadCountFuture() {
+    if (!useWindowsFirestoreRest) return;
+    _unreadCountFuture ??= _fetchUnreadCount(widget.chat).then((count) {
+      widget.chatController.cacheUnreadCount(widget.chat.reference.id, count);
+      return count;
+    });
+  }
+
   void _showContextMenu(BuildContext context, Offset position) {
     showMenu(
       context: context,
@@ -9054,6 +9098,7 @@ class _ChatListItemState extends State<_ChatListItem>
         _showContextMenu(context, details.globalPosition);
       },
       child: InkWell(
+        mouseCursor: MaterialStateMouseCursor.clickable,
         onTap: widget.onTap,
         child: IntrinsicHeight(
           child: Row(
@@ -9068,146 +9113,108 @@ class _ChatListItemState extends State<_ChatListItem>
                   ),
                 ),
               Expanded(
-                child: Container(
-          width: double.infinity,
-          padding: EdgeInsetsDirectional.fromSTEB(12, 8, 12, 8),
-          decoration: BoxDecoration(
-            color: widget.isSelected
-                ? Colors.white
-                : Colors.transparent, // White for selected
-            borderRadius: BorderRadius.circular(8),
-            border: widget.isSelected
-                ? Border.all(
-                    color: Color.fromRGBO(
-                        230, 235, 245, 1), // Light border for selected
-                    width: 1,
-                  )
-                : Border(
-                    bottom: BorderSide(
-                      color: Color.fromRGBO(230, 235, 245, 1), // Light border
-                      width: 1,
-                    ),
-                  ),
-            boxShadow: widget.isSelected
-                ? [
-                    BoxShadow(
-                      color:
-                          Color.fromRGBO(0, 0, 0, 0.05), // Neutral gray shadow
-                      blurRadius: 8,
-                      offset: Offset(0, 2),
-                      spreadRadius: 0,
-                    ),
-                  ]
-                : null,
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.max,
-            children: [
-              // Avatar
-              _buildChatAvatar(widget.chat),
-              SizedBox(width: 12),
-              // Chat Info
-              Expanded(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        // Pin icon if chat is pinned
-                        if (widget.chat.isPinnedByUser(currentUserReference)) ...[
-                          Icon(
-                            Icons.push_pin,
-                            color: Color(0xFF000000), // Black
-                            size: 16,
-                          ),
-                          SizedBox(width: 4),
-                        ],
-                        Expanded(
-                          child: _getChatDisplayName(widget.chat,
-                              isSelected: widget.isSelected),
-                        ),
-                      ],
-                    ),
-                    SizedBox(height: 2),
-                    _getLastMessagePreview(widget.chat,
-                        isSelected: widget.isSelected),
-                    if (widget.chat.isGroup && widget.chat.members.isNotEmpty) ...[
-                      SizedBox(height: 2),
-                      _buildGroupMemberCountBadge(widget.chat),
-                    ],
-                  ],
-                ),
-              ),
-              // Timestamp and unread count badge
-              Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: [
-                  Row(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.center,
-                    children: [
-                      // Normal Badge (Blue dot)
-                      if (widget.hasUnreadMessages)
-                        Container(
-                          width: 10,
-                          height: 10,
-                          margin: EdgeInsets.only(right: 8),
-                          decoration: BoxDecoration(
-                            color: Color(0xFF3B82F6),
-                            shape: BoxShape.circle,
-                            boxShadow: [
-                              BoxShadow(
-                                color: Color(0x4D3B82F6),
-                                blurRadius: 4,
-                                spreadRadius: 1,
+                child: Padding(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+                  child: Container(
+                    width: double.infinity,
+                    padding:
+                        const EdgeInsetsDirectional.fromSTEB(16, 12, 16, 12),
+                    decoration: BoxDecoration(
+                      color: widget.isSelected
+                          ? Colors.white
+                          : Colors.transparent,
+                      borderRadius: BorderRadius.circular(8),
+                      border: widget.isSelected
+                          ? Border.all(
+                              color: Color.fromRGBO(230, 235, 245, 1),
+                              width: 1,
+                            )
+                          : Border(
+                              bottom: BorderSide(
+                                color: Color.fromRGBO(230, 235, 245, 1),
+                                width: 1,
                               ),
-                            ],
+                            ),
+                      boxShadow: widget.isSelected
+                          ? [
+                              BoxShadow(
+                                color: Color.fromRGBO(0, 0, 0, 0.05),
+                                blurRadius: 8,
+                                offset: Offset(0, 2),
+                                spreadRadius: 0,
+                              ),
+                            ]
+                          : null,
+                    ),
+                    child: IntrinsicHeight(
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          _buildChatAvatar(widget.chat),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  children: [
+                                    if (widget.chat.isPinnedByUser(
+                                        currentUserReference)) ...[
+                                      const Icon(
+                                        Icons.push_pin,
+                                        color: Color(0xFF000000),
+                                        size: 16,
+                                      ),
+                                      const SizedBox(width: 4),
+                                    ],
+                                    Expanded(
+                                      child: _getChatDisplayName(widget.chat,
+                                          isSelected: widget.isSelected),
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 4),
+                                _getLastMessagePreview(widget.chat,
+                                    isSelected: widget.isSelected),
+                                if (widget.chat.isGroup &&
+                                    widget.chat.members.isNotEmpty) ...[
+                                  const SizedBox(height: 4),
+                                  _buildGroupMemberCountBadge(widget.chat),
+                                ],
+                              ],
+                            ),
                           ),
-                        ),
-                      // Timestamp
-                      Text(
-                        widget.chat.lastMessageAt != null
-                            ? () {
-                                final now = DateTime.now();
-                                final messageTime =
-                                    widget.chat.lastMessageAt!.toLocal();
-                                final difference =
-                                    now.difference(messageTime);
-
-                                // If within 24 hours, show time only
-                                if (difference.inHours < 24) {
-                                  return DateFormat('h:mm a')
-                                      .format(messageTime);
-                                } else {
-                                  // Otherwise show date in MM/DD/YYYY format
-                                  return DateFormat('MM/dd/yyyy')
-                                      .format(messageTime);
-                                }
-                              }()
-                            : 'Unknown',
-                        style: TextStyle(
-                          fontFamily: 'Inter',
-                          color: widget.isSelected
-                              ? Color(0xFF6B7280)
-                              : Color(0xFF9CA3AF),
-                          fontSize: 11,
-                        ),
+                          const SizedBox(width: 10),
+                          SizedBox(
+                            width: 56,
+                            child: Stack(
+                              clipBehavior: Clip.none,
+                              children: [
+                                Align(
+                                  alignment: Alignment.topRight,
+                                  child: _buildMessageTimestamp(),
+                                ),
+                                if (widget.hasUnreadMessages)
+                                  Align(
+                                    alignment: Alignment.centerRight,
+                                    child: _buildUnreadCountBadge(),
+                                  ),
+                              ],
+                            ),
+                          ),
+                        ],
                       ),
-                    ],
+                    ),
                   ),
-                ],
-              ),
-            ],
-          ),
-        ),
+                ),
               ),
             ],
           ),
         ),
       ),
-    );
+    ).withClickCursor().withClickCursor();
   }
 
   Widget _buildChatAvatar(ChatsRecord chat) {
@@ -9453,6 +9460,129 @@ class _ChatListItemState extends State<_ChatListItem>
           );
         },
       );
+    }
+  }
+
+  Widget _buildMessageTimestamp() {
+    final timestampText = widget.chat.lastMessageAt != null
+        ? () {
+            final now = DateTime.now();
+            final messageTime = widget.chat.lastMessageAt!.toLocal();
+            final difference = now.difference(messageTime);
+
+            if (difference.inHours < 24) {
+              return DateFormat('h:mm a').format(messageTime);
+            }
+            return DateFormat('MM/dd/yyyy').format(messageTime);
+          }()
+        : 'Unknown';
+
+    return Text(
+      timestampText,
+      style: TextStyle(
+        fontFamily: 'Inter',
+        color: widget.isSelected ? Color(0xFF6B7280) : Color(0xFF9CA3AF),
+        fontSize: 11,
+      ),
+    );
+  }
+
+  Widget _buildUnreadCountBadge() {
+    Widget badge(int count) {
+      const badgeHeight = 16.0;
+      final display = count > 99 ? '99+' : '$count';
+      final badgeWidth = display.length > 2
+          ? 26.0
+          : (display.length > 1 ? 20.0 : badgeHeight);
+
+      return Container(
+        width: badgeWidth,
+        height: badgeHeight,
+        decoration: BoxDecoration(
+          color: Color(0xFF3B82F6),
+          borderRadius: BorderRadius.circular(badgeHeight / 2),
+          boxShadow: [
+            BoxShadow(
+              color: Color(0x4D3B82F6),
+              blurRadius: 3,
+              spreadRadius: 0.5,
+            ),
+          ],
+        ),
+        alignment: Alignment.center,
+        child: Text(
+          display,
+          style: TextStyle(
+            fontFamily: 'Inter',
+            color: Colors.white,
+            fontSize: display.length > 2 ? 7 : 9,
+            fontWeight: FontWeight.w700,
+            height: 1,
+          ),
+          textAlign: TextAlign.center,
+          textHeightBehavior: const TextHeightBehavior(
+            applyHeightToFirstAscent: false,
+            applyHeightToLastDescent: false,
+          ),
+        ),
+      );
+    }
+
+    if (useWindowsFirestoreRest) {
+      return FutureBuilder<int>(
+        future: _unreadCountFuture,
+        initialData: widget.chatController
+            .getCachedUnreadCount(widget.chat.reference.id),
+        builder: (context, snapshot) {
+          final count = snapshot.data;
+          if (count == null || count <= 0) {
+            return const SizedBox.shrink();
+          }
+          return badge(count);
+        },
+      );
+    }
+
+    return StreamBuilder<int>(
+      stream: widget.chatController.getUnreadMessageCount(widget.chat),
+      initialData: widget.chatController
+          .getCachedUnreadCount(widget.chat.reference.id),
+      builder: (context, snapshot) {
+        final count = snapshot.data;
+        if (count == null || count <= 0) {
+          return const SizedBox.shrink();
+        }
+        return badge(count);
+      },
+    );
+  }
+
+  Future<int> _fetchUnreadCount(ChatsRecord chat) async {
+    if (currentUserReference == null) return 0;
+
+    try {
+      final messages =
+          await fsQueryChatMessages(chat.reference, limit: 500);
+      int count = 0;
+
+      for (final message in messages) {
+        final isUnread = message.senderRef != currentUserReference &&
+            !message.isSystemMessage &&
+            !message.isReadBy.contains(currentUserReference);
+
+        if (isUnread) {
+          count++;
+        } else if (message.senderRef == currentUserReference ||
+            message.isReadBy.contains(currentUserReference)) {
+          break;
+        }
+      }
+
+      return count;
+    } catch (_) {
+      return widget.chatController
+              .getCachedUnreadCount(chat.reference.id) ??
+          0;
     }
   }
 
@@ -9713,6 +9843,7 @@ class _ForwardModeOption extends StatelessWidget {
     return Material(
       color: Colors.transparent,
       child: InkWell(
+        mouseCursor: MaterialStateMouseCursor.clickable,
         borderRadius: BorderRadius.circular(12),
         onTap: onTap,
         child: Container(

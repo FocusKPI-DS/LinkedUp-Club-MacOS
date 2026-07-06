@@ -70,6 +70,23 @@ class ChatController extends GetxController {
   final Map<String, UsersRecord> _userRecordCache = {};
   final Map<String, Future<UsersRecord>> _userFutureCache = {};
 
+  // Last known unread message count per chat (avoids badge flashing "1" on reload)
+  final Map<String, int> _unreadCountCache = {};
+
+  int? getCachedUnreadCount(String chatId) => _unreadCountCache[chatId];
+
+  void cacheUnreadCount(String chatId, int count) {
+    _unreadCountCache[chatId] = count;
+  }
+
+  void _setCachedUnreadCount(String chatId, int count) {
+    cacheUnreadCount(chatId, count);
+  }
+
+  void _invalidateCachedUnreadCount(String chatId) {
+    _unreadCountCache.remove(chatId);
+  }
+
   /// Windows/Linux: sidebar stays on spinner until DM names + avatars are prefetched.
   final RxBool desktopSidebarReady = true.obs;
   bool _desktopSidebarPrimed = false;
@@ -438,6 +455,7 @@ class ChatController extends GetxController {
       // Avoid native messages subcollection — local badge + REST chat patch only.
       locallySeenChats[chat.reference.id] = DateTime.now();
       knownUnreadChats.remove(chat.reference.id);
+      _setCachedUnreadCount(chat.reference.id, 0);
       final currentChats = List<ChatsRecord>.from(chats);
       chats.value = currentChats;
       pauseListListeners();
@@ -454,6 +472,7 @@ class ChatController extends GetxController {
   void markChatAsUnread(ChatsRecord chat) {
     _manuallyMarkedUnread.add(chat.reference.id);
     knownUnreadChats.add(chat.reference.id);
+    _invalidateCachedUnreadCount(chat.reference.id);
     // Set seenAt to epoch so any lastMessageAt is always "after" it
     locallySeenChats[chat.reference.id] =
         DateTime.fromMillisecondsSinceEpoch(0);
@@ -565,35 +584,42 @@ class ChatController extends GetxController {
   // Returns a stream that efficiently counts unread messages
   // Uses smart logic: only counts messages at/after lastMessageAt if user hasn't seen last message
   Stream<int> getUnreadMessageCount(ChatsRecord chat) {
+    final chatId = chat.reference.id;
+
     if (currentUserReference == null) {
+      _setCachedUnreadCount(chatId, 0);
       return Stream.value(0);
     }
 
     // CRITICAL: If this chat is currently open, return 0 (WhatsApp-like behavior)
     if (selectedChat.value != null &&
-        selectedChat.value!.reference.id == chat.reference.id) {
+        selectedChat.value!.reference.id == chatId) {
+      _setCachedUnreadCount(chatId, 0);
       return Stream.value(0);
     }
 
     // Check local state first
-    if (locallySeenChats.containsKey(chat.reference.id)) {
-      final seenAt = locallySeenChats[chat.reference.id];
+    if (locallySeenChats.containsKey(chatId)) {
+      final seenAt = locallySeenChats[chatId];
       final lastMessageAt = chat.lastMessageAt;
       if (seenAt != null &&
           lastMessageAt != null &&
           !lastMessageAt.isAfter(seenAt)) {
+        _setCachedUnreadCount(chatId, 0);
         return Stream.value(0);
       }
     }
 
     // If user has seen the last message, no unread messages
     if (chat.lastMessageSeen.contains(currentUserReference)) {
+      _setCachedUnreadCount(chatId, 0);
       return Stream.value(0);
     }
 
     // If no last message or user sent the last message, no unread
     if (chat.lastMessage.isEmpty ||
         chat.lastMessageSent == currentUserReference) {
+      _setCachedUnreadCount(chatId, 0);
       return Stream.value(0);
     }
 
@@ -601,6 +627,7 @@ class ChatController extends GetxController {
     // This prevents counting old messages that don't have isReadBy populated
     final lastMessageAt = chat.lastMessageAt;
     if (lastMessageAt == null) {
+      _setCachedUnreadCount(chatId, 0);
       return Stream.value(0);
     }
 
@@ -633,6 +660,7 @@ class ChatController extends GetxController {
         }
       }
 
+      _setCachedUnreadCount(chatId, count);
       return count;
     });
   }
@@ -663,6 +691,7 @@ class ChatController extends GetxController {
       // Immediately update local state to prevent flickering
       // Use current time as the seen timestamp
       locallySeenChats[chat.reference.id] = DateTime.now();
+      _setCachedUnreadCount(chat.reference.id, 0);
 
       // CRITICAL: Remove from knownUnreadChats immediately when user opens the chat
       // This ensures the badge disappears right away
@@ -823,8 +852,7 @@ class ChatController extends GetxController {
     }
   }
 
-  /// Chats with no messages in this many days are considered "inactive"
-  /// and hidden from the All tab (shown only in the Inactive tab).
+  /// Chats with no messages in this many days are considered inactive.
   static const int inactiveDays = 30;
 
   /// Returns true if the chat has had no new messages in the last [inactiveDays].
@@ -888,15 +916,8 @@ class ChatController extends GetxController {
         // Unread only
         filteredChatsList =
             filteredChatsList.where((chat) => hasUnreadMessages(chat)).toList();
-      } else if (selectedTabIndex.value == 2) {
-        // Inactive tab
-        filteredChatsList =
-            filteredChatsList.where((chat) => _isInactive(chat)).toList();
-      } else {
-        // All tab (index 0): exclude inactive chats so the list stays clean
-        filteredChatsList =
-            filteredChatsList.where((chat) => !_isInactive(chat)).toList();
       }
+      // All tab (index 0): show every chat including inactive
     }
 
     // 2. Filter by search query

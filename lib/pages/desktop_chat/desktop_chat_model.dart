@@ -7,6 +7,9 @@ import 'package:flutter/material.dart';
 /// Sidebar display mode: flat chat list vs folder-grouped view.
 enum SidebarMode { chat, folders }
 
+/// Set to true to show the Folders sidebar toggle in the chat header.
+const bool kShowFoldersSidebar = false;
+
 class DesktopChatModel extends FlutterFlowModel {
   ///  State fields for stateful widgets in this page.
 
