@@ -1140,8 +1140,15 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
       top = bubbleTopLeft.dy - _actionBarGapAboveText - menuHeight;
     }
 
-    // Right-align the menu with the right edge of this message bubble.
-    final left = bubbleTopLeft.dx + bubbleSize.width - menuWidth;
+    // Align menu with bubble edge; for received messages that are narrower than
+    // the menu, left-justify so the toolbar doesn't extend into the sidebar.
+    final isSentByMe = widget.message?.senderRef == currentUserReference;
+    final double left;
+    if (!isSentByMe && menuWidth > bubbleSize.width) {
+      left = bubbleTopLeft.dx;
+    } else {
+      left = bubbleTopLeft.dx + bubbleSize.width - menuWidth;
+    }
     return Offset(left, top);
   }
 
