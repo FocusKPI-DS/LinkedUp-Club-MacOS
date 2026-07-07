@@ -2,6 +2,7 @@ import 'package:translator/translator.dart';
 import '/utils/debug_log.dart';
 import 'wechat_voice_bubble.dart';
 import 'dart:convert';
+import 'dart:async';
 import '/pages/chat/forwarded_history_viewer/forwarded_history_viewer_widget.dart';
 import '/auth/firebase_auth/auth_util.dart';
 import '/backend/backend.dart';
@@ -107,6 +108,12 @@ class ChatThreadWidget extends StatefulWidget {
 class _ChatThreadWidgetState extends State<ChatThreadWidget> {
   static const double _groupedMessageSpacing = 2.0;
   static const double _separateMessageSpacing = 14.0;
+  static const int _menuItemsPerRow = 5;
+  static const double _menuItemSize = 52.0;
+  static const double _menuHorizontalPadding = 8.0;
+  static const double _menuVerticalPadding = 8.0;
+  static const Duration _hoverMenuOpenDelay = Duration(milliseconds: 200);
+  static const Duration _hoverMenuCloseDelay = Duration(milliseconds: 250);
 
   EdgeInsets get _messageRowPadding => EdgeInsets.fromLTRB(
         8.0,
@@ -117,14 +124,23 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
 
   late ChatThreadModel _model;
   final GlobalKey _menuIconKey = GlobalKey();
+  final GlobalKey _messageTextAnchorKey = GlobalKey();
+  final GlobalKey _bubbleKey = GlobalKey();
+  final GlobalKey _actionBarMeasureKey = GlobalKey();
+  OverlayEntry? _actionBarOverlayEntry;
+  Offset? _actionBarOverlayPosition;
+  bool _pointerOverActionBar = false;
   String? _selectedReaction;
   final Set<String> _locallyRemovedReactions = <String>{};
-  bool _isHoveredForMenu = false;
   bool _isMenuOpen = false;
+  bool _showHoverActionBar = false;
+  Timer? _hoverOpenTimer;
+  Timer? _hoverCloseTimer;
 
   // Static overlay entry to ensure only one grid menu is open across all message widgets
   static OverlayEntry? _activeGridOverlay;
   static _ChatThreadWidgetState? _activeMenuOwner;
+  static _ChatThreadWidgetState? _activeInlineMenuOwner;
   bool _isSummarySectionExpanded = false;
   // Cache for file info results to prevent unnecessary rebuilds
   Map<String, dynamic>? _cachedFileInfo;
@@ -225,6 +241,17 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
 
   @override
   void dispose() {
+    _hoverOpenTimer?.cancel();
+    _hoverCloseTimer?.cancel();
+    if (_activeInlineMenuOwner == this) {
+      _activeInlineMenuOwner = null;
+    }
+    if (_activeMenuOwner == this) {
+      _activeGridOverlay?.remove();
+      _activeGridOverlay = null;
+      _activeMenuOwner = null;
+    }
+    _removeActionBarOverlay();
     _chatThreadComponentState?.translateNotifier
         .removeListener(_onTranslateTriggered);
     _model.maybeDispose();
@@ -1075,13 +1102,158 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
     }
   }
 
-  // Unified grid-style message action menu — matches iOS design on all platforms
+  static const double _actionBarGapAboveText = 10.0;
+  static const double _fallbackActionBarHeight = 58.0;
+
+  Widget _messageTextAnchor({required Widget child}) {
+    return KeyedSubtree(
+      key: _messageTextAnchorKey,
+      child: child,
+    );
+  }
+
+  Offset? _computeActionBarOverlayPosition() {
+    final bubbleBox =
+        _bubbleKey.currentContext?.findRenderObject() as RenderBox?;
+    final anchorBox =
+        _messageTextAnchorKey.currentContext?.findRenderObject() as RenderBox?;
+
+    var menuWidth = 230.0;
+    var menuHeight = _fallbackActionBarHeight;
+    final menuBox =
+        _actionBarMeasureKey.currentContext?.findRenderObject() as RenderBox?;
+    if (menuBox != null && menuBox.hasSize) {
+      menuWidth = menuBox.size.width;
+      menuHeight = menuBox.size.height;
+    }
+
+    if (bubbleBox == null || !bubbleBox.hasSize) return null;
+
+    final bubbleTopLeft = bubbleBox.localToGlobal(Offset.zero);
+    final bubbleSize = bubbleBox.size;
+
+    double top;
+    if (anchorBox != null && anchorBox.hasSize) {
+      final anchorTop = anchorBox.localToGlobal(Offset.zero).dy;
+      top = anchorTop - _actionBarGapAboveText - menuHeight;
+    } else {
+      top = bubbleTopLeft.dy - _actionBarGapAboveText - menuHeight;
+    }
+
+    // Right-align the menu with the right edge of this message bubble.
+    final left = bubbleTopLeft.dx + bubbleSize.width - menuWidth;
+    return Offset(left, top);
+  }
+
+  void _recomputeActionBarOverlayPosition() {
+    if (!_showHoverActionBar || !mounted) return;
+    final position = _computeActionBarOverlayPosition();
+    if (position == null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted && _showHoverActionBar) {
+          _recomputeActionBarOverlayPosition();
+        }
+      });
+      return;
+    }
+    if (_actionBarOverlayPosition != position) {
+      _actionBarOverlayPosition = position;
+      _actionBarOverlayEntry?.markNeedsBuild();
+    }
+  }
+
+  void _removeActionBarOverlay() {
+    _actionBarOverlayEntry?.remove();
+    _actionBarOverlayEntry = null;
+    _actionBarOverlayPosition = null;
+    _pointerOverActionBar = false;
+  }
+
+  void _insertActionBarOverlay() {
+    _removeActionBarOverlay();
+    if (!mounted) return;
+
+    final overlay = Overlay.of(context, rootOverlay: true);
+    late OverlayEntry entry;
+    entry = OverlayEntry(
+      builder: (overlayContext) {
+        final menu = _buildSlackStyleActionBar();
+        final position =
+            _actionBarOverlayPosition ?? _computeActionBarOverlayPosition();
+
+        if (position == null) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (mounted && _showHoverActionBar) {
+              _recomputeActionBarOverlayPosition();
+            }
+          });
+          return Offstage(child: menu);
+        }
+
+        // Return Positioned directly — Overlay is already a Stack; wrapping in
+        // another Stack with only Positioned children collapses to zero size.
+        return Positioned(
+          left: position.dx,
+          top: position.dy,
+          child: MouseRegion(
+            onEnter: (_) {
+              _pointerOverActionBar = true;
+              _hoverCloseTimer?.cancel();
+            },
+            onExit: (_) {
+              _pointerOverActionBar = false;
+              _scheduleHoverMenuClose();
+            },
+            child: menu,
+          ),
+        );
+      },
+    );
+
+    _actionBarOverlayEntry = entry;
+    overlay.insert(entry);
+  }
+
+  Widget _buildSlackStyleActionBar() {
+    final isPinned = widget.message?.isPinned == true;
+
+    return KeyedSubtree(
+      key: _actionBarMeasureKey,
+      child: _MessageMenuActionBar(
+      menuIconKey: _menuIconKey,
+      isPinned: isPinned,
+      onReact: () {
+        _closeHoverActionBar();
+        _handleMenuAction(_MsgAction.react);
+      },
+      onReply: () {
+        _closeHoverActionBar();
+        _handleMenuAction(_MsgAction.reply);
+      },
+      onForward: () {
+        _closeHoverActionBar();
+        _handleMenuAction(_MsgAction.forward);
+      },
+      onPin: () {
+        _closeHoverActionBar();
+        _handleMenuAction(isPinned ? _MsgAction.unpin : _MsgAction.pin);
+      },
+      onMore: () {
+        _hoverCloseTimer?.cancel();
+        _showGridMenu();
+      },
+      ),
+    );
+  }
+
   Widget _messageMenuButton() {
     final isIOS = !kIsWeb && Platform.isIOS;
     return GestureDetector(
       onTap: () => _showGridMenu(),
-      child: MouseRegion(
-        cursor: SystemMouseCursors.click,
+      child: InkWell(
+        onTap: () => _showGridMenu(),
+        mouseCursor: MaterialStateMouseCursor.clickable,
+        borderRadius: BorderRadius.circular(8),
         child: KeyedSubtree(
           key: _menuIconKey,
           child: Container(
@@ -1119,7 +1291,204 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
     );
   }
 
+  List<Map<String, dynamic>> _menuItemDefinitions() {
+    final isOwnMessage = widget.message?.senderRef == currentUserReference;
+    final hasMedia = (widget.message?.image != null &&
+            widget.message!.image.isNotEmpty) ||
+        (widget.message?.images != null &&
+            widget.message!.images.isNotEmpty) ||
+        (widget.message?.video != null && widget.message!.video!.isNotEmpty);
+
+    return [
+      {
+        'label': 'Copy',
+        'icon': CupertinoIcons.doc_on_doc,
+        'action': _MsgAction.copy
+      },
+      {
+        'label': 'Select',
+        'icon': CupertinoIcons.checkmark_circle,
+        'action': _MsgAction.select
+      },
+      {
+        'label': 'React',
+        'icon': CupertinoIcons.smiley,
+        'action': _MsgAction.react
+      },
+      {
+        'label': 'Reply',
+        'icon': CupertinoIcons.arrow_turn_up_left,
+        'action': _MsgAction.reply
+      },
+      {
+        'label': 'Translate',
+        'icon': CupertinoIcons.book,
+        'action': _MsgAction.translate
+      },
+      {
+        'label': 'Forward',
+        'icon': CupertinoIcons.arrow_turn_up_right,
+        'action': _MsgAction.forward
+      },
+      if (isOwnMessage)
+        {
+          'label': 'Edit',
+          'icon': CupertinoIcons.pencil,
+          'action': _MsgAction.edit
+        },
+      if (isOwnMessage)
+        {
+          'label': 'Unsend',
+          'icon': CupertinoIcons.arrow_counterclockwise,
+          'action': _MsgAction.unsend
+        },
+      if (hasMedia)
+        {
+          'label': 'Save',
+          'icon': CupertinoIcons.arrow_down_circle,
+          'action': _MsgAction.save
+        },
+      {
+        'label': widget.message?.isPinned == true ? 'Unpin' : 'Pin',
+        'icon': CupertinoIcons.pin,
+        'action': widget.message?.isPinned == true
+            ? _MsgAction.unpin
+            : _MsgAction.pin
+      },
+      {
+        'label': 'Report',
+        'icon': CupertinoIcons.exclamationmark_triangle,
+        'action': _MsgAction.report
+      },
+    ];
+  }
+
+  Size _gridMenuDimensions() {
+    final menuItems = _menuItemDefinitions();
+    final actualItemsInWidestRow = menuItems.length < _menuItemsPerRow
+        ? menuItems.length
+        : _menuItemsPerRow;
+    final menuWidth = (_menuItemSize * actualItemsInWidestRow) +
+        (_menuHorizontalPadding * 2) +
+        2.0;
+    final rowCount = (menuItems.length / _menuItemsPerRow).ceil();
+    final menuHeight = (_menuItemSize * rowCount) +
+        (_menuVerticalPadding * 2) +
+        (rowCount > 1 ? (rowCount - 1) * 4 : 0);
+    return Size(menuWidth, menuHeight);
+  }
+
+  Widget _buildGridMenuPanel({required ValueChanged<_MsgAction> onAction}) {
+    final menuItems = _menuItemDefinitions();
+    final menuSize = _gridMenuDimensions();
+
+    return Material(
+      color: Colors.transparent,
+      elevation: 6,
+      borderRadius: BorderRadius.circular(12),
+      child: Container(
+        width: menuSize.width,
+        padding: const EdgeInsets.symmetric(
+          horizontal: _menuHorizontalPadding,
+          vertical: _menuVerticalPadding,
+        ),
+        decoration: BoxDecoration(
+          color: Colors.white.withOpacity(0.97),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: Colors.black.withOpacity(0.06),
+            width: 0.5,
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.12),
+              blurRadius: 20,
+              offset: const Offset(0, 6),
+            ),
+          ],
+        ),
+        child: Wrap(
+          spacing: 0,
+          runSpacing: 4,
+          alignment: WrapAlignment.start,
+          children: menuItems.map((item) {
+            final String label = item['label'] as String;
+            final IconData icon = item['icon'] as IconData;
+            final _MsgAction action = item['action'] as _MsgAction;
+            final isDestructive =
+                action == _MsgAction.report || action == _MsgAction.unsend;
+
+            return _MessageMenuGridItem(
+              label: label,
+              icon: icon,
+              isDestructive: isDestructive,
+              itemSize: _menuItemSize,
+              onTap: () => onAction(action),
+            );
+          }).toList(),
+        ),
+      ),
+    );
+  }
+
+  void _closeHoverActionBar({bool updateState = true}) {
+    _hoverOpenTimer?.cancel();
+    if (!_isMenuOpen) {
+      _hoverCloseTimer?.cancel();
+    }
+    if (_activeInlineMenuOwner == this) {
+      _activeInlineMenuOwner = null;
+    }
+    if (_activeMenuOwner == this && _activeGridOverlay != null) {
+      _activeGridOverlay!.remove();
+      _activeGridOverlay = null;
+      _activeMenuOwner = null;
+      _isMenuOpen = false;
+    }
+    _removeActionBarOverlay();
+    if (!_showHoverActionBar) {
+      if (updateState && mounted) setState(() {});
+      return;
+    }
+    _showHoverActionBar = false;
+    if (updateState && mounted) {
+      setState(() {});
+    }
+  }
+
+  void _scheduleHoverMenuOpen() {
+    if (widget.isSelectionMode) return;
+    _hoverCloseTimer?.cancel();
+    if (_showHoverActionBar && _activeInlineMenuOwner == this) return;
+
+    _hoverOpenTimer?.cancel();
+    _hoverOpenTimer = Timer(_hoverMenuOpenDelay, () {
+      if (!mounted || widget.isSelectionMode) return;
+      if (_activeInlineMenuOwner != null &&
+          _activeInlineMenuOwner != this) {
+        _activeInlineMenuOwner!._closeHoverActionBar();
+      }
+      _activeInlineMenuOwner = this;
+      _pointerOverActionBar = false;
+      setState(() => _showHoverActionBar = true);
+      _insertActionBarOverlay();
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _recomputeActionBarOverlayPosition();
+      });
+    });
+  }
+
+  void _scheduleHoverMenuClose() {
+    if (_isMenuOpen || _pointerOverActionBar) return;
+    _hoverCloseTimer?.cancel();
+    _hoverCloseTimer = Timer(_hoverMenuCloseDelay, () {
+      if (!mounted || _isMenuOpen) return;
+      _closeHoverActionBar();
+    });
+  }
+
   void _showGridMenuAtPosition(Offset globalPosition) {
+    _closeHoverActionBar();
     _showGridMenu(position: globalPosition);
   }
 
@@ -1132,63 +1501,46 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
       _activeGridOverlay = null;
       _activeMenuOwner = null;
     }
+    if (_activeInlineMenuOwner != null && _activeInlineMenuOwner != this) {
+      _activeInlineMenuOwner!._closeHoverActionBar();
+    }
+    _hoverOpenTimer?.cancel();
+    if (!_showHoverActionBar) {
+      _hoverCloseTimer?.cancel();
+    }
 
     if (!kIsWeb && Platform.isIOS) {
       HapticFeedback.mediumImpact();
     }
     setState(() => _isMenuOpen = true);
 
-    final isOwnMessage = widget.message?.senderRef == currentUserReference;
-    final hasMedia = (widget.message?.image != null && widget.message!.image.isNotEmpty) ||
-        (widget.message?.images != null && widget.message!.images.isNotEmpty) ||
-        (widget.message?.video != null && widget.message!.video!.isNotEmpty);
-
-    final menuItems = <Map<String, dynamic>>[
-      {'label': 'Copy', 'icon': CupertinoIcons.doc_on_doc, 'action': _MsgAction.copy},
-      {'label': 'Select', 'icon': CupertinoIcons.checkmark_circle, 'action': _MsgAction.select},
-      {'label': 'React', 'icon': CupertinoIcons.smiley, 'action': _MsgAction.react},
-      {'label': 'Reply', 'icon': CupertinoIcons.arrow_turn_up_left, 'action': _MsgAction.reply},
-      {'label': 'Translate', 'icon': CupertinoIcons.book, 'action': _MsgAction.translate},
-      {'label': 'Forward', 'icon': CupertinoIcons.arrow_turn_up_right, 'action': _MsgAction.forward},
-      if (isOwnMessage) {'label': 'Edit', 'icon': CupertinoIcons.pencil, 'action': _MsgAction.edit},
-      if (isOwnMessage) {'label': 'Unsend', 'icon': CupertinoIcons.arrow_counterclockwise, 'action': _MsgAction.unsend},
-      if (hasMedia) {'label': 'Save', 'icon': CupertinoIcons.arrow_down_circle, 'action': _MsgAction.save},
-      {'label': widget.message?.isPinned == true ? 'Unpin' : 'Pin', 'icon': CupertinoIcons.pin, 'action': widget.message?.isPinned == true ? _MsgAction.unpin : _MsgAction.pin},
-      {'label': 'Report', 'icon': CupertinoIcons.exclamationmark_triangle, 'action': _MsgAction.report},
-    ];
-
-    // Grid layout constants
-    const int itemsPerRow = 5;
-    const double itemSize = 52.0;
-    const double horizontalPadding = 8.0;
-    const double verticalPadding = 8.0;
-    final int actualItemsInWidestRow = menuItems.length < itemsPerRow ? menuItems.length : itemsPerRow;
-    final double menuWidth = (itemSize * actualItemsInWidestRow) + (horizontalPadding * 2) + 2.0;
+    final menuSize = _gridMenuDimensions();
 
     // Get position — use provided position (right-click) or fall back to menu icon
     final screenSize = MediaQuery.of(context).size;
-    final int rowCount = (menuItems.length / itemsPerRow).ceil();
-    final double menuHeight = (itemSize * rowCount) + (verticalPadding * 2) + (rowCount > 1 ? (rowCount - 1) * 4 : 0);
 
     double left;
     double top;
     if (position != null) {
       // Right-click: center menu horizontally on click, above click point
-      left = position.dx - menuWidth / 2;
-      top = position.dy - menuHeight - 8;
+      left = position.dx - menuSize.width / 2;
+      top = position.dy - menuSize.height - 8;
     } else {
       // Icon button: position relative to icon
-      final RenderBox? iconBox = _menuIconKey.currentContext?.findRenderObject() as RenderBox?;
+      final RenderBox? iconBox =
+          _menuIconKey.currentContext?.findRenderObject() as RenderBox?;
       if (iconBox == null) {
         setState(() => _isMenuOpen = false);
         return;
       }
       final iconPosition = iconBox.localToGlobal(Offset.zero);
-      left = iconPosition.dx - menuWidth + iconBox.size.width;
-      top = iconPosition.dy - menuHeight - 8;
+      left = iconPosition.dx - menuSize.width + iconBox.size.width;
+      top = iconPosition.dy - menuSize.height - 8;
     }
     if (left < 10) left = 10;
-    if (left + menuWidth > screenSize.width - 10) left = screenSize.width - menuWidth - 10;
+    if (left + menuSize.width > screenSize.width - 10) {
+      left = screenSize.width - menuSize.width - 10;
+    }
     if (top < 10) top = (position?.dy ?? 100) + 8;
 
     final overlay = Overlay.of(context);
@@ -1204,7 +1556,15 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
                 entry.remove();
                 _activeGridOverlay = null;
                 _activeMenuOwner = null;
-                if (mounted) setState(() => _isMenuOpen = false);
+                if (mounted) {
+                  setState(() {
+                    _isMenuOpen = false;
+                    _showHoverActionBar = false;
+                  });
+                }
+                if (_activeInlineMenuOwner == this) {
+                  _activeInlineMenuOwner = null;
+                }
               },
             ),
           ),
@@ -1212,83 +1572,24 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
           Positioned(
             left: left,
             top: top,
-            child: Material(
-              color: Colors.transparent,
-              elevation: 6,
-              borderRadius: BorderRadius.circular(12),
-              child: Container(
-                width: menuWidth,
-                padding: EdgeInsets.symmetric(horizontal: horizontalPadding, vertical: verticalPadding),
-                decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.97),
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(
-                    color: Colors.black.withOpacity(0.06),
-                    width: 0.5,
-                  ),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withOpacity(0.12),
-                      blurRadius: 20,
-                      offset: Offset(0, 6),
-                    ),
-                  ],
-                ),
-                child: Wrap(
-                  spacing: 0,
-                  runSpacing: 4,
-                  alignment: WrapAlignment.start,
-                  children: menuItems.map((item) {
-                    final String label = item['label'] as String;
-                    final IconData icon = item['icon'] as IconData;
-                    final _MsgAction action = item['action'] as _MsgAction;
-                    final isDestructive = action == _MsgAction.report || action == _MsgAction.unsend;
-
-                    return GestureDetector(
-                      behavior: HitTestBehavior.opaque,
-                      onTap: () {
-                        entry.remove();
-                        _activeGridOverlay = null;
-                        _activeMenuOwner = null;
-                        if (mounted) setState(() => _isMenuOpen = false);
-                        WidgetsBinding.instance.addPostFrameCallback((_) {
-                          if (mounted) _handleMenuAction(action);
-                        });
-                      },
-                      child: SizedBox(
-                        width: itemSize,
-                        height: itemSize,
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(
-                              icon,
-                              size: 18,
-                              color: isDestructive ? const Color(0xFFFF3B30) : const Color(0xFF1C1C1E),
-                            ),
-                            const SizedBox(height: 3),
-                            Text(
-                              label,
-                              textAlign: TextAlign.center,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(
-                                fontFamily: chatMessageFontFamily,
-                                fontSize: 9.5,
-                                color: isDestructive
-                                    ? const Color(0xFFFF3B30)
-                                    : const Color(0xFF1C1C1E).withOpacity(0.8),
-                                fontWeight: FontWeight.w400,
-                                letterSpacing: -0.2,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    );
-                  }).toList(),
-                ),
-              ),
+            child: _buildGridMenuPanel(
+              onAction: (action) {
+                entry.remove();
+                _activeGridOverlay = null;
+                _activeMenuOwner = null;
+                if (_activeInlineMenuOwner == this) {
+                  _activeInlineMenuOwner = null;
+                }
+                if (mounted) {
+                  setState(() {
+                    _isMenuOpen = false;
+                    _showHoverActionBar = false;
+                  });
+                }
+                WidgetsBinding.instance.addPostFrameCallback((_) {
+                  if (mounted) _handleMenuAction(action);
+                });
+              },
             ),
           ),
         ],
@@ -1561,31 +1862,37 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
         ],
       );
     } else {
-      // macOS: Use hover detection with dropdown + right-click to open grid menu
+      // Desktop: Slack-style compact action bar on hover; right-click opens full grid
       return GestureDetector(
         onSecondaryTapDown: (details) {
-          // Right-click triggers the grid menu positioned near the click
+          _closeHoverActionBar();
           _showGridMenuAtPosition(details.globalPosition);
         },
         child: MouseRegion(
-          onEnter: (_) => setState(() => _isHoveredForMenu = true),
-          onExit: (_) => setState(() => _isHoveredForMenu = false),
+          onEnter: (_) {
+            if (widget.isSelectionMode) return;
+            _scheduleHoverMenuOpen();
+          },
+          onExit: (_) {
+            _hoverOpenTimer?.cancel();
+            _scheduleHoverMenuClose();
+          },
           child: Column(
             crossAxisAlignment:
                 isSentByMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
             mainAxisSize: MainAxisSize.min,
             children: [
-              Stack(
-                clipBehavior: Clip.none,
-                children: [
-                  bubble,
-                  if (_isHoveredForMenu || _isMenuOpen)
-                    Positioned(
-                      top: 4,
-                      right: 4,
-                      child: _messageMenuButton(),
-                    ),
-                ],
+              SizedBox(
+                width: double.infinity,
+                child: Align(
+                  alignment: isSentByMe
+                      ? Alignment.centerRight
+                      : Alignment.centerLeft,
+                  child: KeyedSubtree(
+                    key: _bubbleKey,
+                    child: bubble,
+                  ),
+                ),
               ),
               if (reactionsBadge != null)
                 Padding(
@@ -2978,13 +3285,16 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
                                                                       8.0,
                                                                   vertical:
                                                                       4.0),
-                                                          child: Text(
-                                                            content,
-                                                            style:
-                                                                const TextStyle(
-                                                              fontSize:
-                                                                  48.0, // Larger size for emojis
-                                                              height: 1.2,
+                                                          child:
+                                                              _messageTextAnchor(
+                                                            child: Text(
+                                                              content,
+                                                              style:
+                                                                  const TextStyle(
+                                                                fontSize:
+                                                                    48.0, // Larger size for emojis
+                                                                height: 1.2,
+                                                              ),
                                                             ),
                                                           ),
                                                         ),
@@ -3160,7 +3470,8 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
                                                               if (widget.message?.forwardedHistory != null && widget.message!.forwardedHistory!.isNotEmpty)
                                                                 _buildChatHistoryPreview(widget.message!.forwardedHistory!)
                                                               else if (widget.message?.content != null && widget.message?.content != '')
-                                                                Container(
+                                                                _messageTextAnchor(
+                                                                  child: Container(
                                                                     constraints:
                                                                         BoxConstraints(
                                                                       maxWidth: hasMedia
@@ -3363,6 +3674,7 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
                                                                           ),
                                                                       ],
                                                                     )),
+                                                                ),
                                                               // Via Qurio AI badge
                                                               if (widget.message?.sentVia == 'qurio_ai')
                                                                 Padding(
@@ -4063,13 +4375,16 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
                                                                       8.0,
                                                                   vertical:
                                                                       4.0),
-                                                          child: Text(
-                                                            content,
-                                                            style:
-                                                                const TextStyle(
-                                                              fontSize:
-                                                                  48.0, // Larger size for emojis
-                                                              height: 1.2,
+                                                          child:
+                                                              _messageTextAnchor(
+                                                            child: Text(
+                                                              content,
+                                                              style:
+                                                                  const TextStyle(
+                                                                fontSize:
+                                                                    48.0, // Larger size for emojis
+                                                                height: 1.2,
+                                                              ),
                                                             ),
                                                           ),
                                                         ),
@@ -4245,7 +4560,8 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
                                                               if (widget.message?.forwardedHistory != null && widget.message!.forwardedHistory!.isNotEmpty)
                                                                 _buildChatHistoryPreview(widget.message!.forwardedHistory!)
                                                               else if (widget.message?.content != null && widget.message?.content != '')
-                                                                Container(
+                                                                _messageTextAnchor(
+                                                                  child: Container(
                                                                     constraints:
                                                                         BoxConstraints(
                                                                       maxWidth: hasMedia
@@ -4448,6 +4764,7 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
                                                                           ),
                                                                       ],
                                                                     )),
+                                                                ),
                                                               // Via Qurio AI badge for received messages
                                                               if (widget.message?.sentVia == 'qurio_ai')
                                                                 Padding(
@@ -5681,6 +5998,402 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
     } else {
       return 'file_$timestamp';
     }
+  }
+}
+
+class _MessageMenuTooltipWithArrow extends StatelessWidget {
+  const _MessageMenuTooltipWithArrow({required this.text});
+
+  final String text;
+
+  static const Color _background = Color(0xFF111827);
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+          decoration: BoxDecoration(
+            color: _background,
+            borderRadius: BorderRadius.circular(6),
+          ),
+          child: Text(
+            text,
+            style: const TextStyle(
+              fontFamily: 'Inter',
+              color: Colors.white,
+              fontSize: 12,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+        ),
+        CustomPaint(
+          size: const Size(12, 6),
+          painter: _DownArrowTooltipPainter(color: _background),
+        ),
+      ],
+    );
+  }
+}
+
+class _DownArrowTooltipPainter extends CustomPainter {
+  const _DownArrowTooltipPainter({required this.color});
+
+  final Color color;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final path = Path()
+      ..moveTo(size.width * 0.5, size.height)
+      ..lineTo(0, 0)
+      ..lineTo(size.width, 0)
+      ..close();
+    canvas.drawPath(path, Paint()..color = color);
+  }
+
+  @override
+  bool shouldRepaint(covariant _DownArrowTooltipPainter oldDelegate) {
+    return oldDelegate.color != color;
+  }
+}
+
+class _MessageMenuActionBar extends StatefulWidget {
+  const _MessageMenuActionBar({
+    required this.menuIconKey,
+    required this.isPinned,
+    required this.onReact,
+    required this.onReply,
+    required this.onForward,
+    required this.onPin,
+    required this.onMore,
+  });
+
+  final GlobalKey menuIconKey;
+  final bool isPinned;
+  final VoidCallback onReact;
+  final VoidCallback onReply;
+  final VoidCallback onForward;
+  final VoidCallback onPin;
+  final VoidCallback onMore;
+
+  @override
+  State<_MessageMenuActionBar> createState() => _MessageMenuActionBarState();
+}
+
+class _MessageMenuActionBarState extends State<_MessageMenuActionBar> {
+  static const double _menuBarHeight = 44.0;
+
+  final GlobalKey _barKey = GlobalKey();
+  final List<GlobalKey> _itemKeys =
+      List<GlobalKey>.generate(4, (_) => GlobalKey());
+  int? _hoveredIndex;
+  String? _hoveredTooltip;
+
+  GlobalKey _keyForIndex(int index) {
+    if (index == 4) return widget.menuIconKey;
+    return _itemKeys[index];
+  }
+
+  double? _arrowCenterX() {
+    if (_hoveredIndex == null) return null;
+    final itemBox =
+        _keyForIndex(_hoveredIndex!).currentContext?.findRenderObject()
+            as RenderBox?;
+    final barBox =
+        _barKey.currentContext?.findRenderObject() as RenderBox?;
+    if (itemBox == null || barBox == null) return null;
+
+    final itemCenterGlobal = itemBox.localToGlobal(
+      Offset(itemBox.size.width / 2, itemBox.size.height / 2),
+    );
+    final barOriginGlobal = barBox.localToGlobal(Offset.zero);
+    return itemCenterGlobal.dx - barOriginGlobal.dx;
+  }
+
+  void _onItemHover(int index, String tooltip, bool hovered) {
+    if (hovered) {
+      setState(() {
+        _hoveredIndex = index;
+        _hoveredTooltip = tooltip;
+      });
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted && _hoveredIndex == index) setState(() {});
+      });
+    } else if (_hoveredIndex == index) {
+      setState(() {
+        _hoveredIndex = null;
+        _hoveredTooltip = null;
+      });
+    }
+  }
+
+  Widget _toolbarDivider() {
+    return Container(
+      width: 1,
+      height: 28,
+      margin: const EdgeInsets.symmetric(vertical: 4),
+      color: const Color(0xFFE5E7EB),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final arrowX = _arrowCenterX();
+
+    return Padding(
+      padding: const EdgeInsets.all(6),
+      child: Material(
+        color: Colors.transparent,
+        elevation: 4,
+        shadowColor: Colors.black26,
+        borderRadius: BorderRadius.circular(10),
+        child: Stack(
+          clipBehavior: Clip.none,
+          key: _barKey,
+          children: [
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: const Color(0xFFE5E7EB)),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.08),
+                    blurRadius: 8,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  _MessageMenuToolbarButton(
+                    key: _itemKeys[0],
+                    icon: CupertinoIcons.smiley,
+                    tooltip: 'React',
+                    onTap: widget.onReact,
+                    onHoverChanged: (h) => _onItemHover(0, 'React', h),
+                  ),
+                  _MessageMenuToolbarButton(
+                    key: _itemKeys[1],
+                    icon: CupertinoIcons.arrow_turn_up_left,
+                    tooltip: 'Reply',
+                    onTap: widget.onReply,
+                    onHoverChanged: (h) => _onItemHover(1, 'Reply', h),
+                  ),
+                  _MessageMenuToolbarButton(
+                    key: _itemKeys[2],
+                    icon: CupertinoIcons.arrow_turn_up_right,
+                    tooltip: 'Forward',
+                    onTap: widget.onForward,
+                    onHoverChanged: (h) => _onItemHover(2, 'Forward', h),
+                  ),
+                  _MessageMenuToolbarButton(
+                    key: _itemKeys[3],
+                    icon: CupertinoIcons.pin,
+                    tooltip: widget.isPinned ? 'Unpin' : 'Pin',
+                    onTap: widget.onPin,
+                    onHoverChanged: (h) =>
+                        _onItemHover(3, widget.isPinned ? 'Unpin' : 'Pin', h),
+                  ),
+                  _toolbarDivider(),
+                  _MessageMenuToolbarButton(
+                    key: widget.menuIconKey,
+                    icon: Icons.more_horiz_rounded,
+                    tooltip: 'More actions',
+                    iconSize: 14,
+                    iconColor: const Color(0xFF6B7280),
+                    onTap: widget.onMore,
+                    onHoverChanged: (h) =>
+                        _onItemHover(4, 'More actions', h),
+                  ),
+                ],
+              ),
+            ),
+            if (_hoveredTooltip != null && arrowX != null)
+              Positioned(
+                left: arrowX,
+                bottom: _menuBarHeight + 8,
+                child: FractionalTranslation(
+                  translation: const Offset(-0.5, 0),
+                  child: _MessageMenuTooltipWithArrow(text: _hoveredTooltip!),
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _MessageMenuToolbarButton extends StatefulWidget {
+  const _MessageMenuToolbarButton({
+    super.key,
+    required this.icon,
+    required this.tooltip,
+    required this.onTap,
+    this.iconSize = 18,
+    this.iconColor = const Color(0xFF1C1C1E),
+    this.onHoverChanged,
+  });
+
+  final IconData icon;
+  final String tooltip;
+  final VoidCallback onTap;
+  final double iconSize;
+  final Color iconColor;
+  final ValueChanged<bool>? onHoverChanged;
+
+  @override
+  State<_MessageMenuToolbarButton> createState() =>
+      _MessageMenuToolbarButtonState();
+}
+
+class _MessageMenuToolbarButtonState extends State<_MessageMenuToolbarButton> {
+  bool _hovered = false;
+
+  static const Color _hoverBackground = Color(0xFFF3F4F6);
+
+  @override
+  Widget build(BuildContext context) {
+    return MouseRegion(
+      onEnter: (_) {
+        setState(() => _hovered = true);
+        widget.onHoverChanged?.call(true);
+      },
+      onExit: (_) {
+        setState(() => _hovered = false);
+        widget.onHoverChanged?.call(false);
+      },
+      cursor: SystemMouseCursors.click,
+      child: GestureDetector(
+        onTap: widget.onTap,
+        behavior: HitTestBehavior.opaque,
+        child: Container(
+          constraints: const BoxConstraints(minWidth: 40, minHeight: 40),
+          decoration: BoxDecoration(
+            color: _hovered ? _hoverBackground : Colors.transparent,
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+            child: Center(
+              child: AnimatedScale(
+                scale: _hovered ? 1.14 : 1.0,
+                duration: const Duration(milliseconds: 140),
+                curve: Curves.easeOutBack,
+                child: Icon(
+                  widget.icon,
+                  size: widget.iconSize,
+                  color: widget.iconColor,
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _MessageMenuGridItem extends StatefulWidget {
+  const _MessageMenuGridItem({
+    required this.label,
+    required this.icon,
+    required this.isDestructive,
+    required this.itemSize,
+    required this.onTap,
+  });
+
+  final String label;
+  final IconData icon;
+  final bool isDestructive;
+  final double itemSize;
+  final VoidCallback onTap;
+
+  @override
+  State<_MessageMenuGridItem> createState() => _MessageMenuGridItemState();
+}
+
+class _MessageMenuGridItemState extends State<_MessageMenuGridItem> {
+  bool _hovered = false;
+
+  static const Color _hoverBackground = Color(0xFFF3F4F6);
+
+  Color get _iconColor => widget.isDestructive
+      ? const Color(0xFFFF3B30)
+      : const Color(0xFF1C1C1E);
+
+  @override
+  Widget build(BuildContext context) {
+    return MouseRegion(
+      onEnter: (_) => setState(() => _hovered = true),
+      onExit: (_) => setState(() => _hovered = false),
+      cursor: SystemMouseCursors.click,
+      child: Tooltip(
+        message: widget.label,
+        preferBelow: false,
+        verticalOffset: 10,
+        waitDuration: const Duration(milliseconds: 250),
+        decoration: BoxDecoration(
+          color: const Color(0xFF111827),
+          borderRadius: BorderRadius.circular(6),
+        ),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        textStyle: const TextStyle(
+          fontFamily: 'Inter',
+          color: Colors.white,
+          fontSize: 12,
+          fontWeight: FontWeight.w500,
+        ),
+        child: GestureDetector(
+          onTap: widget.onTap,
+          behavior: HitTestBehavior.opaque,
+          child: Container(
+            width: widget.itemSize,
+            height: widget.itemSize,
+            decoration: BoxDecoration(
+              color: _hovered ? _hoverBackground : Colors.transparent,
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                AnimatedScale(
+                  scale: _hovered ? 1.14 : 1.0,
+                  duration: const Duration(milliseconds: 140),
+                  curve: Curves.easeOutBack,
+                  child: Icon(
+                    widget.icon,
+                    size: 18,
+                    color: _iconColor,
+                  ),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  widget.label,
+                  textAlign: TextAlign.center,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontFamily: chatMessageFontFamily,
+                    fontSize: 9.5,
+                    color: widget.isDestructive
+                        ? const Color(0xFFFF3B30)
+                        : const Color(0xFF1C1C1E).withOpacity(0.8),
+                    fontWeight: FontWeight.w400,
+                    letterSpacing: -0.2,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
   }
 }
 
