@@ -11,7 +11,7 @@ import '/flutter_flow/flutter_flow_widgets.dart';
 import '/pages/chat/chat_component/add_user/add_user_widget.dart';
 import '/pages/chat/chat_component/reminder_time/reminder_time_widget.dart';
 import '/pages/event/gallary/gallary_widget.dart';
-import '/pages/chat/chat_group_creation/chat_group_creation_widget.dart';
+import '/pages/chat/add_group_members/add_group_members_dialog.dart';
 import '/pages/chat/group_action_tasks/group_action_tasks_widget.dart';
 import '/pages/chat/group_chat_detail/mobile_group_tasks_widget.dart';
 import '/pages/chat/group_chat_detail/mobile_group_media_widget.dart';
@@ -21,6 +21,7 @@ import '/custom_code/widgets/index.dart' as custom_widgets;
 import '/custom_code/services/fireflies_api_service.dart';
 import '/index.dart';
 import '/utils/chat_helpers.dart';
+import '/pages/desktop_chat/desktop_safe_user_builder.dart';
 import '/pages/desktop_chat/rest_poll_builder.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -2469,490 +2470,15 @@ class _GroupChatDetailWidgetState extends State<GroupChatDetailWidget>
   Future<void> _showAddMembersDialog() async {
     if (widget.chatDoc == null) return;
 
-    // Initialize userRef with current members
-    _model.userRef = widget.chatDoc!.members.toList();
-    // Initialize search controller
-    final searchController = TextEditingController();
-    safeSetState(() {});
-
-    await showDialog(
+    await showAddGroupMembersDialog(
       context: context,
-      barrierColor: Colors.black.withOpacity(0.5),
-      builder: (dialogContext) {
-        return StatefulBuilder(
-          builder: (context, setDialogState) {
-            return Dialog(
-              backgroundColor: Colors.transparent,
-              insetPadding:
-                  const EdgeInsets.symmetric(horizontal: 16.0, vertical: 24.0),
-              child: Container(
-                constraints: const BoxConstraints(
-                  maxWidth: 500.0,
-                  maxHeight: 600.0,
-                ),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(16.0),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withOpacity(0.1),
-                      blurRadius: 20,
-                      offset: const Offset(0, 10),
-                    ),
-                  ],
-                ),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    // Header
-                    Container(
-                      padding: const EdgeInsets.all(16.0),
-                      decoration: const BoxDecoration(
-                        color: Colors.white,
-                        borderRadius:
-                            BorderRadius.vertical(top: Radius.circular(16.0)),
-                        border: Border(
-                          bottom: BorderSide(
-                            color: Color(0xFFE5E7EB),
-                            width: 1.0,
-                          ),
-                        ),
-                      ),
-                      child: Row(
-                        children: [
-                          InkWell(
-                            onTap: () => Navigator.of(dialogContext).pop(),
-                            child: const Icon(
-                              Icons.close,
-                              color: Color(0xFF6B7280),
-                              size: 24.0,
-                            ),
-                          ),
-                          const SizedBox(width: 16.0),
-                          const Expanded(
-                            child: Text(
-                              'Add member',
-                              style: TextStyle(
-                                fontFamily: 'Inter',
-                                fontSize: 18.0,
-                                fontWeight: FontWeight.w600,
-                                color: Color(0xFF1A1F36),
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    // Search bar
-                    Container(
-                      padding: const EdgeInsets.all(16.0),
-                      decoration: const BoxDecoration(
-                        color: Colors.white,
-                      ),
-                      child: Container(
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFF3F4F6),
-                          borderRadius: BorderRadius.circular(24.0),
-                          border: Border.all(
-                            color: const Color(0xFFE5E7EB),
-                            width: 1.0,
-                          ),
-                        ),
-                        child: Row(
-                          children: [
-                            const Padding(
-                              padding: EdgeInsets.only(left: 16.0, right: 8.0),
-                              child: Icon(
-                                Icons.search,
-                                color: Color(0xFF6B7280),
-                                size: 20.0,
-                              ),
-                            ),
-                            Expanded(
-                              child: TextField(
-                                controller: searchController,
-                                style: const TextStyle(
-                                  fontFamily: 'Inter',
-                                  fontSize: 14.0,
-                                  color: Color(0xFF1A1F36),
-                                ),
-                                decoration: const InputDecoration(
-                                  hintText: 'Search connections',
-                                  hintStyle: TextStyle(
-                                    fontFamily: 'Inter',
-                                    fontSize: 14.0,
-                                    color: Color(0xFF9CA3AF),
-                                  ),
-                                  border: InputBorder.none,
-                                  contentPadding: EdgeInsets.symmetric(
-                                    horizontal: 8.0,
-                                    vertical: 12.0,
-                                  ),
-                                ),
-                                onChanged: (value) {
-                                  setDialogState(() {
-                                    // Trigger rebuild to update filtered list
-                                  });
-                                },
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                    // Contacts label
-                    Container(
-                      width: double.infinity,
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 16.0, vertical: 8.0),
-                      child: const Text(
-                        'Your Connections',
-                        style: TextStyle(
-                          fontFamily: 'Inter',
-                          fontSize: 13.0,
-                          fontWeight: FontWeight.w600,
-                          color: Color(0xFF6B7280),
-                        ),
-                      ),
-                    ),
-                    // User list
-                    Expanded(
-                      child: AuthUserStreamWidget(
-                        builder: (context) => StreamBuilder<UsersRecord>(
-                          stream:
-                              UsersRecord.getDocument(currentUserReference!),
-                          builder: (context, currentUserSnapshot) {
-                            if (!currentUserSnapshot.hasData) {
-                              return const Center(
-                                child: SizedBox(
-                                  width: 40.0,
-                                  height: 40.0,
-                                  child: CircularProgressIndicator(
-                                    valueColor: AlwaysStoppedAnimation<Color>(
-                                      Color(0xFF3B82F6),
-                                    ),
-                                  ),
-                                ),
-                              );
-                            }
-
-                            final currentUser = currentUserSnapshot.data!;
-                            final connections = currentUser.friends;
-                            final existingMembers =
-                                widget.chatDoc!.members.toList();
-
-                            // Filter connections to only show those not already in the group
-                            // Compare by reference ID to ensure accurate matching
-                            final candidateUserRefs = connections.where((ref) {
-                              // Skip if it's the current user
-                              if (ref.id == currentUserReference?.id) {
-                                return false;
-                              }
-                              // Skip if already in the group
-                              final isAlreadyMember = existingMembers
-                                  .any((member) => member.id == ref.id);
-                              return !isAlreadyMember;
-                            }).toList();
-
-                            if (candidateUserRefs.isEmpty) {
-                              return Center(
-                                child: Padding(
-                                  padding: const EdgeInsets.all(24.0),
-                                  child: Column(
-                                    mainAxisAlignment: MainAxisAlignment.center,
-                                    children: [
-                                      Icon(
-                                        Icons.people_outline,
-                                        size: 48.0,
-                                        color: const Color(0xFFE5E7EB),
-                                      ),
-                                      const SizedBox(height: 16.0),
-                                      const Text(
-                                        'No connections available',
-                                        style: TextStyle(
-                                          fontFamily: 'Inter',
-                                          fontSize: 16.0,
-                                          fontWeight: FontWeight.w600,
-                                          color: Color(0xFF6B7280),
-                                        ),
-                                      ),
-                                      const SizedBox(height: 8.0),
-                                      const Text(
-                                        'All your connections are already in this group',
-                                        textAlign: TextAlign.center,
-                                        style: TextStyle(
-                                          fontFamily: 'Inter',
-                                          fontSize: 14.0,
-                                          color: Color(0xFF9CA3AF),
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              );
-                            }
-
-                            return ListView.builder(
-                              padding:
-                                  const EdgeInsets.symmetric(horizontal: 16.0),
-                              itemCount: candidateUserRefs.length,
-                              itemBuilder: (context, index) {
-                                final userRef = candidateUserRefs[index];
-                                return FutureBuilder<UsersRecord>(
-                                  future: UsersRecord.getDocumentOnce(userRef),
-                                  builder: (context, snapshot) {
-                                    if (snapshot.hasError) {
-                                      return const SizedBox.shrink();
-                                    }
-                                    if (!snapshot.hasData) {
-                                      return const SizedBox(height: 72);
-                                    }
-
-                                    final user = snapshot.data!;
-                                    // Skip deleted/invalid users
-                                    if (user.displayName.isEmpty && user.email.isEmpty) {
-                                      return const SizedBox.shrink();
-                                    }
-
-                                    // Filter by search query - read from controller each time
-                                    final currentSearchQuery =
-                                        searchController.text.toLowerCase();
-                                    if (currentSearchQuery.isNotEmpty) {
-                                      final name =
-                                          user.displayName.toLowerCase();
-                                      final email = user.email.toLowerCase();
-                                      if (!name.contains(currentSearchQuery) &&
-                                          !email.contains(currentSearchQuery)) {
-                                        return const SizedBox.shrink();
-                                      }
-                                    }
-
-                                    final isSelected =
-                                        _model.userRef.contains(userRef);
-
-                                    return InkWell(
-                                      onTap: () {
-                                        setDialogState(() {
-                                          if (isSelected) {
-                                            _model.removeFromUserRef(userRef);
-                                          } else {
-                                            _model.addToUserRef(userRef);
-                                          }
-                                        });
-                                      },
-                                      child: Container(
-                                        padding: const EdgeInsets.symmetric(
-                                          vertical: 12.0,
-                                        ),
-                                        decoration: const BoxDecoration(
-                                          border: Border(
-                                            bottom: BorderSide(
-                                              color: Color(0xFFF3F4F6),
-                                              width: 1.0,
-                                            ),
-                                          ),
-                                        ),
-                                        child: Row(
-                                          children: [
-                                            // Checkbox
-                                            Container(
-                                              width: 20.0,
-                                              height: 20.0,
-                                              margin: const EdgeInsets.only(
-                                                  right: 12.0),
-                                              decoration: BoxDecoration(
-                                                color: isSelected
-                                                    ? const Color(0xFF3B82F6)
-                                                    : Colors.transparent,
-                                                border: Border.all(
-                                                  color: isSelected
-                                                      ? const Color(0xFF3B82F6)
-                                                      : const Color(0xFFD1D5DB),
-                                                  width: 2.0,
-                                                ),
-                                                borderRadius:
-                                                    BorderRadius.circular(4.0),
-                                              ),
-                                              child: isSelected
-                                                  ? const Icon(
-                                                      Icons.check,
-                                                      color: Colors.white,
-                                                      size: 14.0,
-                                                    )
-                                                  : null,
-                                            ),
-                                            // Avatar
-                                            Container(
-                                              width: 48.0,
-                                              height: 48.0,
-                                              decoration: BoxDecoration(
-                                                color: const Color(0xFFEBF4FF),
-                                                shape: BoxShape.circle,
-                                              ),
-                                              child: ClipRRect(
-                                                borderRadius:
-                                                    BorderRadius.circular(24.0),
-                                                child: user.photoUrl.isNotEmpty
-                                                    ? Image.network(
-                                                        user.photoUrl,
-                                                        fit: BoxFit.cover,
-                                                        errorBuilder: (context,
-                                                            error, stackTrace) {
-                                                          return const Center(
-                                                            child: Icon(
-                                                              Icons.person,
-                                                              color: Color(
-                                                                  0xFF3B82F6),
-                                                              size: 24.0,
-                                                            ),
-                                                          );
-                                                        },
-                                                      )
-                                                    : const Center(
-                                                        child: Icon(
-                                                          Icons.person,
-                                                          color:
-                                                              Color(0xFF3B82F6),
-                                                          size: 24.0,
-                                                        ),
-                                                      ),
-                                              ),
-                                            ),
-                                            const SizedBox(width: 12.0),
-                                            // User info
-                                            Expanded(
-                                              child: Column(
-                                                crossAxisAlignment:
-                                                    CrossAxisAlignment.start,
-                                                children: [
-                                                  Text(
-                                                    user.displayName,
-                                                    style: const TextStyle(
-                                                      fontFamily: 'Inter',
-                                                      fontSize: 16.0,
-                                                      fontWeight:
-                                                          FontWeight.w500,
-                                                      color: Color(0xFF1A1F36),
-                                                    ),
-                                                  ),
-                                                  if (user.email.isNotEmpty)
-                                                    Text(
-                                                      user.email,
-                                                      style: const TextStyle(
-                                                        fontFamily: 'Inter',
-                                                        fontSize: 13.0,
-                                                        color:
-                                                            Color(0xFF6B7280),
-                                                      ),
-                                                    ),
-                                                ],
-                                              ),
-                                            ),
-                                          ],
-                                        ),
-                                      ),
-                                    );
-                                  },
-                                );
-                              },
-                            );
-                          },
-                        ),
-                      ),
-                    ),
-                    // Add button
-                    if (_model.userRef.isNotEmpty)
-                      Container(
-                        padding: const EdgeInsets.all(16.0),
-                        decoration: const BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.vertical(
-                              bottom: Radius.circular(16.0)),
-                          border: Border(
-                            top: BorderSide(
-                              color: Color(0xFFE5E7EB),
-                              width: 1.0,
-                            ),
-                          ),
-                        ),
-                        child: SizedBox(
-                          width: double.infinity,
-                          child: ElevatedButton(
-                            onPressed: () async {
-                              try {
-                                // Update only the members list - admin field remains unchanged
-                                // New members are added as regular members, not admins
-                                await fsPatchDocument(widget.chatDoc!.reference, {
-                                  ...mapToFirestore({
-                                    'members': _model.userRef,
-                                  }),
-                                });
-
-                                // Send system message
-                                final userName =
-                                    currentUserDisplayName.isNotEmpty
-                                        ? currentUserDisplayName
-                                        : (currentUserDocument?.displayName ??
-                                            'Someone');
-                                final addedCount = _model.userRef.length -
-                                    widget.chatDoc!.members.length;
-                                if (addedCount > 0) {
-                                  await _sendSystemMessage(
-                                    '$userName added $addedCount ${addedCount == 1 ? 'member' : 'members'}',
-                                  );
-                                }
-
-                                if (mounted) {
-                                  Navigator.of(dialogContext).pop();
-                                  _showSuccessDropdown(
-                                      'Members added successfully');
-                                }
-                              } catch (e) {
-                                if (mounted) {
-                                  Navigator.of(dialogContext).pop();
-                                  _showErrorDropdown('Failed to add members');
-                                }
-                              }
-                            },
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: const Color(0xFF3B82F6),
-                              foregroundColor: Colors.white,
-                              padding:
-                                  const EdgeInsets.symmetric(vertical: 14.0),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(12.0),
-                              ),
-                              elevation: 0,
-                            ),
-                            child: Row(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                const Icon(Icons.check, size: 20.0),
-                                const SizedBox(width: 8.0),
-                                Text(
-                                  'Add ${_model.userRef.length - widget.chatDoc!.members.length} ${(_model.userRef.length - widget.chatDoc!.members.length) == 1 ? 'member' : 'members'}',
-                                  style: const TextStyle(
-                                    fontFamily: 'Inter',
-                                    fontSize: 16.0,
-                                    fontWeight: FontWeight.w600,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
-                      ),
-                  ],
-                ),
-              ),
-            );
-          },
-        );
+      chat: widget.chatDoc!,
+      onMembersAdded: () {
+        if (mounted) {
+          _showSuccessDropdown('Members added successfully');
+        }
       },
-    ).then((_) {
-      // Dispose search controller when dialog closes
-      searchController.dispose();
-    });
+    );
   }
 
   @override
@@ -4412,7 +3938,7 @@ class _GroupChatDetailWidgetState extends State<GroupChatDetailWidget>
                                                                   size: 16.0,
                                                                 ),
                                                                 Text(
-                                                                  'Add',
+                                                                  'Add member',
                                                                   style: FlutterFlowTheme.of(
                                                                           context)
                                                                       .bodyMedium
@@ -4513,17 +4039,12 @@ class _GroupChatDetailWidgetState extends State<GroupChatDetailWidget>
                                                                       final membersItem =
                                                                           members[
                                                                               membersIndex];
-                                                                      return StreamBuilder<
-                                                                          UsersRecord>(
+                                                                      return DesktopSafeUserBuilder(
                                                                         key: ValueKey(membersItem.path),
-                                                                        stream:
-                                                                            UsersRecord.getDocument(membersItem),
-                                                                        builder:
-                                                                            (context,
-                                                                                snapshot) {
-                                                                          // Customize what your widget looks like when it's loading.
-                                                                          if (snapshot.connectionState ==
-                                                                              ConnectionState.waiting) {
+                                                                        userRef: membersItem,
+                                                                        fetchOnce: fsGetUserOnce,
+                                                                        builder: (context, rowUsersRecord) {
+                                                                          if (rowUsersRecord == null) {
                                                                             return Center(
                                                                               child: SizedBox(
                                                                                 width: 32.0,
@@ -4537,14 +4058,6 @@ class _GroupChatDetailWidgetState extends State<GroupChatDetailWidget>
                                                                               ),
                                                                             );
                                                                           }
-
-                                                                          if (snapshot.hasError ||
-                                                                              !snapshot.hasData) {
-                                                                            return const SizedBox.shrink();
-                                                                          }
-
-                                                                          final rowUsersRecord =
-                                                                              snapshot.data!;
 
                                                                           return InkWell(
                                                                             splashColor:
@@ -4715,6 +4228,32 @@ class _GroupChatDetailWidgetState extends State<GroupChatDetailWidget>
                                                                                     ),
                                                                                   ].divide(const SizedBox(width: 12.0)),
                                                                                 ),
+                                                                                if (ChatHelpers.canRemoveGroupMember(
+                                                                                    currentChatDoc,
+                                                                                    currentUserReference,
+                                                                                    rowUsersRecord.reference))
+                                                                                  TextButton(
+                                                                                    onPressed: () async {
+                                                                                      await _removeUser(rowUsersRecord);
+                                                                                    },
+                                                                                    style: TextButton.styleFrom(
+                                                                                      padding: const EdgeInsets.symmetric(
+                                                                                          horizontal: 8.0,
+                                                                                          vertical: 4.0),
+                                                                                      minimumSize: Size.zero,
+                                                                                      tapTargetSize:
+                                                                                          MaterialTapTargetSize.shrinkWrap,
+                                                                                    ),
+                                                                                    child: const Text(
+                                                                                      'Remove',
+                                                                                      style: TextStyle(
+                                                                                        fontFamily: 'Inter',
+                                                                                        fontSize: 13.0,
+                                                                                        fontWeight: FontWeight.w500,
+                                                                                        color: Color(0xFFEF4444),
+                                                                                      ),
+                                                                                    ),
+                                                                                  ),
                                                                                 if (ChatHelpers.isGroupAdmin(currentChatDoc, currentUserReference) &&
                                                                                     rowUsersRecord.reference != currentUserReference)
                                                                                   PopupMenuButton<String>(
@@ -4794,47 +4333,12 @@ class _GroupChatDetailWidgetState extends State<GroupChatDetailWidget>
                                                                                             ],
                                                                                           ),
                                                                                         ),
-                                                                                      // Remove User: Owner can remove anyone (except self); Admin can only remove non-admins
-                                                                                      if (rowUsersRecord.reference != currentChatDoc?.createdBy &&
-                                                                                          (ChatHelpers.isGroupOwner(currentChatDoc, currentUserReference) ||
-                                                                                           !ChatHelpers.isGroupAdmin(currentChatDoc, rowUsersRecord.reference)))
-                                                                                        PopupMenuItem<String>(
-                                                                                          value: 'remove_user',
-                                                                                          child: Row(
-                                                                                            children: [
-                                                                                              Container(
-                                                                                                padding: const EdgeInsets.all(6.0),
-                                                                                                decoration: BoxDecoration(
-                                                                                                  color: const Color(0xFFFEF2F2),
-                                                                                                  borderRadius: BorderRadius.circular(6.0),
-                                                                                                ),
-                                                                                                child: const Icon(
-                                                                                                  Icons.person_remove,
-                                                                                                  color: Color(0xFFEF4444),
-                                                                                                  size: 16.0,
-                                                                                                ),
-                                                                                              ),
-                                                                                              const SizedBox(width: 12.0),
-                                                                                              const Text(
-                                                                                                'Remove User',
-                                                                                                style: TextStyle(
-                                                                                                  fontFamily: 'Inter',
-                                                                                                  fontSize: 14.0,
-                                                                                                  fontWeight: FontWeight.w500,
-                                                                                                  color: Color(0xFF1A1F36),
-                                                                                                ),
-                                                                                              ),
-                                                                                            ],
-                                                                                          ),
-                                                                                        ),
                                                                                     ],
                                                                                     onSelected: (value) async {
                                                                                       if (value == 'make_admin') {
                                                                                         await _makeUserAdmin(rowUsersRecord);
                                                                                       } else if (value == 'remove_admin') {
                                                                                         await _removeUserAdmin(rowUsersRecord);
-                                                                                      } else if (value == 'remove_user') {
-                                                                                        await _removeUser(rowUsersRecord);
                                                                                       }
                                                                                     },
                                                                                   )

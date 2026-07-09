@@ -22,3 +22,11 @@ ButtonStyle desktopClickableButtonStyle(ButtonStyle? base) {
     }),
   );
 }
+
+/// Use as the [PopupMenuItem] child so menu rows show a pointer on desktop.
+Widget desktopClickableMenuChild(Widget child) {
+  return MouseRegion(
+    cursor: SystemMouseCursors.click,
+    child: child,
+  );
+}

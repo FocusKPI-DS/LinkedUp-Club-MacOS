@@ -3,7 +3,7 @@ import '/utils/debug_log.dart';
 import '/utils/desktop_pointer.dart';
 import '/backend/backend.dart';
 import '/backend/schema/enums/enums.dart';
-import '/components/invite_friends_button_widget.dart';
+import '/pages/desktop_chat/new_message_dialog.dart';
 import '/flutter_flow/flutter_flow_animations.dart';
 import '/flutter_flow/flutter_flow_icon_button.dart';
 import '/flutter_flow/flutter_flow_util.dart';
@@ -20,7 +20,7 @@ import '/pages/chat/user_profile_detail/user_profile_detail_widget.dart';
 import '/pages/chat/group_chat_detail/group_chat_detail_widget.dart';
 import '/pages/chat/group_chat_detail/meeting_transcripts_panel_widget.dart';
 import '/pages/chat/group_action_tasks/group_action_tasks_widget.dart';
-import '/pages/chat/add_group_members/add_group_members_widget.dart';
+import '/pages/chat/add_group_members/add_group_members_dialog.dart';
 import '/pages/chat/group_chat_detail/group_media_links_docs_widget.dart';
 import '/pages/chat/chat_history/chat_history_widget.dart';
 import '/pages/chat/chat_component/group_announcements_widget.dart';
@@ -298,6 +298,54 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
       },
       folder.reference,
     );
+  }
+
+  ChatFoldersRecord _folderWithName(
+    ChatFoldersRecord folder,
+    String name,
+  ) {
+    return ChatFoldersRecord.getDocumentFromData(
+      {
+        ...folder.snapshotData,
+        'name': name,
+        'updated_at': getCurrentTimestamp,
+      },
+      folder.reference,
+    );
+  }
+
+  Future<void> _handleRenameFolder(
+    ChatFoldersRecord folder,
+    String newName,
+  ) async {
+    final trimmed = newName.trim();
+    if (trimmed.isEmpty || trimmed == folder.name) return;
+
+    final previousFolders = _model.chatFolders;
+    setState(() {
+      _model.chatFolders = _model.chatFolders.map((f) {
+        if (f.reference.id != folder.reference.id) return f;
+        return _folderWithName(f, trimmed);
+      }).toList();
+    });
+
+    try {
+      await fsPatchDocument(folder.reference, {
+        'name': trimmed,
+        'updated_at': getCurrentTimestamp,
+      });
+    } catch (e) {
+      debugLog('❌ Error renaming folder: $e');
+      if (mounted) {
+        setState(() => _model.chatFolders = previousFolders);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error renaming folder: $e'),
+            backgroundColor: Color(0xFFEF4444),
+          ),
+        );
+      }
+    }
   }
 
   void _toggleFolderCollapsed(ChatFoldersRecord folder) {
@@ -934,17 +982,13 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
                   ),
                   color: Colors.white,
                   elevation: 8,
-                  tooltip: 'New',
+                  tooltip: 'Create new',
                   onSelected: (value) {
                     if (value == 1) {
-                      setState(() {
-                        _clearAllViews();
-                        _model.showNewMessageView = true;
-                        _model.selectedChat = null;
-                        chatController.selectedChat.value = null;
-                        _model.newMessageSearchController?.clear();
-                        _model.newMessageSelectedMembers = [];
-                      });
+                      _clearAllViews();
+                      _model.selectedChat = null;
+                      chatController.selectedChat.value = null;
+                      _showNewMessageDialog();
                     } else if (value == 2) {
                       _showCreateFolderDialog();
                     }
@@ -952,53 +996,62 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
                   itemBuilder: (context) => [
                     PopupMenuItem<int>(
                       value: 1,
-                      child: Row(
-                        children: [
-                          Icon(Icons.maps_ugc_rounded,
-                              color: Color(0xFF3B82F6), size: 20),
-                          SizedBox(width: 12),
-                          Text(
-                            'New Message',
-                            style: TextStyle(
-                              fontFamily: 'Inter',
-                              fontSize: 14,
-                              fontWeight: FontWeight.w500,
-                              color: Color(0xFF1F2937),
+                      mouseCursor: SystemMouseCursors.click,
+                      child: desktopClickableMenuChild(
+                        Row(
+                          children: [
+                            Icon(Icons.maps_ugc_rounded,
+                                color: Color(0xFF3B82F6), size: 20),
+                            SizedBox(width: 12),
+                            Text(
+                              'New Message',
+                              style: TextStyle(
+                                fontFamily: 'Inter',
+                                fontSize: 14,
+                                fontWeight: FontWeight.w500,
+                                color: Color(0xFF1F2937),
+                              ),
                             ),
-                          ),
-                        ],
+                          ],
+                        ),
                       ),
                     ),
                     PopupMenuDivider(height: 1),
                     PopupMenuItem<int>(
                       value: 2,
-                      child: Row(
-                        children: [
-                          Icon(Icons.create_new_folder_rounded,
-                              color: Color(0xFF3B82F6), size: 20),
-                          SizedBox(width: 12),
-                          Text(
-                            'New Folder',
-                            style: TextStyle(
-                              fontFamily: 'Inter',
-                              fontSize: 14,
-                              fontWeight: FontWeight.w500,
-                              color: Color(0xFF1F2937),
+                      mouseCursor: SystemMouseCursors.click,
+                      child: desktopClickableMenuChild(
+                        Row(
+                          children: [
+                            Icon(Icons.create_new_folder_rounded,
+                                color: Color(0xFF3B82F6), size: 20),
+                            SizedBox(width: 12),
+                            Text(
+                              'New Folder',
+                              style: TextStyle(
+                                fontFamily: 'Inter',
+                                fontSize: 14,
+                                fontWeight: FontWeight.w500,
+                                color: Color(0xFF1F2937),
+                              ),
                             ),
-                          ),
-                        ],
+                          ],
+                        ),
                       ),
                     ),
                   ],
-                  child: Padding(
-                    padding: const EdgeInsets.all(4.0),
-                    child: Icon(
-                      Icons.add_rounded,
-                      color: Color(0xFF374151),
-                      size: 26,
+                  child: MouseRegion(
+                    cursor: SystemMouseCursors.click,
+                    child: Padding(
+                      padding: const EdgeInsets.all(4.0),
+                      child: Icon(
+                        Icons.add_rounded,
+                        color: Color(0xFF374151),
+                        size: 26,
+                      ),
                     ),
                   ),
-                ).withClickCursor(),
+                ),
           ],
         ),
       ),
@@ -2293,10 +2346,10 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
         // Compact "New Folder" link at top (Slack-style)
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-          child: GestureDetector(
-            onTap: () => _showCreateFolderDialog(),
-            child: MouseRegion(
-              cursor: SystemMouseCursors.click,
+          child: MouseRegion(
+            cursor: SystemMouseCursors.click,
+            child: GestureDetector(
+              onTap: () => _showCreateFolderDialog(),
               child: Padding(
                 padding: EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                 child: Row(
@@ -2317,7 +2370,7 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
                 ),
               ),
             ),
-          ).withClickCursor(),
+          ),
         ),
 
         // Pinned (combined DM and Groups)
@@ -2904,6 +2957,7 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
             actions: [
               TextButton(
                 onPressed: () => Navigator.of(ctx).pop(),
+                style: desktopClickableButtonStyle(null),
                 child: Text(
                   'Cancel',
                   style: TextStyle(
@@ -2919,6 +2973,7 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
                   Navigator.of(ctx).pop();
                   _createFolder(name, selectedChatIds: selectedIds.toList());
                 },
+                style: desktopClickableButtonStyle(null),
                 child: Text(
                   'Create Folder',
                   style: TextStyle(
@@ -3681,12 +3736,10 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
             color: Color(0xFF111827),
           ),
           onSubmitted: (value) {
-            if (value.trim().isNotEmpty) {
-              fsPatchDocument(folder.reference, {
-                'name': value.trim(),
-                'updated_at': getCurrentTimestamp,
-              });
+            final name = value.trim();
+            if (name.isNotEmpty) {
               Navigator.of(ctx).pop();
+              _handleRenameFolder(folder, name);
             }
           },
         ),
@@ -3698,13 +3751,10 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
           ),
           TextButton(
             onPressed: () {
-              if (controller.text.trim().isNotEmpty) {
-                fsPatchDocument(folder.reference, {
-                  'name': controller.text.trim(),
-                  'updated_at': getCurrentTimestamp,
-                });
-                Navigator.of(ctx).pop();
-              }
+              final name = controller.text.trim();
+              if (name.isEmpty) return;
+              Navigator.of(ctx).pop();
+              _handleRenameFolder(folder, name);
             },
             child: Text('Rename',
                 style: TextStyle(
@@ -4625,14 +4675,35 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
   }
 
   void _clearAllViews() {
-    _model.showNewMessageView = false;
     _model.showGroupCreation = false;
     _model.newMessageSelectedMembers = [];
     _model.isCreatingNewMessageChat = false;
     _model.groupChatTab = GroupChatTab.messages;
   }
 
+  List<(String, GroupChatTab, IconData)> _chatHeaderTabConfigs(ChatsRecord chat) {
+    const dmTabs = <(String, GroupChatTab, IconData)>[
+      ('Messages', GroupChatTab.messages, Icons.chat_bubble_outline_rounded),
+      ('Files and Links', GroupChatTab.filesAndLinks, Icons.folder_outlined),
+      ('Action Tasks', GroupChatTab.actionTasks, Icons.checklist_rounded),
+      ('Pinned Messages', GroupChatTab.pinnedMessages, Icons.push_pin_outlined),
+    ];
+    if (!chat.isGroup) return dmTabs;
+
+    return [
+      ...dmTabs.sublist(0, 3),
+      ('Announcements', GroupChatTab.announcements, Icons.campaign_outlined),
+      dmTabs[3],
+    ];
+  }
+
   void _selectGroupChatTab(GroupChatTab tab) {
+    final chat = _model.selectedChat;
+    if (chat != null &&
+        !chat.isGroup &&
+        tab == GroupChatTab.announcements) {
+      tab = GroupChatTab.messages;
+    }
     setState(() {
       _model.groupChatTab = tab;
       _model.showTasksPanel = false;
@@ -4649,7 +4720,12 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
 
-      final tabIndex = GroupChatTab.values.indexOf(_model.groupChatTab);
+      final chat = _model.selectedChat;
+      if (chat == null) return;
+
+      final tabConfigs = _chatHeaderTabConfigs(chat);
+      final tabIndex =
+          tabConfigs.indexWhere((config) => config.$2 == _model.groupChatTab);
       if (tabIndex < 0 || tabIndex >= _groupTabKeys.length) return;
 
       final tabContext = _groupTabKeys[tabIndex].currentContext;
@@ -4678,12 +4754,12 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
     });
   }
 
-  Widget _buildGroupChatTabBody(ChatsRecord chat) {
+  Widget _buildChatTabBody(ChatsRecord chat) {
     switch (_model.groupChatTab) {
       case GroupChatTab.messages:
         return Column(
           children: [
-            _buildAnnouncementBanner(chat),
+            if (chat.isGroup) _buildAnnouncementBanner(chat),
             Expanded(
               child: _buildPlatformChatThread(key: _chatThreadKey),
             ),
@@ -4692,7 +4768,7 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
         );
       case GroupChatTab.filesAndLinks:
         return GroupMediaLinksDocsWidget(
-          key: ValueKey('group-media-${chat.reference.path}'),
+          key: ValueKey('chat-media-${chat.reference.path}'),
           chatDoc: chat,
           embedded: true,
         );
@@ -4708,16 +4784,10 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
     }
   }
 
-  Widget _buildGroupChatHeaderTabs() {
+  Widget _buildChatHeaderTabs(ChatsRecord chat) {
     _scheduleGroupTabIndicatorUpdate();
 
-    const tabConfigs = <(String, GroupChatTab, IconData)>[
-      ('Messages', GroupChatTab.messages, Icons.chat_bubble_outline_rounded),
-      ('Files and Links', GroupChatTab.filesAndLinks, Icons.folder_outlined),
-      ('Action Tasks', GroupChatTab.actionTasks, Icons.checklist_rounded),
-      ('Announcements', GroupChatTab.announcements, Icons.campaign_outlined),
-      ('Pinned Messages', GroupChatTab.pinnedMessages, Icons.push_pin_outlined),
-    ];
+    final tabConfigs = _chatHeaderTabConfigs(chat);
 
     return Column(
       mainAxisSize: MainAxisSize.min,
@@ -5037,696 +5107,39 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
     }
   }
 
-  Widget _buildNewMessageView() {
-    return Container(
-      width: double.infinity,
-      height: double.infinity,
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [
-            Colors.white,
-            Color(0xFFF0F4FF),
-            Color(0xFFE8F0FE),
-          ],
-        ),
-      ),
-      child: Column(
-        children: [
-          // Header
-          Container(
-            width: double.infinity,
-            padding: EdgeInsetsDirectional.fromSTEB(32, 32, 32, 24),
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.topRight,
-                colors: [
-                  Colors.white,
-                  Color(0xFFF8FAFF),
-                ],
-              ),
-              boxShadow: [
-                BoxShadow(
-                  color: Color(0x0D000000),
-                  blurRadius: 8,
-                  offset: Offset(0, 2),
-                ),
-              ],
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    GestureDetector(
-                      onTap: () {
-                        setState(() {
-                          _model.showNewMessageView = false;
-                          _model.newMessageSearchController?.clear();
-                          _model.newMessageSelectedMembers = [];
-                        });
-                      },
-                      child: Container(
-                        padding: EdgeInsets.all(8),
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.circular(8),
-                          border: Border.all(
-                            color: Color(0xFFE5E7EB),
-                            width: 1,
-                          ),
-                        ),
-                        child: Icon(
-                          Icons.close,
-                          color: Color(0xFF6B7280),
-                          size: 20,
-                        ),
-                      ),
-                    ).withClickCursor(),
-                    SizedBox(width: 12),
-                    Container(
-                      padding: EdgeInsets.all(6),
-                      decoration: BoxDecoration(
-                        color: Color(0xFF3B82F6).withOpacity(0.1),
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      child: Icon(
-                        Icons.chat_bubble_outline,
-                        color: Color(0xFF3B82F6),
-                        size: 20,
-                      ),
-                    ),
-                    SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'New Message',
-                            style: TextStyle(
-                              fontFamily: 'Inter',
-                              color: Color(0xFF1A1F36),
-                              fontSize: 20,
-                              fontWeight: FontWeight.w600,
-                              letterSpacing: -0.3,
-                            ),
-                          ),
-                          SizedBox(height: 6),
-                          Text(
-                            _model.newMessageSelectedMembers.length > 1
-                                ? 'Adding ${_model.newMessageSelectedMembers.length} people — this will start a group chat'
-                                : 'Add one person for a direct message, or more to start a group',
-                            style: TextStyle(
-                              fontFamily: 'Inter',
-                              color: Color(0xFF64748B),
-                              fontSize: 13,
-                              fontWeight: FontWeight.w400,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-          // Search bar
-          Container(
-            width: double.infinity,
-            padding: EdgeInsetsDirectional.fromSTEB(32, 20, 32, 16),
-            decoration: BoxDecoration(
-              color: Colors.transparent,
-            ),
-            child: Container(
-              height: 44,
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(
-                  color: Color(0xFFE2E8F0),
-                  width: 1.5,
-                ),
-                boxShadow: [
-                  BoxShadow(
-                    color: Color(0xFF3B82F6).withOpacity(0.08),
-                    blurRadius: 12,
-                    offset: Offset(0, 4),
-                  ),
-                ],
-              ),
-              child: TextFormField(
-                controller: _model.newMessageSearchController,
-                onChanged: (value) {
-                  setState(() {});
-                },
-                decoration: InputDecoration(
-                  hintText: 'Type a name to add people',
-                  hintStyle: TextStyle(
-                    fontFamily: 'Inter',
-                    color: Color(0xFF94A3B8),
-                    fontSize: 14,
-                    fontWeight: FontWeight.w400,
-                  ),
-                  border: InputBorder.none,
-                  contentPadding:
-                      EdgeInsetsDirectional.fromSTEB(16, 12, 16, 12),
-                  prefixIcon: Padding(
-                    padding: EdgeInsetsDirectional.only(start: 14, end: 10),
-                    child: Icon(
-                      Icons.person_add_alt_1_rounded,
-                      color: Color(0xFF3B82F6),
-                      size: 20,
-                    ),
-                  ),
-                ),
-                style: TextStyle(
-                  fontFamily: 'Inter',
-                  color: Color(0xFF1A1F36),
-                  fontSize: 14,
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-            ),
-          ),
-          // Selected people chips ("To:" area)
-          if (_model.newMessageSelectedMembers.isNotEmpty)
-            Container(
-              width: double.infinity,
-              padding: EdgeInsetsDirectional.fromSTEB(32, 0, 32, 4),
-              child: Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: _model.newMessageSelectedMembers.map((memberRef) {
-                  return DesktopSafeUserBuilder(
-                    userRef: memberRef,
-                    fetchOnce: _getOrCreateUserFuture,
-                    builder: (context, user) {
-                      final name = (user?.displayName.isNotEmpty ?? false)
-                          ? user!.displayName
-                          : (user?.email.split('@').first ?? 'User');
-                      return Container(
-                        padding:
-                            EdgeInsetsDirectional.fromSTEB(6, 4, 8, 4),
-                        decoration: BoxDecoration(
-                          color: Color(0xFFEBF2FF),
-                          borderRadius: BorderRadius.circular(20),
-                          border: Border.all(
-                            color: Color(0xFFBFD4FF),
-                            width: 1,
-                          ),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Container(
-                              width: 24,
-                              height: 24,
-                              clipBehavior: Clip.antiAlias,
-                              decoration: BoxDecoration(
-                                shape: BoxShape.circle,
-                                color: Color(0xFFDCE7FF),
-                              ),
-                              child: (user != null &&
-                                      user.photoUrl.isNotEmpty)
-                                  ? CachedNetworkImage(
-                                      imageUrl: user.photoUrl,
-                                      width: 24,
-                                      height: 24,
-                                      fit: BoxFit.cover,
-                                      errorWidget: (context, url, error) =>
-                                          Icon(Icons.person,
-                                              size: 14,
-                                              color: Color(0xFF3B82F6)),
-                                    )
-                                  : Icon(Icons.person,
-                                      size: 14, color: Color(0xFF3B82F6)),
-                            ),
-                            SizedBox(width: 6),
-                            Text(
-                              name,
-                              style: TextStyle(
-                                fontFamily: 'Inter',
-                                fontSize: 13,
-                                fontWeight: FontWeight.w500,
-                                color: Color(0xFF1D4ED8),
-                              ),
-                            ),
-                            SizedBox(width: 6),
-                            GestureDetector(
-                              onTap: () => setState(() => _model
-                                  .newMessageSelectedMembers
-                                  .remove(memberRef)),
-                              child: Icon(
-                                Icons.close_rounded,
-                                size: 16,
-                                color: Color(0xFF3B82F6),
-                              ),
-                            ).withClickCursor(),
-                          ],
-                        ),
-                      );
-                    },
-                  );
-                }).toList(),
-              ),
-            ),
-          // Invite friends buttons
-          Container(
-            width: double.infinity,
-            padding: EdgeInsetsDirectional.fromSTEB(32, 12, 32, 12),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                InviteFriendsButtonWidget(),
-                SizedBox(width: 16),
-                _buildEmailInviteButton(),
-              ],
-            ),
-          ),
-          // Suggested connections list
-          Expanded(
-            child: Container(
-              width: double.infinity,
-              padding: EdgeInsetsDirectional.fromSTEB(32, 8, 32, 32),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Padding(
-                    padding: EdgeInsetsDirectional.only(start: 4, bottom: 12),
-                    child: Row(
-                      children: [
-                        Container(
-                          width: 3,
-                          height: 14,
-                          decoration: BoxDecoration(
-                            color: Color(0xFF3B82F6),
-                            borderRadius: BorderRadius.circular(2),
-                          ),
-                        ),
-                        SizedBox(width: 8),
-                        Text(
-                          'SUGGESTED',
-                          style: TextStyle(
-                            fontFamily: 'Inter',
-                            color: Color(0xFF475569),
-                            fontSize: 11,
-                            fontWeight: FontWeight.w700,
-                            letterSpacing: 1.2,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  Expanded(
-                    child: DesktopSafeUserBuilder(
-                      userRef: currentUserReference!,
-                      fetchOnce: _getOrCreateUserFuture,
-                      builder: (context, currentUser) {
-                        if (currentUser == null) {
-                          return Center(
-                            child: CircularProgressIndicator(
-                              color: Color.fromARGB(255, 16, 184, 239),
-                            ),
-                          );
-                        }
-
-                        final connections = currentUser.friends;
-
-                        if (connections.isEmpty) {
-                          return Center(
-                            child: Column(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Container(
-                                  width: 80,
-                                  height: 80,
-                                  decoration: BoxDecoration(
-                                    color: Color(0xFF3B82F6).withOpacity(0.1),
-                                    shape: BoxShape.circle,
-                                  ),
-                                  child: Icon(
-                                    Icons.people_outline_rounded,
-                                    color: Color(0xFF3B82F6),
-                                    size: 40,
-                                  ),
-                                ),
-                                SizedBox(height: 24),
-                                Text(
-                                  'No connections',
-                                  style: TextStyle(
-                                    fontFamily: 'Inter',
-                                    color: Color(0xFF1A1F36),
-                                    fontSize: 18,
-                                    fontWeight: FontWeight.w600,
-                                    letterSpacing: -0.3,
-                                  ),
-                                ),
-                                SizedBox(height: 8),
-                                Text(
-                                  'Add connections to start chatting',
-                                  style: TextStyle(
-                                    fontFamily: 'Inter',
-                                    color: Color(0xFF64748B),
-                                    fontSize: 15,
-                                    fontWeight: FontWeight.w400,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          );
-                        }
-
-                        final searchQuery = _model
-                                .newMessageSearchController?.text
-                                .toLowerCase() ??
-                            '';
-
-                        return ListView.builder(
-                          itemCount: connections.length,
-                          itemBuilder: (context, index) {
-                            final connectionRef = connections[index];
-
-                            return DesktopSafeUserBuilder(
-                              userRef: connectionRef,
-                              fetchOnce: _getOrCreateUserFuture,
-                              builder: (context, user) {
-                                if (user == null) {
-                                  return SizedBox.shrink();
-                                }
-
-                                final isCurrentUser =
-                                    user.reference == currentUserReference;
-
-                                if (isCurrentUser) {
-                                  return SizedBox.shrink();
-                                }
-
-                                final isSelected = _model
-                                    .newMessageSelectedMembers
-                                    .contains(user.reference);
-
-                                // Filter by search query
-                                if (searchQuery.isNotEmpty) {
-                                  final displayName =
-                                      user.displayName.toLowerCase();
-                                  final email = user.email.toLowerCase();
-                                  if (!displayName.contains(searchQuery) &&
-                                      !email.contains(searchQuery)) {
-                                    return SizedBox.shrink();
-                                  }
-                                }
-
-                                return Container(
-                                  margin: EdgeInsets.only(bottom: 8),
-                                  decoration: BoxDecoration(
-                                    color: isSelected
-                                        ? Color(0xFFEBF2FF)
-                                        : Colors.white,
-                                    borderRadius: BorderRadius.circular(8),
-                                    border: Border.all(
-                                      color: isSelected
-                                          ? Color(0xFF3B82F6)
-                                          : Color(0xFFE2E8F0),
-                                      width: isSelected ? 2 : 1,
-                                    ),
-                                    boxShadow: [
-                                      BoxShadow(
-                                        color: Color(0x0A000000),
-                                        blurRadius: 8,
-                                        offset: Offset(0, 2),
-                                      ),
-                                    ],
-                                  ),
-                                  child: Material(
-                                    color: Colors.transparent,
-                                    child: InkWell(
-                                      mouseCursor: MaterialStateMouseCursor.clickable,
-                                      onTap: () {
-                                        setState(() {
-                                          if (isSelected) {
-                                            _model.newMessageSelectedMembers
-                                                .remove(user.reference);
-                                          } else {
-                                            _model.newMessageSelectedMembers
-                                                .add(user.reference);
-                                            // Reset the search so the next
-                                            // person can be found without
-                                            // clearing the field manually.
-                                            _model.newMessageSearchController
-                                                ?.clear();
-                                          }
-                                        });
-                                      },
-                                      borderRadius: BorderRadius.circular(8),
-                                      child: Container(
-                                        padding: EdgeInsetsDirectional.fromSTEB(
-                                            16, 12, 16, 12),
-                                        child: Row(
-                                          children: [
-                                            // Avatar with gradient border
-                                            Container(
-                                              width: 48,
-                                              height: 48,
-                                              decoration: BoxDecoration(
-                                                shape: BoxShape.circle,
-                                                gradient: LinearGradient(
-                                                  colors: [
-                                                    Color(0xFF3B82F6),
-                                                    Color(0xFF60A5FA),
-                                                  ],
-                                                ),
-                                                boxShadow: [
-                                                  BoxShadow(
-                                                    color: Color(0xFF3B82F6)
-                                                        .withOpacity(0.3),
-                                                    blurRadius: 8,
-                                                    offset: Offset(0, 2),
-                                                  ),
-                                                ],
-                                              ),
-                                              padding: EdgeInsets.all(2),
-                                              child: Container(
-                                                decoration: BoxDecoration(
-                                                  shape: BoxShape.circle,
-                                                  color: Colors.white,
-                                                ),
-                                                child: ClipRRect(
-                                                  borderRadius:
-                                                      BorderRadius.circular(22),
-                                                  child: CachedNetworkImage(
-                                                    imageUrl: user.photoUrl,
-                                                    width: 44,
-                                                    height: 44,
-                                                    fit: BoxFit.cover,
-                                                    placeholder:
-                                                        (context, url) =>
-                                                            Container(
-                                                      width: 44,
-                                                      height: 44,
-                                                      decoration: BoxDecoration(
-                                                        color:
-                                                            Color(0xFFF1F5F9),
-                                                        shape: BoxShape.circle,
-                                                      ),
-                                                      child: Icon(
-                                                        Icons.person_rounded,
-                                                        color:
-                                                            Color(0xFF64748B),
-                                                        size: 20,
-                                                      ),
-                                                    ),
-                                                    errorWidget:
-                                                        (context, url, error) =>
-                                                            Container(
-                                                      width: 44,
-                                                      height: 44,
-                                                      decoration: BoxDecoration(
-                                                        color:
-                                                            Color(0xFFF1F5F9),
-                                                        shape: BoxShape.circle,
-                                                      ),
-                                                      child: Icon(
-                                                        Icons.person_rounded,
-                                                        color:
-                                                            Color(0xFF64748B),
-                                                        size: 20,
-                                                      ),
-                                                    ),
-                                                  ),
-                                                ),
-                                              ),
-                                            ),
-                                            SizedBox(width: 12),
-                                            // User info
-                                            Expanded(
-                                              child: Column(
-                                                crossAxisAlignment:
-                                                    CrossAxisAlignment.start,
-                                                children: [
-                                                  Text(
-                                                    user.displayName,
-                                                    style: TextStyle(
-                                                      fontFamily: 'Inter',
-                                                      color: Color(0xFF111827),
-                                                      fontSize: 14,
-                                                      fontWeight:
-                                                          FontWeight.w500,
-                                                    ),
-                                                  ),
-                                                  SizedBox(height: 2),
-                                                  Text(
-                                                    user.email,
-                                                    style: TextStyle(
-                                                      fontFamily: 'Inter',
-                                                      color: Color(0xFF6B7280),
-                                                      fontSize: 12,
-                                                      fontWeight:
-                                                          FontWeight.w400,
-                                                    ),
-                                                  ),
-                                                ],
-                                              ),
-                                            ),
-                                            // Selection indicator
-                                            Container(
-                                              width: 28,
-                                              height: 28,
-                                              decoration: BoxDecoration(
-                                                color: isSelected
-                                                    ? Color(0xFF3B82F6)
-                                                    : Color(0xFF3B82F6)
-                                                        .withOpacity(0.08),
-                                                shape: BoxShape.circle,
-                                                border: isSelected
-                                                    ? null
-                                                    : Border.all(
-                                                        color: Color(0xFFCBD5E1),
-                                                        width: 1.5,
-                                                      ),
-                                              ),
-                                              child: Icon(
-                                                isSelected
-                                                    ? Icons.check_rounded
-                                                    : Icons.add_rounded,
-                                                color: isSelected
-                                                    ? Colors.white
-                                                    : Color(0xFF3B82F6),
-                                                size: 18,
-                                              ),
-                                            ),
-                                          ],
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                                );
-                              },
-                            );
-                          },
-                        );
-                      },
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-          // Bottom action bar: start DM (1 person) or group (2+)
-          _buildNewMessageActionBar(),
-        ],
-      ),
+  Future<void> _showNewMessageDialog() async {
+    await showNewMessageDialog(
+      context: context,
+      searchController: _model.newMessageSearchController!,
+      initialSelectedMembers: _model.newMessageSelectedMembers,
+      fetchUser: _getOrCreateUserFuture,
+      onSubmit: _createChatFromNewMessageSelection,
     );
-  }
 
-  Widget _buildNewMessageActionBar() {
-    final count = _model.newMessageSelectedMembers.length;
-    final hasSelection = count > 0;
-    final isGroup = count > 1;
-    final label = !hasSelection
-        ? 'Add people to start'
-        : isGroup
-            ? 'Create Group ($count)'
-            : 'Start Direct Message';
-    return Container(
-      width: double.infinity,
-      padding: EdgeInsetsDirectional.fromSTEB(32, 12, 32, 20),
-      decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.6),
-        border: Border(
-          top: BorderSide(color: Color(0xFFE2E8F0), width: 1),
-        ),
-      ),
-      child: SizedBox(
-        width: double.infinity,
-        height: 48,
-        child: ElevatedButton(
-          onPressed: (!hasSelection || _model.isCreatingNewMessageChat)
-              ? null
-              : _createChatFromNewMessage,
-          style: ElevatedButton.styleFrom(
-            backgroundColor:
-                hasSelection ? Color(0xFF3B82F6) : Color(0xFF9CA3AF),
-            disabledBackgroundColor: Color(0xFFCBD5E1),
-            elevation: 0,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12),
-            ),
-          ),
-          child: _model.isCreatingNewMessageChat
-              ? SizedBox(
-                  width: 20,
-                  height: 20,
-                  child: CircularProgressIndicator(
-                    color: Colors.white,
-                    strokeWidth: 2,
-                  ),
-                )
-              : Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(
-                      isGroup
-                          ? Icons.group_rounded
-                          : Icons.chat_bubble_rounded,
-                      color: Colors.white,
-                      size: 18,
-                    ),
-                    SizedBox(width: 8),
-                    Text(
-                      label,
-                      style: TextStyle(
-                        fontFamily: 'Inter',
-                        color: Colors.white,
-                        fontSize: 15,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ],
-                ),
-        ),
-      ),
-    );
+    if (mounted) {
+      setState(() {
+        _model.newMessageSelectedMembers = [];
+        _model.newMessageSearchController?.clear();
+        _model.isCreatingNewMessageChat = false;
+      });
+    }
   }
 
   /// Creates a direct message when a single person is selected, or a group
-  /// chat when multiple people are selected, from the combined New Message view.
-  Future<void> _createChatFromNewMessage() async {
-    final selected = List<DocumentReference>.from(
-        _model.newMessageSelectedMembers);
+  /// chat when multiple people are selected, from the New Message dialog.
+  Future<void> _createChatFromNewMessageSelection(
+    List<DocumentReference> selected,
+  ) async {
     if (selected.isEmpty) return;
 
+    _model.newMessageSelectedMembers = List.from(selected);
     setState(() => _model.isCreatingNewMessageChat = true);
     try {
       if (selected.length == 1) {
-        // Direct message
         final user = await _getOrCreateUserFuture(selected.first);
         await _startNewChatWithUser(user);
       } else {
-        // Group chat — reuse the existing group creation pipeline.
-        _model.selectedMembers = selected;
+        _model.selectedMembers = List.from(selected);
         _model.groupName = '';
         _model.groupNameController?.clear();
         _model.groupImagePath = null;
@@ -5738,7 +5151,6 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
       if (mounted) {
         setState(() {
           _model.isCreatingNewMessageChat = false;
-          _model.showNewMessageView = false;
           _model.newMessageSelectedMembers = [];
           _model.newMessageSearchController?.clear();
         });
@@ -5749,7 +5161,6 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
   Widget _buildRightPanel() {
     // Determine if any right-side panel should be shown
     final showAnyPanel = _model.showGroupCreation ||
-        _model.showNewMessageView ||
         (_model.showGroupInfoPanel && _model.groupInfoChat != null) ||
         (_model.showUserProfilePanel && _model.userProfileUser != null) ||
         _model.showChatHistoryPanel ||
@@ -5774,7 +5185,6 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
                   onTap: () {
                     setState(() {
                       _model.showGroupCreation = false;
-                      _model.showNewMessageView = false;
                       _model.newMessageSelectedMembers = [];
                       _model.showGroupInfoPanel = false;
                       _model.groupInfoChat = null;
@@ -5800,14 +5210,6 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
                     _model.groupImagePath = null;
                     _model.groupImageUrl = null;
                     _model.isUploadingImage = false;
-                  });
-                }),
-              if (_model.showNewMessageView)
-                _buildRightSidePanel(_buildNewMessageView(), () {
-                  setState(() {
-                    _model.showNewMessageView = false;
-                    _model.newMessageSearchController?.clear();
-                    _model.newMessageSelectedMembers = [];
                   });
                 }),
 
@@ -6751,17 +6153,7 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
             children: [
               _buildChatHeader(),
               Expanded(
-                child: _model.selectedChat!.isGroup
-                    ? _buildGroupChatTabBody(_model.selectedChat!)
-                    : Column(
-                        children: [
-                          Expanded(
-                            child:
-                                _buildPlatformChatThread(key: _chatThreadKey),
-                          ),
-                          if (_isSelectionMode) _buildSelectionBar(),
-                        ],
-                      ),
+                child: _buildChatTabBody(_model.selectedChat!),
               ),
             ],
           )
@@ -6826,28 +6218,18 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
 
     return Container(
       width: double.infinity,
-      padding: EdgeInsetsDirectional.fromSTEB(20, 16, 20, chat.isGroup ? 0 : 16),
+      padding: const EdgeInsetsDirectional.fromSTEB(20, 16, 20, 0),
       decoration: BoxDecoration(
         color: Color.fromRGBO(250, 252, 255, 1), // Match left sidebar color
-        border: chat.isGroup
-            ? null
-            : Border(
-                bottom: BorderSide(
-                  color: Color(0xFFE5E7EB),
-                  width: 1,
-                ),
-              ),
       ),
-      child: chat.isGroup
-          ? Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                _buildChatHeaderMainRow(chat),
-                _buildGroupChatHeaderTabs(),
-              ],
-            )
-          : _buildChatHeaderMainRow(chat),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          _buildChatHeaderMainRow(chat),
+          _buildChatHeaderTabs(chat),
+        ],
+      ),
     );
   }
 
@@ -8071,16 +7453,45 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
 
   Widget _buildHeaderName(ChatsRecord chat) {
     if (chat.isGroup) {
-      return Text(
-        chat.title.isNotEmpty ? chat.title : 'Group Chat',
-        style: TextStyle(
-          fontFamily: 'Inter',
-          color: Color(0xFF1F2937),
-          fontSize: 16,
-          fontWeight: FontWeight.w600,
-        ),
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
+      final title = chat.title.isNotEmpty ? chat.title : 'Group Chat';
+      final canRename =
+          ChatHelpers.isGroupOwner(chat, currentUserReference);
+
+      return Row(
+        children: [
+          Flexible(
+            child: Text(
+              title,
+              style: TextStyle(
+                fontFamily: 'Inter',
+                color: Color(0xFF1F2937),
+                fontSize: 16,
+                fontWeight: FontWeight.w600,
+              ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+          if (canRename) ...[
+            const SizedBox(width: 6),
+            Tooltip(
+              message: 'Rename group',
+              child: InkWell(
+                mouseCursor: MaterialStateMouseCursor.clickable,
+                onTap: () => _showRenameGroupChatDialog(chat),
+                borderRadius: BorderRadius.circular(6),
+                child: Padding(
+                  padding: const EdgeInsets.all(4),
+                  child: Icon(
+                    Icons.edit_outlined,
+                    size: 16,
+                    color: Color(0xFF9CA3AF),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ],
       );
     } else {
       // For direct chats, get the other user's name
@@ -8160,7 +7571,6 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
     setState(() {
       _model.showChatHistoryPanel = true;
       _model.showGroupCreation = false;
-      _model.showNewMessageView = false;
       _model.showGroupInfoPanel = false;
       _model.groupInfoChat = null;
       _model.showUserProfilePanel = false;
@@ -8328,153 +7738,289 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
   }
 
   void _showGroupMembersDialog(ChatsRecord chat) {
-    final members = _sortGroupMembers(chat);
-
     showDialog(
       context: context,
       builder: (dialogContext) {
-        return Dialog(
-          backgroundColor: Colors.transparent,
-          insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
-          child: Container(
-            width: 360,
-            constraints: const BoxConstraints(maxWidth: 360, maxHeight: 520),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(12),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.08),
-                  blurRadius: 24,
-                  offset: Offset(0, 8),
+        var members = _sortGroupMembers(chat);
+
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return Dialog(
+              backgroundColor: Colors.transparent,
+              insetPadding:
+                  const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
+              child: Container(
+                width: 360,
+                constraints:
+                    const BoxConstraints(maxWidth: 360, maxHeight: 520),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(12),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.08),
+                      blurRadius: 24,
+                      offset: Offset(0, 8),
+                    ),
+                  ],
                 ),
-              ],
-            ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-                  decoration: BoxDecoration(
-                    color: Color(0xFFFAFBFC),
-                    borderRadius: BorderRadius.only(
-                      topLeft: Radius.circular(12),
-                      topRight: Radius.circular(12),
-                    ),
-                    border: Border(
-                      bottom: BorderSide(color: Color(0xFFE5E7EB), width: 1),
-                    ),
-                  ),
-                  child: Row(
-                    children: [
-                      Container(
-                        width: 32,
-                        height: 32,
-                        decoration: BoxDecoration(
-                          color: Color(0xFFEFF6FF),
-                          borderRadius: BorderRadius.circular(8),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 20, vertical: 16),
+                      decoration: BoxDecoration(
+                        color: Color(0xFFFAFBFC),
+                        borderRadius: BorderRadius.only(
+                          topLeft: Radius.circular(12),
+                          topRight: Radius.circular(12),
                         ),
-                        child: Icon(
-                          Icons.people_rounded,
-                          color: Color(0xFF3B82F6),
-                          size: 18,
+                        border: Border(
+                          bottom:
+                              BorderSide(color: Color(0xFFE5E7EB), width: 1),
                         ),
                       ),
-                      SizedBox(width: 12),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              'Group Members',
-                              style: TextStyle(
-                                fontFamily: 'Inter',
-                                color: Color(0xFF111827),
-                                fontSize: 15,
-                                fontWeight: FontWeight.w600,
-                              ),
+                      child: Row(
+                        children: [
+                          Container(
+                            width: 32,
+                            height: 32,
+                            decoration: BoxDecoration(
+                              color: Color(0xFFEFF6FF),
+                              borderRadius: BorderRadius.circular(8),
                             ),
-                            Text(
-                              '${members.length} members',
-                              style: TextStyle(
-                                fontFamily: 'Inter',
-                                color: Color(0xFF6B7280),
-                                fontSize: 12,
-                              ),
+                            child: Icon(
+                              Icons.people_rounded,
+                              color: Color(0xFF3B82F6),
+                              size: 18,
                             ),
-                          ],
+                          ),
+                          SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'Group Members',
+                                  style: TextStyle(
+                                    fontFamily: 'Inter',
+                                    color: Color(0xFF111827),
+                                    fontSize: 15,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                                Text(
+                                  '${members.length} members',
+                                  style: TextStyle(
+                                    fontFamily: 'Inter',
+                                    color: Color(0xFF6B7280),
+                                    fontSize: 12,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          IconButton(
+                            onPressed: () => Navigator.pop(dialogContext),
+                            icon: Icon(Icons.close_rounded,
+                                color: Color(0xFF9CA3AF), size: 20),
+                            padding: EdgeInsets.zero,
+                            constraints: BoxConstraints(),
+                          ),
+                        ],
+                      ),
+                    ),
+                    Flexible(
+                      child: ListView.separated(
+                        shrinkWrap: true,
+                        padding: const EdgeInsets.symmetric(vertical: 8),
+                        itemCount: members.length +
+                            (ChatHelpers.isGroupAdmin(
+                                    chat, currentUserReference)
+                                ? 1
+                                : 0),
+                        separatorBuilder: (_, __) => Divider(
+                          height: 1,
+                          indent: 68,
+                          color: Color(0xFFF3F4F6),
                         ),
+                        itemBuilder: (context, index) {
+                          final canManageMembers = ChatHelpers.isGroupAdmin(
+                              chat, currentUserReference);
+                          if (canManageMembers && index == 0) {
+                            return _buildAddMemberListRow(
+                              onTap: () {
+                                Navigator.pop(dialogContext);
+                                _showAddMembersDialog(chat);
+                              },
+                            );
+                          }
+                          final memberIndex =
+                              canManageMembers ? index - 1 : index;
+                          final memberRef = members[memberIndex];
+                          return _buildGroupMemberRow(
+                            chat,
+                            memberRef,
+                            dialogContext,
+                            onMemberRemoved: () {
+                              setDialogState(() {
+                                members = List<DocumentReference>.from(members)
+                                  ..removeWhere(
+                                      (ref) => ref.id == memberRef.id);
+                              });
+                            },
+                          );
+                        },
                       ),
-                      IconButton(
-                        onPressed: () => Navigator.pop(dialogContext),
-                        icon: Icon(Icons.close_rounded,
-                            color: Color(0xFF9CA3AF), size: 20),
-                        padding: EdgeInsets.zero,
-                        constraints: BoxConstraints(),
-                      ),
-                    ],
-                  ),
+                    ),
+                  ],
                 ),
-                Flexible(
-                  child: ListView.separated(
-                    shrinkWrap: true,
-                    padding: const EdgeInsets.symmetric(vertical: 8),
-                    itemCount: members.length,
-                    separatorBuilder: (_, __) => Divider(
-                      height: 1,
-                      indent: 68,
-                      color: Color(0xFFF3F4F6),
-                    ),
-                    itemBuilder: (context, index) {
-                      return _buildGroupMemberRow(
-                        chat,
-                        members[index],
-                        dialogContext,
-                      );
-                    },
-                  ),
-                ),
-                if (ChatHelpers.isGroupAdmin(chat, currentUserReference))
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-                    decoration: BoxDecoration(
-                      border: Border(
-                        top: BorderSide(color: Color(0xFFE5E7EB), width: 1),
-                      ),
-                    ),
-                    child: TextButton.icon(
-                      onPressed: () {
-                        Navigator.pop(dialogContext);
-                        _navigateToAddMembers(chat);
-                      },
-                      icon: Icon(Icons.person_add_outlined,
-                          size: 18, color: Color(0xFF3B82F6)),
-                      label: Text(
-                        'Add members',
-                        style: TextStyle(
-                          fontFamily: 'Inter',
-                          color: Color(0xFF3B82F6),
-                          fontSize: 14,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ),
-                  ),
-              ],
-            ),
-          ),
+              ),
+            );
+          },
         );
       },
     );
   }
 
+  Future<void> _confirmAndRemoveGroupMember({
+    required ChatsRecord chat,
+    required UsersRecord user,
+    required BuildContext dialogContext,
+    required VoidCallback onMemberRemoved,
+  }) async {
+    final confirmed = await showDialog<bool>(
+      context: dialogContext,
+      barrierColor: Colors.black.withOpacity(0.5),
+      builder: (context) => Dialog(
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+        ),
+        backgroundColor: Colors.white,
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Remove member',
+                style: TextStyle(
+                  fontFamily: 'Inter',
+                  fontSize: 18,
+                  fontWeight: FontWeight.w600,
+                  color: Color(0xFF1A1F36),
+                ),
+              ),
+              SizedBox(height: 12),
+              Text(
+                'Are you sure you want to remove ${user.displayName} from the group?',
+                style: TextStyle(
+                  fontFamily: 'Inter',
+                  fontSize: 14,
+                  color: Color(0xFF6B7280),
+                  height: 1.5,
+                ),
+              ),
+              SizedBox(height: 24),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  TextButton(
+                    onPressed: () => Navigator.pop(context, false),
+                    child: Text(
+                      'Cancel',
+                      style: TextStyle(
+                        fontFamily: 'Inter',
+                        color: Color(0xFF6B7280),
+                      ),
+                    ),
+                  ),
+                  SizedBox(width: 8),
+                  ElevatedButton(
+                    onPressed: () => Navigator.pop(context, true),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Color(0xFFEF4444),
+                      foregroundColor: Colors.white,
+                      elevation: 0,
+                    ),
+                    child: Text(
+                      'Remove',
+                      style: TextStyle(fontFamily: 'Inter'),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+
+    if (confirmed != true) return;
+
+    try {
+      final updatedMembers = List<DocumentReference>.from(chat.members)
+        ..remove(user.reference);
+
+      await fsPatchDocument(chat.reference, {
+        'members': updatedMembers,
+      });
+
+      final actorName = currentUserDisplayName.isNotEmpty
+          ? currentUserDisplayName
+          : (currentUserDocument?.displayName ?? 'Someone');
+      final systemMessage =
+          '$actorName removed ${user.displayName} from the group';
+
+      await fsCreateMessage(chat.reference, {
+        'content': systemMessage,
+        'created_at': getCurrentTimestamp,
+        'sender_ref': currentUserReference,
+        'sender_name': actorName,
+        'sender_photo': currentUserPhoto.isNotEmpty
+            ? currentUserPhoto
+            : (currentUserDocument?.photoUrl ?? ''),
+        'is_system_message': true,
+        'is_read_by': [currentUserReference],
+      });
+
+      await fsPatchDocument(chat.reference, {
+        'last_message': systemMessage,
+        'last_message_at': getCurrentTimestamp,
+        'last_message_sent': currentUserReference,
+      });
+
+      await chatController.refreshChats(force: true);
+      onMemberRemoved();
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('${user.displayName} removed from group'),
+            backgroundColor: Color(0xFF34C759),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to remove member'),
+            backgroundColor: Color(0xFFEF4444),
+          ),
+        );
+      }
+    }
+  }
+
   Widget _buildGroupMemberRow(
     ChatsRecord chat,
     DocumentReference memberRef,
-    BuildContext dialogContext,
-  ) {
+    BuildContext dialogContext, {
+    VoidCallback? onMemberRemoved,
+  }) {
     return DesktopSafeUserBuilder(
       userRef: memberRef,
       fetchOnce: _getOrCreateUserFuture,
@@ -8510,105 +8056,141 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
         final isOwner = ChatHelpers.isGroupOwner(chat, memberRef);
         final isAdmin = ChatHelpers.isGroupAdmin(chat, memberRef);
         final isCurrentUser = memberRef == currentUserReference;
+        final canRemove = ChatHelpers.canRemoveGroupMember(
+          chat,
+          currentUserReference,
+          memberRef,
+        );
 
-        return InkWell(
-          mouseCursor: MaterialStateMouseCursor.clickable,
-          onTap: () {
-            Navigator.pop(dialogContext);
-            context.pushNamed(
-              UserSummaryWidget.routeName,
-              queryParameters: {
-                'userRef': serializeParam(memberRef, ParamType.DocumentReference),
-              }.withoutNulls,
-              extra: <String, dynamic>{
-                'userRef': memberRef,
-              },
-            );
-          },
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-            child: Row(
-              children: [
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(18),
-                  child: CachedNetworkImage(
-                    imageUrl: memberRef.path.contains('ai_agent_summerai')
-                        ? 'https://firebasestorage.googleapis.com/v0/b/linkedup-c3e29.firebasestorage.app/o/asset%2Fsoftware-agent.png?alt=media&token=99761584-999d-4f8e-b3d1-f9d1baf86120'
-                        : user.photoUrl,
-                    width: 36,
-                    height: 36,
-                    fit: BoxFit.cover,
-                    placeholder: (context, url) => Container(
-                      width: 36,
-                      height: 36,
-                      color: Color(0xFFF3F4F6),
-                      child: Icon(Icons.person,
-                          color: Color(0xFF9CA3AF), size: 18),
-                    ),
-                    errorWidget: (context, url, error) => Container(
-                      width: 36,
-                      height: 36,
-                      color: Color(0xFFF3F4F6),
-                      child: Icon(Icons.person,
-                          color: Color(0xFF9CA3AF), size: 18),
-                    ),
-                  ),
-                ),
-                SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+        return Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+          child: Row(
+            children: [
+              Expanded(
+                child: InkWell(
+                  mouseCursor: MaterialStateMouseCursor.clickable,
+                  onTap: () {
+                    Navigator.pop(dialogContext);
+                    context.pushNamed(
+                      UserSummaryWidget.routeName,
+                      queryParameters: {
+                        'userRef': serializeParam(
+                            memberRef, ParamType.DocumentReference),
+                      }.withoutNulls,
+                      extra: <String, dynamic>{
+                        'userRef': memberRef,
+                      },
+                    );
+                  },
+                  child: Row(
                     children: [
-                      Row(
-                        children: [
-                          Flexible(
-                            child: Text(
-                              user.displayName.isNotEmpty
-                                  ? user.displayName
-                                  : 'Unknown User',
-                              style: TextStyle(
-                                fontFamily: 'Inter',
-                                color: Color(0xFF111827),
-                                fontSize: 14,
-                                fontWeight: FontWeight.w500,
-                              ),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(18),
+                        child: CachedNetworkImage(
+                          imageUrl: memberRef.path.contains('ai_agent_summerai')
+                              ? 'https://firebasestorage.googleapis.com/v0/b/linkedup-c3e29.firebasestorage.app/o/asset%2Fsoftware-agent.png?alt=media&token=99761584-999d-4f8e-b3d1-f9d1baf86120'
+                              : user.photoUrl,
+                          width: 36,
+                          height: 36,
+                          fit: BoxFit.cover,
+                          placeholder: (context, url) => Container(
+                            width: 36,
+                            height: 36,
+                            color: Color(0xFFF3F4F6),
+                            child: Icon(Icons.person,
+                                color: Color(0xFF9CA3AF), size: 18),
                           ),
-                          if (isCurrentUser) ...[
-                            SizedBox(width: 6),
-                            Text(
-                              '(You)',
-                              style: TextStyle(
-                                fontFamily: 'Inter',
-                                color: Color(0xFF9CA3AF),
-                                fontSize: 12,
-                              ),
-                            ),
-                          ],
-                        ],
-                      ),
-                      if (isOwner || isAdmin)
-                        Padding(
-                          padding: const EdgeInsets.only(top: 2),
-                          child: Text(
-                            isOwner ? 'Owner' : 'Admin',
-                            style: TextStyle(
-                              fontFamily: 'Inter',
-                              color: isOwner
-                                  ? Color(0xFFF59E0B)
-                                  : Color(0xFF3B82F6),
-                              fontSize: 11,
-                              fontWeight: FontWeight.w600,
-                            ),
+                          errorWidget: (context, url, error) => Container(
+                            width: 36,
+                            height: 36,
+                            color: Color(0xFFF3F4F6),
+                            child: Icon(Icons.person,
+                                color: Color(0xFF9CA3AF), size: 18),
                           ),
                         ),
+                      ),
+                      SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                Flexible(
+                                  child: Text(
+                                    user.displayName.isNotEmpty
+                                        ? user.displayName
+                                        : 'Unknown User',
+                                    style: TextStyle(
+                                      fontFamily: 'Inter',
+                                      color: Color(0xFF111827),
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.w500,
+                                    ),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                                if (isCurrentUser) ...[
+                                  SizedBox(width: 6),
+                                  Text(
+                                    '(You)',
+                                    style: TextStyle(
+                                      fontFamily: 'Inter',
+                                      color: Color(0xFF9CA3AF),
+                                      fontSize: 12,
+                                    ),
+                                  ),
+                                ],
+                              ],
+                            ),
+                            if (isOwner || isAdmin)
+                              Padding(
+                                padding: const EdgeInsets.only(top: 2),
+                                child: Text(
+                                  isOwner ? 'Owner' : 'Admin',
+                                  style: TextStyle(
+                                    fontFamily: 'Inter',
+                                    color: isOwner
+                                        ? Color(0xFFF59E0B)
+                                        : Color(0xFF3B82F6),
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ),
+                          ],
+                        ),
+                      ),
                     ],
                   ),
                 ),
-              ],
-            ),
+              ),
+              if (canRemove)
+                TextButton(
+                  onPressed: () => _confirmAndRemoveGroupMember(
+                    chat: chat,
+                    user: user,
+                    dialogContext: dialogContext,
+                    onMemberRemoved: onMemberRemoved ?? () {},
+                  ),
+                  style: TextButton.styleFrom(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    minimumSize: Size.zero,
+                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  ),
+                  child: Text(
+                    'Remove',
+                    style: TextStyle(
+                      fontFamily: 'Inter',
+                      color: Color(0xFFEF4444),
+                      fontSize: 13,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ),
+            ],
           ),
         );
       },
@@ -8915,22 +8497,73 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
     }
   }
 
-  void _navigateToAddMembers(ChatsRecord chat) {
+  void _showAddMembersDialog(ChatsRecord chat) {
     if (!chat.isGroup) return;
-    Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (context) => AddGroupMembersWidget(chatDoc: chat),
+    if (!ChatHelpers.isGroupAdmin(chat, currentUserReference)) return;
+
+    showAddGroupMembersDialog(
+      context: context,
+      chat: chat,
+      onMembersAdded: () async {
+        await chatController.refreshChats(force: true);
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Members added successfully'),
+              backgroundColor: Color(0xFF34C759),
+            ),
+          );
+        }
+      },
+    );
+  }
+
+  void _navigateToAddMembers(ChatsRecord chat) {
+    _showAddMembersDialog(chat);
+  }
+
+  Widget _buildAddMemberListRow({required VoidCallback onTap}) {
+    return InkWell(
+      mouseCursor: MaterialStateMouseCursor.clickable,
+      onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+        child: Row(
+          children: [
+            Container(
+              width: 36,
+              height: 36,
+              decoration: BoxDecoration(
+                color: Color(0xFFF3F4F6),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(
+                Icons.person_outline_rounded,
+                color: Color(0xFF9CA3AF),
+                size: 20,
+              ),
+            ),
+            SizedBox(width: 12),
+            Text(
+              'Add member',
+              style: TextStyle(
+                fontFamily: 'Inter',
+                color: Color(0xFF3B82F6),
+                fontSize: 14,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
 
   void _navigateToMedia(ChatsRecord chat) {
-    if (!chat.isGroup) return;
     _selectGroupChatTab(GroupChatTab.filesAndLinks);
   }
 
   void _navigateToTasks(ChatsRecord chat) {
-    if (!chat.isGroup) return;
     _selectGroupChatTab(GroupChatTab.actionTasks);
   }
 
@@ -9624,154 +9257,6 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
         );
       }
     }
-  }
-
-  Widget _buildEmailInviteButton() {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        mouseCursor: MaterialStateMouseCursor.clickable,
-        onTap: () => _showEmailInviteDialog(),
-        borderRadius: BorderRadius.circular(20.0),
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(20.0),
-          child: BackdropFilter(
-            filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
-            child: Container(
-              padding: const EdgeInsets.all(12.0),
-              decoration: BoxDecoration(
-                color: CupertinoColors.white.withOpacity(0.7),
-                borderRadius: BorderRadius.circular(20.0),
-                border: Border.all(
-                  color: CupertinoColors.white.withOpacity(0.8),
-                  width: 1.5,
-                ),
-                boxShadow: [
-                  BoxShadow(
-                    color: CupertinoColors.black.withOpacity(0.1),
-                    blurRadius: 10,
-                    offset: const Offset(0, 4),
-                    spreadRadius: 0,
-                  ),
-                ],
-              ),
-              child: Icon(
-                CupertinoIcons.mail_solid,
-                color: CupertinoColors.systemBlue,
-                size: 20.0,
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  void _showEmailInviteDialog() {
-    final emailController = TextEditingController();
-
-    showCupertinoDialog(
-      context: context,
-      builder: (dialogContext) => CupertinoAlertDialog(
-        title: Text('Invite via Email'),
-        content: Padding(
-          padding: const EdgeInsets.only(top: 10.0),
-          child: CupertinoTextField(
-            controller: emailController,
-            placeholder: 'Recipient Email',
-            keyboardType: TextInputType.emailAddress,
-          ),
-        ),
-        actions: [
-          CupertinoDialogAction(
-            child: Text('Cancel'),
-            onPressed: () => Navigator.pop(dialogContext),
-          ),
-          CupertinoDialogAction(
-            child: Text('Send Invite'),
-            onPressed: () async {
-              final email = emailController.text.trim();
-              if (email.isEmpty || !email.contains('@')) {
-                Navigator.pop(dialogContext);
-                return;
-              }
-              Navigator.pop(dialogContext);
-
-              try {
-                final userUid = currentUserUid.isNotEmpty
-                    ? currentUserUid
-                    : (currentUserReference?.id ?? '');
-                final referralLink = 'https://lona.club/invite/$userUid';
-
-                await actions.sendResendInvite(
-                  email: email,
-                  senderName: currentUserDisplayName,
-                  referralLink: referralLink,
-                );
-
-                // Show green tick overlay
-                _showSuccessTick();
-              } catch (e) {
-                // Silently fail
-              }
-            },
-          ),
-        ],
-      ),
-    );
-  }
-
-  void _showSuccessTick() {
-    final overlay = Overlay.of(context);
-    late OverlayEntry entry;
-
-    entry = OverlayEntry(
-      builder: (context) => Positioned(
-        top: 50,
-        left: 0,
-        right: 0,
-        child: Center(
-          child: TweenAnimationBuilder<double>(
-            tween: Tween(begin: 0.0, end: 1.0),
-            duration: Duration(milliseconds: 300),
-            builder: (context, value, child) {
-              return Opacity(
-                opacity: value,
-                child: Transform.scale(
-                  scale: value,
-                  child: Container(
-                    padding: EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: Color(0xFF10B981),
-                      shape: BoxShape.circle,
-                      boxShadow: [
-                        BoxShadow(
-                          color: Color(0xFF10B981).withOpacity(0.3),
-                          blurRadius: 20,
-                          spreadRadius: 5,
-                        ),
-                      ],
-                    ),
-                    child: Icon(
-                      Icons.check,
-                      color: Colors.white,
-                      size: 32,
-                    ),
-                  ),
-                ),
-              );
-            },
-          ),
-        ),
-      ),
-    );
-
-    overlay.insert(entry);
-
-    // Remove after 1.5 seconds
-    Future.delayed(Duration(milliseconds: 1500), () {
-      entry.remove();
-    });
   }
 }
 

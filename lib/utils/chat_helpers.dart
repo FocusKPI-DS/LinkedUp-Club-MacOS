@@ -38,6 +38,22 @@ class ChatHelpers {
     return chat.createdBy?.path == userRef.path;
   }
 
+  /// Whether [actorRef] may remove [targetRef] from [chat].
+  /// Owner can remove anyone except the owner record; admins can only remove
+  /// regular members.
+  static bool canRemoveGroupMember(
+    ChatsRecord? chat,
+    DocumentReference? actorRef,
+    DocumentReference? targetRef,
+  ) {
+    if (chat == null || actorRef == null || targetRef == null) return false;
+    if (!isGroupAdmin(chat, actorRef)) return false;
+    if (actorRef.path == targetRef.path) return false;
+    if (chat.createdBy?.path == targetRef.path) return false;
+    if (isGroupOwner(chat, actorRef)) return true;
+    return !isGroupAdmin(chat, targetRef);
+  }
+
   /// Returns an existing direct chat with [targetUserRef], or creates one.
   ///
   /// Throws if [currentUserReference] is null (user not logged in).

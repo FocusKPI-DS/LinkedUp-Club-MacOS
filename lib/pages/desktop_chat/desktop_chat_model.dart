@@ -7,7 +7,7 @@ import 'package:flutter/material.dart';
 /// Sidebar display mode: flat chat list vs folder-grouped view.
 enum SidebarMode { chat, folders }
 
-/// Main content tabs shown in the group chat header.
+/// Main content tabs shown in the chat header (group and direct messages).
 enum GroupChatTab {
   messages,
   filesAndLinks,
@@ -75,10 +75,9 @@ class DesktopChatModel extends FlutterFlowModel {
   bool showUserProfilePanel = false;
   UsersRecord? userProfileUser;
 
-  // New message view in right panel
-  bool showNewMessageView = false;
+  // New message dialog
   TextEditingController? newMessageSearchController;
-  // People selected in the combined New Message view. One selection creates a
+  // People selected in the New Message dialog. One selection creates a
   // direct message; more than one creates a group chat.
   List<DocumentReference> newMessageSelectedMembers = [];
   bool isCreatingNewMessageChat = false;
