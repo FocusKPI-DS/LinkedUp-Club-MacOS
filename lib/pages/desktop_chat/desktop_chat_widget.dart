@@ -76,6 +76,16 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
   final animationsMap = <String, AnimationInfo>{};
   final _chatThreadKey = GlobalKey<ChatThreadComponentWidgetState>();
 
+  // Sliding underline for group chat header tabs
+  final GlobalKey _groupTabRowKey = GlobalKey();
+  final List<GlobalKey> _groupTabKeys = List<GlobalKey>.generate(
+    GroupChatTab.values.length,
+    (_) => GlobalKey(),
+  );
+  double _groupTabIndicatorLeft = 0;
+  double _groupTabIndicatorWidth = 0;
+  bool _groupTabIndicatorReady = false;
+
   // Multi-message selection state
   bool _isSelectionMode = false;
   final Set<MessagesRecord> _selectedMessages = {};
@@ -108,9 +118,10 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
     if (kIsWeb || !(Platform.isWindows || Platform.isLinux)) return;
     _windowsGroupExtrasTimer?.cancel();
     if (mounted) setState(() => _windowsGroupExtrasReady = false);
-    if (!DesktopSafeUserBuilder.useOnceFetch) {
-      _subscribeToChatFolders();
-    }
+    // Restart folder polling after leaving a thread. This runs on the REST
+    // poll path (useOnceFetch), which is safe on Windows/Linux — the previous
+    // guard made this a no-op and left folders stale after opening a chat.
+    _subscribeToChatFolders();
   }
 
   Widget _buildPlatformChatThread({Key? key}) {
@@ -215,6 +226,7 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
             _model.showUserProfilePanel = false;
             _model.userProfileUser = null;
             _model.showTasksPanel = false;
+            _model.groupChatTab = GroupChatTab.messages;
             // Set the selected chat
             _model.selectedChat = selectedChat;
             debugLog(
@@ -237,14 +249,93 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
       Future.delayed(Duration(milliseconds: 500), () {
         if (!DesktopSafeUserBuilder.useOnceFetch) {
           _initializePresence();
-          _subscribeToChatFolders();
         }
+        // Load chat folders on every platform. On Windows/Linux this uses the
+        // REST poll path (no live streams), so it's safe under useOnceFetch.
+        // Without this, previously created folders wouldn't appear until the
+        // user created a new folder (which triggers a manual refresh).
+        _subscribeToChatFolders();
       });
       // Clear dock badge when chat page is opened (macOS)
       if (!kIsWeb && Platform.isMacOS) {
         actions.clearAppBadge();
       }
     });
+  }
+
+  /// Fetches the latest folders from the backend and updates state right away.
+  /// Used after creating a folder so it appears without waiting for the poll
+  /// timer (Windows/Linux) or stream event. If the fetch returns nothing (or
+  /// throws), [fallback] performs an optimistic local update.
+  Future<void> _refreshChatFoldersNow({VoidCallback? fallback}) async {
+    if (currentUserReference == null) return;
+    try {
+      final folders = await fsQueryChatFolders(currentUserReference!);
+      if (!mounted) return;
+      setState(() {
+        if (folders.isNotEmpty) {
+          _model.chatFolders = folders;
+        } else {
+          fallback?.call();
+        }
+      });
+    } catch (e) {
+      debugLog('Error refreshing chat folders after create: $e');
+      if (mounted && fallback != null) {
+        setState(fallback);
+      }
+    }
+  }
+
+  ChatFoldersRecord _folderWithCollapsed(
+    ChatFoldersRecord folder,
+    bool isCollapsed,
+  ) {
+    return ChatFoldersRecord.getDocumentFromData(
+      {
+        ...folder.snapshotData,
+        'is_collapsed': isCollapsed,
+      },
+      folder.reference,
+    );
+  }
+
+  void _toggleFolderCollapsed(ChatFoldersRecord folder) {
+    final nextCollapsed = !folder.isCollapsed;
+    setState(() {
+      _model.chatFolders = _model.chatFolders.map((f) {
+        if (f.reference.id != folder.reference.id) return f;
+        return _folderWithCollapsed(f, nextCollapsed);
+      }).toList();
+    });
+    fsPatchDocument(folder.reference, {'is_collapsed': nextCollapsed});
+  }
+
+  /// Deletes a folder and removes it from the sidebar immediately. On
+  /// Windows/Linux the folder list only refreshes via a 30s poll, so without
+  /// the optimistic removal the folder would linger until the next poll.
+  Future<void> _deleteFolder(ChatFoldersRecord folder) async {
+    final previousFolders = _model.chatFolders;
+    setState(() {
+      _model.chatFolders = _model.chatFolders
+          .where((f) => f.reference.id != folder.reference.id)
+          .toList();
+    });
+    try {
+      await fsDeleteDocument(folder.reference);
+    } catch (e) {
+      debugLog('❌ Error deleting folder: $e');
+      // Restore on failure so the UI reflects the real state.
+      if (mounted) {
+        setState(() => _model.chatFolders = previousFolders);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error deleting folder: $e'),
+            backgroundColor: Color(0xFFEF4444),
+          ),
+        );
+      }
+    }
   }
 
   void _subscribeToChatFolders() {
@@ -430,6 +521,7 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
                 mainAxisSize: MainAxisSize.max,
                 children: [
                   _buildHeader(),
+                  _buildGroupFoldersToggle(),
                   _buildNavigationTabs(),
                   _buildSearchBar(),
                   _buildChatList(),
@@ -698,36 +790,27 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
         decoration: BoxDecoration(
           color: Colors.white,
           shape: BoxShape.circle,
+          border: Border.all(color: Color(0xFFE5E7EB), width: 1),
         ),
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(size / 2),
-          child: CachedNetworkImage(
-            imageUrl: chat.chatImageUrl,
-            width: size,
-            height: size,
-            fit: BoxFit.cover,
-            memCacheWidth: 72,
-            memCacheHeight: 72,
-            placeholder: (context, url) => Container(
-              width: size,
-              height: size,
-              decoration: BoxDecoration(
-                color: Color(0xFFE5E7EB),
-                shape: BoxShape.circle,
+        clipBehavior: Clip.antiAlias,
+        child: chat.chatImageUrl.isNotEmpty
+            ? CachedNetworkImage(
+                imageUrl: chat.chatImageUrl,
+                fit: BoxFit.cover,
+                width: double.infinity,
+                height: double.infinity,
+                memCacheWidth: 72,
+                memCacheHeight: 72,
+                placeholder: (context, url) => Center(
+                  child: Icon(Icons.group, color: Color(0xFF6B7280), size: 18),
+                ),
+                errorWidget: (context, url, error) => Center(
+                  child: Icon(Icons.group, color: Color(0xFF6B7280), size: 18),
+                ),
+              )
+            : Center(
+                child: Icon(Icons.group, color: Color(0xFF6B7280), size: 18),
               ),
-              child: Icon(Icons.group, color: Color(0xFF6B7280), size: 18),
-            ),
-            errorWidget: (context, url, error) => Container(
-              width: size,
-              height: size,
-              decoration: BoxDecoration(
-                color: Color(0xFFE5E7EB),
-                shape: BoxShape.circle,
-              ),
-              child: Icon(Icons.group, color: Color(0xFF6B7280), size: 18),
-            ),
-          ),
-        ),
       );
     } else {
       final otherUserRef = chat.members.firstWhere(
@@ -753,6 +836,7 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
             decoration: BoxDecoration(
               color: Color(0xFF3B82F6),
               shape: BoxShape.circle,
+              border: Border.all(color: Color(0xFFE5E7EB), width: 1),
             ),
             child: ClipRRect(
               borderRadius: BorderRadius.circular(size / 2),
@@ -850,38 +934,31 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
                   ),
                   color: Colors.white,
                   elevation: 8,
-                  tooltip: 'New Chat',
+                  tooltip: 'New',
                   onSelected: (value) {
-                    setState(() {
-                      _clearAllViews();
-                      if (value == 1) {
+                    if (value == 1) {
+                      setState(() {
+                        _clearAllViews();
                         _model.showNewMessageView = true;
                         _model.selectedChat = null;
                         chatController.selectedChat.value = null;
                         _model.newMessageSearchController?.clear();
-                      } else if (value == 2) {
-                        _model.showGroupCreation = true;
-                        _model.selectedChat = null;
-                        chatController.selectedChat.value = null;
-                        _model.groupName = '';
-                        _model.selectedMembers = [];
-                        _model.groupNameController?.clear();
-                        _model.groupImagePath = null;
-                        _model.groupImageUrl = null;
-                        _model.isUploadingImage = false;
-                      }
-                    });
+                        _model.newMessageSelectedMembers = [];
+                      });
+                    } else if (value == 2) {
+                      _showCreateFolderDialog();
+                    }
                   },
                   itemBuilder: (context) => [
                     PopupMenuItem<int>(
                       value: 1,
                       child: Row(
                         children: [
-                          Icon(CupertinoIcons.person_fill,
-                              color: Color(0xFF3B82F6), size: 18),
+                          Icon(Icons.maps_ugc_rounded,
+                              color: Color(0xFF3B82F6), size: 20),
                           SizedBox(width: 12),
                           Text(
-                            'Direct Message',
+                            'New Message',
                             style: TextStyle(
                               fontFamily: 'Inter',
                               fontSize: 14,
@@ -897,11 +974,11 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
                       value: 2,
                       child: Row(
                         children: [
-                          Icon(CupertinoIcons.group_solid,
+                          Icon(Icons.create_new_folder_rounded,
                               color: Color(0xFF3B82F6), size: 20),
                           SizedBox(width: 12),
                           Text(
-                            'Group Chat',
+                            'New Folder',
                             style: TextStyle(
                               fontFamily: 'Inter',
                               fontSize: 14,
@@ -921,7 +998,7 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
                       size: 26,
                     ),
                   ),
-                ),
+                ).withClickCursor(),
           ],
         ),
       ),
@@ -1082,6 +1159,76 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
         ),
       ),
     );
+  }
+
+  /// macOS-style toggle above the All/Unread tabs that switches the sidebar
+  /// into the folder-grouped view when enabled.
+  Widget _buildGroupFoldersToggle() {
+    void toggle() {
+      final value = !FFAppState().groupFoldersEnabled;
+      setState(() {
+        FFAppState().groupFoldersEnabled = value;
+        _model.groupFoldersEnabled = value;
+      });
+    }
+
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: toggle,
+      child: Container(
+        width: double.infinity,
+        decoration: BoxDecoration(
+          color: Color.fromRGBO(250, 252, 255, 1),
+        ),
+        padding: const EdgeInsets.fromLTRB(16, 10, 16, 8),
+        child: Row(
+          children: [
+            Expanded(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Enable group folders',
+                    style: TextStyle(
+                      fontFamily: 'Inter',
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                      color: Color(0xFF111827),
+                    ),
+                  ),
+                  SizedBox(height: 2),
+                  Text(
+                    'Group related chats under a shared topic',
+                    style: TextStyle(
+                      fontFamily: 'Inter',
+                      fontSize: 11,
+                      fontWeight: FontWeight.w400,
+                      color: Color(0xFF9CA3AF),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            SizedBox(width: 12),
+            Transform.scale(
+              scale: 0.7,
+              alignment: Alignment.centerRight,
+              child: CupertinoSwitch(
+                value: FFAppState().groupFoldersEnabled,
+                activeColor: Color(0xFF3B82F6),
+                onChanged: (value) {
+                  setState(() {
+                    FFAppState().groupFoldersEnabled = value;
+                    _model.groupFoldersEnabled = value;
+                  });
+                },
+              ),
+            ),
+          ],
+        ),
+      ),
+    ).withClickCursor();
   }
 
   Widget _buildNavigationTabs() {
@@ -1261,11 +1408,11 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
 
             return Stack(
               children: [
-                // Show flat chat list or folder view based on sidebar mode
-                !kShowFoldersSidebar ||
-                        _model.sidebarMode == SidebarMode.chat
-                    ? _buildFlatChatListView(allChats)
-                    : _buildFolderListView(allChats),
+                // Show folder-grouped view when "Enable group folders" is on,
+                // otherwise the flat chat list.
+                FFAppState().groupFoldersEnabled
+                    ? _buildFolderListView(allChats)
+                    : _buildFlatChatListView(allChats),
                 // Quick search dropdown overlay
                 if (_model.showQuickSearch && chatController.searchQuery.value.isNotEmpty)
                   _buildQuickSearchDropdown(allChats),
@@ -1764,6 +1911,7 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
         onMute: _handleMuteNotifications,
         onMarkUnread: (chat) => chatController.markChatAsUnread(chat),
         onMoveToFolder: _showMoveToFolderMenu,
+        onRename: _showRenameGroupChatDialog,
         getOrCreateUserFuture: _getOrCreateUserFuture,
       );
     });
@@ -2005,12 +2153,45 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
   }
 
   /// Flat chat list (Chat mode): Pinned at top, then all chats by time.
+  bool _shouldShowInactiveSection() {
+    final tabIndex = _model.tabController?.index ?? 0;
+    return tabIndex == 0 &&
+        chatController.chatFilter.value == 'All' &&
+        chatController.searchQuery.value.isEmpty;
+  }
+
+  List<ChatsRecord> _getInactiveChats() {
+    if (!_shouldShowInactiveSection()) return const [];
+    return chatController.getInactiveChatsForSidebar();
+  }
+
+  List<Widget> _buildInactiveSection() {
+    // Always show the Inactive header on the All tab, even when there are no
+    // inactive chats (parity with how the Pinned section is presented).
+    if (!_shouldShowInactiveSection()) return const [];
+    final inactive = chatController.getInactiveChatsForSidebar();
+
+    return [
+      _buildSmartFolderHeader(
+        'Inactive',
+        inactive.length,
+        Icons.archive_outlined,
+        _model.isInactiveCollapsed,
+        () => setState(
+            () => _model.isInactiveCollapsed = !_model.isInactiveCollapsed),
+      ),
+      if (!_model.isInactiveCollapsed)
+        for (final chat in inactive) _buildFolderChatItem(chat),
+    ];
+  }
+
   Widget _buildFlatChatListView(List<ChatsRecord> filteredChats) {
     final userRef = currentUserReference;
     final pinned = filteredChats.where((c) => c.isPinnedByUser(userRef)).toList();
     final rest = filteredChats.where((c) => !c.isPinnedByUser(userRef)).toList();
+    final inactive = _getInactiveChats();
 
-    if (filteredChats.isEmpty) {
+    if (filteredChats.isEmpty && inactive.isEmpty) {
       final tabIndex = _model.tabController?.index ?? 0;
       final emptyMessage =
           tabIndex == 1 ? 'No unread chats' : 'No chats yet';
@@ -2050,43 +2231,60 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
             () => setState(() => _model.isPinnedCollapsed = !_model.isPinnedCollapsed),
           ),
           if (!_model.isPinnedCollapsed)
-            for (final chat in pinned) _buildFolderChatItem(chat),
+            for (final chat in pinned) _buildFolderChatItem(chat, showPinIcon: false),
         ],
 
         // All other chats — flat, sorted by time (already sorted by controller)
         if (rest.isNotEmpty) ...[
-          // Small "Recent" label divider
-          Padding(
-            padding: const EdgeInsets.fromLTRB(28, 12, 16, 4),
-            child: Text(
-              'Recent',
-              style: TextStyle(
-                fontFamily: 'Inter',
-                fontSize: 11,
-                fontWeight: FontWeight.w600,
-                color: Color(0xFF9CA3AF),
-                letterSpacing: 0.5,
-              ),
-            ),
+          _buildSmartFolderHeader(
+            'Recent',
+            rest.length,
+            Icons.history_rounded,
+            _model.isRecentCollapsed,
+            () => setState(
+                () => _model.isRecentCollapsed = !_model.isRecentCollapsed),
           ),
-          for (final chat in rest) _buildFolderChatItem(chat),
+          if (!_model.isRecentCollapsed)
+            for (final chat in rest) _buildFolderChatItem(chat),
         ],
+
+        ..._buildInactiveSection(),
       ],
     );
+  }
+
+  /// Chat IDs that belong to a custom folder. Such chats live exclusively
+  /// under their folder and are hidden from the Pinned/Group/DM sections so
+  /// each chat only ever appears in one place.
+  Set<String> _folderedChatIds() {
+    final ids = <String>{};
+    for (final folder in _model.chatFolders) {
+      ids.addAll(folder.chatIds);
+    }
+    return ids;
   }
 
   Widget _buildFolderListView(List<ChatsRecord> filteredChats) {
     // Smart folder classification
     // Combine pinned DMs and Groups into a single "Pinned" section
     final userRef = currentUserReference;
+    final folderedIds = _folderedChatIds();
+    // Pinned takes precedence over folders: a pinned chat always shows in the
+    // Pinned section (and is excluded from its folder below).
     final pinned = filteredChats
         .where((c) => c.isPinnedByUser(userRef))
         .toList();
     final groups = filteredChats
-        .where((c) => !c.isPinnedByUser(userRef) && c.isGroup)
+        .where((c) =>
+            !c.isPinnedByUser(userRef) &&
+            c.isGroup &&
+            !folderedIds.contains(c.reference.id))
         .toList();
     final dms = filteredChats
-        .where((c) => !c.isPinnedByUser(userRef) && !c.isGroup)
+        .where((c) =>
+            !c.isPinnedByUser(userRef) &&
+            !c.isGroup &&
+            !folderedIds.contains(c.reference.id))
         .toList();
 
     return ListView(
@@ -2133,8 +2331,12 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
           ),
           if (!_model.isPinnedCollapsed)
             for (final chat in pinned)
-              _buildFolderChatItem(chat),
+              _buildFolderChatItem(chat, showPinIcon: false),
         ],
+
+        // Custom folders (user-created)
+        for (final folder in _model.chatFolders)
+          _buildFolderSection(folder, filteredChats),
 
         // Group
         if (groups.isNotEmpty) ...[
@@ -2164,9 +2366,7 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
               _buildFolderChatItem(chat),
         ],
 
-        // Custom folders (user-created)
-        for (final folder in _model.chatFolders)
-          _buildFolderSection(folder, filteredChats),
+        ..._buildInactiveSection(),
       ],
     );
   }
@@ -2230,9 +2430,12 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
 
   Widget _buildFolderSection(
       ChatFoldersRecord folder, List<ChatsRecord> filteredChats) {
-    // Only show chats in this folder that match the current tab filter
+    // Only show chats in this folder that match the current tab filter.
+    // Pinned chats take precedence and live in the Pinned section instead.
     final folderChats = filteredChats
-        .where((c) => folder.chatIds.contains(c.reference.id))
+        .where((c) =>
+            folder.chatIds.contains(c.reference.id) &&
+            !c.isPinnedByUser(currentUserReference))
         .toList();
 
     // Count unread in this folder
@@ -2269,8 +2472,7 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
     return GestureDetector(
       onTap: () {
         if (folder != null) {
-          // Toggle collapse
-          fsPatchDocument(folder.reference, {'is_collapsed': !isCollapsed});
+          _toggleFolderCollapsed(folder);
         }
       },
       onSecondaryTapUp: folder != null
@@ -2370,7 +2572,7 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
           ],
         ),
       ),
-    ).withClickCursor().withClickCursor();
+    ).withClickCursor();
   }
 
   Widget _buildUnfiledHeader(int count) {
@@ -2428,7 +2630,7 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
     ).withClickCursor();
   }
 
-  Widget _buildFolderChatItem(ChatsRecord chat) {
+  Widget _buildFolderChatItem(ChatsRecord chat, {bool showPinIcon = true}) {
     return Obx(() {
       final _ = chatController.chats.length;
       final __ = chatController.locallySeenChats.length;
@@ -2442,6 +2644,7 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
         key: ValueKey('folder_chat_${chat.reference.id}'),
         chat: chat,
         isSelected: isSelected,
+        showPinIcon: showPinIcon,
         onTap: () {
           setState(() {
             _clearAllViews();
@@ -2456,6 +2659,7 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
         onMute: _handleMuteNotifications,
         onMarkUnread: (chat) => chatController.markChatAsUnread(chat),
         onMoveToFolder: _showMoveToFolderMenu,
+        onRename: _showRenameGroupChatDialog,
         getOrCreateUserFuture: _getOrCreateUserFuture,
       );
     });
@@ -2463,120 +2667,305 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
 
   // ─── Folder Management Dialogs ───
 
-  void _showCreateFolderDialog() {
+  /// Single-popup create-folder flow:
+  ///   Step 1 — Enter a name for your folder
+  ///   Step 2 — Add Chats (Groups | Direct Messages side by side)
+  void _showCreateFolderDialog() async {
     final nameController = TextEditingController();
+    final selectedIds = <String>{};
+    final groupsScrollController = ScrollController();
+    final dmsScrollController = ScrollController();
+
+    final allChats = chatController.chats;
+    final allGroups = allChats.where((c) => c.isGroup).toList();
+    final allDMs = allChats.where((c) => !c.isGroup).toList();
+
+    // Pre-resolve DM display names from the other participant.
+    final dmNameMap = <String, String>{};
+    for (final dm in allDMs) {
+      if (dm.title.isNotEmpty) {
+        dmNameMap[dm.reference.id] = dm.title;
+      } else {
+        try {
+          final otherUserRef = dm.members.firstWhere(
+            (m) => m != currentUserReference,
+            orElse: () => dm.members.first,
+          );
+          final user = await _getOrCreateUserFuture(otherUserRef);
+          dmNameMap[dm.reference.id] =
+              user.displayName.isNotEmpty ? user.displayName : 'User';
+        } catch (_) {
+          dmNameMap[dm.reference.id] = 'Direct Message';
+        }
+      }
+    }
+
+    // Chats already filed in another folder are locked out (one folder each).
+    final chatFolderMap = <String, List<String>>{};
+    final lockedChatIds = <String>{};
+    for (final folder in _model.chatFolders) {
+      for (final chatId in folder.chatIds) {
+        chatFolderMap.putIfAbsent(chatId, () => []).add(folder.name);
+        lockedChatIds.add(chatId);
+      }
+    }
+
+    bool isSelectable(ChatsRecord c) =>
+        !lockedChatIds.contains(c.reference.id) &&
+        !c.isPinnedByUser(currentUserReference);
+
+    if (!mounted) return;
     showDialog(
       context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: Colors.white,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        title: Text(
-          'New Folder',
-          style: TextStyle(
-            fontFamily: 'Inter',
-            fontSize: 16,
-            fontWeight: FontWeight.w600,
-            color: Color(0xFF111827),
-          ),
-        ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Step 1: Enter a name for your folder',
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) {
+          Widget buildColumn(
+            String label,
+            IconData icon,
+            List<ChatsRecord> chats,
+            ScrollController scrollController, {
+            bool isDm = false,
+          }) {
+            return Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _buildPickerSectionLabel(label, icon, chats.length),
+                  SizedBox(height: 4),
+                  Expanded(
+                    child: chats.isEmpty
+                        ? Center(
+                            child: Text(
+                              'None',
+                              style: TextStyle(
+                                fontFamily: 'Inter',
+                                fontSize: 12,
+                                color: Color(0xFF9CA3AF),
+                              ),
+                            ),
+                          )
+                        : Scrollbar(
+                            controller: scrollController,
+                            thumbVisibility: true,
+                            child: ListView(
+                              controller: scrollController,
+                              padding: EdgeInsets.only(right: 8),
+                              children: [
+                                for (final chat in chats)
+                                  _buildPickerChatRow(
+                                    chat: chat,
+                                    resolvedName: isDm
+                                        ? dmNameMap[chat.reference.id]
+                                        : null,
+                                    isChecked:
+                                        selectedIds.contains(chat.reference.id),
+                                    isAlreadyInFolder: false,
+                                    isLockedInOtherFolder: lockedChatIds
+                                        .contains(chat.reference.id),
+                                    isPinned: chat
+                                        .isPinnedByUser(currentUserReference),
+                                    folderNames:
+                                        chatFolderMap[chat.reference.id],
+                                    onTap: () {
+                                      if (!isSelectable(chat)) return;
+                                      setDialogState(() {
+                                        if (selectedIds
+                                            .contains(chat.reference.id)) {
+                                          selectedIds.remove(chat.reference.id);
+                                        } else {
+                                          selectedIds.add(chat.reference.id);
+                                        }
+                                      });
+                                    },
+                                  ),
+                              ],
+                            ),
+                          ),
+                  ),
+                ],
+              ),
+            );
+          }
+
+          return AlertDialog(
+            backgroundColor: Colors.white,
+            shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            title: Text(
+              'New Folder',
               style: TextStyle(
                 fontFamily: 'Inter',
-                fontSize: 12,
-                color: Color(0xFF6B7280),
-              ),
-            ),
-            SizedBox(height: 8),
-            TextField(
-              controller: nameController,
-              autofocus: true,
-              decoration: InputDecoration(
-                hintText: 'Folder name',
-                hintStyle: TextStyle(
-                  fontFamily: 'Inter',
-                  color: Color(0xFF9CA3AF),
-                ),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(8),
-                  borderSide: BorderSide(color: Color(0xFFE5E7EB)),
-                ),
-                focusedBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(8),
-                  borderSide: BorderSide(color: Color(0xFF3B82F6)),
-                ),
-                contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-              ),
-              style: TextStyle(
-                fontFamily: 'Inter',
-                fontSize: 14,
+                fontSize: 16,
+                fontWeight: FontWeight.w600,
                 color: Color(0xFF111827),
               ),
-              onSubmitted: (value) {
-                if (value.trim().isNotEmpty) {
+            ),
+            content: SizedBox(
+              width: 560,
+              height: MediaQuery.of(ctx).size.height / 2,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // ── Step 1: Name ──
+                  Text(
+                    'Step 1: Enter a name for your folder',
+                    style: TextStyle(
+                      fontFamily: 'Inter',
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: Color(0xFF6B7280),
+                    ),
+                  ),
+                  SizedBox(height: 8),
+                  TextField(
+                    controller: nameController,
+                    autofocus: true,
+                    decoration: InputDecoration(
+                      hintText: 'Folder name',
+                      hintStyle: TextStyle(
+                        fontFamily: 'Inter',
+                        color: Color(0xFF9CA3AF),
+                      ),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(8),
+                        borderSide: BorderSide(color: Color(0xFFE5E7EB)),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(8),
+                        borderSide: BorderSide(color: Color(0xFF3B82F6)),
+                      ),
+                      contentPadding:
+                          EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                    ),
+                    style: TextStyle(
+                      fontFamily: 'Inter',
+                      fontSize: 14,
+                      color: Color(0xFF111827),
+                    ),
+                  ),
+                  SizedBox(height: 16),
+                  // ── Step 2: Add Chats ──
+                  Row(
+                    children: [
+                      Text(
+                        'Step 2: Add Chats',
+                        style: TextStyle(
+                          fontFamily: 'Inter',
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          color: Color(0xFF6B7280),
+                        ),
+                      ),
+                      Spacer(),
+                      Text(
+                        '${selectedIds.length} selected',
+                        style: TextStyle(
+                          fontFamily: 'Inter',
+                          fontSize: 12,
+                          color: Color(0xFF9CA3AF),
+                        ),
+                      ),
+                    ],
+                  ),
+                  SizedBox(height: 8),
+                  Divider(height: 1, color: Color(0xFFE5E7EB)),
+                  SizedBox(height: 8),
+                  // Groups | Direct Messages side by side
+                  Expanded(
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        buildColumn(
+                          'Groups',
+                          Icons.group_outlined,
+                          allGroups,
+                          groupsScrollController,
+                        ),
+                        Padding(
+                          padding: EdgeInsets.symmetric(horizontal: 8),
+                          child: VerticalDivider(
+                            width: 1,
+                            color: Color(0xFFE5E7EB),
+                          ),
+                        ),
+                        buildColumn(
+                          'Direct Messages',
+                          Icons.person_outline_rounded,
+                          allDMs,
+                          dmsScrollController,
+                          isDm: true,
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(ctx).pop(),
+                child: Text(
+                  'Cancel',
+                  style: TextStyle(
+                    fontFamily: 'Inter',
+                    color: Color(0xFF6B7280),
+                  ),
+                ),
+              ),
+              TextButton(
+                onPressed: () {
+                  final name = nameController.text.trim();
+                  if (name.isEmpty) return;
                   Navigator.of(ctx).pop();
-                  _showSelectGroupsForFolderDialog(value.trim());
-                }
-              },
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(),
-            child: Text(
-              'Cancel',
-              style: TextStyle(
-                fontFamily: 'Inter',
-                color: Color(0xFF6B7280),
+                  _createFolder(name, selectedChatIds: selectedIds.toList());
+                },
+                child: Text(
+                  'Create Folder',
+                  style: TextStyle(
+                    fontFamily: 'Inter',
+                    color: Color(0xFF3B82F6),
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
               ),
-            ),
-          ),
-          TextButton(
-            onPressed: () {
-              if (nameController.text.trim().isNotEmpty) {
-                Navigator.of(ctx).pop();
-                _showSelectGroupsForFolderDialog(nameController.text.trim());
-              }
-            },
-            child: Text(
-              'Next',
-              style: TextStyle(
-                fontFamily: 'Inter',
-                color: Color(0xFF3B82F6),
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          ),
-        ],
+            ],
+          );
+        },
       ),
     );
   }
 
-  /// Step 2: Show a searchable chat selection dialog with Groups/DMs sections
-  void _showSelectGroupsForFolderDialog(String folderName) {
-    _showChatPickerDialog(
-      title: 'Add Chats to "$folderName"',
-      subtitle: 'Step 2: Select chats to add to this folder',
-      actionLabel: 'Create Folder',
-      existingChatIds: <String>{},
-      onConfirm: (selectedIds) {
-        _createFolder(folderName, selectedChatIds: selectedIds.toList());
-      },
-    );
+  /// Dialog to add chats to an existing folder (from the + button)
+  /// Removes the given chat IDs from every folder except [exceptFolderId], so a
+  /// chat can only ever belong to a single folder.
+  Future<void> _removeChatsFromOtherFolders(
+    Iterable<String> chatIds, {
+    required String exceptFolderId,
+  }) async {
+    final ids = chatIds.toList();
+    for (final folder in _model.chatFolders) {
+      if (folder.reference.id == exceptFolderId) continue;
+      final toRemove =
+          ids.where((id) => folder.chatIds.contains(id)).toList();
+      if (toRemove.isEmpty) continue;
+      try {
+        await fsArrayRemove(folder.reference, 'chat_ids', toRemove);
+        await fsPatchDocument(folder.reference, {
+          'updated_at': getCurrentTimestamp,
+        });
+      } catch (e) {
+        debugLog('❌ Error removing chats from folder ${folder.name}: $e');
+      }
+    }
   }
 
-  /// Dialog to add chats to an existing folder (from the + button)
   void _showAddChatsToExistingFolderDialog(ChatFoldersRecord folder) {
     _showChatPickerDialog(
       title: 'Add Chats to "${folder.name}"',
       subtitle: 'Select chats to add',
       actionLabel: 'Add to Folder',
       existingChatIds: folder.chatIds.toSet(),
+      currentFolderId: folder.reference.id,
       onConfirm: (selectedIds) async {
         if (selectedIds.isEmpty) return;
         try {
@@ -2588,6 +2977,11 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
           await fsPatchDocument(folder.reference, {
             'updated_at': getCurrentTimestamp,
           });
+          // A chat belongs to only one folder — drop it from any others.
+          await _removeChatsFromOtherFolders(
+            selectedIds,
+            exceptFolderId: folder.reference.id,
+          );
         } catch (e) {
           debugLog('❌ Error adding chats to folder: $e');
         }
@@ -2596,18 +2990,25 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
   }
 
   /// Shared chat picker dialog showing Groups, DMs, and existing folder reference
+  ///
+  /// [currentFolderId] is the folder being edited (null when creating a new one).
+  /// A chat may only ever live in a single folder, so any chat already filed in
+  /// a *different* folder is locked: it renders grayed out and cannot be picked.
   void _showChatPickerDialog({
     required String title,
     required String subtitle,
     required String actionLabel,
     required Set<String> existingChatIds,
     required Function(Set<String>) onConfirm,
+    String? currentFolderId,
   }) async {
     final allChats = chatController.chats;
     final allGroups = allChats.where((c) => c.isGroup).toList();
     final allDMs = allChats.where((c) => !c.isGroup).toList();
     final selectedIds = <String>{};
     final searchQuery = ValueNotifier<String>('');
+    final groupsScrollController = ScrollController();
+    final dmsScrollController = ScrollController();
 
     // Pre-resolve DM display names from other user
     final dmNameMap = <String, String>{};
@@ -2628,11 +3029,15 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
       }
     }
 
-    // Build folder lookup: chatId -> list of folder names
+    // Build folder lookup for chats already filed in a *different* folder.
+    // These are locked out of the picker so a chat can only belong to one folder.
     final chatFolderMap = <String, List<String>>{};
+    final lockedChatIds = <String>{};
     for (final folder in _model.chatFolders) {
+      if (folder.reference.id == currentFolderId) continue;
       for (final chatId in folder.chatIds) {
         chatFolderMap.putIfAbsent(chatId, () => []).add(folder.name);
+        lockedChatIds.add(chatId);
       }
     }
 
@@ -2664,8 +3069,8 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
               ],
             ),
             content: SizedBox(
-              width: 400,
-              height: 480,
+              width: 560,
+              height: MediaQuery.of(ctx).size.height / 2,
               child: Column(
                 children: [
                   // Search bar
@@ -2693,7 +3098,10 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
                         onTap: () {
                           setDialogState(() {
                             final allSelectableIds = allFiltered
-                                .where((c) => !existingChatIds.contains(c.reference.id))
+                                .where((c) =>
+                                    !existingChatIds.contains(c.reference.id) &&
+                                    !lockedChatIds.contains(c.reference.id) &&
+                                    !c.isPinnedByUser(currentUserReference))
                                 .map((c) => c.reference.id)
                                 .toSet();
                             if (selectedIds.containsAll(allSelectableIds)) {
@@ -2717,61 +3125,118 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
                   ),
                   SizedBox(height: 8),
                   Divider(height: 1, color: Color(0xFFE5E7EB)),
-                  // Chat list with sections
+                  SizedBox(height: 8),
+                  // Groups | Direct Messages side by side
                   Expanded(
-                    child: ListView(
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        // ── Groups Section ──
-                        if (filteredGroups.isNotEmpty) ...[
-                          _buildPickerSectionLabel('Groups', Icons.group_outlined, filteredGroups.length),
-                          for (final chat in filteredGroups)
-                            _buildPickerChatRow(
-                              chat: chat,
-                              isChecked: selectedIds.contains(chat.reference.id),
-                              isAlreadyInFolder: existingChatIds.contains(chat.reference.id),
-                              folderNames: chatFolderMap[chat.reference.id],
-                              onTap: () {
-                                if (existingChatIds.contains(chat.reference.id)) return;
-                                setDialogState(() {
-                                  if (selectedIds.contains(chat.reference.id)) {
-                                    selectedIds.remove(chat.reference.id);
-                                  } else {
-                                    selectedIds.add(chat.reference.id);
-                                  }
-                                });
-                              },
-                            ),
-                          SizedBox(height: 8),
-                        ],
-                        // ── DMs Section ──
-                        if (filteredDMs.isNotEmpty) ...[
-                          _buildPickerSectionLabel('Direct Messages', Icons.person_outline_rounded, filteredDMs.length),
-                          for (final chat in filteredDMs)
-                            _buildPickerChatRow(
-                              chat: chat,
-                              resolvedName: dmNameMap[chat.reference.id],
-                              isChecked: selectedIds.contains(chat.reference.id),
-                              isAlreadyInFolder: existingChatIds.contains(chat.reference.id),
-                              folderNames: chatFolderMap[chat.reference.id],
-                              onTap: () {
-                                if (existingChatIds.contains(chat.reference.id)) return;
-                                setDialogState(() {
-                                  if (selectedIds.contains(chat.reference.id)) {
-                                    selectedIds.remove(chat.reference.id);
-                                  } else {
-                                    selectedIds.add(chat.reference.id);
-                                  }
-                                });
-                              },
-                            ),
-                        ],
-                        if (filteredGroups.isEmpty && filteredDMs.isEmpty)
-                          Padding(
-                            padding: EdgeInsets.only(top: 40),
-                            child: Center(
-                              child: Text('No chats found', style: TextStyle(fontFamily: 'Inter', fontSize: 13, color: Color(0xFF9CA3AF))),
-                            ),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              _buildPickerSectionLabel('Groups', Icons.group_outlined, filteredGroups.length),
+                              SizedBox(height: 4),
+                              Expanded(
+                                child: filteredGroups.isEmpty
+                                    ? Center(
+                                        child: Text(
+                                          query.isEmpty ? 'None' : 'No chats found',
+                                          style: TextStyle(fontFamily: 'Inter', fontSize: 12, color: Color(0xFF9CA3AF)),
+                                        ),
+                                      )
+                                    : Scrollbar(
+                                        controller: groupsScrollController,
+                                        thumbVisibility: true,
+                                        child: ListView(
+                                          controller: groupsScrollController,
+                                          padding: EdgeInsets.only(right: 8),
+                                          children: [
+                                            for (final chat in filteredGroups)
+                                              _buildPickerChatRow(
+                                                chat: chat,
+                                                isChecked: selectedIds.contains(chat.reference.id),
+                                                isAlreadyInFolder: existingChatIds.contains(chat.reference.id),
+                                                isLockedInOtherFolder: lockedChatIds.contains(chat.reference.id),
+                                                isPinned: chat.isPinnedByUser(currentUserReference),
+                                                folderNames: chatFolderMap[chat.reference.id],
+                                                onTap: () {
+                                                  if (existingChatIds.contains(chat.reference.id)) return;
+                                                  if (lockedChatIds.contains(chat.reference.id)) return;
+                                                  if (chat.isPinnedByUser(currentUserReference)) return;
+                                                  setDialogState(() {
+                                                    if (selectedIds.contains(chat.reference.id)) {
+                                                      selectedIds.remove(chat.reference.id);
+                                                    } else {
+                                                      selectedIds.add(chat.reference.id);
+                                                    }
+                                                  });
+                                                },
+                                              ),
+                                          ],
+                                        ),
+                                      ),
+                              ),
+                            ],
                           ),
+                        ),
+                        Padding(
+                          padding: EdgeInsets.symmetric(horizontal: 8),
+                          child: VerticalDivider(
+                            width: 1,
+                            color: Color(0xFFE5E7EB),
+                          ),
+                        ),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              _buildPickerSectionLabel('Direct Messages', Icons.person_outline_rounded, filteredDMs.length),
+                              SizedBox(height: 4),
+                              Expanded(
+                                child: filteredDMs.isEmpty
+                                    ? Center(
+                                        child: Text(
+                                          query.isEmpty ? 'None' : 'No chats found',
+                                          style: TextStyle(fontFamily: 'Inter', fontSize: 12, color: Color(0xFF9CA3AF)),
+                                        ),
+                                      )
+                                    : Scrollbar(
+                                        controller: dmsScrollController,
+                                        thumbVisibility: true,
+                                        child: ListView(
+                                          controller: dmsScrollController,
+                                          padding: EdgeInsets.only(right: 8),
+                                          children: [
+                                            for (final chat in filteredDMs)
+                                              _buildPickerChatRow(
+                                                chat: chat,
+                                                resolvedName: dmNameMap[chat.reference.id],
+                                                isChecked: selectedIds.contains(chat.reference.id),
+                                                isAlreadyInFolder: existingChatIds.contains(chat.reference.id),
+                                                isLockedInOtherFolder: lockedChatIds.contains(chat.reference.id),
+                                                isPinned: chat.isPinnedByUser(currentUserReference),
+                                                folderNames: chatFolderMap[chat.reference.id],
+                                                onTap: () {
+                                                  if (existingChatIds.contains(chat.reference.id)) return;
+                                                  if (lockedChatIds.contains(chat.reference.id)) return;
+                                                  if (chat.isPinnedByUser(currentUserReference)) return;
+                                                  setDialogState(() {
+                                                    if (selectedIds.contains(chat.reference.id)) {
+                                                      selectedIds.remove(chat.reference.id);
+                                                    } else {
+                                                      selectedIds.add(chat.reference.id);
+                                                    }
+                                                  });
+                                                },
+                                              ),
+                                          ],
+                                        ),
+                                      ),
+                              ),
+                            ],
+                          ),
+                        ),
                       ],
                     ),
                   ),
@@ -2820,18 +3285,25 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
     String? resolvedName,
     required bool isChecked,
     required bool isAlreadyInFolder,
+    bool isLockedInOtherFolder = false,
+    bool isPinned = false,
     List<String>? folderNames,
     required VoidCallback onTap,
   }) {
     final displayName = resolvedName ?? (chat.title.isNotEmpty ? chat.title : (chat.isGroup ? 'Group Chat' : 'Direct Message'));
     final isGroup = chat.isGroup;
-    final opacity = isAlreadyInFolder ? 0.5 : 1.0;
+    // Disabled when already in this folder, filed in another folder, or pinned.
+    // Pinned chats take precedence and live in the Pinned section only.
+    final isDisabled = isAlreadyInFolder || isLockedInOtherFolder || isPinned;
+    final opacity = isDisabled ? 0.5 : 1.0;
 
     return Opacity(
       opacity: opacity,
       child: InkWell(
-        mouseCursor: MaterialStateMouseCursor.clickable,
-        onTap: isAlreadyInFolder ? null : onTap,
+        mouseCursor: isDisabled
+            ? SystemMouseCursors.forbidden
+            : MaterialStateMouseCursor.clickable,
+        onTap: isDisabled ? null : onTap,
         borderRadius: BorderRadius.circular(6),
         child: Padding(
           padding: EdgeInsets.symmetric(horizontal: 4, vertical: 5),
@@ -2917,6 +3389,20 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
                         'Already in this folder',
                         style: TextStyle(fontFamily: 'Inter', fontSize: 10, color: Color(0xFF9CA3AF), fontStyle: FontStyle.italic),
                       ),
+                    if (isPinned && !isAlreadyInFolder)
+                      Padding(
+                        padding: EdgeInsets.only(top: 2),
+                        child: Row(
+                          children: [
+                            Icon(Icons.push_pin_rounded, size: 10, color: Color(0xFF9CA3AF)),
+                            SizedBox(width: 3),
+                            Text(
+                              "Pinned — can't be added to folders",
+                              style: TextStyle(fontFamily: 'Inter', fontSize: 10, color: Color(0xFF9CA3AF), fontStyle: FontStyle.italic),
+                            ),
+                          ],
+                        ),
+                      ),
                   ],
                 ),
               ),
@@ -2935,7 +3421,7 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
     try {
       final nextOrder = _model.chatFolders.length;
       debugLog('📁 Creating folder "$name"');
-      await fsCreateChatFolderDocument(
+      final docRef = await fsCreateChatFolderDocument(
         userRef: currentUserReference!,
         data: {
           'name': name,
@@ -2947,6 +3433,41 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
         },
       );
       debugLog('✅ Folder "$name" created successfully with ${selectedChatIds?.length ?? 0} groups');
+
+      // Make the folder visible immediately. On Windows/Linux the folder list
+      // is refreshed via a 30s poll (no live stream), so without this the new
+      // folder wouldn't appear until the next poll. We refresh from the backend
+      // and fall back to an optimistic local insert if the fetch is empty/slow.
+      await _refreshChatFoldersNow(
+        fallback: () {
+          if (_model.chatFolders.any((f) => f.reference.id == docRef.id)) {
+            return;
+          }
+          _model.chatFolders = [
+            ..._model.chatFolders,
+            ChatFoldersRecord.getDocumentFromData(
+              {
+                'name': name,
+                'order': nextOrder,
+                'is_collapsed': false,
+                'chat_ids': selectedChatIds ?? <String>[],
+                'created_at': getCurrentTimestamp,
+                'updated_at': getCurrentTimestamp,
+              },
+              docRef,
+            ),
+          ];
+        },
+      );
+
+      // A chat belongs to only one folder — drop the newly added chats from
+      // any other folders they may have been in.
+      if (selectedChatIds != null && selectedChatIds.isNotEmpty) {
+        await _removeChatsFromOtherFolders(
+          selectedChatIds,
+          exceptFolderId: docRef.id,
+        );
+      }
     } catch (e, stack) {
       debugLog('❌ Error creating folder: $e');
       debugLog(stack);
@@ -2962,6 +3483,166 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
   }
 
 
+
+  void _showRenameGroupChatDialog(ChatsRecord chat) {
+    if (!chat.isGroup ||
+        !ChatHelpers.isGroupOwner(chat, currentUserReference)) {
+      return;
+    }
+
+    final controller = TextEditingController(text: chat.title);
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: Colors.white,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        title: Text(
+          'Rename Group',
+          style: TextStyle(
+            fontFamily: 'Inter',
+            fontSize: 16,
+            fontWeight: FontWeight.w600,
+            color: Color(0xFF111827),
+          ),
+        ),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          decoration: InputDecoration(
+            hintText: 'Group name',
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(8),
+              borderSide: BorderSide(color: Color(0xFFE5E7EB)),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(8),
+              borderSide: BorderSide(color: Color(0xFF3B82F6)),
+            ),
+            contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          ),
+          style: TextStyle(
+            fontFamily: 'Inter',
+            fontSize: 14,
+            color: Color(0xFF111827),
+          ),
+          onSubmitted: (value) {
+            final name = value.trim();
+            if (name.isNotEmpty) {
+              Navigator.of(ctx).pop();
+              _handleRenameGroupChat(chat, name);
+            }
+          },
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: Text(
+              'Cancel',
+              style: TextStyle(
+                fontFamily: 'Inter',
+                color: Color(0xFF6B7280),
+              ),
+            ),
+          ),
+          TextButton(
+            onPressed: () {
+              final name = controller.text.trim();
+              if (name.isEmpty) return;
+              Navigator.of(ctx).pop();
+              _handleRenameGroupChat(chat, name);
+            },
+            child: Text(
+              'Rename',
+              style: TextStyle(
+                fontFamily: 'Inter',
+                color: Color(0xFF3B82F6),
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _handleRenameGroupChat(
+    ChatsRecord chat,
+    String newName,
+  ) async {
+    if (!chat.isGroup ||
+        !ChatHelpers.isGroupOwner(chat, currentUserReference)) {
+      return;
+    }
+
+    final oldName = chat.title;
+    if (oldName == newName) return;
+
+    try {
+      await fsPatchDocument(chat.reference, {'title': newName});
+
+      final userName = currentUserDisplayName.isNotEmpty
+          ? currentUserDisplayName
+          : (currentUserDocument?.displayName ?? 'Someone');
+      final systemMessage =
+          '$userName updated the group name from "$oldName" to "$newName"';
+
+      await fsCreateMessage(chat.reference, {
+        'content': systemMessage,
+        'created_at': getCurrentTimestamp,
+        'sender_ref': currentUserReference,
+        'sender_name': userName,
+        'sender_photo': currentUserPhoto.isNotEmpty
+            ? currentUserPhoto
+            : (currentUserDocument?.photoUrl ?? ''),
+        'is_system_message': true,
+        'is_read_by': [currentUserReference],
+      });
+
+      await fsPatchDocument(chat.reference, {
+        'last_message': systemMessage,
+        'last_message_at': getCurrentTimestamp,
+        'last_message_sent': currentUserReference,
+      });
+
+      chatController.applyLocalChatLastMessageFromPatch(chat.reference, {
+        'title': newName,
+        'last_message': systemMessage,
+        'last_message_at': getCurrentTimestamp,
+        'last_message_sent': currentUserReference,
+      });
+
+      if (_model.selectedChat?.reference.id == chat.reference.id) {
+        final data = Map<String, dynamic>.from(chat.snapshotData);
+        data['title'] = newName;
+        data['last_message'] = systemMessage;
+        data['last_message_at'] = getCurrentTimestamp;
+        data['last_message_sent'] = currentUserReference;
+        setState(() {
+          _model.selectedChat =
+              ChatsRecord.getDocumentFromData(data, chat.reference);
+        });
+      }
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Group renamed successfully'),
+            backgroundColor: Color(0xFF10B981),
+          ),
+        );
+      }
+    } catch (e) {
+      debugLog('❌ Error renaming group chat: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error renaming group: $e'),
+            backgroundColor: Color(0xFFEF4444),
+          ),
+        );
+      }
+    }
+  }
 
   void _showRenameFolderDialog(ChatFoldersRecord folder) {
     final controller = TextEditingController(text: folder.name);
@@ -3052,7 +3733,7 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
           ),
         ),
         content: Text(
-          'Delete "${folder.name}"? Chats will be moved to Unfiled.',
+          'Delete the folder "${folder.name}"? Chats will not be deleted.',
           style: TextStyle(
             fontFamily: 'Inter',
             fontSize: 14,
@@ -3067,8 +3748,8 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
           ),
           TextButton(
             onPressed: () {
-              fsDeleteDocument(folder.reference);
               Navigator.of(ctx).pop();
+              _deleteFolder(folder);
             },
             child: Text('Delete',
                 style: TextStyle(
@@ -3128,42 +3809,56 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
   }
 
   void _showMoveToFolderMenu(Offset position, ChatsRecord chat) {
+    // A chat can only live in one folder. If it's already filed, every other
+    // folder is disabled — the user must "Move to Unfiled" first to relocate it.
+    // Pinned chats take precedence and can't be added to any folder.
+    final isFiledElsewhere = _model.chatFolders
+        .any((f) => f.chatIds.contains(chat.reference.id));
+    final isPinned = chat.isPinnedByUser(currentUserReference);
     final items = <PopupMenuEntry<String>>[
       // Existing folders
       for (final folder in _model.chatFolders)
-        PopupMenuItem<String>(
-          value: folder.reference.id,
-          child: Row(
-            children: [
-              Icon(
-                folder.chatIds.contains(chat.reference.id)
-                    ? Icons.folder_rounded
-                    : Icons.folder_outlined,
-                size: 16,
-                color: folder.chatIds.contains(chat.reference.id)
-                    ? Color(0xFF3B82F6)
-                    : Color(0xFF374151),
-              ),
-              SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  folder.name,
-                  style: TextStyle(
-                    fontFamily: 'Inter',
-                    fontSize: 13,
-                    color: Color(0xFF111827),
-                    fontWeight: folder.chatIds.contains(chat.reference.id)
-                        ? FontWeight.w600
-                        : FontWeight.w400,
+        () {
+          final containsChat = folder.chatIds.contains(chat.reference.id);
+          final isLocked = isPinned || (isFiledElsewhere && !containsChat);
+          return PopupMenuItem<String>(
+            value: folder.reference.id,
+            enabled: !isLocked,
+            child: Opacity(
+              opacity: isLocked ? 0.4 : 1.0,
+              child: Row(
+                children: [
+                  Icon(
+                    containsChat
+                        ? Icons.folder_rounded
+                        : Icons.folder_outlined,
+                    size: 16,
+                    color: containsChat
+                        ? Color(0xFF3B82F6)
+                        : Color(0xFF374151),
                   ),
-                  overflow: TextOverflow.ellipsis,
-                ),
+                  SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      folder.name,
+                      style: TextStyle(
+                        fontFamily: 'Inter',
+                        fontSize: 13,
+                        color: Color(0xFF111827),
+                        fontWeight: containsChat
+                            ? FontWeight.w600
+                            : FontWeight.w400,
+                      ),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                  if (containsChat)
+                    Icon(Icons.check, size: 14, color: Color(0xFF3B82F6)),
+                ],
               ),
-              if (folder.chatIds.contains(chat.reference.id))
-                Icon(Icons.check, size: 14, color: Color(0xFF3B82F6)),
-            ],
-          ),
-        ),
+            ),
+          );
+        }(),
       if (_model.chatFolders.isNotEmpty) PopupMenuDivider(),
       // Remove from folder
       PopupMenuItem<String>(
@@ -3932,6 +4627,179 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
   void _clearAllViews() {
     _model.showNewMessageView = false;
     _model.showGroupCreation = false;
+    _model.newMessageSelectedMembers = [];
+    _model.isCreatingNewMessageChat = false;
+    _model.groupChatTab = GroupChatTab.messages;
+  }
+
+  void _selectGroupChatTab(GroupChatTab tab) {
+    setState(() {
+      _model.groupChatTab = tab;
+      _model.showTasksPanel = false;
+      _model.showAnnouncementsPanel = false;
+      _model.showPinnedMessagesPopup = false;
+      _model.pinnedMessagesPopupChat = null;
+      _model.showGroupFilesPopup = false;
+      _model.groupFilesPopupChat = null;
+    });
+    _scheduleGroupTabIndicatorUpdate();
+  }
+
+  void _scheduleGroupTabIndicatorUpdate() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+
+      final tabIndex = GroupChatTab.values.indexOf(_model.groupChatTab);
+      if (tabIndex < 0 || tabIndex >= _groupTabKeys.length) return;
+
+      final tabContext = _groupTabKeys[tabIndex].currentContext;
+      final rowContext = _groupTabRowKey.currentContext;
+      if (tabContext == null || rowContext == null) return;
+
+      final tabBox = tabContext.findRenderObject() as RenderBox?;
+      final rowBox = rowContext.findRenderObject() as RenderBox?;
+      if (tabBox == null || !tabBox.hasSize || rowBox == null) return;
+
+      final tabOffset = tabBox.localToGlobal(Offset.zero, ancestor: rowBox);
+      final nextLeft = tabOffset.dx;
+      final nextWidth = tabBox.size.width;
+
+      if (_groupTabIndicatorLeft == nextLeft &&
+          _groupTabIndicatorWidth == nextWidth &&
+          _groupTabIndicatorReady) {
+        return;
+      }
+
+      setState(() {
+        _groupTabIndicatorLeft = nextLeft;
+        _groupTabIndicatorWidth = nextWidth;
+        _groupTabIndicatorReady = true;
+      });
+    });
+  }
+
+  Widget _buildGroupChatTabBody(ChatsRecord chat) {
+    switch (_model.groupChatTab) {
+      case GroupChatTab.messages:
+        return Column(
+          children: [
+            _buildAnnouncementBanner(chat),
+            Expanded(
+              child: _buildPlatformChatThread(key: _chatThreadKey),
+            ),
+            if (_isSelectionMode) _buildSelectionBar(),
+          ],
+        );
+      case GroupChatTab.filesAndLinks:
+        return GroupMediaLinksDocsWidget(
+          key: ValueKey('group-media-${chat.reference.path}'),
+          chatDoc: chat,
+          embedded: true,
+        );
+      case GroupChatTab.actionTasks:
+        return GroupActionTasksWidget(chatDoc: chat, embedded: true);
+      case GroupChatTab.announcements:
+        return GroupAnnouncementsWidget(chatDoc: chat, embedded: true);
+      case GroupChatTab.pinnedMessages:
+        return ColoredBox(
+          color: Colors.white,
+          child: _buildPinnedMessagesPopupContent(chat, inTabView: true),
+        );
+    }
+  }
+
+  Widget _buildGroupChatHeaderTabs() {
+    _scheduleGroupTabIndicatorUpdate();
+
+    const tabConfigs = <(String, GroupChatTab, IconData)>[
+      ('Messages', GroupChatTab.messages, Icons.chat_bubble_outline_rounded),
+      ('Files and Links', GroupChatTab.filesAndLinks, Icons.folder_outlined),
+      ('Action Tasks', GroupChatTab.actionTasks, Icons.checklist_rounded),
+      ('Announcements', GroupChatTab.announcements, Icons.campaign_outlined),
+      ('Pinned Messages', GroupChatTab.pinnedMessages, Icons.push_pin_outlined),
+    ];
+
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          padding: const EdgeInsets.fromLTRB(20, 12, 20, 0),
+          child: Stack(
+            key: _groupTabRowKey,
+            clipBehavior: Clip.none,
+            children: [
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  for (var i = 0; i < tabConfigs.length; i++) ...[
+                    if (i > 0) const SizedBox(width: 20),
+                    _buildGroupChatHeaderTabItem(
+                      tabConfigs[i].$1,
+                      tabConfigs[i].$2,
+                      tabConfigs[i].$3,
+                      key: _groupTabKeys[i],
+                    ),
+                  ],
+                ],
+              ),
+              if (_groupTabIndicatorReady)
+                AnimatedPositioned(
+                  duration: const Duration(milliseconds: 250),
+                  curve: Curves.easeInOutCubic,
+                  left: _groupTabIndicatorLeft,
+                  bottom: 0,
+                  width: _groupTabIndicatorWidth,
+                  height: 2,
+                  child: const ColoredBox(color: Color(0xFF3B82F6)),
+                ),
+            ],
+          ),
+        ),
+        const Divider(height: 1, thickness: 1, color: Color(0xFFE5E7EB)),
+      ],
+    );
+  }
+
+  Widget _buildGroupChatHeaderTabItem(
+    String label,
+    GroupChatTab tab,
+    IconData icon, {
+    Key? key,
+  }) {
+    final isSelected = _model.groupChatTab == tab;
+    const activeBlue = Color(0xFF3B82F6);
+    const inactiveColor = Color(0xFF6B7280);
+
+    return InkWell(
+      key: key,
+      mouseCursor: MaterialStateMouseCursor.clickable,
+      onTap: () => _selectGroupChatTab(tab),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              icon,
+              size: 16,
+              color: isSelected ? activeBlue : inactiveColor,
+            ),
+            const SizedBox(width: 6),
+            Text(
+              label,
+              style: TextStyle(
+                fontFamily: 'Inter',
+                fontSize: 13,
+                fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
+                color: isSelected ? activeBlue : inactiveColor,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   Future<void> _startNewChatWithUser(UsersRecord user) async {
@@ -4217,6 +5085,7 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
                         setState(() {
                           _model.showNewMessageView = false;
                           _model.newMessageSearchController?.clear();
+                          _model.newMessageSelectedMembers = [];
                         });
                       },
                       child: Container(
@@ -4255,7 +5124,7 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            'Start a New Direct Message',
+                            'New Message',
                             style: TextStyle(
                               fontFamily: 'Inter',
                               color: Color(0xFF1A1F36),
@@ -4266,7 +5135,9 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
                           ),
                           SizedBox(height: 6),
                           Text(
-                            'Search for a colleague to begin a private conversation',
+                            _model.newMessageSelectedMembers.length > 1
+                                ? 'Adding ${_model.newMessageSelectedMembers.length} people — this will start a group chat'
+                                : 'Add one person for a direct message, or more to start a group',
                             style: TextStyle(
                               fontFamily: 'Inter',
                               color: Color(0xFF64748B),
@@ -4312,7 +5183,7 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
                   setState(() {});
                 },
                 decoration: InputDecoration(
-                  hintText: 'Search by name or email',
+                  hintText: 'Type a name to add people',
                   hintStyle: TextStyle(
                     fontFamily: 'Inter',
                     color: Color(0xFF94A3B8),
@@ -4325,7 +5196,7 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
                   prefixIcon: Padding(
                     padding: EdgeInsetsDirectional.only(start: 14, end: 10),
                     child: Icon(
-                      Icons.search_rounded,
+                      Icons.person_add_alt_1_rounded,
                       color: Color(0xFF3B82F6),
                       size: 20,
                     ),
@@ -4340,6 +5211,88 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
               ),
             ),
           ),
+          // Selected people chips ("To:" area)
+          if (_model.newMessageSelectedMembers.isNotEmpty)
+            Container(
+              width: double.infinity,
+              padding: EdgeInsetsDirectional.fromSTEB(32, 0, 32, 4),
+              child: Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: _model.newMessageSelectedMembers.map((memberRef) {
+                  return DesktopSafeUserBuilder(
+                    userRef: memberRef,
+                    fetchOnce: _getOrCreateUserFuture,
+                    builder: (context, user) {
+                      final name = (user?.displayName.isNotEmpty ?? false)
+                          ? user!.displayName
+                          : (user?.email.split('@').first ?? 'User');
+                      return Container(
+                        padding:
+                            EdgeInsetsDirectional.fromSTEB(6, 4, 8, 4),
+                        decoration: BoxDecoration(
+                          color: Color(0xFFEBF2FF),
+                          borderRadius: BorderRadius.circular(20),
+                          border: Border.all(
+                            color: Color(0xFFBFD4FF),
+                            width: 1,
+                          ),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Container(
+                              width: 24,
+                              height: 24,
+                              clipBehavior: Clip.antiAlias,
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                color: Color(0xFFDCE7FF),
+                              ),
+                              child: (user != null &&
+                                      user.photoUrl.isNotEmpty)
+                                  ? CachedNetworkImage(
+                                      imageUrl: user.photoUrl,
+                                      width: 24,
+                                      height: 24,
+                                      fit: BoxFit.cover,
+                                      errorWidget: (context, url, error) =>
+                                          Icon(Icons.person,
+                                              size: 14,
+                                              color: Color(0xFF3B82F6)),
+                                    )
+                                  : Icon(Icons.person,
+                                      size: 14, color: Color(0xFF3B82F6)),
+                            ),
+                            SizedBox(width: 6),
+                            Text(
+                              name,
+                              style: TextStyle(
+                                fontFamily: 'Inter',
+                                fontSize: 13,
+                                fontWeight: FontWeight.w500,
+                                color: Color(0xFF1D4ED8),
+                              ),
+                            ),
+                            SizedBox(width: 6),
+                            GestureDetector(
+                              onTap: () => setState(() => _model
+                                  .newMessageSelectedMembers
+                                  .remove(memberRef)),
+                              child: Icon(
+                                Icons.close_rounded,
+                                size: 16,
+                                color: Color(0xFF3B82F6),
+                              ),
+                            ).withClickCursor(),
+                          ],
+                        ),
+                      );
+                    },
+                  );
+                }).toList(),
+              ),
+            ),
           // Invite friends buttons
           Container(
             width: double.infinity,
@@ -4471,6 +5424,10 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
                                   return SizedBox.shrink();
                                 }
 
+                                final isSelected = _model
+                                    .newMessageSelectedMembers
+                                    .contains(user.reference);
+
                                 // Filter by search query
                                 if (searchQuery.isNotEmpty) {
                                   final displayName =
@@ -4485,11 +5442,15 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
                                 return Container(
                                   margin: EdgeInsets.only(bottom: 8),
                                   decoration: BoxDecoration(
-                                    color: Colors.white,
+                                    color: isSelected
+                                        ? Color(0xFFEBF2FF)
+                                        : Colors.white,
                                     borderRadius: BorderRadius.circular(8),
                                     border: Border.all(
-                                      color: Color(0xFFE2E8F0),
-                                      width: 1,
+                                      color: isSelected
+                                          ? Color(0xFF3B82F6)
+                                          : Color(0xFFE2E8F0),
+                                      width: isSelected ? 2 : 1,
                                     ),
                                     boxShadow: [
                                       BoxShadow(
@@ -4503,10 +5464,20 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
                                     color: Colors.transparent,
                                     child: InkWell(
                                       mouseCursor: MaterialStateMouseCursor.clickable,
-                                      onTap: () async {
-                                        await _startNewChatWithUser(user);
+                                      onTap: () {
                                         setState(() {
-                                          _model.showNewMessageView = false;
+                                          if (isSelected) {
+                                            _model.newMessageSelectedMembers
+                                                .remove(user.reference);
+                                          } else {
+                                            _model.newMessageSelectedMembers
+                                                .add(user.reference);
+                                            // Reset the search so the next
+                                            // person can be found without
+                                            // clearing the field manually.
+                                            _model.newMessageSearchController
+                                                ?.clear();
+                                          }
                                         });
                                       },
                                       borderRadius: BorderRadius.circular(8),
@@ -4619,19 +5590,30 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
                                                 ],
                                               ),
                                             ),
-                                            // Start Chat button
+                                            // Selection indicator
                                             Container(
-                                              width: 36,
-                                              height: 36,
+                                              width: 28,
+                                              height: 28,
                                               decoration: BoxDecoration(
-                                                color: Color(0xFF3B82F6)
-                                                    .withOpacity(0.1),
-                                                borderRadius:
-                                                    BorderRadius.circular(8),
+                                                color: isSelected
+                                                    ? Color(0xFF3B82F6)
+                                                    : Color(0xFF3B82F6)
+                                                        .withOpacity(0.08),
+                                                shape: BoxShape.circle,
+                                                border: isSelected
+                                                    ? null
+                                                    : Border.all(
+                                                        color: Color(0xFFCBD5E1),
+                                                        width: 1.5,
+                                                      ),
                                               ),
                                               child: Icon(
-                                                Icons.arrow_forward_rounded,
-                                                color: Color(0xFF3B82F6),
+                                                isSelected
+                                                    ? Icons.check_rounded
+                                                    : Icons.add_rounded,
+                                                color: isSelected
+                                                    ? Colors.white
+                                                    : Color(0xFF3B82F6),
                                                 size: 18,
                                               ),
                                             ),
@@ -4652,9 +5634,116 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
               ),
             ),
           ),
+          // Bottom action bar: start DM (1 person) or group (2+)
+          _buildNewMessageActionBar(),
         ],
       ),
     );
+  }
+
+  Widget _buildNewMessageActionBar() {
+    final count = _model.newMessageSelectedMembers.length;
+    final hasSelection = count > 0;
+    final isGroup = count > 1;
+    final label = !hasSelection
+        ? 'Add people to start'
+        : isGroup
+            ? 'Create Group ($count)'
+            : 'Start Direct Message';
+    return Container(
+      width: double.infinity,
+      padding: EdgeInsetsDirectional.fromSTEB(32, 12, 32, 20),
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.6),
+        border: Border(
+          top: BorderSide(color: Color(0xFFE2E8F0), width: 1),
+        ),
+      ),
+      child: SizedBox(
+        width: double.infinity,
+        height: 48,
+        child: ElevatedButton(
+          onPressed: (!hasSelection || _model.isCreatingNewMessageChat)
+              ? null
+              : _createChatFromNewMessage,
+          style: ElevatedButton.styleFrom(
+            backgroundColor:
+                hasSelection ? Color(0xFF3B82F6) : Color(0xFF9CA3AF),
+            disabledBackgroundColor: Color(0xFFCBD5E1),
+            elevation: 0,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
+          ),
+          child: _model.isCreatingNewMessageChat
+              ? SizedBox(
+                  width: 20,
+                  height: 20,
+                  child: CircularProgressIndicator(
+                    color: Colors.white,
+                    strokeWidth: 2,
+                  ),
+                )
+              : Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(
+                      isGroup
+                          ? Icons.group_rounded
+                          : Icons.chat_bubble_rounded,
+                      color: Colors.white,
+                      size: 18,
+                    ),
+                    SizedBox(width: 8),
+                    Text(
+                      label,
+                      style: TextStyle(
+                        fontFamily: 'Inter',
+                        color: Colors.white,
+                        fontSize: 15,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                ),
+        ),
+      ),
+    );
+  }
+
+  /// Creates a direct message when a single person is selected, or a group
+  /// chat when multiple people are selected, from the combined New Message view.
+  Future<void> _createChatFromNewMessage() async {
+    final selected = List<DocumentReference>.from(
+        _model.newMessageSelectedMembers);
+    if (selected.isEmpty) return;
+
+    setState(() => _model.isCreatingNewMessageChat = true);
+    try {
+      if (selected.length == 1) {
+        // Direct message
+        final user = await _getOrCreateUserFuture(selected.first);
+        await _startNewChatWithUser(user);
+      } else {
+        // Group chat — reuse the existing group creation pipeline.
+        _model.selectedMembers = selected;
+        _model.groupName = '';
+        _model.groupNameController?.clear();
+        _model.groupImagePath = null;
+        _model.groupImageUrl = null;
+        _model.isUploadingImage = false;
+        await _createGroup();
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _model.isCreatingNewMessageChat = false;
+          _model.showNewMessageView = false;
+          _model.newMessageSelectedMembers = [];
+          _model.newMessageSearchController?.clear();
+        });
+      }
+    }
   }
 
   Widget _buildRightPanel() {
@@ -4686,6 +5775,7 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
                     setState(() {
                       _model.showGroupCreation = false;
                       _model.showNewMessageView = false;
+                      _model.newMessageSelectedMembers = [];
                       _model.showGroupInfoPanel = false;
                       _model.groupInfoChat = null;
                       _model.showUserProfilePanel = false;
@@ -4717,6 +5807,7 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
                   setState(() {
                     _model.showNewMessageView = false;
                     _model.newMessageSearchController?.clear();
+                    _model.newMessageSelectedMembers = [];
                   });
                 }),
 
@@ -5014,7 +6105,10 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
     );
   }
 
-  Widget _buildPinnedMessagesPopupContent(ChatsRecord chat) {
+  Widget _buildPinnedMessagesPopupContent(
+    ChatsRecord chat, {
+    bool inTabView = false,
+  }) {
     Widget buildBody(AsyncSnapshot<List<MessagesRecord>> snapshot) {
       if (snapshot.connectionState == ConnectionState.waiting &&
           !snapshot.hasData) {
@@ -5081,8 +6175,11 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
       }
 
       return ListView.separated(
-        shrinkWrap: true,
-        padding: const EdgeInsets.symmetric(vertical: 8),
+        shrinkWrap: !inTabView,
+        padding: EdgeInsets.symmetric(
+          vertical: 8,
+          horizontal: inTabView ? 4 : 0,
+        ),
         itemCount: pinnedMessages.length,
         separatorBuilder: (_, __) => Divider(
           height: 1,
@@ -5108,10 +6205,14 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
             mouseCursor: MaterialStateMouseCursor.clickable,
             onTap: () {
               final messageId = msg.reference.id;
-              setState(() {
-                _model.showPinnedMessagesPopup = false;
-                _model.pinnedMessagesPopupChat = null;
-              });
+              if (inTabView) {
+                _selectGroupChatTab(GroupChatTab.messages);
+              } else {
+                setState(() {
+                  _model.showPinnedMessagesPopup = false;
+                  _model.pinnedMessagesPopupChat = null;
+                });
+              }
               WidgetsBinding.instance.addPostFrameCallback((_) {
                 _chatThreadKey.currentState?.scrollToMessage(messageId);
               });
@@ -5648,80 +6749,15 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
     return _model.selectedChat != null
         ? Column(
             children: [
-              // Top panel with user info
               _buildChatHeader(),
-              // Live Meeting Banner (only for group chats)
-              if (_model.selectedChat!.isGroup && _showWindowsGroupExtras)
-                MeetingBannerWidget(chat: _model.selectedChat!),
-              // Pinned Announcement Banner (only for group chats)
-              if (_model.selectedChat!.isGroup && _showWindowsGroupExtras)
-                _buildAnnouncementBanner(_model.selectedChat!),
-              // Action Items Stats Section (only for group chats)
-              if (_model.selectedChat!.isGroup && _showWindowsGroupExtras)
-                _buildActionItemsStats(_model.selectedChat!),
-              // Tasks panel or Chat thread component
               Expanded(
-                child: _model.showTasksPanel && _model.selectedChat!.isGroup
-                    ? Stack(
-                        children: [
-                          // Show chat thread behind
-                          _buildPlatformChatThread(),
-                          // Semi-transparent overlay background
-                          Positioned.fill(
-                            child: GestureDetector(
-                              onTap: () {
-                                setState(() {
-                                  _model.showTasksPanel = false;
-                                });
-                              },
-                              child: Container(
-                                color: Colors.black.withOpacity(0.3),
-                              ),
-                            ).withClickCursor(),
-                          ),
-                          // Tasks panel on the right (30% width)
-                          Positioned(
-                            right: 0,
-                            top: 0,
-                            bottom: 0,
-                            child: Container(
-                              width: MediaQuery.of(context).size.width * 0.4,
-                              constraints: BoxConstraints(
-                                minWidth: 300,
-                                maxWidth: 500,
-                              ),
-                              decoration: BoxDecoration(
-                                color: FlutterFlowTheme.of(context)
-                                    .secondaryBackground,
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: Colors.black.withOpacity(0.2),
-                                    blurRadius: 10,
-                                    offset: Offset(-2, 0),
-                                  ),
-                                ],
-                              ),
-                              child: GroupActionTasksWidget(
-                                chatDoc: _model.selectedChat,
-                                onClose: () {
-                                  setState(() {
-                                    _model.showTasksPanel = false;
-                                  });
-                                },
-                              ),
-                            ).animate().slideX(
-                                  begin: 1.0,
-                                  end: 0.0,
-                                  duration: Duration(milliseconds: 300),
-                                  curve: Curves.easeOut,
-                                ),
-                          ),
-                        ],
-                      )
+                child: _model.selectedChat!.isGroup
+                    ? _buildGroupChatTabBody(_model.selectedChat!)
                     : Column(
                         children: [
                           Expanded(
-                            child: _buildPlatformChatThread(key: _chatThreadKey),
+                            child:
+                                _buildPlatformChatThread(key: _chatThreadKey),
                           ),
                           if (_isSelectionMode) _buildSelectionBar(),
                         ],
@@ -5790,183 +6826,152 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
 
     return Container(
       width: double.infinity,
-      padding: EdgeInsetsDirectional.fromSTEB(20, 16, 20, 16),
+      padding: EdgeInsetsDirectional.fromSTEB(20, 16, 20, chat.isGroup ? 0 : 16),
       decoration: BoxDecoration(
         color: Color.fromRGBO(250, 252, 255, 1), // Match left sidebar color
-        border: Border(
-          bottom: BorderSide(
-            color: Color(0xFFE5E7EB),
-            width: 1,
-          ),
-        ),
+        border: chat.isGroup
+            ? null
+            : Border(
+                bottom: BorderSide(
+                  color: Color(0xFFE5E7EB),
+                  width: 1,
+                ),
+              ),
       ),
-      child: Row(
-        children: [
-          // User avatar
-          _buildHeaderAvatar(chat),
-          SizedBox(width: 12),
-          // User info
-          Expanded(
-            child: _buildHeaderName(chat),
-          ),
-          if (chat.isGroup) _buildGroupMembersHeaderButton(chat),
-          _buildChatSearchHeaderButton(),
-          // Google Meet icon
-          if (chat.isGroup)
-            Tooltip(
-              message: chat.hasActiveMeeting
-                  ? 'Join active meeting'
-                  : 'Start a Google Meet',
-              child: InkWell(
-                mouseCursor: MaterialStateMouseCursor.clickable,
-                onTap: () async {
-                  if (chat.hasActiveMeeting) {
-                    // Join existing meeting
-                    await MeetingService.joinMeeting(chatRef: chat.reference);
-                    await qurioLaunchUrl(chat.activeMeetingUrl);
-                  } else {
-                    // Try one-click first (uses Qurio token or Firebase popup)
-                    final meetUrl = await GoogleMeetCreator.createInstantMeeting(
-                      chatTitle: chat.title.isNotEmpty ? chat.title : 'Quick Meeting',
+      child: chat.isGroup
+          ? Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                _buildChatHeaderMainRow(chat),
+                _buildGroupChatHeaderTabs(),
+              ],
+            )
+          : _buildChatHeaderMainRow(chat),
+    );
+  }
+
+  Widget _buildChatHeaderMainRow(ChatsRecord chat) {
+    return Row(
+      children: [
+        // User avatar
+        _buildHeaderAvatar(chat),
+        SizedBox(width: 12),
+        // User info
+        Expanded(
+          child: _buildHeaderName(chat),
+        ),
+        if (chat.isGroup) _buildGroupMembersHeaderButton(chat),
+        _buildChatSearchHeaderButton(),
+        // Google Meet icon
+        if (chat.isGroup)
+          Tooltip(
+            message: chat.hasActiveMeeting
+                ? 'Join active meeting'
+                : 'Start a Google Meet',
+            child: InkWell(
+              mouseCursor: MaterialStateMouseCursor.clickable,
+              onTap: () async {
+                if (chat.hasActiveMeeting) {
+                  // Join existing meeting
+                  await MeetingService.joinMeeting(chatRef: chat.reference);
+                  await qurioLaunchUrl(chat.activeMeetingUrl);
+                } else {
+                  // Try one-click first (uses Qurio token or Firebase popup)
+                  final meetUrl = await GoogleMeetCreator.createInstantMeeting(
+                    chatTitle: chat.title.isNotEmpty ? chat.title : 'Quick Meeting',
+                  );
+                  if (meetUrl != null) {
+                    await MeetingService.startMeeting(
+                      chatRef: chat.reference,
+                      meetUrl: meetUrl,
+                      starterName: currentUserDocument?.displayName,
                     );
-                    if (meetUrl != null) {
+                    await qurioLaunchUrl(meetUrl);
+                  } else {
+                    // Fallback: dialog for manual link
+                    final manualUrl = await _showStartMeetingDialog();
+                    if (manualUrl != null && manualUrl.isNotEmpty) {
                       await MeetingService.startMeeting(
                         chatRef: chat.reference,
-                        meetUrl: meetUrl,
+                        meetUrl: manualUrl,
                         starterName: currentUserDocument?.displayName,
                       );
-                      await qurioLaunchUrl(meetUrl);
-                    } else {
-                      // Fallback: dialog for manual link
-                      final manualUrl = await _showStartMeetingDialog();
-                      if (manualUrl != null && manualUrl.isNotEmpty) {
-                        await MeetingService.startMeeting(
-                          chatRef: chat.reference,
-                          meetUrl: manualUrl,
-                          starterName: currentUserDocument?.displayName,
-                        );
-                        await qurioLaunchUrl(manualUrl);
-                      }
+                      await qurioLaunchUrl(manualUrl);
                     }
                   }
-                },
-                borderRadius: BorderRadius.circular(8),
-                child: Padding(
-                  padding: EdgeInsetsDirectional.fromSTEB(0, 0, 12, 0),
-                  child: Image.asset(
-                    'assets/images/gmeet.png',
-                    width: 28,
-                    height: 28,
-                    fit: BoxFit.contain,
-                  ),
+                }
+              },
+              borderRadius: BorderRadius.circular(8),
+              child: Padding(
+                padding: EdgeInsetsDirectional.fromSTEB(0, 0, 12, 0),
+                child: Image.asset(
+                  'assets/images/gmeet.png',
+                  width: 28,
+                  height: 28,
+                  fit: BoxFit.contain,
                 ),
               ),
             ),
-          // Audio/Video call icons removed for macOS (Zego not supported)
-          // Call icons will show on iOS, Android, and Web builds
+          ),
+        // Audio/Video call icons removed for macOS (Zego not supported)
+        // Call icons will show on iOS, Android, and Web builds
 
-          // More options button - dropdown menu for group chats
-          chat.isGroup
-              ? PopupMenuButton<String>(
-                  onSelected: (String value) {
-                    if (value == 'search') {
-                      _openChatSearchPanel();
-                    } else if (value == 'add_members') {
-                      _navigateToAddMembers(chat);
-                    } else if (value == 'media') {
-                      _navigateToMedia(chat);
-                    } else if (value == 'tasks') {
-                      _navigateToTasks(chat);
-                    } else if (value == 'group_info') {
-                      _viewGroupChat(chat);
-                    } else if (value == 'meeting_transcripts') {
-                      setState(() {
-                        _model.showMeetingTranscriptsPopup = true;
-                        _model.meetingTranscriptsPopupChat = chat;
-                      });
-                    } else if (value == 'announcements') {
-                      setState(() {
-                        _model.showAnnouncementsPanel = true;
-                        _model.showGroupCreation = false;
-                        _model.showNewMessageView = false;
-                        _model.showGroupInfoPanel = false;
-                        _model.groupInfoChat = null;
-                        _model.showUserProfilePanel = false;
-                        _model.userProfileUser = null;
-                        _model.showChatHistoryPanel = false;
-                      });
-                    } else if (value == 'pinned_messages') {
-                      setState(() {
-                        _model.showPinnedMessagesPopup = true;
-                        _model.pinnedMessagesPopupChat = chat;
-                      });
-                    } else if (value == 'group_files') {
-                      setState(() {
-                        _model.showGroupFilesPopup = true;
-                        _model.groupFilesPopupChat = chat;
-                      });
-                    }
-                  },
-                  itemBuilder: (BuildContext context) {
-                    // Group chat options
-                    return <PopupMenuEntry<String>>[
-                      PopupMenuItem<String>(
-                        value: 'search',
-                        child: Row(
-                          children: [
-                            Icon(
-                              Icons.search_rounded,
-                              color: Color(0xFF374151),
-                              size: 18,
-                            ),
-                            SizedBox(width: 12),
-                            Text(
-                              'Search in chat',
-                              style: TextStyle(
-                                fontFamily: 'Inter',
-                                color: Color(0xFF111827),
-                                fontSize: 14,
-                                fontWeight: FontWeight.w500,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      if (ChatHelpers.isGroupAdmin(chat, currentUserReference))
-                        PopupMenuItem<String>(
-                          value: 'add_members',
-                          child: Row(
-                            children: [
-                              Icon(
-                                Icons.person_add,
-                                color: Color(0xFF374151),
-                                size: 18,
-                              ),
-                              SizedBox(width: 12),
-                              Text(
-                                'Add Members',
-                                style: TextStyle(
-                                  fontFamily: 'Inter',
-                                  color: Color(0xFF111827),
-                                  fontSize: 14,
-                                  fontWeight: FontWeight.w500,
-                                ),
-                              ),
-                            ],
+        // More options button - dropdown menu for group chats
+        chat.isGroup
+            ? PopupMenuButton<String>(
+                onSelected: (String value) {
+                  if (value == 'search') {
+                    _openChatSearchPanel();
+                  } else if (value == 'add_members') {
+                    _navigateToAddMembers(chat);
+                  } else if (value == 'group_info') {
+                    _viewGroupChat(chat);
+                  } else if (value == 'meeting_transcripts') {
+                    setState(() {
+                      _model.showMeetingTranscriptsPopup = true;
+                      _model.meetingTranscriptsPopupChat = chat;
+                    });
+                  }
+                },
+                itemBuilder: (BuildContext context) {
+                  // Group chat options
+                  return <PopupMenuEntry<String>>[
+                    PopupMenuItem<String>(
+                      value: 'search',
+                      child: Row(
+                        children: [
+                          Icon(
+                            Icons.search_rounded,
+                            color: Color(0xFF374151),
+                            size: 18,
                           ),
-                        ),
+                          SizedBox(width: 12),
+                          Text(
+                            'Search in chat',
+                            style: TextStyle(
+                              fontFamily: 'Inter',
+                              color: Color(0xFF111827),
+                              fontSize: 14,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    if (ChatHelpers.isGroupAdmin(chat, currentUserReference))
                       PopupMenuItem<String>(
-                        value: 'media',
+                        value: 'add_members',
                         child: Row(
                           children: [
                             Icon(
-                              Icons.photo_library,
+                              Icons.person_add,
                               color: Color(0xFF374151),
                               size: 18,
                             ),
                             SizedBox(width: 12),
                             Text(
-                              'Media',
+                              'Add Members',
                               style: TextStyle(
                                 fontFamily: 'Inter',
                                 color: Color(0xFF111827),
@@ -5977,154 +6982,66 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
                           ],
                         ),
                       ),
-                      PopupMenuItem<String>(
-                        value: 'tasks',
-                        child: Row(
-                          children: [
-                            Icon(
-                              Icons.checklist,
-                              color: Color(0xFF374151),
-                              size: 18,
+                    PopupMenuDivider(),
+                    PopupMenuItem<String>(
+                      value: 'meeting_transcripts',
+                      child: Row(
+                        children: [
+                          Icon(
+                            Icons.description_outlined,
+                            color: Color(0xFF374151),
+                            size: 18,
+                          ),
+                          SizedBox(width: 12),
+                          Text(
+                            'Meeting Transcripts',
+                            style: TextStyle(
+                              fontFamily: 'Inter',
+                              color: Color(0xFF111827),
+                              fontSize: 14,
+                              fontWeight: FontWeight.w500,
                             ),
-                            SizedBox(width: 12),
-                            Text(
-                              'Tasks',
-                              style: TextStyle(
-                                fontFamily: 'Inter',
-                                color: Color(0xFF111827),
-                                fontSize: 14,
-                                fontWeight: FontWeight.w500,
-                              ),
-                            ),
-                          ],
-                        ),
+                          ),
+                        ],
                       ),
-                      PopupMenuItem<String>(
-                        value: 'announcements',
-                        child: Row(
-                          children: [
-                            Icon(
-                              Icons.campaign_rounded,
-                              color: Color(0xFF374151),
-                              size: 18,
+                    ),
+                    PopupMenuItem<String>(
+                      value: 'group_info',
+                      child: Row(
+                        children: [
+                          Icon(
+                            Icons.info_outline,
+                            color: Color(0xFF374151),
+                            size: 18,
+                          ),
+                          SizedBox(width: 12),
+                          Text(
+                            'Group Info',
+                            style: TextStyle(
+                              fontFamily: 'Inter',
+                              color: Color(0xFF111827),
+                              fontSize: 14,
+                              fontWeight: FontWeight.w500,
                             ),
-                            SizedBox(width: 12),
-                            Text(
-                              'Announcements',
-                              style: TextStyle(
-                                fontFamily: 'Inter',
-                                color: Color(0xFF111827),
-                                fontSize: 14,
-                                fontWeight: FontWeight.w500,
-                              ),
-                            ),
-                          ],
-                        ),
+                          ),
+                        ],
                       ),
-                      PopupMenuItem<String>(
-                        value: 'pinned_messages',
-                        child: Row(
-                          children: [
-                            Icon(
-                              Icons.push_pin_outlined,
-                              color: Color(0xFF374151),
-                              size: 18,
-                            ),
-                            SizedBox(width: 12),
-                            Text(
-                              'Pinned Messages',
-                              style: TextStyle(
-                                fontFamily: 'Inter',
-                                color: Color(0xFF111827),
-                                fontSize: 14,
-                                fontWeight: FontWeight.w500,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      PopupMenuItem<String>(
-                        value: 'group_files',
-                        child: Row(
-                          children: [
-                            Icon(
-                              Icons.folder_outlined,
-                              color: Color(0xFF374151),
-                              size: 18,
-                            ),
-                            SizedBox(width: 12),
-                            Text(
-                              'Group Files',
-                              style: TextStyle(
-                                fontFamily: 'Inter',
-                                color: Color(0xFF111827),
-                                fontSize: 14,
-                                fontWeight: FontWeight.w500,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      PopupMenuDivider(),
-                      PopupMenuItem<String>(
-                        value: 'meeting_transcripts',
-                        child: Row(
-                          children: [
-                            Icon(
-                              Icons.description_outlined,
-                              color: Color(0xFF374151),
-                              size: 18,
-                            ),
-                            SizedBox(width: 12),
-                            Text(
-                              'Meeting Transcripts',
-                              style: TextStyle(
-                                fontFamily: 'Inter',
-                                color: Color(0xFF111827),
-                                fontSize: 14,
-                                fontWeight: FontWeight.w500,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      PopupMenuItem<String>(
-                        value: 'group_info',
-                        child: Row(
-                          children: [
-                            Icon(
-                              Icons.info_outline,
-                              color: Color(0xFF374151),
-                              size: 18,
-                            ),
-                            SizedBox(width: 12),
-                            Text(
-                              'Group Info',
-                              style: TextStyle(
-                                fontFamily: 'Inter',
-                                color: Color(0xFF111827),
-                                fontSize: 14,
-                                fontWeight: FontWeight.w500,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ];
-                  },
-                  icon: Icon(
-                    Icons.more_vert,
-                    color: Color(0xFF9CA3AF),
-                    size: 20,
-                  ),
-                  tooltip: 'More options',
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  color: Colors.white,
-                  elevation: 8,
-                )
-              : PopupMenuButton<String>(
+                    ),
+                  ];
+                },
+                icon: Icon(
+                  Icons.more_vert,
+                  color: Color(0xFF9CA3AF),
+                  size: 20,
+                ),
+                tooltip: 'More options',
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                color: Colors.white,
+                elevation: 8,
+              )
+            : PopupMenuButton<String>(
                   onSelected: (String value) {
                     if (value == 'search') {
                       _openChatSearchPanel();
@@ -6231,8 +7148,7 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
                     borderRadius: BorderRadius.circular(8),
                   ),
                 ),
-        ],
-      ),
+      ],
     );
   }
 
@@ -6826,18 +7742,7 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
       final confirmedCount = ann.confirmedBy.length;
 
       return GestureDetector(
-        onTap: () {
-          setState(() {
-            _model.showAnnouncementsPanel = true;
-            _model.showGroupCreation = false;
-            _model.showNewMessageView = false;
-            _model.showGroupInfoPanel = false;
-            _model.groupInfoChat = null;
-            _model.showUserProfilePanel = false;
-            _model.userProfileUser = null;
-            _model.showChatHistoryPanel = false;
-          });
-        },
+        onTap: () => _selectGroupChatTab(GroupChatTab.announcements),
         child: Container(
           width: double.infinity,
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
@@ -8021,18 +8926,12 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
 
   void _navigateToMedia(ChatsRecord chat) {
     if (!chat.isGroup) return;
-    Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (context) => GroupMediaLinksDocsWidget(chatDoc: chat),
-      ),
-    );
+    _selectGroupChatTab(GroupChatTab.filesAndLinks);
   }
 
   void _navigateToTasks(ChatsRecord chat) {
     if (!chat.isGroup) return;
-    setState(() {
-      _model.showTasksPanel = true;
-    });
+    _selectGroupChatTab(GroupChatTab.actionTasks);
   }
 
   void _handlePinChat(ChatsRecord chat) async {
@@ -8888,7 +9787,9 @@ class _ChatListItem extends StatefulWidget {
   final Function(ChatsRecord) onMute;
   final Function(ChatsRecord) onMarkUnread;
   final Function(Offset, ChatsRecord)? onMoveToFolder;
+  final Function(ChatsRecord)? onRename;
   final Future<UsersRecord> Function(DocumentReference) getOrCreateUserFuture;
+  final bool showPinIcon;
 
   const _ChatListItem({
     Key? key,
@@ -8902,7 +9803,9 @@ class _ChatListItem extends StatefulWidget {
     required this.onMute,
     required this.onMarkUnread,
     this.onMoveToFolder,
+    this.onRename,
     required this.getOrCreateUserFuture,
+    this.showPinIcon = true,
   }) : super(key: key);
 
   @override
@@ -9047,6 +9950,31 @@ class _ChatListItemState extends State<_ChatListItem>
               ],
             ),
           ),
+        if (widget.chat.isGroup &&
+            widget.onRename != null &&
+            ChatHelpers.isGroupOwner(widget.chat, currentUserReference))
+          PopupMenuItem<String>(
+            value: 'rename',
+            child: Row(
+              children: [
+                Icon(
+                  Icons.edit_outlined,
+                  color: Color(0xFF374151),
+                  size: 18,
+                ),
+                SizedBox(width: 12),
+                Text(
+                  'Rename Group',
+                  style: TextStyle(
+                    fontFamily: 'Inter',
+                    color: Color(0xFF111827),
+                    fontSize: 14,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ],
+            ),
+          ),
         PopupMenuItem<String>(
           value: 'delete',
           child: Row(
@@ -9085,6 +10013,8 @@ class _ChatListItemState extends State<_ChatListItem>
         }
       } else if (value == 'move_to_folder') {
         widget.onMoveToFolder?.call(position, widget.chat);
+      } else if (value == 'rename') {
+        widget.onRename?.call(widget.chat);
       }
     });
   }
@@ -9160,8 +10090,9 @@ class _ChatListItemState extends State<_ChatListItem>
                               children: [
                                 Row(
                                   children: [
-                                    if (widget.chat.isPinnedByUser(
-                                        currentUserReference)) ...[
+                                    if (widget.showPinIcon &&
+                                        widget.chat.isPinnedByUser(
+                                            currentUserReference)) ...[
                                       const Icon(
                                         Icons.push_pin,
                                         color: Color(0xFF000000),
@@ -9225,47 +10156,42 @@ class _ChatListItemState extends State<_ChatListItem>
         decoration: BoxDecoration(
           color: Colors.white,
           shape: BoxShape.circle,
+          border: Border.all(color: Color(0xFFE5E7EB), width: 1),
         ),
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(18),
-          child: CachedNetworkImage(
-            imageUrl: chat.chatImageUrl,
-            width: 36,
-            height: 36,
-            fit: BoxFit.cover,
-            memCacheWidth: 72,
-            memCacheHeight: 72,
-            maxWidthDiskCache: 72,
-            maxHeightDiskCache: 72,
-            filterQuality: FilterQuality.high,
-            placeholder: (context, url) => Container(
-              width: 36,
-              height: 36,
-              decoration: BoxDecoration(
-                color: Colors.white,
-                shape: BoxShape.circle,
+        clipBehavior: Clip.antiAlias,
+        child: chat.chatImageUrl.isNotEmpty
+            ? CachedNetworkImage(
+                imageUrl: chat.chatImageUrl,
+                fit: BoxFit.cover,
+                width: double.infinity,
+                height: double.infinity,
+                memCacheWidth: 72,
+                memCacheHeight: 72,
+                maxWidthDiskCache: 72,
+                maxHeightDiskCache: 72,
+                filterQuality: FilterQuality.high,
+                placeholder: (context, url) => Center(
+                  child: Icon(
+                    Icons.group,
+                    color: Color(0xFF6B7280),
+                    size: 18,
+                  ),
+                ),
+                errorWidget: (context, url, error) => Center(
+                  child: Icon(
+                    Icons.group,
+                    color: Color(0xFF6B7280),
+                    size: 18,
+                  ),
+                ),
+              )
+            : Center(
+                child: Icon(
+                  Icons.group,
+                  color: Color(0xFF6B7280),
+                  size: 18,
+                ),
               ),
-              child: Icon(
-                Icons.group,
-                color: Color(0xFF6B7280),
-                size: 18,
-              ),
-            ),
-            errorWidget: (context, url, error) => Container(
-              width: 36,
-              height: 36,
-              decoration: BoxDecoration(
-                color: Colors.white,
-                shape: BoxShape.circle,
-              ),
-              child: Icon(
-                Icons.group,
-                color: Color(0xFF6B7280),
-                size: 18,
-              ),
-            ),
-          ),
-        ),
       );
     } else {
       // For direct chats, get the other user's profile picture
@@ -9299,6 +10225,7 @@ class _ChatListItemState extends State<_ChatListItem>
                 decoration: BoxDecoration(
                   color: Color(0xFF3B82F6),
                   shape: BoxShape.circle,
+                  border: Border.all(color: Color(0xFFE5E7EB), width: 1),
                 ),
                 child: ClipRRect(
                   borderRadius: BorderRadius.circular(18),

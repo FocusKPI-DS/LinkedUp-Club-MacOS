@@ -108,7 +108,6 @@ class ChatThreadWidget extends StatefulWidget {
 class _ChatThreadWidgetState extends State<ChatThreadWidget> {
   static const double _groupedMessageSpacing = 2.0;
   static const double _separateMessageSpacing = 14.0;
-  static const int _menuItemsPerRow = 5;
   static const double _menuItemSize = 52.0;
   static const double _menuHorizontalPadding = 8.0;
   static const double _menuVerticalPadding = 8.0;
@@ -1298,7 +1297,8 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
     );
   }
 
-  List<Map<String, dynamic>> _menuItemDefinitions() {
+  ({List<Map<String, dynamic>> primary, List<Map<String, dynamic>> secondary})
+      _menuItemRows() {
     final isOwnMessage = widget.message?.senderRef == currentUserReference;
     final hasMedia = (widget.message?.image != null &&
             widget.message!.image.isNotEmpty) ||
@@ -1306,17 +1306,7 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
             widget.message!.images.isNotEmpty) ||
         (widget.message?.video != null && widget.message!.video!.isNotEmpty);
 
-    return [
-      {
-        'label': 'Copy',
-        'icon': CupertinoIcons.doc_on_doc,
-        'action': _MsgAction.copy
-      },
-      {
-        'label': 'Select',
-        'icon': CupertinoIcons.checkmark_circle,
-        'action': _MsgAction.select
-      },
+    final primary = <Map<String, dynamic>>[
       {
         'label': 'React',
         'icon': CupertinoIcons.smiley,
@@ -1328,15 +1318,42 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
         'action': _MsgAction.reply
       },
       {
-        'label': 'Translate',
-        'icon': CupertinoIcons.book,
-        'action': _MsgAction.translate
-      },
-      {
         'label': 'Forward',
         'icon': CupertinoIcons.arrow_turn_up_right,
         'action': _MsgAction.forward
       },
+      {
+        'label': 'Copy',
+        'icon': CupertinoIcons.doc_on_doc,
+        'action': _MsgAction.copy
+      },
+      {
+        'label': 'Select',
+        'icon': CupertinoIcons.checkmark_circle,
+        'action': _MsgAction.select
+      },
+      if (!isOwnMessage)
+        {
+          'label': 'Translate',
+          'icon': CupertinoIcons.book,
+          'action': _MsgAction.translate
+        },
+      {
+        'label': widget.message?.isPinned == true ? 'Unpin' : 'Pin',
+        'icon': CupertinoIcons.pin,
+        'action': widget.message?.isPinned == true
+            ? _MsgAction.unpin
+            : _MsgAction.pin
+      },
+      if (hasMedia)
+        {
+          'label': 'Save',
+          'icon': CupertinoIcons.arrow_down_circle,
+          'action': _MsgAction.save
+        },
+    ];
+
+    final secondary = <Map<String, dynamic>>[
       if (isOwnMessage)
         {
           'label': 'Edit',
@@ -1349,44 +1366,58 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
           'icon': CupertinoIcons.arrow_counterclockwise,
           'action': _MsgAction.unsend
         },
-      if (hasMedia)
+      if (!isOwnMessage)
         {
-          'label': 'Save',
-          'icon': CupertinoIcons.arrow_down_circle,
-          'action': _MsgAction.save
+          'label': 'Report',
+          'icon': CupertinoIcons.exclamationmark_triangle,
+          'action': _MsgAction.report
         },
-      {
-        'label': widget.message?.isPinned == true ? 'Unpin' : 'Pin',
-        'icon': CupertinoIcons.pin,
-        'action': widget.message?.isPinned == true
-            ? _MsgAction.unpin
-            : _MsgAction.pin
-      },
-      {
-        'label': 'Report',
-        'icon': CupertinoIcons.exclamationmark_triangle,
-        'action': _MsgAction.report
-      },
     ];
+
+    return (primary: primary, secondary: secondary);
   }
 
   Size _gridMenuDimensions() {
-    final menuItems = _menuItemDefinitions();
-    final actualItemsInWidestRow = menuItems.length < _menuItemsPerRow
-        ? menuItems.length
-        : _menuItemsPerRow;
-    final menuWidth = (_menuItemSize * actualItemsInWidestRow) +
+    final rows = _menuItemRows();
+    final widestRow = rows.primary.length > rows.secondary.length
+        ? rows.primary.length
+        : rows.secondary.length;
+    final menuWidth = (_menuItemSize * widestRow) +
         (_menuHorizontalPadding * 2) +
         2.0;
-    final rowCount = (menuItems.length / _menuItemsPerRow).ceil();
-    final menuHeight = (_menuItemSize * rowCount) +
+    const dividerHeight = 9.0;
+    final menuHeight = (_menuItemSize * 2) +
         (_menuVerticalPadding * 2) +
-        (rowCount > 1 ? (rowCount - 1) * 4 : 0);
+        dividerHeight;
     return Size(menuWidth, menuHeight);
   }
 
+  Widget _buildGridMenuRow(
+    List<Map<String, dynamic>> items, {
+    required ValueChanged<_MsgAction> onAction,
+  }) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: items.map((item) {
+        final String label = item['label'] as String;
+        final IconData icon = item['icon'] as IconData;
+        final _MsgAction action = item['action'] as _MsgAction;
+        final isDestructive =
+            action == _MsgAction.report || action == _MsgAction.unsend;
+
+        return _MessageMenuGridItem(
+          label: label,
+          icon: icon,
+          isDestructive: isDestructive,
+          itemSize: _menuItemSize,
+          onTap: () => onAction(action),
+        );
+      }).toList(),
+    );
+  }
+
   Widget _buildGridMenuPanel({required ValueChanged<_MsgAction> onAction}) {
-    final menuItems = _menuItemDefinitions();
+    final rows = _menuItemRows();
     final menuSize = _gridMenuDimensions();
 
     return Material(
@@ -1414,25 +1445,18 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
             ),
           ],
         ),
-        child: Wrap(
-          spacing: 0,
-          runSpacing: 4,
-          alignment: WrapAlignment.start,
-          children: menuItems.map((item) {
-            final String label = item['label'] as String;
-            final IconData icon = item['icon'] as IconData;
-            final _MsgAction action = item['action'] as _MsgAction;
-            final isDestructive =
-                action == _MsgAction.report || action == _MsgAction.unsend;
-
-            return _MessageMenuGridItem(
-              label: label,
-              icon: icon,
-              isDestructive: isDestructive,
-              itemSize: _menuItemSize,
-              onTap: () => onAction(action),
-            );
-          }).toList(),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _buildGridMenuRow(rows.primary, onAction: onAction),
+            Container(
+              height: 1,
+              margin: const EdgeInsets.symmetric(vertical: 4),
+              color: Colors.black.withOpacity(0.08),
+            ),
+            _buildGridMenuRow(rows.secondary, onAction: onAction),
+          ],
         ),
       ),
     );

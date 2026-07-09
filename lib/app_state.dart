@@ -80,6 +80,10 @@ class FFAppState extends ChangeNotifier {
       _safeInit(() {
         _chatFontSize = prefs.getDouble('ff_chatFontSize') ?? _chatFontSize;
       });
+      _safeInit(() {
+        _groupFoldersEnabled =
+            prefs.getBool('ff_groupFoldersEnabled') ?? _groupFoldersEnabled;
+      });
     });
   }
 
@@ -451,6 +455,16 @@ class FFAppState extends ChangeNotifier {
   set autoTranslate(bool value) {
     _autoTranslate = value;
     prefs.setBool('ff_autoTranslate', value);
+    notifyListeners();
+  }
+
+  // Group folders preference: when true, the chat sidebar shows the
+  // folder-grouped view instead of the flat chat list.
+  bool _groupFoldersEnabled = false;
+  bool get groupFoldersEnabled => _groupFoldersEnabled;
+  set groupFoldersEnabled(bool value) {
+    _groupFoldersEnabled = value;
+    prefs.setBool('ff_groupFoldersEnabled', value);
     notifyListeners();
   }
 

@@ -89,6 +89,7 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
   bool _isPinnedCollapsed = false;
   bool _isGroupsCollapsed = false;
   bool _isDMCollapsed = false;
+  bool _isRecentCollapsed = false;
   bool _isInactiveCollapsed = true; // Inactive chats hidden by default
   bool _isFolderMode = false; // Toggle between Chats (flat list) and Folders (grouped) mode
   final GlobalKey<_FullScreenChatPageState> _fullScreenChatPageKey = GlobalKey<_FullScreenChatPageState>();
@@ -839,21 +840,21 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
       });
     }
 
-    // Build menu items — matching contextMenuBuilder in MessageContentWidget
+    // Build menu rows — matching expanded grid menu in ChatThreadWidget
     final isOwnMessage = message.senderRef == currentUserReference;
-    final menuItems = <Map<String, dynamic>>[
-      {'label': 'Copy', 'icon': CupertinoIcons.doc_on_doc, 'value': 'copy'},
-      {'label': 'Select', 'icon': CupertinoIcons.checkmark_circle, 'value': 'select'},
+    final primaryMenuItems = <Map<String, dynamic>>[
       {'label': 'React', 'icon': CupertinoIcons.smiley, 'value': 'react'},
       {'label': 'Reply', 'icon': CupertinoIcons.arrow_turn_up_left, 'value': 'reply'},
-      {'label': 'Translate', 'icon': CupertinoIcons.book, 'value': 'translate'},
       {'label': 'Forward', 'icon': CupertinoIcons.arrow_turn_up_right, 'value': 'forward'},
-      {'label': 'Delete', 'icon': CupertinoIcons.delete, 'value': 'delete'},
+      {'label': 'Copy', 'icon': CupertinoIcons.doc_on_doc, 'value': 'copy'},
+      {'label': 'Select', 'icon': CupertinoIcons.checkmark_circle, 'value': 'select'},
+      if (!isOwnMessage) {'label': 'Translate', 'icon': CupertinoIcons.book, 'value': 'translate'},
+      {'label': 'Pin', 'icon': CupertinoIcons.pin, 'value': 'pin'},
+    ];
+    final secondaryMenuItems = <Map<String, dynamic>>[
       if (isOwnMessage) {'label': 'Edit', 'icon': CupertinoIcons.pencil, 'value': 'edit'},
       if (isOwnMessage) {'label': 'Unsend', 'icon': CupertinoIcons.arrow_counterclockwise, 'value': 'unsend'},
-      {'label': 'Download', 'icon': CupertinoIcons.arrow_down_circle, 'value': 'download'},
-      {'label': 'Pin', 'icon': CupertinoIcons.pin, 'value': 'pin'},
-      {'label': 'Report', 'icon': CupertinoIcons.exclamationmark_triangle, 'value': 'report'},
+      if (!isOwnMessage) {'label': 'Report', 'icon': CupertinoIcons.exclamationmark_triangle, 'value': 'report'},
     ];
 
     // Dismiss any existing overlay AND any active text selection (prevents double-open)
@@ -862,14 +863,15 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
     primaryFocus?.unfocus();
 
     // Layout constants — identical to contextMenuBuilder in MessageContentWidget
-    final int itemsPerRow = 5;
     final double itemSize = 48.0;
     final double horizontalPadding = 6.0;
     final double verticalPadding = 6.0;
-    final int actualItemsInWidestRow = menuItems.length < itemsPerRow ? menuItems.length : itemsPerRow;
-    final double menuWidth = (itemSize * actualItemsInWidestRow) + (horizontalPadding * 2) + 2.0;
-    final int rowCount = (menuItems.length / itemsPerRow).ceil();
-    final double menuHeight = (itemSize * rowCount) + (verticalPadding * 2) + (rowCount > 1 ? (rowCount - 1) * 4 : 0);
+    const double dividerHeight = 9.0;
+    final int widestRow = primaryMenuItems.length > secondaryMenuItems.length
+        ? primaryMenuItems.length
+        : secondaryMenuItems.length;
+    final double menuWidth = (itemSize * widestRow) + (horizontalPadding * 2) + 2.0;
+    final double menuHeight = (itemSize * 2) + (verticalPadding * 2) + dividerHeight;
 
     // Calculate position near the long-press point
     final screenSize = MediaQuery.of(context).size;
@@ -912,60 +914,120 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
                     width: 0.5,
                   ),
                 ),
-                child: Wrap(
-                  spacing: 0,
-                  runSpacing: 4,
-                  alignment: WrapAlignment.start,
-                  children: menuItems.map((item) {
-                    final String value = item['value'] as String;
-                    final String label = item['label'] as String;
-                    final IconData icon = item['icon'] as IconData;
-                    final isDestructive = value == 'report' || value == 'unsend' || value == 'delete';
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: primaryMenuItems.map((item) {
+                        final String value = item['value'] as String;
+                        final String label = item['label'] as String;
+                        final IconData icon = item['icon'] as IconData;
+                        final isDestructive = value == 'report' || value == 'unsend';
 
-                    return GestureDetector(
-                      behavior: HitTestBehavior.opaque,
-                      onTap: () {
-                        _hideMenuOverlay();
-                        // Defer action to next frame so widget tree settles after overlay removal
-                        WidgetsBinding.instance.addPostFrameCallback((_) {
-                          if (mounted) {
-                            handleMessageAction(value, message);
-                          }
-                        });
-                      },
-                      child: SizedBox(
-                        width: 48,
-                        height: 48,
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(
-                              icon,
-                              size: 16,
-                              color: isDestructive ? const Color(0xFFFF3B30) : const Color(0xFF1C1C1E),
+                        return GestureDetector(
+                          behavior: HitTestBehavior.opaque,
+                          onTap: () {
+                            _hideMenuOverlay();
+                            WidgetsBinding.instance.addPostFrameCallback((_) {
+                              if (mounted) {
+                                handleMessageAction(value, message);
+                              }
+                            });
+                          },
+                          child: SizedBox(
+                            width: 48,
+                            height: 48,
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Icon(
+                                  icon,
+                                  size: 16,
+                                  color: isDestructive ? const Color(0xFFFF3B30) : const Color(0xFF1C1C1E),
+                                ),
+                                const SizedBox(height: 2),
+                                Text(
+                                  label,
+                                  textAlign: TextAlign.center,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(
+                                    fontFamily: 'SF Pro Text',
+                                    fontSize: 8.5,
+                                    color: isDestructive
+                                        ? const Color(0xFFFF3B30)
+                                        : const Color(0xFF1C1C1E).withOpacity(0.8),
+                                    fontWeight: FontWeight.w400,
+                                    letterSpacing: -0.2,
+                                    decoration: TextDecoration.none,
+                                  ),
+                                ),
+                              ],
                             ),
-                            const SizedBox(height: 2),
-                            Text(
-                              label,
-                              textAlign: TextAlign.center,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(
-                                fontFamily: 'SF Pro Text',
-                                fontSize: 8.5,
-                                color: isDestructive
-                                    ? const Color(0xFFFF3B30)
-                                    : const Color(0xFF1C1C1E).withOpacity(0.8),
-                                fontWeight: FontWeight.w400,
-                                letterSpacing: -0.2,
-                                decoration: TextDecoration.none,
-                              ),
+                          ),
+                        );
+                      }).toList(),
+                    ),
+                    Container(
+                      height: 1,
+                      margin: const EdgeInsets.symmetric(vertical: 4),
+                      color: Colors.black.withOpacity(0.08),
+                    ),
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: secondaryMenuItems.map((item) {
+                        final String value = item['value'] as String;
+                        final String label = item['label'] as String;
+                        final IconData icon = item['icon'] as IconData;
+                        final isDestructive = value == 'report' || value == 'unsend';
+
+                        return GestureDetector(
+                          behavior: HitTestBehavior.opaque,
+                          onTap: () {
+                            _hideMenuOverlay();
+                            WidgetsBinding.instance.addPostFrameCallback((_) {
+                              if (mounted) {
+                                handleMessageAction(value, message);
+                              }
+                            });
+                          },
+                          child: SizedBox(
+                            width: 48,
+                            height: 48,
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Icon(
+                                  icon,
+                                  size: 16,
+                                  color: isDestructive ? const Color(0xFFFF3B30) : const Color(0xFF1C1C1E),
+                                ),
+                                const SizedBox(height: 2),
+                                Text(
+                                  label,
+                                  textAlign: TextAlign.center,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(
+                                    fontFamily: 'SF Pro Text',
+                                    fontSize: 8.5,
+                                    color: isDestructive
+                                        ? const Color(0xFFFF3B30)
+                                        : const Color(0xFF1C1C1E).withOpacity(0.8),
+                                    fontWeight: FontWeight.w400,
+                                    letterSpacing: -0.2,
+                                    decoration: TextDecoration.none,
+                                  ),
+                                ),
+                              ],
                             ),
-                          ],
-                        ),
-                      ),
-                    );
-                  }).toList(),
+                          ),
+                        );
+                      }).toList(),
+                    ),
+                  ],
                 ),
               ),
             ),
@@ -2877,7 +2939,8 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
 
           // Show empty state message for new users when chat list is empty
           if (filteredChats.isEmpty &&
-              chatController.searchQuery.value.isEmpty) {
+              chatController.searchQuery.value.isEmpty &&
+              _getInactiveChats().isEmpty) {
             return Transform.translate(
               offset: Offset(0, -40),
               child: Center(
@@ -3071,28 +3134,23 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
             for (final chat in pinned)
               _buildChatListItemObx(chat, false),
         ],
-        // "Recent" label divider (matches macOS)
-        if (active.isNotEmpty && pinned.isNotEmpty)
-          Padding(
-            padding: const EdgeInsets.fromLTRB(20, 12, 16, 4),
-            child: Text(
-              'Recent',
-              style: TextStyle(
-                fontFamily: '.SF Pro Text',
-                fontSize: 13,
-                fontWeight: FontWeight.w600,
-                color: Color(0xFF8E8E93),
-                letterSpacing: 0.2,
-              ),
-            ),
+        // Recent section (collapsible)
+        if (active.isNotEmpty) ...[
+          _buildSmartSectionHeader(
+            title: 'Recent',
+            icon: CupertinoIcons.clock,
+            count: active.length,
+            isCollapsed: _isRecentCollapsed,
+            unreadCount: _countUnread(active),
+            onToggle: () => setState(() => _isRecentCollapsed = !_isRecentCollapsed),
           ),
+          if (!_isRecentCollapsed)
+            for (final chat in active)
+              _buildChatListItemObx(chat, false),
+        ],
 
-        // Active chats (recent)
-        for (final chat in active)
-          _buildChatListItemObx(chat, false),
-
-        // Inactive section (30+ days)
-        if (inactive.isNotEmpty) ...[
+        // Inactive section (30+ days) — header always visible on the All tab
+        if (_shouldShowInactiveSection()) ...[
           _buildSmartSectionHeader(
             title: 'Inactive',
             icon: CupertinoIcons.archivebox,
@@ -3109,41 +3167,54 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
     );
   }
 
-  /// Returns true if the chat has had no new messages in the last 30 days.
-  /// Mirrors ChatController._isInactive logic for parity with macOS.
-  bool _isChatInactive(ChatsRecord chat) {
-    final lastActivity = chat.lastMessageAt ?? chat.createdAt;
-    if (lastActivity == null) return true;
-    return DateTime.now().difference(lastActivity).inDays >= 30;
+  /// Whether the Inactive section should render (All tab, not searching).
+  /// The header stays visible even when there are no inactive chats.
+  bool _shouldShowInactiveSection() {
+    final tabIndex = _model.tabController?.index ?? 0;
+    return tabIndex == 0 && chatController.searchQuery.value.isEmpty;
   }
 
-  /// Get inactive chats from the FULL unfiltered list.
-  /// chatController.filteredChats already excludes inactive chats on the All tab,
-  /// so we must source them directly from chatController.chats.
+  /// Get inactive chats from the full unfiltered list for the All tab section.
   List<ChatsRecord> _getInactiveChats() {
-    final userRef = currentUserReference;
-    final blockedIds = chatController.blockedUserIds.value;
-    return chatController.chats.where((chat) {
-      // Must be inactive
-      if (!_isChatInactive(chat)) return false;
-      // Exclude pinned (pinned chats stay in the Pinned section)
-      if (chat.isPinnedByUser(userRef)) return false;
-      // Exclude blocked DMs
-      if (!chat.isGroup && chat.members.any((m) =>
-          m != userRef && blockedIds.contains(m.id))) return false;
-      return true;
-    }).toList();
+    if (!_shouldShowInactiveSection()) {
+      return const [];
+    }
+    return chatController.getInactiveChatsForSidebar();
   }
 
+
+  /// Chat IDs that belong to a custom folder. Foldered chats live exclusively
+  /// under their folder and are hidden from the Pinned/Group/DM sections.
+  Set<String> _folderedChatIds() {
+    final ids = <String>{};
+    for (final folder in _chatFolders) {
+      ids.addAll(folder.chatIds);
+    }
+    return ids;
+  }
 
   /// macOS-style folder list view with smart sections.
   Widget _buildFolderListView(List<ChatsRecord> filteredChats) {
     // Smart folder classification (same as macOS)
     final userRef = currentUserReference;
-    final pinned = filteredChats.where((c) => c.isPinnedByUser(userRef)).toList();
+    final folderedIds = _folderedChatIds();
+    // Pinned takes precedence over folders: a pinned chat always shows in the
+    // Pinned section (and is excluded from its folder below).
+    final pinned =
+        filteredChats.where((c) => c.isPinnedByUser(userRef)).toList();
     // filteredChats already excludes inactive on All tab, no need for _isChatInactive check
-    final groups = filteredChats.where((c) => !c.isPinnedByUser(userRef) && c.isGroup).toList();
-    final dms = filteredChats.where((c) => !c.isPinnedByUser(userRef) && !c.isGroup).toList();
+    final groups = filteredChats
+        .where((c) =>
+            !c.isPinnedByUser(userRef) &&
+            c.isGroup &&
+            !folderedIds.contains(c.reference.id))
+        .toList();
+    final dms = filteredChats
+        .where((c) =>
+            !c.isPinnedByUser(userRef) &&
+            !c.isGroup &&
+            !folderedIds.contains(c.reference.id))
+        .toList();
     // Get inactive chats from the full unfiltered list
     final inactive = _getInactiveChats();
 
@@ -3168,6 +3239,10 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
             for (final chat in pinned)
               _buildChatListItemObx(chat, false),
         ],
+
+        // Custom user-created folders
+        for (final folder in _chatFolders)
+          _buildCustomFolderSection(folder, filteredChats),
 
         // Groups section (active only)
         if (groups.isNotEmpty) ...[
@@ -3199,12 +3274,8 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
               _buildChatListItemObx(chat, false),
         ],
 
-        // Custom user-created folders
-        for (final folder in _chatFolders)
-          _buildCustomFolderSection(folder, filteredChats),
-
-        // Inactive section (30+ days no messages)
-        if (inactive.isNotEmpty) ...[
+        // Inactive section (30+ days) — header always visible on the All tab
+        if (_shouldShowInactiveSection()) ...[
           _buildSmartSectionHeader(
             title: 'Inactive',
             icon: CupertinoIcons.archivebox,
@@ -3332,11 +3403,38 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
     );
   }
 
+  ChatFoldersRecord _folderWithCollapsed(
+    ChatFoldersRecord folder,
+    bool isCollapsed,
+  ) {
+    return ChatFoldersRecord.getDocumentFromData(
+      {
+        ...folder.snapshotData,
+        'is_collapsed': isCollapsed,
+      },
+      folder.reference,
+    );
+  }
+
+  void _toggleFolderCollapsed(ChatFoldersRecord folder) {
+    final nextCollapsed = !folder.isCollapsed;
+    setState(() {
+      _chatFolders = _chatFolders.map((f) {
+        if (f.reference.id != folder.reference.id) return f;
+        return _folderWithCollapsed(f, nextCollapsed);
+      }).toList();
+    });
+    folder.reference.update({'is_collapsed': nextCollapsed});
+  }
+
   /// Build a custom user-created folder section.
   Widget _buildCustomFolderSection(
       ChatFoldersRecord folder, List<ChatsRecord> allChats) {
+    // Pinned chats take precedence and live in the Pinned section instead.
     final folderChats = allChats
-        .where((c) => folder.chatIds.contains(c.reference.id))
+        .where((c) =>
+            folder.chatIds.contains(c.reference.id) &&
+            !c.isPinnedByUser(currentUserReference))
         .toList();
     final unreadCount = _countUnread(folderChats);
 
@@ -3344,9 +3442,7 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
       mainAxisSize: MainAxisSize.min,
       children: [
         GestureDetector(
-          onTap: () {
-            folder.reference.update({'is_collapsed': !folder.isCollapsed});
-          },
+          onTap: () => _toggleFolderCollapsed(folder),
           onLongPress: () => _showFolderOptionsSheet(folder),
           child: Container(
             width: double.infinity,
@@ -3539,6 +3635,21 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
                                   'chat_ids': FieldValue.arrayUnion(selectedIds.toList()),
                                   'updated_at': FieldValue.serverTimestamp(),
                                 });
+                                // A chat belongs to only one folder — drop the
+                                // selected chats from any other folders.
+                                for (final other in _chatFolders) {
+                                  if (other.reference.id == folder.reference.id) {
+                                    continue;
+                                  }
+                                  final toRemove = selectedIds
+                                      .where((id) => other.chatIds.contains(id))
+                                      .toList();
+                                  if (toRemove.isEmpty) continue;
+                                  await other.reference.update({
+                                    'chat_ids': FieldValue.arrayRemove(toRemove),
+                                    'updated_at': FieldValue.serverTimestamp(),
+                                  });
+                                }
                               },
                         child: Text(
                           'Add (${selectedIds.length})',
@@ -3796,8 +3907,8 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
     showCupertinoDialog(
       context: context,
       builder: (ctx) => CupertinoAlertDialog(
-        title: Text('Delete "${folder.name}"?'),
-        content: Text('Chats in this folder will not be deleted.'),
+        title: Text('Delete the folder "${folder.name}"?'),
+        content: Text('Chats will not be deleted.'),
         actions: [
           CupertinoDialogAction(
             child: Text('Cancel'),
@@ -3808,7 +3919,19 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
             child: Text('Delete'),
             onPressed: () async {
               Navigator.pop(ctx);
-              await folder.reference.delete();
+              final previousFolders = _chatFolders;
+              setState(() {
+                _chatFolders = _chatFolders
+                    .where((f) => f.reference.id != folder.reference.id)
+                    .toList();
+              });
+              try {
+                await folder.reference.delete();
+              } catch (e) {
+                if (mounted) {
+                  setState(() => _chatFolders = previousFolders);
+                }
+              }
             },
           ),
         ],
@@ -6208,7 +6331,17 @@ class _MobileChatListItemState extends State<_MobileChatListItem>
                     'updated_at': getCurrentTimestamp,
                   });
                 } else {
-                  // Add to folder
+                  // A chat belongs to only one folder — remove it from any
+                  // other folder first, then add to the selected one.
+                  for (final other in folders) {
+                    if (other.reference.id != folder.reference.id &&
+                        other.chatIds.contains(chatId)) {
+                      await other.reference.update({
+                        'chat_ids': FieldValue.arrayRemove([chatId]),
+                        'updated_at': getCurrentTimestamp,
+                      });
+                    }
+                  }
                   await folder.reference.update({
                     'chat_ids': FieldValue.arrayUnion([chatId]),
                     'updated_at': getCurrentTimestamp,

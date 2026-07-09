@@ -14,10 +14,12 @@ class GroupAnnouncementsWidget extends StatefulWidget {
     super.key,
     required this.chatDoc,
     this.onClose,
+    this.embedded = false,
   });
 
   final ChatsRecord? chatDoc;
   final VoidCallback? onClose;
+  final bool embedded;
 
   @override
   State<GroupAnnouncementsWidget> createState() =>
@@ -141,10 +143,56 @@ class _GroupAnnouncementsWidgetState extends State<GroupAnnouncementsWidget> {
       color: Colors.white,
       child: Column(
         children: [
-          _buildHeader(),
+          if (!widget.embedded) _buildHeader(),
+          if (widget.embedded) _buildEmbeddedToolbar(),
           Expanded(
             child: _buildAnnouncementList(),
           ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildEmbeddedToolbar() {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(20, 12, 20, 8),
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        border: Border(
+          bottom: BorderSide(color: Color(0xFFF3F4F6), width: 1),
+        ),
+      ),
+      child: Row(
+        children: [
+          if (_isAdmin && !_isCreating)
+            InkWell(
+              onTap: () => setState(() => _isCreating = true),
+              borderRadius: BorderRadius.circular(8),
+              child: Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF3B82F6),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.add, color: Colors.white, size: 16),
+                    SizedBox(width: 4),
+                    Text(
+                      'New Announcement',
+                      style: TextStyle(
+                        fontFamily: 'Inter',
+                        color: Colors.white,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
         ],
       ),
     );

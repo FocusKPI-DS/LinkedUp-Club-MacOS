@@ -7,6 +7,15 @@ import 'package:flutter/material.dart';
 /// Sidebar display mode: flat chat list vs folder-grouped view.
 enum SidebarMode { chat, folders }
 
+/// Main content tabs shown in the group chat header.
+enum GroupChatTab {
+  messages,
+  filesAndLinks,
+  actionTasks,
+  announcements,
+  pinnedMessages,
+}
+
 /// Set to true to show the Folders sidebar toggle in the chat header.
 const bool kShowFoldersSidebar = false;
 
@@ -69,6 +78,10 @@ class DesktopChatModel extends FlutterFlowModel {
   // New message view in right panel
   bool showNewMessageView = false;
   TextEditingController? newMessageSearchController;
+  // People selected in the combined New Message view. One selection creates a
+  // direct message; more than one creates a group chat.
+  List<DocumentReference> newMessageSelectedMembers = [];
+  bool isCreatingNewMessageChat = false;
 
   // Chat History panel
   bool showChatHistoryPanel = false;
@@ -88,6 +101,9 @@ class DesktopChatModel extends FlutterFlowModel {
   bool showGroupFilesPopup = false;
   ChatsRecord? groupFilesPopupChat;
 
+  // Active tab in the group chat header (Messages, Files and Links, etc.)
+  GroupChatTab groupChatTab = GroupChatTab.messages;
+
   // Sidebar resize/collapse state
   double sidebarWidth = 320.0; // Default width
   bool isSidebarCollapsed = false;
@@ -103,6 +119,8 @@ class DesktopChatModel extends FlutterFlowModel {
   bool isPinnedCollapsed = false;
   bool isDMCollapsed = false;
   bool isGroupCollapsed = false;
+  bool isRecentCollapsed = false;
+  bool isInactiveCollapsed = true;
   bool isUnfiledCollapsed = false;
   // Search states
   bool showQuickSearch = false; // dropdown overlay on left
@@ -114,6 +132,10 @@ class DesktopChatModel extends FlutterFlowModel {
 
   // Sidebar mode: flat chat list vs folder view
   SidebarMode sidebarMode = SidebarMode.chat;
+
+  // "Enable group folders" toggle above the All/Unread tabs.
+  // When true, the sidebar shows the folder-grouped view.
+  bool groupFoldersEnabled = false;
 
   @override
   void initState(BuildContext context) {

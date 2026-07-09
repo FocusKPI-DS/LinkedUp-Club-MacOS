@@ -6367,7 +6367,17 @@ Navigator.pop(context);
                     'updated_at': FieldValue.serverTimestamp(),
                   });
                 } else {
-                  // Add to folder
+                  // A chat belongs to only one folder — remove it from any
+                  // other folder first, then add to the selected one.
+                  for (final other in _model.chatFolders) {
+                    if (other.reference.id != folder.reference.id &&
+                        other.chatIds.contains(chatId)) {
+                      await other.reference.update({
+                        'chat_ids': FieldValue.arrayRemove([chatId]),
+                        'updated_at': FieldValue.serverTimestamp(),
+                      });
+                    }
+                  }
                   await folder.reference.update({
                     'chat_ids': FieldValue.arrayUnion([chatId]),
                     'updated_at': FieldValue.serverTimestamp(),
@@ -6458,6 +6468,21 @@ Navigator.pop(context);
                           'chat_ids': FieldValue.arrayUnion(selectedIds.toList()),
                           'updated_at': FieldValue.serverTimestamp(),
                         });
+                        // A chat belongs to only one folder — drop the selected
+                        // chats from any other folders.
+                        for (final other in _model.chatFolders) {
+                          if (other.reference.id == folder.reference.id) {
+                            continue;
+                          }
+                          final toRemove = selectedIds
+                              .where((id) => other.chatIds.contains(id))
+                              .toList();
+                          if (toRemove.isEmpty) continue;
+                          await other.reference.update({
+                            'chat_ids': FieldValue.arrayRemove(toRemove),
+                            'updated_at': FieldValue.serverTimestamp(),
+                          });
+                        }
                       },
                     ),
                   ],
@@ -6518,7 +6543,18 @@ Navigator.pop(context);
     // Exclude inactive chats from folder view
     final activeChats = allChats.where((c) => !_isInactive(c)).toList();
 
-    final pinned = activeChats.where((c) => c.isPinnedByUser(userRef)).toList()
+    // Chats in a custom folder live only under that folder — hide them from the
+    // Pinned/Group/DM sections so each chat appears in a single place.
+    final folderedIds = <String>{};
+    for (final folder in _model.chatFolders) {
+      folderedIds.addAll(folder.chatIds);
+    }
+
+    // Pinned takes precedence over folders: a pinned chat always shows in the
+    // Pinned section (and is excluded from its folder below).
+    final pinned = activeChats
+        .where((c) => c.isPinnedByUser(userRef))
+        .toList()
       ..sort((a, b) {
         final aTime = a.lastMessageAt ?? a.createdAt;
         final bTime = b.lastMessageAt ?? b.createdAt;
@@ -6527,7 +6563,12 @@ Navigator.pop(context);
         if (bTime == null) return -1;
         return bTime.compareTo(aTime);
       });
-    final groups = activeChats.where((c) => !c.isPinnedByUser(userRef) && c.isGroup).toList()
+    final groups = activeChats
+        .where((c) =>
+            !c.isPinnedByUser(userRef) &&
+            c.isGroup &&
+            !folderedIds.contains(c.reference.id))
+        .toList()
       ..sort((a, b) {
         final aTime = a.lastMessageAt ?? a.createdAt;
         final bTime = b.lastMessageAt ?? b.createdAt;
@@ -6536,7 +6577,12 @@ Navigator.pop(context);
         if (bTime == null) return -1;
         return bTime.compareTo(aTime);
       });
-    final dms = activeChats.where((c) => !c.isPinnedByUser(userRef) && !c.isGroup).toList()
+    final dms = activeChats
+        .where((c) =>
+            !c.isPinnedByUser(userRef) &&
+            !c.isGroup &&
+            !folderedIds.contains(c.reference.id))
+        .toList()
       ..sort((a, b) {
         final aTime = a.lastMessageAt ?? a.createdAt;
         final bTime = b.lastMessageAt ?? b.createdAt;
@@ -6586,6 +6632,10 @@ Navigator.pop(context);
             ...pinned.map((chat) => _buildFolderChatItem(chat)),
         ],
 
+        // Custom folders
+        for (final folder in _model.chatFolders)
+          _buildCustomFolderSection(folder, activeChats),
+
         // Groups
         if (groups.isNotEmpty) ...[
           _buildFolderSectionHeader(
@@ -6613,10 +6663,6 @@ Navigator.pop(context);
           if (!_model.isDMCollapsed)
             ...dms.map((chat) => _buildFolderChatItem(chat)),
         ],
-
-        // Custom folders
-        for (final folder in _model.chatFolders)
-          _buildCustomFolderSection(folder, activeChats),
 
         SizedBox(height: 100),
       ],
@@ -6697,8 +6743,11 @@ Navigator.pop(context);
   }
 
   Widget _buildCustomFolderSection(ChatFoldersRecord folder, List<ChatsRecord> allChats) {
+    // Pinned chats take precedence and live in the Pinned section instead.
     final folderChats = allChats
-        .where((c) => folder.chatIds.contains(c.reference.id))
+        .where((c) =>
+            folder.chatIds.contains(c.reference.id) &&
+            !c.isPinnedByUser(currentUserReference))
         .toList()
       ..sort((a, b) {
         final aTime = a.lastMessageAt ?? a.createdAt;

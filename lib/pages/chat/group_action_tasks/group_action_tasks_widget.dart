@@ -18,10 +18,12 @@ class GroupActionTasksWidget extends StatefulWidget {
     super.key,
     required this.chatDoc,
     this.onClose,
+    this.embedded = false,
   });
 
   final ChatsRecord? chatDoc;
   final VoidCallback? onClose;
+  final bool embedded;
 
   static String routeName = 'GroupActionTasks';
   static String routePath = '/group-action-tasks';
@@ -84,6 +86,11 @@ class _GroupActionTasksWidgetState extends State<GroupActionTasksWidget> {
 
   @override
   Widget build(BuildContext context) {
+    final panel = _buildTasksPanel();
+    if (widget.embedded) {
+      return panel;
+    }
+
     return Stack(
       children: [
         // Semi-transparent overlay
@@ -101,60 +108,70 @@ class _GroupActionTasksWidgetState extends State<GroupActionTasksWidget> {
         // 35% width panel on the right
         Align(
           alignment: Alignment.centerRight,
-          child: Container(
+          child: SizedBox(
             width: MediaQuery.of(context).size.width * 0.35,
             height: MediaQuery.of(context).size.height,
-            child: GestureDetector(
-              onTap: () {
-                FocusScope.of(context).unfocus();
-                FocusManager.instance.primaryFocus?.unfocus();
-              },
-              child: Scaffold(
-                key: scaffoldKey,
-                backgroundColor: const Color(0xFFF9FAFB),
-                appBar: AppBar(
-                  backgroundColor:
-                      FlutterFlowTheme.of(context).secondaryBackground,
-                  automaticallyImplyLeading: false,
-                  leading: IconButton(
-                    icon: Icon(
-                      widget.onClose != null ? Icons.close : Icons.arrow_back,
-                      color: FlutterFlowTheme.of(context).primaryText,
-                      size: 24,
-                    ),
-                    onPressed: () {
-                      if (widget.onClose != null) {
-                        widget.onClose!();
-                      } else {
-                        Navigator.pop(context);
-                      }
-                    },
+            child: panel,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildTasksPanel() {
+    return GestureDetector(
+      onTap: () {
+        FocusScope.of(context).unfocus();
+        FocusManager.instance.primaryFocus?.unfocus();
+      },
+      child: Scaffold(
+        key: scaffoldKey,
+        backgroundColor: const Color(0xFFF9FAFB),
+        appBar: widget.embedded
+            ? null
+            : AppBar(
+                backgroundColor:
+                    FlutterFlowTheme.of(context).secondaryBackground,
+                automaticallyImplyLeading: false,
+                leading: IconButton(
+                  icon: Icon(
+                    widget.onClose != null ? Icons.close : Icons.arrow_back,
+                    color: FlutterFlowTheme.of(context).primaryText,
+                    size: 24,
                   ),
-                  title: Text(
-                    'Action Tasks',
-                    style: FlutterFlowTheme.of(context).headlineMedium.override(
-                          font: GoogleFonts.inter(
-                            fontWeight: FontWeight.w600,
-                            fontStyle: FlutterFlowTheme.of(context)
-                                .headlineMedium
-                                .fontStyle,
-                          ),
-                          color: FlutterFlowTheme.of(context).primaryText,
-                          fontSize: 18.0,
-                          letterSpacing: 0.0,
-                          fontWeight: FontWeight.w600,
-                        ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  actions: const [],
-                  centerTitle: false,
-                  elevation: 0.0,
+                  onPressed: () {
+                    if (widget.onClose != null) {
+                      widget.onClose!();
+                    } else {
+                      Navigator.pop(context);
+                    }
+                  },
                 ),
-                body: SafeArea(
-                  top: true,
-                  child: _buildTasksStream(
-                    body: (snapshot) {
+                title: Text(
+                  'Action Tasks',
+                  style: FlutterFlowTheme.of(context).headlineMedium.override(
+                        font: GoogleFonts.inter(
+                          fontWeight: FontWeight.w600,
+                          fontStyle: FlutterFlowTheme.of(context)
+                              .headlineMedium
+                              .fontStyle,
+                        ),
+                        color: FlutterFlowTheme.of(context).primaryText,
+                        fontSize: 18.0,
+                        letterSpacing: 0.0,
+                        fontWeight: FontWeight.w600,
+                      ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                actions: const [],
+                centerTitle: false,
+                elevation: 0.0,
+              ),
+        body: SafeArea(
+          top: !widget.embedded,
+          child: _buildTasksStream(
+            body: (snapshot) {
                             if (snapshot.connectionState ==
                                 ConnectionState.waiting) {
                               return const Center(
@@ -281,12 +298,8 @@ class _GroupActionTasksWidgetState extends State<GroupActionTasksWidget> {
                             );
                           },
                         ),
-                ),
-              ),
-            ),
-          ),
         ),
-      ],
+      ),
     );
   }
 

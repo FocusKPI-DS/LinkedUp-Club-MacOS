@@ -856,10 +856,39 @@ class ChatController extends GetxController {
   static const int inactiveDays = 30;
 
   /// Returns true if the chat has had no new messages in the last [inactiveDays].
+  bool isChatInactive(ChatsRecord chat) => _isInactive(chat);
+
   bool _isInactive(ChatsRecord chat) {
     final lastActivity = chat.lastMessageAt ?? chat.createdAt;
     if (lastActivity == null) return true; // no timestamp → inactive
     return DateTime.now().difference(lastActivity).inDays >= inactiveDays;
+  }
+
+  /// Inactive chats for the collapsible sidebar section on the All tab.
+  List<ChatsRecord> getInactiveChatsForSidebar() {
+    final userRef = currentUserReference;
+    final inactive = chats.where((chat) {
+      if (!_isInactive(chat)) return false;
+      if (userRef != null && chat.isPinnedByUser(userRef)) return false;
+      if (!chat.isGroup &&
+          chat.members.any((member) =>
+              member != userRef &&
+              blockedUserIds.value.contains(member.id))) {
+        return false;
+      }
+      return true;
+    }).toList();
+
+    inactive.sort((a, b) {
+      final aTime = a.lastMessageAt ?? a.createdAt;
+      final bTime = b.lastMessageAt ?? b.createdAt;
+      if (aTime == null && bTime == null) return 0;
+      if (aTime == null) return 1;
+      if (bTime == null) return -1;
+      return bTime.compareTo(aTime);
+    });
+
+    return inactive;
   }
 
   // Get filtered chats based on search and tab
@@ -916,8 +945,11 @@ class ChatController extends GetxController {
         // Unread only
         filteredChatsList =
             filteredChatsList.where((chat) => hasUnreadMessages(chat)).toList();
+      } else if (chatFilter.value == 'All' && searchQuery.value.isEmpty) {
+        // All tab: active chats only — inactive chats appear in the collapsible section
+        filteredChatsList =
+            filteredChatsList.where((chat) => !_isInactive(chat)).toList();
       }
-      // All tab (index 0): show every chat including inactive
     }
 
     // 2. Filter by search query
