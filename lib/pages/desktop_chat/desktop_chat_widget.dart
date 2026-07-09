@@ -31,7 +31,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:ui';
 import 'package:flutter/foundation.dart'
-    show kIsWeb, defaultTargetPlatform, TargetPlatform;
+    show kIsWeb, defaultTargetPlatform, TargetPlatform, listEquals;
 import 'package:flutter/scheduler.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:easy_debounce/easy_debounce.dart';
@@ -312,6 +312,56 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
       },
       folder.reference,
     );
+  }
+
+  ChatFoldersRecord _folderWithChatIds(
+    ChatFoldersRecord folder,
+    List<String> chatIds,
+  ) {
+    return ChatFoldersRecord.getDocumentFromData(
+      {
+        ...folder.snapshotData,
+        'chat_ids': chatIds,
+        'updated_at': getCurrentTimestamp,
+      },
+      folder.reference,
+    );
+  }
+
+  /// Updates folder membership in local state so the sidebar moves chats
+  /// immediately (Windows polls folders every 30s without this).
+  void _applyLocalChatFolderMembership({
+    required Iterable<String> chatIds,
+    String? targetFolderId,
+  }) {
+    final ids = chatIds.toSet();
+    setState(() {
+      _model.chatFolders = _model.chatFolders.map((folder) {
+        var next = folder.chatIds.where((id) => !ids.contains(id)).toList();
+        if (targetFolderId != null && folder.reference.id == targetFolderId) {
+          for (final id in ids) {
+            if (!next.contains(id)) next.add(id);
+          }
+        }
+        if (listEquals(next, folder.chatIds)) return folder;
+        return _folderWithChatIds(folder, next);
+      }).toList();
+    });
+  }
+
+  void _applyLocalRemoveChatsFromOtherFolders(
+    Iterable<String> chatIds, {
+    required String exceptFolderId,
+  }) {
+    final ids = chatIds.toSet();
+    setState(() {
+      _model.chatFolders = _model.chatFolders.map((folder) {
+        if (folder.reference.id == exceptFolderId) return folder;
+        final next = folder.chatIds.where((id) => !ids.contains(id)).toList();
+        if (listEquals(next, folder.chatIds)) return folder;
+        return _folderWithChatIds(folder, next);
+      }).toList();
+    });
   }
 
   Future<void> _handleRenameFolder(
@@ -2343,36 +2393,6 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
     return ListView(
       padding: EdgeInsets.zero,
       children: [
-        // Compact "New Folder" link at top (Slack-style)
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-          child: MouseRegion(
-            cursor: SystemMouseCursors.click,
-            child: GestureDetector(
-              onTap: () => _showCreateFolderDialog(),
-              child: Padding(
-                padding: EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                child: Row(
-                  children: [
-                    Icon(Icons.add_rounded,
-                        size: 14, color: Color(0xFF9CA3AF)),
-                    SizedBox(width: 6),
-                    Text(
-                      'New Folder',
-                      style: TextStyle(
-                        fontFamily: 'Inter',
-                        fontSize: 12,
-                        fontWeight: FontWeight.w500,
-                        color: Color(0xFF9CA3AF),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-        ),
-
         // Pinned (combined DM and Groups)
         if (pinned.isNotEmpty) ...[
           _buildSmartFolderHeader(
@@ -2998,7 +3018,9 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
     required String exceptFolderId,
   }) async {
     final ids = chatIds.toList();
-    for (final folder in _model.chatFolders) {
+    final previousFolders = _model.chatFolders;
+    _applyLocalRemoveChatsFromOtherFolders(ids, exceptFolderId: exceptFolderId);
+    for (final folder in previousFolders) {
       if (folder.reference.id == exceptFolderId) continue;
       final toRemove =
           ids.where((id) => folder.chatIds.contains(id)).toList();
@@ -3023,6 +3045,11 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
       currentFolderId: folder.reference.id,
       onConfirm: (selectedIds) async {
         if (selectedIds.isEmpty) return;
+        final previousFolders = _model.chatFolders;
+        _applyLocalChatFolderMembership(
+          chatIds: selectedIds,
+          targetFolderId: folder.reference.id,
+        );
         try {
           await fsArrayUnion(
             folder.reference,
@@ -3039,6 +3066,15 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
           );
         } catch (e) {
           debugLog('❌ Error adding chats to folder: $e');
+          if (mounted) {
+            setState(() => _model.chatFolders = previousFolders);
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('Error adding chats to folder: $e'),
+                backgroundColor: Color(0xFFEF4444),
+              ),
+            );
+          }
         }
       },
     );
@@ -3958,43 +3994,76 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
         _showCreateFolderDialog();
         return;
       }
+
+      final chatId = chat.reference.id;
+      final previousFolders = _model.chatFolders;
+
       if (value == '_remove') {
-        // Remove from all folders
-        for (final folder in _model.chatFolders) {
-          if (folder.chatIds.contains(chat.reference.id)) {
+        _applyLocalChatFolderMembership(chatIds: [chatId]);
+        try {
+          for (final folder in previousFolders) {
+            if (folder.chatIds.contains(chatId)) {
+              await fsArrayRemove(
+                folder.reference,
+                'chat_ids',
+                [chatId],
+              );
+              await fsPatchDocument(folder.reference, {
+                'updated_at': getCurrentTimestamp,
+              });
+            }
+          }
+        } catch (e) {
+          debugLog('❌ Error moving chat to unfiled: $e');
+          if (mounted) {
+            setState(() => _model.chatFolders = previousFolders);
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('Error moving chat: $e'),
+                backgroundColor: Color(0xFFEF4444),
+              ),
+            );
+          }
+        }
+        return;
+      }
+
+      _applyLocalChatFolderMembership(
+        chatIds: [chatId],
+        targetFolderId: value,
+      );
+      try {
+        for (final folder in previousFolders) {
+          if (folder.reference.id != value &&
+              folder.chatIds.contains(chatId)) {
             await fsArrayRemove(
               folder.reference,
               'chat_ids',
-              [chat.reference.id],
+              [chatId],
             );
             await fsPatchDocument(folder.reference, {
               'updated_at': getCurrentTimestamp,
             });
           }
         }
-        return;
-      }
-      // Move to selected folder
-      // First remove from all other folders
-      for (final folder in _model.chatFolders) {
-        if (folder.reference.id != value &&
-            folder.chatIds.contains(chat.reference.id)) {
-          await fsArrayRemove(
-            folder.reference,
-            'chat_ids',
-            [chat.reference.id],
+        final targetRef =
+            currentUserReference!.collection('chat_folders').doc(value);
+        await fsArrayUnion(targetRef, 'chat_ids', [chatId]);
+        await fsPatchDocument(targetRef, {
+          'updated_at': getCurrentTimestamp,
+        });
+      } catch (e) {
+        debugLog('❌ Error moving chat to folder: $e');
+        if (mounted) {
+          setState(() => _model.chatFolders = previousFolders);
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Error moving chat to folder: $e'),
+              backgroundColor: Color(0xFFEF4444),
+            ),
           );
-          await fsPatchDocument(folder.reference, {
-            'updated_at': getCurrentTimestamp,
-          });
         }
       }
-      // Then add to selected folder
-      final targetRef = currentUserReference!.collection('chat_folders').doc(value);
-      await fsArrayUnion(targetRef, 'chat_ids', [chat.reference.id]);
-      await fsPatchDocument(targetRef, {
-        'updated_at': getCurrentTimestamp,
-      });
     });
   }
 
