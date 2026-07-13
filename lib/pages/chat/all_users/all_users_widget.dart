@@ -1,5 +1,6 @@
 import '/auth/firebase_auth/auth_util.dart';
 import '/backend/backend.dart';
+import '/backend/firestore/firestore_desktop_adapter.dart';
 import '/component/attendee_list/attendee_list_widget.dart';
 import '/component/empty_friend_list/empty_friend_list_widget.dart';
 import '/flutter_flow/flutter_flow_animations.dart';
@@ -46,7 +47,7 @@ class _AllUsersWidgetState extends State<AllUsersWidget>
 
     // On page load action.
     SchedulerBinding.instance.addPostFrameCallback((_) async {
-      _model.users = await queryUsersRecordOnce();
+      _model.users = await fsQueryUsers(limit: 200);
       _model.addToMember(currentUserReference!);
       safeSetState(() {});
       _model.usersDoc = _model.users!.toList().cast<UsersRecord>();
@@ -414,50 +415,30 @@ class _AllUsersWidgetState extends State<AllUsersWidget>
                                                 allUsersVarItem.reference),
                                         user: allUsersVarItem,
                                         addFriend: () async {
-                                          await currentUserReference!.update({
-                                            ...mapToFirestore(
-                                              {
-                                                'sent_requests':
-                                                    FieldValue.arrayUnion([
-                                                  allUsersVarItem.reference
-                                                ]),
-                                              },
-                                            ),
-                                          });
+                                          await fsArrayUnion(
+                                            currentUserReference!,
+                                            'sent_requests',
+                                            [allUsersVarItem.reference],
+                                          );
 
-                                          await allUsersVarItem.reference
-                                              .update({
-                                            ...mapToFirestore(
-                                              {
-                                                'friend_requests':
-                                                    FieldValue.arrayUnion(
-                                                        [currentUserReference]),
-                                              },
-                                            ),
-                                          });
+                                          await fsArrayUnion(
+                                            allUsersVarItem.reference,
+                                            'friend_requests',
+                                            [currentUserReference!],
+                                          );
                                         },
                                         removeRequest: () async {
-                                          await currentUserReference!.update({
-                                            ...mapToFirestore(
-                                              {
-                                                'sent_requests':
-                                                    FieldValue.arrayRemove([
-                                                  allUsersVarItem.reference
-                                                ]),
-                                              },
-                                            ),
-                                          });
+                                          await fsArrayRemove(
+                                            currentUserReference!,
+                                            'sent_requests',
+                                            [allUsersVarItem.reference],
+                                          );
 
-                                          await allUsersVarItem.reference
-                                              .update({
-                                            ...mapToFirestore(
-                                              {
-                                                'friend_requests':
-                                                    FieldValue.arrayRemove(
-                                                        [currentUserReference]),
-                                              },
-                                            ),
-                                          });
+                                          await fsArrayRemove(
+                                            allUsersVarItem.reference,
+                                            'friend_requests',
+                                            [currentUserReference!],
+                                          );
                                         },
                                       ),
                                     ),

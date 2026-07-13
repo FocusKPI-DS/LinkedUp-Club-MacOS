@@ -1,0 +1,144 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Wix xmlns="http://schemas.microsoft.com/wix/2006/wi">
+  <!--
+    UpgradeCode must stay fixed for the life of the product (enables MSI upgrades).
+    Product Id="*" → new product code per build; MajorUpgrade replaces older installs.
+  -->
+  <Product
+    Id="*"
+    Name="Lona"
+    Language="1033"
+    Version="$(var.ProductVersion)"
+    Manufacturer="FocusKPI"
+    UpgradeCode="7E4A9B2C-1D3F-4A5B-9C8D-6E2F1A0B4C5D">
+
+    <Package
+      InstallerVersion="500"
+      Compressed="yes"
+      InstallScope="perMachine"
+      Platform="x64"
+      Description="Lona desktop application"
+      Comments="Lona for Windows" />
+
+    <MajorUpgrade
+      AllowSameVersionUpgrades="yes"
+      DowngradeErrorMessage="A newer version of Lona is already installed." />
+
+    <MediaTemplate EmbedCab="yes" />
+
+    <Icon Id="LonaIcon.ico" SourceFile="$(var.RepoRoot)\windows\runner\resources\app_icon.ico" />
+    <Property Id="ARPPRODUCTICON" Value="LonaIcon.ico" />
+
+    <Feature Id="ProductFeature" Title="Lona" Level="1">
+      <ComponentGroupRef Id="AppHarvest" />
+      <ComponentRef Id="LegacyLinkedUpCleanup" />
+      <ComponentRef Id="ApplicationShortcuts" />
+      <ComponentRef Id="DesktopShortcut" />
+    </Feature>
+
+    <Property Id="INSTALLDESKTOPSHORTCUT" Value="1" />
+    <Property Id="WIXUI_EXITDIALOGOPTIONALCHECKBOXTEXT" Value="Launch Lona" />
+    <Property Id="WIXUI_EXITDIALOGOPTIONALCHECKBOX" Value="1" />
+    <Property Id="WixShellExecTarget" Value="[#lona.exe]" />
+
+    <CustomAction
+      Id="LaunchApplication"
+      BinaryKey="WixCA"
+      DllEntry="WixShellExec"
+      Impersonate="yes" />
+
+    <!-- WixUI_InstallDir: pick install folder; skip the default EULA page -->
+    <UIRef Id="WixUI_InstallDir" />
+    <Property Id="WIXUI_INSTALLDIR" Value="INSTALLFOLDER" />
+    <UI>
+      <Dialog Id="OptionsDlg" Width="370" Height="270" Title="!(loc.InstallDirDlg_Title)">
+        <Control Id="Next" Type="PushButton" X="236" Y="243" Width="56" Height="17" Default="yes" Text="&amp;Next">
+          <Publish Event="NewDialog" Value="VerifyReadyDlg">1</Publish>
+        </Control>
+        <Control Id="Back" Type="PushButton" X="180" Y="243" Width="56" Height="17" Text="&amp;Back">
+          <Publish Event="NewDialog" Value="InstallDirDlg">1</Publish>
+        </Control>
+        <Control Id="Cancel" Type="PushButton" X="304" Y="243" Width="56" Height="17" Cancel="yes" Text="Cancel">
+          <Publish Event="SpawnDialog" Value="CancelDlg">1</Publish>
+        </Control>
+        <Control Id="BannerLine" Type="Line" X="0" Y="44" Width="370" Height="0" />
+        <Control Id="BottomLine" Type="Line" X="0" Y="234" Width="370" Height="0" />
+        <Control Id="Title" Type="Text" X="20" Y="55" Width="330" Height="20" Transparent="yes" NoPrefix="yes" Text="{\WixUI_Font_Title}Additional tasks" />
+        <Control Id="Description" Type="Text" X="20" Y="80" Width="330" Height="30" Transparent="yes" Text="Choose any extra shortcuts to create during installation." />
+        <Control Id="DesktopShortcutCheckbox" Type="CheckBox" X="20" Y="120" Width="330" Height="17" Property="INSTALLDESKTOPSHORTCUT" CheckBoxValue="1" Text="Create a &amp;desktop shortcut" />
+      </Dialog>
+
+      <Publish Dialog="WelcomeDlg" Control="Next" Event="NewDialog" Value="InstallDirDlg" Order="2">1</Publish>
+      <Publish Dialog="InstallDirDlg" Control="Back" Event="NewDialog" Value="WelcomeDlg" Order="2">1</Publish>
+      <Publish Dialog="InstallDirDlg" Control="Next" Event="NewDialog" Value="OptionsDlg" Order="2">1</Publish>
+      <Publish Dialog="VerifyReadyDlg" Control="Back" Event="NewDialog" Value="OptionsDlg" Order="2">1</Publish>
+      <Publish Dialog="ExitDialog" Control="Finish" Event="DoAction" Value="LaunchApplication">WIXUI_EXITDIALOGOPTIONALCHECKBOX = 1 and NOT Installed</Publish>
+    </UI>
+
+    <Directory Id="TARGETDIR" Name="SourceDir">
+      <Directory Id="ProgramFiles64Folder">
+        <Directory Id="INSTALLFOLDER" Name="Lona" />
+      </Directory>
+      <Directory Id="ProgramMenuFolder">
+        <Directory Id="ApplicationProgramsFolder" Name="Lona" />
+      </Directory>
+      <Directory Id="DesktopFolder" Name="Desktop" />
+    </Directory>
+
+    <!-- Remove pre-rename executable when upgrading from linkedup.exe → lona.exe -->
+    <DirectoryRef Id="INSTALLFOLDER">
+      <Component Id="LegacyLinkedUpCleanup" Guid="D4E5F6A7-B8C9-4D0E-1F2A-3B4C5D6E7F8A">
+        <RemoveFile Id="RemoveLegacyLinkedUpExe" Name="linkedup.exe" On="both" />
+        <RegistryValue
+          Root="HKLM"
+          Key="Software\FocusKPI\Lona"
+          Name="LegacyLinkedUpRemoved"
+          Type="integer"
+          Value="1"
+          KeyPath="yes" />
+      </Component>
+    </DirectoryRef>
+
+    <DirectoryRef Id="ApplicationProgramsFolder">
+      <Component Id="ApplicationShortcuts" Guid="B8C9D0E1-F2A3-4B5C-9D0E-1F2A3B4C5D6E">
+        <Shortcut
+          Id="ApplicationStartMenuShortcut"
+          Name="Lona"
+          Description="Lona"
+          Target="[#lona.exe]"
+          WorkingDirectory="INSTALLFOLDER"
+          Icon="LonaIcon.ico"
+          IconIndex="0" />
+        <RemoveFolder Id="ApplicationProgramsFolder" On="uninstall" />
+        <RegistryValue
+          Root="HKCU"
+          Key="Software\FocusKPI\Lona"
+          Name="Installed"
+          Type="integer"
+          Value="1"
+          KeyPath="yes" />
+      </Component>
+    </DirectoryRef>
+
+    <DirectoryRef Id="DesktopFolder">
+      <Component Id="DesktopShortcut" Guid="C1D2E3F4-A5B6-4C7D-8E9F-0A1B2C3D4E5F">
+        <Condition>INSTALLDESKTOPSHORTCUT="1"</Condition>
+        <Shortcut
+          Id="DesktopShortcutLink"
+          Name="Lona"
+          Description="Lona"
+          Target="[#lona.exe]"
+          WorkingDirectory="INSTALLFOLDER"
+          Icon="LonaIcon.ico"
+          IconIndex="0" />
+        <RegistryValue
+          Root="HKCU"
+          Key="Software\FocusKPI\Lona"
+          Name="DesktopShortcut"
+          Type="integer"
+          Value="1"
+          KeyPath="yes" />
+      </Component>
+    </DirectoryRef>
+  </Product>
+</Wix>

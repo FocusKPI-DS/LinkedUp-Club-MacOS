@@ -130,7 +130,7 @@ class _FlutterFlowChoiceChipsState extends State<FlutterFlowChoiceChips> {
             labelPadding: style.labelPadding,
             avatar: option.iconData != null
                 ? FaIcon(
-                    option.iconData,
+                    option.iconData as FaIconData,
                     size: style.iconSize,
                     color: style.iconColor,
                   )

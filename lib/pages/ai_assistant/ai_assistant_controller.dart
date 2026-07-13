@@ -1,20 +1,41 @@
+import 'dart:async';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:get/get.dart';
 import '/auth/firebase_auth/auth_util.dart';
+import '/backend/firestore/firestore_desktop_adapter.dart';
+import '/flutter_flow/flutter_flow_util.dart';
 
 enum AIAssistantState { loading, success, error }
 
 class AIAssistantController extends GetxController {
-  // Observable variables
   final Rx<AIAssistantState> state = AIAssistantState.loading.obs;
-  final RxList<DocumentSnapshot> conversations = <DocumentSnapshot>[].obs;
-  final RxList<DocumentSnapshot> messages = <DocumentSnapshot>[].obs;
+  final RxList<FsDocSnapshot> conversations = <FsDocSnapshot>[].obs;
+  final RxList<FsDocSnapshot> messages = <FsDocSnapshot>[].obs;
   final RxString currentConversationId = ''.obs;
   final RxBool isAITyping = false.obs;
   final RxString errorMessage = ''.obs;
 
   final FirebaseFunctions _functions = FirebaseFunctions.instance;
+
+  StreamSubscription<QuerySnapshot<Map<String, dynamic>>>? _conversationsSub;
+  StreamSubscription<QuerySnapshot<Map<String, dynamic>>>? _messagesSub;
+  Timer? _conversationsPoll;
+  Timer? _messagesPoll;
+
+  DocumentReference get _conversationRef => FirebaseFirestore.instance
+      .collection('ai_assistant_conversations')
+      .doc(currentConversationId.value);
+
+  Map<String, dynamic> _serverTimestampFields({
+    required List<String> fields,
+  }) {
+    if (useWindowsFirestoreRest) {
+      return {for (final f in fields) f: getCurrentTimestamp};
+    }
+    return {for (final f in fields) f: FieldValue.serverTimestamp()};
+  }
 
   @override
   void onInit() {
@@ -22,7 +43,15 @@ class AIAssistantController extends GetxController {
     initializeConversation();
   }
 
-  // Initialize conversation
+  @override
+  void onClose() {
+    _conversationsSub?.cancel();
+    _messagesSub?.cancel();
+    _conversationsPoll?.cancel();
+    _messagesPoll?.cancel();
+    super.onClose();
+  }
+
   Future<void> initializeConversation() async {
     if (currentConversationId.value.isEmpty) {
       try {
@@ -39,7 +68,6 @@ class AIAssistantController extends GetxController {
     }
   }
 
-  // Create or get existing conversation
   Future<String> _createOrGetConversation() async {
     try {
       if (currentUserReference == null) {
@@ -47,37 +75,30 @@ class AIAssistantController extends GetxController {
         return 'fallback_conversation';
       }
 
-      // Check if user already has an active conversation
-      final querySnapshot = await FirebaseFirestore.instance
-          .collection('ai_assistant_conversations')
-          .where('user_ref', isEqualTo: currentUserReference)
-          .where('is_active', isEqualTo: true)
-          .limit(1)
-          .get();
-
-      if (querySnapshot.docs.isNotEmpty) {
-        return querySnapshot.docs.first.id;
+      final active = await fsQueryActiveAiConversation(currentUserReference!);
+      if (active != null) {
+        return active.id;
       }
 
-      // Create new conversation
-      final docRef = await FirebaseFirestore.instance
-          .collection('ai_assistant_conversations')
-          .add({
-        'user_ref': currentUserReference,
-        'created_at': FieldValue.serverTimestamp(),
-        'updated_at': FieldValue.serverTimestamp(),
-        'last_message': '',
-        'last_message_at': FieldValue.serverTimestamp(),
-        'message_count': 0,
-        'is_active': true,
-        'is_pinned': false,
-        'title': 'New Chat',
-        'context_data': {
-          'workspace_id': null,
-          'recent_events': [],
-          'user_preferences': {}
-        }
-      });
+      final docRef = await fsCreateRootDocument(
+        collectionPath: 'ai_assistant_conversations',
+        data: {
+          'user_ref': currentUserReference,
+          ..._serverTimestampFields(
+            fields: ['created_at', 'updated_at', 'last_message_at'],
+          ),
+          'last_message': '',
+          'message_count': 0,
+          'is_active': true,
+          'is_pinned': false,
+          'title': 'New Chat',
+          'context_data': {
+            'workspace_id': null,
+            'recent_events': [],
+            'user_preferences': {},
+          },
+        },
+      );
 
       return docRef.id;
     } catch (e) {
@@ -86,18 +107,30 @@ class AIAssistantController extends GetxController {
     }
   }
 
-  // Load conversations with real-time updates
   void loadConversations() {
     if (currentUserReference == null) return;
 
-    FirebaseFirestore.instance
+    _conversationsSub?.cancel();
+    _conversationsPoll?.cancel();
+
+    if (useWindowsFirestoreRest) {
+      _pollConversations();
+      _conversationsPoll = Timer.periodic(
+        const Duration(seconds: 15),
+        (_) => _pollConversations(),
+      );
+      return;
+    }
+
+    _conversationsSub = FirebaseFirestore.instance
         .collection('ai_assistant_conversations')
         .where('user_ref', isEqualTo: currentUserReference)
         .orderBy('is_pinned', descending: true)
         .orderBy('last_message_at', descending: true)
         .snapshots()
         .listen((snapshot) {
-      conversations.value = snapshot.docs;
+      conversations.value =
+          snapshot.docs.map((d) => FsDocSnapshot.fromQuery(d)).toList();
       state.value = AIAssistantState.success;
     }, onError: (error) {
       print('Error loading conversations: $error');
@@ -106,51 +139,90 @@ class AIAssistantController extends GetxController {
     });
   }
 
-  // Load messages for current conversation
+  Future<void> _pollConversations() async {
+    if (currentUserReference == null) return;
+    try {
+      conversations.value =
+          await fsQueryAiConversations(currentUserReference!);
+      state.value = AIAssistantState.success;
+    } catch (error) {
+      print('Error loading conversations: $error');
+      errorMessage.value = 'Error loading conversations: $error';
+      state.value = AIAssistantState.error;
+    }
+  }
+
   void loadMessages() {
     if (currentConversationId.value.isEmpty ||
-        currentConversationId.value == 'fallback_conversation') return;
+        currentConversationId.value == 'fallback_conversation') {
+      return;
+    }
 
-    FirebaseFirestore.instance
+    _messagesSub?.cancel();
+    _messagesPoll?.cancel();
+
+    if (useWindowsFirestoreRest) {
+      _pollMessages();
+      _messagesPoll = Timer.periodic(
+        const Duration(seconds: 15),
+        (_) => _pollMessages(),
+      );
+      return;
+    }
+
+    _messagesSub = FirebaseFirestore.instance
         .collection('ai_assistant_conversations')
         .doc(currentConversationId.value)
         .collection('messages')
         .orderBy('created_at', descending: false)
         .snapshots()
         .listen((snapshot) {
-      messages.value = snapshot.docs;
+      messages.value =
+          snapshot.docs.map((d) => FsDocSnapshot.fromQuery(d)).toList();
     }, onError: (error) {
       print('Error loading messages: $error');
     });
   }
 
-  // Switch conversation
+  Future<void> _pollMessages() async {
+    if (currentConversationId.value.isEmpty ||
+        currentConversationId.value == 'fallback_conversation') {
+      return;
+    }
+    try {
+      messages.value =
+          await fsQueryAiMessages(currentConversationId.value);
+    } catch (error) {
+      print('Error loading messages: $error');
+    }
+  }
+
   void switchConversation(String conversationId) {
     currentConversationId.value = conversationId;
     loadMessages();
   }
 
-  // Create new conversation
   Future<void> createNewConversation() async {
     try {
-      final docRef = await FirebaseFirestore.instance
-          .collection('ai_assistant_conversations')
-          .add({
-        'user_ref': currentUserReference,
-        'created_at': FieldValue.serverTimestamp(),
-        'updated_at': FieldValue.serverTimestamp(),
-        'last_message': '',
-        'last_message_at': FieldValue.serverTimestamp(),
-        'message_count': 0,
-        'is_active': true,
-        'is_pinned': false,
-        'title': 'New Chat',
-        'context_data': {
-          'workspace_id': null,
-          'recent_events': [],
-          'user_preferences': {}
-        }
-      });
+      final docRef = await fsCreateRootDocument(
+        collectionPath: 'ai_assistant_conversations',
+        data: {
+          'user_ref': currentUserReference,
+          ..._serverTimestampFields(
+            fields: ['created_at', 'updated_at', 'last_message_at'],
+          ),
+          'last_message': '',
+          'message_count': 0,
+          'is_active': true,
+          'is_pinned': false,
+          'title': 'New Chat',
+          'context_data': {
+            'workspace_id': null,
+            'recent_events': [],
+            'user_preferences': {},
+          },
+        },
+      );
 
       currentConversationId.value = docRef.id;
       loadMessages();
@@ -159,7 +231,6 @@ class AIAssistantController extends GetxController {
     }
   }
 
-  // Generate conversation title
   String _generateConversationTitle(String firstMessage) {
     String cleaned = firstMessage.trim();
     if (cleaned.length <= 40) {
@@ -173,61 +244,51 @@ class AIAssistantController extends GetxController {
     return '${truncated}...';
   }
 
-  // Send message
   Future<void> sendMessage(String messageText) async {
     if (messageText.trim().isEmpty) return;
 
     try {
-      // Get conversation data for title generation
-      final conversationDoc = await FirebaseFirestore.instance
-          .collection('ai_assistant_conversations')
-          .doc(currentConversationId.value)
-          .get();
-
-      final conversationData = conversationDoc.data();
+      final conversationData =
+          await fsFetchDocumentData(_conversationRef);
       final messageCount = conversationData?['message_count'] as int? ?? 0;
-      final currentTitle = conversationData?['title'] as String? ?? 'New Chat';
+      final currentTitle =
+          conversationData?['title'] as String? ?? 'New Chat';
 
-      // Add user message
-      await FirebaseFirestore.instance
-          .collection('ai_assistant_conversations')
-          .doc(currentConversationId.value)
-          .collection('messages')
-          .add({
-        'sender_type': 'user',
-        'content': messageText,
-        'created_at': FieldValue.serverTimestamp(),
-        'message_type': 'text',
-        'metadata': {}
-      });
+      await fsCreateAiMessage(
+        conversationId: currentConversationId.value,
+        data: {
+          'sender_type': 'user',
+          'content': messageText,
+          'created_at': useWindowsFirestoreRest
+              ? getCurrentTimestamp
+              : FieldValue.serverTimestamp(),
+          'message_type': 'text',
+          'metadata': {},
+        },
+      );
 
-      // Prepare update data
-      Map<String, dynamic> updateData = {
+      final updateData = <String, dynamic>{
         'last_message': messageText,
-        'last_message_at': FieldValue.serverTimestamp(),
-        'message_count': FieldValue.increment(1),
-        'updated_at': FieldValue.serverTimestamp(),
+        ..._serverTimestampFields(
+          fields: ['last_message_at', 'updated_at'],
+        ),
       };
 
-      // Generate title from first message
       if (messageCount == 0 || currentTitle == 'New Chat') {
         updateData['title'] = _generateConversationTitle(messageText);
       }
 
-      // Update conversation
-      await FirebaseFirestore.instance
-          .collection('ai_assistant_conversations')
-          .doc(currentConversationId.value)
-          .update(updateData);
+      await fsPatchDocument(_conversationRef, updateData);
+      await fsIncrementDocumentField(_conversationRef, 'message_count', 1);
 
-      // Show typing indicator
       isAITyping.value = true;
-
-      // Call AI function
       await _callAIFunction(messageText);
-
-      // Hide typing indicator
       isAITyping.value = false;
+
+      if (useWindowsFirestoreRest) {
+        await _pollMessages();
+        await _pollConversations();
+      }
     } catch (e) {
       print('Error sending message: $e');
       isAITyping.value = false;
@@ -235,7 +296,6 @@ class AIAssistantController extends GetxController {
     }
   }
 
-  // Call AI function
   Future<void> _callAIFunction(String message) async {
     try {
       if (currentConversationId.value.isEmpty ||
@@ -261,31 +321,31 @@ class AIAssistantController extends GetxController {
     }
   }
 
-  // Pin/Unpin conversation
   Future<void> togglePinConversation(
       String conversationId, bool currentPinStatus) async {
     try {
-      await FirebaseFirestore.instance
-          .collection('ai_assistant_conversations')
-          .doc(conversationId)
-          .update({
-        'is_pinned': !currentPinStatus,
-        'updated_at': FieldValue.serverTimestamp(),
-      });
+      await fsPatchDocument(
+        FirebaseFirestore.instance
+            .collection('ai_assistant_conversations')
+            .doc(conversationId),
+        {
+          'is_pinned': !currentPinStatus,
+          ..._serverTimestampFields(fields: ['updated_at']),
+        },
+      );
     } catch (e) {
       print('Error toggling pin: $e');
     }
   }
 
-  // Delete conversation
   Future<void> deleteConversation(String conversationId) async {
     try {
-      await FirebaseFirestore.instance
-          .collection('ai_assistant_conversations')
-          .doc(conversationId)
-          .delete();
+      await fsDeleteDocument(
+        FirebaseFirestore.instance
+            .collection('ai_assistant_conversations')
+            .doc(conversationId),
+      );
 
-      // If deleted current conversation, create new one
       if (currentConversationId.value == conversationId) {
         final newConversationId = await _createOrGetConversation();
         currentConversationId.value = newConversationId;
@@ -296,18 +356,18 @@ class AIAssistantController extends GetxController {
     }
   }
 
-  // Archive conversation
   Future<void> archiveConversation(String conversationId) async {
     try {
-      await FirebaseFirestore.instance
-          .collection('ai_assistant_conversations')
-          .doc(conversationId)
-          .update({
-        'is_active': false,
-        'updated_at': FieldValue.serverTimestamp(),
-      });
+      await fsPatchDocument(
+        FirebaseFirestore.instance
+            .collection('ai_assistant_conversations')
+            .doc(conversationId),
+        {
+          'is_active': false,
+          ..._serverTimestampFields(fields: ['updated_at']),
+        },
+      );
 
-      // If archived current conversation, create new one
       if (currentConversationId.value == conversationId) {
         final newConversationId = await _createOrGetConversation();
         currentConversationId.value = newConversationId;

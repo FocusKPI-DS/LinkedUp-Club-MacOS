@@ -1,5 +1,6 @@
 import '/auth/firebase_auth/auth_util.dart';
 import '/backend/backend.dart';
+import '/backend/firestore/firestore_desktop_adapter.dart';
 import '/backend/schema/enums/enums.dart';
 import '/flutter_flow/flutter_flow_icon_button.dart';
 import '/flutter_flow/flutter_flow_util.dart';
@@ -141,12 +142,16 @@ class _UserProfileDetailWidgetState extends State<UserProfileDetailWidget> {
               Align(
                 alignment: const AlignmentDirectional(0.0, -1.0),
                 child: StreamBuilder<List<PostsRecord>>(
-                  stream: queryPostsRecord(
-                    queryBuilder: (postsRecord) => postsRecord.where(
-                      'author_ref',
-                      isEqualTo: widget.user?.reference,
-                    ),
-                  ),
+                  stream: useWindowsFirestoreRest
+                      ? Stream.periodic(const Duration(seconds: 30)).asyncMap(
+                          (_) => fsQueryPostsByAuthor(widget.user!.reference),
+                        )
+                      : queryPostsRecord(
+                          queryBuilder: (postsRecord) => postsRecord.where(
+                            'author_ref',
+                            isEqualTo: widget.user?.reference,
+                          ),
+                        ),
                   builder: (context, snapshot) {
                     // Customize what your widget looks like when it's loading.
                     if (!snapshot.hasData) {
@@ -297,39 +302,27 @@ class _UserProfileDetailWidgetState extends State<UserProfileDetailWidget> {
                                             Expanded(
                                               child: FFButtonWidget(
                                                 onPressed: () async {
-                                                  await currentUserReference!
-                                                      .update({
-                                                    ...mapToFirestore(
-                                                      {
-                                                        'friends': FieldValue
-                                                            .arrayUnion([
-                                                          widget.user?.reference
-                                                        ]),
-                                                        'friend_requests':
-                                                            FieldValue
-                                                                .arrayRemove([
-                                                          widget.user?.reference
-                                                        ]),
-                                                      },
-                                                    ),
-                                                  });
+                                                  await fsArrayUnion(
+                                                    currentUserReference!,
+                                                    'friends',
+                                                    [widget.user?.reference],
+                                                  );
+                                                  await fsArrayRemove(
+                                                    currentUserReference!,
+                                                    'friend_requests',
+                                                    [widget.user?.reference],
+                                                  );
 
-                                                  await widget.user!.reference
-                                                      .update({
-                                                    ...mapToFirestore(
-                                                      {
-                                                        'sent_requests':
-                                                            FieldValue
-                                                                .arrayRemove([
-                                                          currentUserReference
-                                                        ]),
-                                                        'friends': FieldValue
-                                                            .arrayUnion([
-                                                          currentUserReference
-                                                        ]),
-                                                      },
-                                                    ),
-                                                  });
+                                                  await fsArrayRemove(
+                                                    widget.user!.reference,
+                                                    'sent_requests',
+                                                    [currentUserReference],
+                                                  );
+                                                  await fsArrayUnion(
+                                                    widget.user!.reference,
+                                                    'friends',
+                                                    [currentUserReference],
+                                                  );
 
                                                   context.pushNamed(
                                                     UserProfileDetailWidget
@@ -399,18 +392,11 @@ class _UserProfileDetailWidgetState extends State<UserProfileDetailWidget> {
                                             Expanded(
                                               child: FFButtonWidget(
                                                 onPressed: () async {
-                                                  await widget.user!.reference
-                                                      .update({
-                                                    ...mapToFirestore(
-                                                      {
-                                                        'sent_requests':
-                                                            FieldValue
-                                                                .arrayRemove([
-                                                          currentUserReference
-                                                        ]),
-                                                      },
-                                                    ),
-                                                  });
+                                                  await fsArrayRemove(
+                                                    widget.user!.reference,
+                                                    'sent_requests',
+                                                    [currentUserReference],
+                                                  );
                                                 },
                                                 text: 'Decline',
                                                 options: FFButtonOptions(
@@ -493,7 +479,8 @@ class _UserProfileDetailWidgetState extends State<UserProfileDetailWidget> {
                                             } else {
                                               var chatsRecordReference =
                                                   ChatsRecord.collection.doc();
-                                              await chatsRecordReference.set({
+                                              await fsSetDocument(
+                                                  chatsRecordReference, {
                                                 ...createChatsRecordData(
                                                   title: 'Friend',
                                                   isGroup: false,
@@ -621,32 +608,18 @@ class _UserProfileDetailWidgetState extends State<UserProfileDetailWidget> {
                                           onPressed: () async {
                                             await Future.wait([
                                               Future(() async {
-                                                await widget.user!.reference
-                                                    .update({
-                                                  ...mapToFirestore(
-                                                    {
-                                                      'friend_requests':
-                                                          FieldValue
-                                                              .arrayRemove([
-                                                        currentUserReference
-                                                      ]),
-                                                    },
-                                                  ),
-                                                });
+                                                await fsArrayRemove(
+                                                  widget.user!.reference,
+                                                  'friend_requests',
+                                                  [currentUserReference],
+                                                );
                                               }),
                                               Future(() async {
-                                                await currentUserReference!
-                                                    .update({
-                                                  ...mapToFirestore(
-                                                    {
-                                                      'sent_requests':
-                                                          FieldValue
-                                                              .arrayRemove([
-                                                        widget.user?.reference
-                                                      ]),
-                                                    },
-                                                  ),
-                                                });
+                                                await fsArrayRemove(
+                                                  currentUserReference!,
+                                                  'sent_requests',
+                                                  [widget.user?.reference],
+                                                );
                                               }),
                                             ]);
                                           },
@@ -702,32 +675,18 @@ class _UserProfileDetailWidgetState extends State<UserProfileDetailWidget> {
                                           onPressed: () async {
                                             await Future.wait([
                                               Future(() async {
-                                                await widget.user!.reference
-                                                    .update({
-                                                  ...mapToFirestore(
-                                                    {
-                                                      'friend_requests':
-                                                          FieldValue
-                                                              .arrayUnion([
-                                                        currentUserReference
-                                                      ]),
-                                                    },
-                                                  ),
-                                                });
+                                                await fsArrayUnion(
+                                                  widget.user!.reference,
+                                                  'friend_requests',
+                                                  [currentUserReference],
+                                                );
                                               }),
                                               Future(() async {
-                                                await currentUserReference!
-                                                    .update({
-                                                  ...mapToFirestore(
-                                                    {
-                                                      'sent_requests':
-                                                          FieldValue
-                                                              .arrayUnion([
-                                                        widget.user?.reference
-                                                      ]),
-                                                    },
-                                                  ),
-                                                });
+                                                await fsArrayUnion(
+                                                  currentUserReference!,
+                                                  'sent_requests',
+                                                  [widget.user?.reference],
+                                                );
                                               }),
                                             ]);
 
@@ -1403,14 +1362,15 @@ class _UserProfileDetailWidgetState extends State<UserProfileDetailWidget> {
                                                           child: MemoWidget(
                                                             action: (memo,
                                                                 image) async {
-                                                              await _model.memo!
-                                                                  .reference
-                                                                  .update(
-                                                                      createUserMemoRecordData(
-                                                                memoText: memo,
-                                                                memoImage:
-                                                                    image,
-                                                              ));
+                                                              await fsPatchDocument(
+                                                                _model.memo!
+                                                                    .reference,
+                                                                createUserMemoRecordData(
+                                                                  memoText: memo,
+                                                                  memoImage:
+                                                                      image,
+                                                                ),
+                                                              );
                                                               _model.memoText =
                                                                   memo;
                                                               safeSetState(

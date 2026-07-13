@@ -15,8 +15,11 @@ import 'package:flutter/material.dart';
 // Set your widget name, define your parameter, and then add the
 // boilerplate code using the green button on the right!
 
+import 'dart:async';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '/auth/firebase_auth/auth_util.dart';
+import '/backend/firestore/firestore_desktop_adapter.dart';
 import 'package:badges/badges.dart' as badges;
 
 class NotificationBadge extends StatefulWidget {
@@ -45,6 +48,7 @@ class NotificationBadge extends StatefulWidget {
 
 class _NotificationBadgeState extends State<NotificationBadge> {
   StreamSubscription<QuerySnapshot>? _notificationSubscription;
+  Timer? _notificationPoll;
   int _unreadCount = 0;
 
   @override
@@ -56,27 +60,47 @@ class _NotificationBadgeState extends State<NotificationBadge> {
   @override
   void dispose() {
     _notificationSubscription?.cancel();
+    _notificationPoll?.cancel();
     super.dispose();
   }
 
-  void _subscribeToNotifications() {
-    if (currentUserReference != null) {
-      String userPath = currentUserReference!.path;
-
-      // Count unread notifications from ff_user_push_notifications
-      _notificationSubscription = FirebaseFirestore.instance
-          .collection('ff_user_push_notifications')
-          .where('user_refs', arrayContains: userPath)
-          .where('status', isEqualTo: 'succeeded')
-          .snapshots()
-          .listen((snapshot) {
-        if (mounted) {
-          setState(() {
-            _unreadCount = snapshot.docs.length;
-          });
-        }
-      });
+  Future<void> _pollNotifications() async {
+    if (currentUserReference == null) return;
+    try {
+      final docs = await fsQueryUserPushNotifications(
+        userPath: currentUserReference!.path,
+      );
+      if (mounted) {
+        setState(() => _unreadCount = docs.length);
+      }
+    } catch (e) {
+      print('Error polling notifications: $e');
     }
+  }
+
+  void _subscribeToNotifications() {
+    if (currentUserReference == null) return;
+
+    if (useWindowsFirestoreRest) {
+      _pollNotifications();
+      _notificationPoll = Timer.periodic(
+        const Duration(seconds: 15),
+        (_) => _pollNotifications(),
+      );
+      return;
+    }
+
+    final userPath = currentUserReference!.path;
+    _notificationSubscription = FirebaseFirestore.instance
+        .collection('ff_user_push_notifications')
+        .where('user_refs', arrayContains: userPath)
+        .where('status', isEqualTo: 'succeeded')
+        .snapshots()
+        .listen((snapshot) {
+      if (mounted) {
+        setState(() => _unreadCount = snapshot.docs.length);
+      }
+    });
   }
 
   @override

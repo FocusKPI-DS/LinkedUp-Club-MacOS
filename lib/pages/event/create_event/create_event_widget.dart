@@ -1,5 +1,6 @@
 import '/auth/firebase_auth/auth_util.dart';
 import '/backend/backend.dart';
+import '/backend/firestore/firestore_desktop_adapter.dart';
 import '/backend/firebase_storage/storage.dart';
 import '/backend/schema/enums/enums.dart';
 import '/backend/schema/structs/index.dart';
@@ -4586,63 +4587,69 @@ class _CreateEventWidgetState extends State<CreateEventWidget> {
                               : () async {
                                   var shouldSetState = false;
                                   if (widget.event != null) {
-                                    await widget.event!.reference.update({
-                                      ...createEventsRecordData(
-                                        title: _model.titleTextController.text,
-                                        description:
-                                            _model.textController3.text,
-                                        location: valueOrDefault<String>(
-                                          (_model.placePickerValue.address ==
+                                    await fsPatchDocument(
+                                      widget.event!.reference,
+                                      {
+                                        ...createEventsRecordData(
+                                          title: _model.titleTextController.text,
+                                          description:
+                                              _model.textController3.text,
+                                          location: valueOrDefault<String>(
+                                            (_model.placePickerValue.address ==
+                                                        '') ||
+                                                    (_model.placePickerValue
+                                                            .latLng ==
+                                                        null)
+                                                ? _model.location
+                                                : _model.placePickerValue.address,
+                                            'location',
+                                          ),
+                                          latlng: (_model.placePickerValue
+                                                          .address ==
                                                       '') ||
                                                   (_model.placePickerValue
                                                           .latLng ==
                                                       null)
-                                              ? _model.location
-                                              : _model.placePickerValue.address,
-                                          'location',
+                                              ? _model.latlng
+                                              : _model.placePickerValue.latLng,
+                                          startDate: _model.startDate,
+                                          endDate: _model.endTime,
+                                          creatorId: currentUserReference,
+                                          coverImageUrl: _model.image,
+                                          isPrivate: true,
+                                          createdAt: getCurrentTimestamp,
+                                          isTrending: false,
+                                          price: int.tryParse(
+                                              _model.priceTextController.text),
+                                          ticketDeadline: _model.deadlinePaying ??
+                                              widget!.event?.ticketDeadline,
+                                          ticketAmount: int.tryParse(
+                                              _model.amountTextController.text),
+                                          eventLink:
+                                              _model.eventLinkTextController.text,
+                                          eventType: _model.eventType,
+                                          ticketingMethod: _model.ticketingMethod,
                                         ),
-                                        latlng: (_model.placePickerValue
-                                                        .address ==
-                                                    '') ||
-                                                (_model.placePickerValue
-                                                        .latLng ==
-                                                    null)
-                                            ? _model.latlng
-                                            : _model.placePickerValue.latLng,
-                                        startDate: _model.startDate,
-                                        endDate: _model.endTime,
-                                        creatorId: currentUserReference,
-                                        coverImageUrl: _model.image,
-                                        isPrivate: true,
-                                        createdAt: getCurrentTimestamp,
-                                        isTrending: false,
-                                        price: int.tryParse(
-                                            _model.priceTextController.text),
-                                        ticketDeadline: _model.deadlinePaying ??
-                                            widget!.event?.ticketDeadline,
-                                        ticketAmount: int.tryParse(
-                                            _model.amountTextController.text),
-                                        eventLink:
-                                            _model.eventLinkTextController.text,
-                                        eventType: _model.eventType,
-                                        ticketingMethod: _model.ticketingMethod,
-                                      ),
-                                      ...mapToFirestore(
-                                        {
-                                          'speakers':
-                                              getSpeakerListFirestoreData(
-                                            _model.speaker,
-                                          ),
-                                          'category': _model.categorySelected,
-                                          'dateSchedule':
-                                              getDateScheduleListFirestoreData(
-                                            FFAppState().scheduleDate,
-                                          ),
-                                          'participants': FieldValue.arrayUnion(
-                                              [currentUserReference]),
-                                        },
-                                      ),
-                                    });
+                                        ...mapToFirestore(
+                                          {
+                                            'speakers':
+                                                getSpeakerListFirestoreData(
+                                              _model.speaker,
+                                            ),
+                                            'category': _model.categorySelected,
+                                            'dateSchedule':
+                                                getDateScheduleListFirestoreData(
+                                              FFAppState().scheduleDate,
+                                            ),
+                                          },
+                                        ),
+                                      },
+                                    );
+                                    await fsArrayUnion(
+                                      widget.event!.reference,
+                                      'participants',
+                                      [currentUserReference],
+                                    );
                                     FFAppState().scheduleDate = [];
                                     FFAppState().update(() {});
 
@@ -4835,7 +4842,7 @@ class _CreateEventWidgetState extends State<CreateEventWidget> {
                                     } else {
                                       var eventsRecordReference =
                                           EventsRecord.collection.doc();
-                                      await eventsRecordReference.set({
+                                      await fsSetDocument(eventsRecordReference, {
                                         ...createEventsRecordData(
                                           title:
                                               _model.titleTextController.text,
@@ -4990,8 +4997,9 @@ class _CreateEventWidgetState extends State<CreateEventWidget> {
                                       );
                                       shouldSetState = true;
 
-                                      await _model.createdEventTop!.reference
-                                          .update(createEventsRecordData(
+                                      await fsPatchDocument(
+                                          _model.createdEventTop!.reference,
+                                          createEventsRecordData(
                                         eventRef:
                                             _model.createdEventTop?.reference,
                                         eventId: _model
@@ -5002,8 +5010,9 @@ class _CreateEventWidgetState extends State<CreateEventWidget> {
                                       var participantRecordReference =
                                           ParticipantRecord.createDoc(_model
                                               .createdEventTop!.reference);
-                                      await participantRecordReference
-                                          .set(createParticipantRecordData(
+                                      await fsSetDocument(
+                                          participantRecordReference,
+                                          createParticipantRecordData(
                                         userId: currentUserUid,
                                         userRef: currentUserReference,
                                         name: currentUserDisplayName,
@@ -5037,7 +5046,7 @@ class _CreateEventWidgetState extends State<CreateEventWidget> {
                                       if (_model.groupValue == true) {
                                         var chatsRecordReference =
                                             ChatsRecord.collection.doc();
-                                        await chatsRecordReference.set({
+                                        await fsSetDocument(chatsRecordReference, {
                                           ...createChatsRecordData(
                                             title:
                                                 _model.titleTextController.text,
@@ -5102,19 +5111,16 @@ class _CreateEventWidgetState extends State<CreateEventWidget> {
                                         }, chatsRecordReference);
                                         shouldSetState = true;
 
-                                        await _model.createdEventTop!.reference
-                                            .update({
-                                          ...createEventsRecordData(
-                                            mainGroup: _model.chat?.reference,
-                                          ),
-                                          ...mapToFirestore(
-                                            {
-                                              'chat_groups':
-                                                  FieldValue.arrayUnion(
-                                                      [_model.chat?.reference]),
-                                            },
-                                          ),
-                                        });
+                                        await fsPatchDocument(
+                                            _model.createdEventTop!.reference,
+                                            createEventsRecordData(
+                                          mainGroup: _model.chat?.reference,
+                                        ));
+                                        await fsArrayUnion(
+                                          _model.createdEventTop!.reference,
+                                          'chat_groups',
+                                          [_model.chat?.reference],
+                                        );
                                       }
                                       FFAppState().scheduleDate = [];
                                       FFAppState().update(() {});

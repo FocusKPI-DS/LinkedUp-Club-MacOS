@@ -3,6 +3,9 @@
 // DO NOT REMOVE OR MODIFY THE CODE ABOVE!
 
 import 'package:cloud_functions/cloud_functions.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+
+import '/backend/cloud_functions/callable_functions.dart';
 
 Future<Map<String, dynamic>?> calendarListEvents({
   String calendarId = 'primary',
@@ -15,26 +18,30 @@ Future<Map<String, dynamic>?> calendarListEvents({
 }) async {
   try {
     print('🔵 Fetching calendar events...');
+    if (FirebaseAuth.instance.currentUser == null) {
+      return {
+        'success': false,
+        'error': 'Not signed in',
+        'errorCode': 'unauthenticated',
+      };
+    }
 
-    final HttpsCallable callable = FirebaseFunctions.instance.httpsCallable(
+    final resultData = await invokeCloudFunction(
       'calendarListEvents',
-      options: HttpsCallableOptions(
-        timeout: const Duration(seconds: 60),
-      ),
+      data: {
+        'calendarId': calendarId,
+        if (timeMin != null) 'timeMin': timeMin,
+        if (timeMax != null) 'timeMax': timeMax,
+        'maxResults': maxResults,
+        if (pageToken != null) 'pageToken': pageToken,
+        'singleEvents': singleEvents,
+        'orderBy': orderBy,
+      },
+      timeout: const Duration(seconds: 60),
     );
 
-    final result = await callable.call({
-      'calendarId': calendarId,
-      if (timeMin != null) 'timeMin': timeMin,
-      if (timeMax != null) 'timeMax': timeMax,
-      'maxResults': maxResults,
-      if (pageToken != null) 'pageToken': pageToken,
-      'singleEvents': singleEvents,
-      'orderBy': orderBy,
-    });
-
-    if (result.data != null) {
-      final data = result.data as Map;
+    if (resultData != null) {
+      final data = Map<String, dynamic>.from(resultData as Map);
       if (data['success'] == true) {
         print('✅ Calendar events fetched successfully');
 
@@ -60,6 +67,15 @@ Future<Map<String, dynamic>?> calendarListEvents({
         'error': 'No data received',
       };
     }
+  } on FirebaseFunctionsException catch (e) {
+    print(
+      '❌ Calendar Cloud Function error: code=${e.code} message=${e.message}',
+    );
+    return {
+      'success': false,
+      'error': e.message ?? e.code,
+      'errorCode': e.code,
+    };
   } catch (e) {
     print('❌ Error fetching calendar events: $e');
     return {

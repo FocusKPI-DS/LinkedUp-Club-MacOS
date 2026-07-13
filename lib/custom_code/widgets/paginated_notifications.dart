@@ -19,6 +19,8 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:timeago/timeago.dart' as timeago;
 import 'dart:convert';
+import '/backend/firestore/firestore_desktop_adapter.dart';
+import '/pages/desktop_chat/rest_poll_builder.dart';
 
 class PaginatedNotifications extends StatefulWidget {
   const PaginatedNotifications(
@@ -110,26 +112,21 @@ class _PaginatedNotificationsState extends State<PaginatedNotifications> {
       String userPath, int limit) async {
     List<Map<String, dynamic>> notifications = [];
 
-    QuerySnapshot querySnapshot = await FirebaseFirestore.instance
-        .collection('ff_user_push_notifications')
-        .orderBy('timestamp', descending: true)
-        .limit(limit)
-        .get();
+    final docs = await fsQueryAllUserPushNotifications(limit: limit);
 
-    for (var doc in querySnapshot.docs) {
-      Map<String, dynamic> data = Map<String, dynamic>.from(doc.data() as Map);
-      String userRefs = data['user_refs'] ?? '';
+    for (final doc in docs) {
+      Map<String, dynamic> data =
+          Map<String, dynamic>.from(doc.data() ?? {});
+      String userRefs = data['user_refs']?.toString() ?? '';
 
       if (userRefs.contains(userPath)) {
         data['document_id'] = doc.id;
         data['notification_type'] = 'user';
 
-        // Ensure timestamp is DateTime
-        if (data['timestamp'] != null && data['timestamp'] is Timestamp) {
-          data['timestamp'] = (data['timestamp'] as Timestamp).toDate();
+        if (data['timestamp'] != null) {
+          data['timestamp'] = _toDateTime(data['timestamp']);
         }
 
-        // Store sender as DocumentReference if it's a string path
         if (data['sender'] != null && data['sender'] is String) {
           data['sender_ref'] = FirebaseFirestore.instance.doc(data['sender']);
         } else if (data['sender'] != null &&
@@ -144,24 +141,25 @@ class _PaginatedNotificationsState extends State<PaginatedNotifications> {
     return notifications;
   }
 
+  DateTime _toDateTime(dynamic value) {
+    if (value is Timestamp) return value.toDate();
+    if (value is DateTime) return value;
+    return DateTime.now();
+  }
+
   Future<List<Map<String, dynamic>>> _loadSystemNotifications(int limit) async {
     List<Map<String, dynamic>> notifications = [];
 
-    QuerySnapshot querySnapshot = await FirebaseFirestore.instance
-        .collection('ff_push_notifications')
-        .where('target_audience', isEqualTo: 'All')
-        .orderBy('timestamp', descending: true)
-        .limit(limit)
-        .get();
+    final docs = await fsQuerySystemPushNotifications(limit: limit);
 
-    for (var doc in querySnapshot.docs) {
-      Map<String, dynamic> data = Map<String, dynamic>.from(doc.data() as Map);
+    for (final doc in docs) {
+      Map<String, dynamic> data =
+          Map<String, dynamic>.from(doc.data() ?? {});
       data['document_id'] = doc.id;
       data['notification_type'] = 'system';
 
-      // Ensure timestamp is DateTime
-      if (data['timestamp'] != null && data['timestamp'] is Timestamp) {
-        data['timestamp'] = (data['timestamp'] as Timestamp).toDate();
+      if (data['timestamp'] != null) {
+        data['timestamp'] = _toDateTime(data['timestamp']);
       }
 
       notifications.add(data);
@@ -195,9 +193,8 @@ class _PaginatedNotificationsState extends State<PaginatedNotifications> {
 
   Future<void> _fetchUserData(DocumentReference userRef) async {
     try {
-      DocumentSnapshot userDoc = await userRef.get();
-      if (userDoc.exists) {
-        Map<String, dynamic> userData = userDoc.data() as Map<String, dynamic>;
+      final userData = await fsFetchDocumentData(userRef);
+      if (userData != null) {
         _userCache[userRef.path] = userData;
         print(
             'Cached user data for ${userRef.path}: photo_url = ${userData['photo_url']}');
@@ -551,6 +548,20 @@ class _PaginatedNotificationsState extends State<PaginatedNotifications> {
 
   @override
   Widget build(BuildContext context) {
+    if (useWindowsFirestoreRest) {
+      return RestPollBuilder<int>(
+        interval: const Duration(seconds: 15),
+        fetch: () async {
+          await _loadInitialNotifications();
+          return _allNotifications.length;
+        },
+        builder: (context, snapshot) => _buildNotificationsBody(),
+      );
+    }
+    return _buildNotificationsBody();
+  }
+
+  Widget _buildNotificationsBody() {
     return Container(
       width: widget.width ?? double.infinity,
       height: widget.height ?? 400,

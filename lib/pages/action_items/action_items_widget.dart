@@ -2,7 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '/backend/backend.dart';
+import '/backend/firestore/firestore_desktop_adapter.dart';
 import '/auth/firebase_auth/auth_util.dart';
+import '/pages/desktop_chat/rest_poll_builder.dart';
+import '/custom_code/widgets/action_item_card.dart';
 
 class ActionItemsWidget extends StatefulWidget {
   const ActionItemsWidget({super.key});
@@ -22,13 +25,7 @@ class _ActionItemsWidgetState extends State<ActionItemsWidget> {
       return _buildEmptyState();
     }
 
-    return StreamBuilder<List<ActionItemsRecord>>(
-      stream: queryActionItemsRecord(
-        queryBuilder: (actionItemsRecord) => actionItemsRecord
-            .where('user_ref', isEqualTo: currentUserReference)
-            .orderBy('created_time', descending: true)
-            .limit(20),
-      ),
+    return _buildActionItemsStream(
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const Center(child: CircularProgressIndicator());
@@ -121,7 +118,36 @@ class _ActionItemsWidgetState extends State<ActionItemsWidget> {
                           itemCount: filteredTodos.length,
                           itemBuilder: (context, index) {
                             final todo = filteredTodos[index];
-                            return _buildTodoCard(todo, index);
+                            final isExpanded =
+                                _expandedDetails.contains(todo.reference.id);
+                            final displayCompleted =
+                                todo.status == 'completed' ||
+                                    _completedTasks.contains(todo.reference.path);
+
+                            return ActionItemCard(
+                              key: ValueKey(todo.reference.id),
+                              todo: todo,
+                              isCompleting: false,
+                              progress: null,
+                              isExpanded: isExpanded,
+                              displayCompleted: displayCompleted,
+                              checkboxEnabled: true,
+                              onToggleExpanded: () {
+                                setState(() {
+                                  final id = todo.reference.id;
+                                  if (_expandedDetails.contains(id)) {
+                                    _expandedDetails.remove(id);
+                                  } else {
+                                    _expandedDetails.add(id);
+                                  }
+                                });
+                              },
+                              onToggleComplete: (value) {
+                                if (value) _handleTaskComplete(todo);
+                              },
+                              onEdit: () => _showEditDialog(todo),
+                              onDelete: () => _handleDeleteTask(todo),
+                            );
                           },
                         ),
                 ],
@@ -130,6 +156,33 @@ class _ActionItemsWidgetState extends State<ActionItemsWidget> {
           ),
         );
       },
+    );
+  }
+
+  Widget _buildActionItemsStream({
+    required Widget Function(
+      BuildContext context,
+      AsyncSnapshot<List<ActionItemsRecord>> snapshot,
+    ) builder,
+  }) {
+    if (useWindowsFirestoreRest) {
+      return RestPollBuilder<List<ActionItemsRecord>>(
+        interval: const Duration(seconds: 20),
+        fetch: () => fsQueryActionItemsByUser(
+          currentUserReference!,
+          limit: 20,
+        ),
+        builder: builder,
+      );
+    }
+    return StreamBuilder<List<ActionItemsRecord>>(
+      stream: queryActionItemsRecord(
+        queryBuilder: (actionItemsRecord) => actionItemsRecord
+            .where('user_ref', isEqualTo: currentUserReference)
+            .orderBy('created_time', descending: true)
+            .limit(20),
+      ),
+      builder: builder,
     );
   }
 
@@ -254,298 +307,6 @@ class _ActionItemsWidgetState extends State<ActionItemsWidget> {
     );
   }
 
-  Widget _buildTodoCard(ActionItemsRecord todo, int index) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 8),
-      padding: const EdgeInsets.all(10),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(
-          color: const Color(0xFFE5E7EB),
-          width: 1,
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: const Color(0xFF1F2937).withOpacity(0.04),
-            blurRadius: 4,
-            offset: const Offset(0, 1),
-          ),
-        ],
-      ),
-      child: Stack(
-        clipBehavior: Clip.none,
-        children: [
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Priority, Group, Assigned + Due (top row)
-              Row(
-                children: [
-                  _buildPriorityBadge(todo.priority),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: (todo.groupName.isNotEmpty || todo.chatRef == null)
-                        ? Text(
-                            todo.groupName,
-                            style: const TextStyle(
-                              fontFamily: 'Inter',
-                              fontSize: 12,
-                              fontWeight: FontWeight.w500,
-                              color: Color(0xFF64748B),
-                            ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          )
-                        : StreamBuilder<ChatsRecord>(
-                            stream: ChatsRecord.getDocument(todo.chatRef!),
-                            builder: (context, chatSnap) {
-                              final name = chatSnap.data?.title ?? '';
-                              return Text(
-                                name,
-                                style: const TextStyle(
-                                  fontFamily: 'Inter',
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w500,
-                                  color: Color(0xFF64748B),
-                                ),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                              );
-                            },
-                          ),
-                  ),
-                  const SizedBox(width: 6),
-                  Transform.translate(
-                    offset: const Offset(-10, -10),
-                    child: Row(
-                      children: [
-                        const Icon(Icons.calendar_today_outlined,
-                            size: 12, color: Color(0xFF94A3B8)),
-                        const SizedBox(width: 3),
-                        Text(
-                          DateFormat('MMM dd').format(todo.createdTime!),
-                          style: const TextStyle(
-                            fontFamily: 'Inter',
-                            fontSize: 11,
-                            color: Color(0xFF64748B),
-                          ),
-                        ),
-                        const SizedBox(width: 6),
-                        const Icon(Icons.event_available_outlined,
-                            size: 12, color: Color(0xFF94A3B8)),
-                        const SizedBox(width: 3),
-                        Text(
-                          todo.dueDate != null
-                              ? DateFormat('MMM dd').format(todo.dueDate!)
-                              : 'No due',
-                          style: const TextStyle(
-                            fontFamily: 'Inter',
-                            fontSize: 11,
-                            color: Color(0xFF64748B),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 6),
-
-              // Task title
-              Text(
-                todo.title,
-                style: const TextStyle(
-                  fontFamily: 'Inter',
-                  fontSize: 13,
-                  fontWeight: FontWeight.w600,
-                  color: Color(0xFF0F172A),
-                ),
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-              ),
-              const SizedBox(height: 4),
-
-              // Details (people only)
-              if (todo.involvedPeople.isNotEmpty)
-                Row(
-                  children: [
-                    const Icon(Icons.people_outline,
-                        size: 12, color: Color(0xFF64748B)),
-                    const SizedBox(width: 4),
-                    Text(
-                      todo.involvedPeople.join(', '),
-                      style: const TextStyle(
-                        fontFamily: 'Inter',
-                        fontSize: 12,
-                        color: Color(0xFF64748B),
-                      ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ],
-                ),
-              const SizedBox(height: 4),
-              // (Due date moved to top row)
-
-              const SizedBox(height: 4),
-
-              // Details toggle button
-              Align(
-                alignment: Alignment.centerRight,
-                child: Transform.translate(
-                  offset: const Offset(0, -2),
-                  child: TextButton(
-                    onPressed: () {
-                      setState(() {
-                        final id = todo.reference.id;
-                        if (_expandedDetails.contains(id)) {
-                          _expandedDetails.remove(id);
-                        } else {
-                          _expandedDetails.add(id);
-                        }
-                      });
-                    },
-                    style: TextButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 8, vertical: 4),
-                      minimumSize: const Size(0, 0),
-                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                      foregroundColor: const Color(0xFF2563EB),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: const [
-                        Text(
-                          'Details',
-                          style: TextStyle(
-                            fontFamily: 'Inter',
-                            fontSize: 11,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                        SizedBox(width: 4),
-                        Icon(
-                          Icons.keyboard_arrow_down,
-                          size: 14,
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-
-              // Details dropdown
-              AnimatedSwitcher(
-                duration: const Duration(milliseconds: 120),
-                child: _expandedDetails.contains(todo.reference.id)
-                    ? Container(
-                        key: ValueKey('details-${todo.reference.id}'),
-                        width: double.infinity,
-                        margin: const EdgeInsets.only(top: 2),
-                        padding: const EdgeInsets.all(8),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFF8FAFC),
-                          borderRadius: BorderRadius.circular(8),
-                          border: Border.all(color: const Color(0xFFE5E7EB)),
-                        ),
-                        child: Text(
-                          (todo.description).isNotEmpty
-                              ? todo.description
-                              : 'No details available',
-                          style: const TextStyle(
-                            fontFamily: 'Inter',
-                            fontSize: 12,
-                            color: Color(0xFF334155),
-                            height: 1.35,
-                          ),
-                        ),
-                      )
-                    : const SizedBox.shrink(),
-              ),
-            ],
-          ),
-          // Checkbox in top right
-          Positioned(
-            top: -10,
-            right: -10,
-            child: Checkbox(
-              value: todo.status == 'completed' ||
-                  _completedTasks.contains(todo.reference.path),
-              onChanged: (value) => _handleTaskComplete(todo),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(4),
-              ),
-              checkColor: Colors.white,
-              fillColor: WidgetStateProperty.resolveWith<Color>(
-                (Set<WidgetState> states) {
-                  if (states.contains(WidgetState.selected)) {
-                    return const Color(0xFF10B981);
-                  }
-                  return Colors.white;
-                },
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildPriorityBadge(String priority) {
-    Color bgColor;
-    Color textColor;
-    String label;
-
-    switch (priority.toLowerCase()) {
-      case 'urgent':
-        bgColor = const Color(0xFFFEF2F2);
-        textColor = const Color(0xFFDC2626);
-        label = 'Urgent';
-        break;
-      case 'high':
-        bgColor = const Color(0xFFFFF7ED);
-        textColor = const Color(0xFFF97316);
-        label = 'High';
-        break;
-      case 'moderate':
-        bgColor = const Color(0xFFFEFCE8);
-        textColor = const Color(0xFFEAB308);
-        label = 'Moderate';
-        break;
-      case 'low':
-        bgColor = const Color(0xFFEFF6FF);
-        textColor = const Color(0xFF3B82F6);
-        label = 'Low';
-        break;
-      default:
-        bgColor = const Color(0xFFEFF6FF);
-        textColor = const Color(0xFF3B82F6);
-        label = 'Moderate';
-    }
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-      decoration: BoxDecoration(
-        color: bgColor,
-        borderRadius: BorderRadius.circular(6),
-        border: Border.all(
-          color: textColor.withOpacity(0.3),
-          width: 1,
-        ),
-      ),
-      child: Text(
-        label,
-        style: TextStyle(
-          fontFamily: 'Inter',
-          fontSize: 11,
-          fontWeight: FontWeight.w600,
-          color: textColor,
-        ),
-      ),
-    );
-  }
-
   Future<void> _handleTaskComplete(ActionItemsRecord todo) async {
     // Optimistically update local state first
     final taskId = todo.reference.path;
@@ -554,11 +315,7 @@ class _ActionItemsWidgetState extends State<ActionItemsWidget> {
     });
 
     try {
-      // Update task in Firebase
-      await todo.reference.update({
-        'status': 'completed',
-        'completed_time': FieldValue.serverTimestamp(),
-      });
+      await fsMarkActionItemDone(todo.reference);
     } catch (e) {
       print('Error updating task: $e');
       // Rollback on error
@@ -566,6 +323,273 @@ class _ActionItemsWidgetState extends State<ActionItemsWidget> {
         _completedTasks.remove(taskId);
       });
     }
+  }
+
+  Future<void> _handleDeleteTask(ActionItemsRecord todo) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: Colors.white,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Text(
+          'Delete Task',
+          style: TextStyle(
+            fontFamily: 'Inter',
+            fontSize: 20,
+            fontWeight: FontWeight.w700,
+            color: Color(0xFF1F2937),
+          ),
+        ),
+        content: Text(
+          'Are you sure you want to delete "${todo.title}"? This action cannot be undone.',
+          style: const TextStyle(
+            fontFamily: 'Inter',
+            fontSize: 14,
+            color: Color(0xFF64748B),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text(
+              'Cancel',
+              style: TextStyle(
+                fontFamily: 'Inter',
+                color: Color(0xFF64748B),
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFFDC2626),
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8),
+              ),
+            ),
+            child: const Text(
+              'Delete',
+              style: TextStyle(
+                fontFamily: 'Inter',
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true) return;
+
+    try {
+      await fsDeleteMatchingActionItems(todo);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Task deleted successfully'),
+            backgroundColor: Colors.green,
+            duration: Duration(seconds: 2),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error deleting task: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _showEditDialog(ActionItemsRecord todo) async {
+    final titleController = TextEditingController(text: todo.title);
+    final validPriorities = ['low', 'medium', 'high', 'urgent'];
+    final priorityValue = todo.priority.isNotEmpty
+        ? todo.priority.toLowerCase()
+        : 'low';
+    String selectedPriority =
+        validPriorities.contains(priorityValue) ? priorityValue : 'low';
+    DateTime? selectedDueDate = todo.dueDate;
+
+    await showDialog(
+      context: context,
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return AlertDialog(
+              backgroundColor: Colors.white,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+              ),
+              title: const Text(
+                'Edit Task',
+                style: TextStyle(
+                  fontFamily: 'Inter',
+                  fontSize: 20,
+                  fontWeight: FontWeight.w700,
+                  color: Color(0xFF1F2937),
+                ),
+              ),
+              content: SizedBox(
+                width: double.maxFinite,
+                child: SingleChildScrollView(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      TextField(
+                        controller: titleController,
+                        autofocus: true,
+                        maxLines: 3,
+                        decoration: InputDecoration(
+                          hintText: 'Enter task title',
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          focusedBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(8),
+                            borderSide: const BorderSide(
+                              color: Color(0xFF3B82F6),
+                              width: 2,
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      const Text(
+                        'Priority',
+                        style: TextStyle(
+                          fontFamily: 'Inter',
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                          color: Color(0xFF1F2937),
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      DropdownButtonFormField<String>(
+                        value: selectedPriority,
+                        decoration: InputDecoration(
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                        ),
+                        items: validPriorities
+                            .map(
+                              (p) => DropdownMenuItem(
+                                value: p,
+                                child: Text(
+                                  p[0].toUpperCase() + p.substring(1),
+                                ),
+                              ),
+                            )
+                            .toList(),
+                        onChanged: (value) {
+                          if (value != null) {
+                            setDialogState(() => selectedPriority = value);
+                          }
+                        },
+                      ),
+                      const SizedBox(height: 16),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: OutlinedButton.icon(
+                              onPressed: () async {
+                                final picked = await showDatePicker(
+                                  context: context,
+                                  initialDate:
+                                      selectedDueDate ?? DateTime.now(),
+                                  firstDate: DateTime(2020),
+                                  lastDate: DateTime(2100),
+                                );
+                                if (picked != null) {
+                                  setDialogState(() => selectedDueDate = picked);
+                                }
+                              },
+                              icon: const Icon(Icons.calendar_today_outlined),
+                              label: Text(
+                                selectedDueDate != null
+                                    ? DateFormat('MMM dd, yyyy')
+                                        .format(selectedDueDate!)
+                                    : 'Set due date',
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          OutlinedButton(
+                            onPressed: selectedDueDate == null
+                                ? null
+                                : () => setDialogState(
+                                      () => selectedDueDate = null,
+                                    ),
+                            child: const Text('Clear'),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text(
+                    'Cancel',
+                    style: TextStyle(
+                      fontFamily: 'Inter',
+                      color: Color(0xFF64748B),
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+                ElevatedButton(
+                  onPressed: () async {
+                    final title = titleController.text.trim();
+                    if (title.isEmpty) return;
+
+                    try {
+                      await fsPatchDocument(todo.reference, {
+                        'title': title,
+                        'priority': selectedPriority,
+                        'due_date': selectedDueDate,
+                      });
+                      if (context.mounted) Navigator.pop(context);
+                    } catch (e) {
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text('Error updating task: $e'),
+                            backgroundColor: Colors.red,
+                          ),
+                        );
+                      }
+                    }
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF3B82F6),
+                    foregroundColor: Colors.white,
+                  ),
+                  child: const Text(
+                    'Save',
+                    style: TextStyle(
+                      fontFamily: 'Inter',
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+
+    titleController.dispose();
   }
 
   Widget _buildEmptyState() {

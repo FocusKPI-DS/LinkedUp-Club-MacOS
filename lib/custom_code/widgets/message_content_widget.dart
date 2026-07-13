@@ -10,6 +10,7 @@ import 'package:flutter/services.dart';
 import 'package:ff_theme/flutter_flow/flutter_flow_theme.dart';
 import '/custom_code/widgets/index.dart' as custom_widgets;
 import '/app_state.dart';
+import '/utils/chat_message_font.dart';
 
 class _MatchInfo {
   final int start;
@@ -171,7 +172,7 @@ class MessageContentWidget extends StatelessWidget {
 
     final baseBlackStyle = TextStyle(
       fontSize: fontSize,
-      fontFamily: 'SF Pro Text',
+      fontFamily: chatMessageFontFamily,
       color: Color(0xFF000000),
       letterSpacing: -0.4,
       fontWeight: FontWeight.w400,
@@ -180,7 +181,7 @@ class MessageContentWidget extends StatelessWidget {
 
     final mentionStyle = TextStyle(
       fontSize: fontSize,
-      fontFamily: 'SF Pro Text',
+      fontFamily: chatMessageFontFamily,
       color: Color(0xFF007AFF),
       letterSpacing: -0.4,
       fontWeight: FontWeight.w600,
@@ -189,7 +190,7 @@ class MessageContentWidget extends StatelessWidget {
 
     final linkStyle = TextStyle(
       fontSize: fontSize,
-      fontFamily: 'SF Pro Text',
+      fontFamily: chatMessageFontFamily,
       color: const Color(0xFF007AFF),
       letterSpacing: -0.4,
       fontWeight: FontWeight.w400,
@@ -368,7 +369,7 @@ class MessageContentWidget extends StatelessWidget {
         style: TextStyle(
           color: Color(0xFF000000),
           fontSize: FFAppState().chatFontSize,
-          fontFamily: 'SF Pro Text',
+          fontFamily: chatMessageFontFamily,
           fontWeight: FontWeight.w400,
           letterSpacing: -0.4,
           height: 1.3,
@@ -407,22 +408,21 @@ class MessageContentWidget extends StatelessWidget {
             return const SizedBox.shrink();
           }
 
-          // Build full list of menu items corresponding to MobileChatWidget
-          final allMenuItems = [
-            {'label': 'Copy', 'icon': CupertinoIcons.doc_on_doc, 'value': 'copy'},
-            {'label': 'Select', 'icon': CupertinoIcons.checkmark_circle, 'value': 'select'},
+          // Build menu rows — matching expanded grid menu in ChatThreadWidget
+          final primaryMenuItems = <Map<String, dynamic>>[
             {'label': 'React', 'icon': CupertinoIcons.smiley, 'value': 'react'},
             {'label': 'Reply', 'icon': CupertinoIcons.arrow_turn_up_left, 'value': 'reply'},
-            {'label': 'Translate', 'icon': CupertinoIcons.book, 'value': 'translate'},
             {'label': 'Forward', 'icon': CupertinoIcons.arrow_turn_up_right, 'value': 'forward'},
-            {'label': 'Delete', 'icon': CupertinoIcons.delete, 'value': 'delete'},
+            {'label': 'Copy', 'icon': CupertinoIcons.doc_on_doc, 'value': 'copy'},
+            {'label': 'Select', 'icon': CupertinoIcons.checkmark_circle, 'value': 'select'},
+            if (!isOwnMessage) {'label': 'Translate', 'icon': CupertinoIcons.book, 'value': 'translate'},
+            {'label': 'Pin', 'icon': CupertinoIcons.pin, 'value': 'pin'},
+          ];
+          final secondaryMenuItems = <Map<String, dynamic>>[
             if (isOwnMessage) {'label': 'Edit', 'icon': CupertinoIcons.pencil, 'value': 'edit'},
             if (isOwnMessage) {'label': 'Unsend', 'icon': CupertinoIcons.arrow_counterclockwise, 'value': 'unsend'},
-            {'label': 'Download', 'icon': CupertinoIcons.arrow_down_circle, 'value': 'download'},
-            {'label': 'Pin', 'icon': CupertinoIcons.pin, 'value': 'pin'},
-            {'label': 'Report', 'icon': CupertinoIcons.exclamationmark_triangle, 'value': 'report'},
+            if (!isOwnMessage) {'label': 'Report', 'icon': CupertinoIcons.exclamationmark_triangle, 'value': 'report'},
           ];
-          final menuItems = allMenuItems;
 
           Widget buildGridItem(Map<String, dynamic> item) {
             final String value = item['value'] as String;
@@ -460,7 +460,7 @@ class MessageContentWidget extends StatelessWidget {
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(
-                        fontFamily: 'SF Pro Text',
+                        fontFamily: chatMessageFontFamily,
                         fontSize: 8.5, // slightly larger, readable
                         color: isDestructive
                             ? const Color(0xFFFF3B30)
@@ -477,13 +477,14 @@ class MessageContentWidget extends StatelessWidget {
           );
         }
 
-          final int itemsPerRow = 5; // wider menu for text selection
           final double itemSize = 48.0;
           final double horizontalPadding = 6.0;
           final double verticalPadding = 6.0;
 
-          final int actualItemsInWidestRow = menuItems.length < itemsPerRow ? menuItems.length : itemsPerRow;
-          final double menuWidth = (itemSize * actualItemsInWidestRow) + (horizontalPadding * 2) + 2.0;
+          final int widestRow = primaryMenuItems.length > secondaryMenuItems.length
+              ? primaryMenuItems.length
+              : secondaryMenuItems.length;
+          final double menuWidth = (itemSize * widestRow) + (horizontalPadding * 2) + 2.0;
 
           return CustomSingleChildLayout(
             delegate: TextSelectionToolbarLayoutDelegate(
@@ -506,11 +507,28 @@ class MessageContentWidget extends StatelessWidget {
                     width: 0.5,
                   ),
                 ),
-                child: Wrap(
-                  spacing: 0,
-                  runSpacing: 4,
-                  alignment: WrapAlignment.start,
-                  children: menuItems.map((item) => buildGridItem(item)).toList(),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: primaryMenuItems
+                          .map((item) => buildGridItem(item))
+                          .toList(),
+                    ),
+                    Container(
+                      height: 1,
+                      margin: const EdgeInsets.symmetric(vertical: 4),
+                      color: Colors.black.withOpacity(0.08),
+                    ),
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: secondaryMenuItems
+                          .map((item) => buildGridItem(item))
+                          .toList(),
+                    ),
+                  ],
                 ),
               ),
             ),
@@ -562,10 +580,10 @@ class CodeElementBuilder extends MarkdownElementBuilder {
                 children: [
                   Text(
                     language.isEmpty ? 'code' : language,
-                    style: const TextStyle(
+                    style: TextStyle(
                       color: Color(0xFFABB2BF),
                       fontSize: 12,
-                      fontFamily: 'SF Pro Text',
+                      fontFamily: chatMessageFontFamily,
                       fontWeight: FontWeight.bold,
                     ),
                   ),

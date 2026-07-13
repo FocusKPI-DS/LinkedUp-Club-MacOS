@@ -2,7 +2,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:intl/intl.dart';
-import '/utils/markdown_to_quill_delta.dart';
+import '/utils/chat_message_font.dart';
 
 class ForwardedHistoryViewerWidget extends StatefulWidget {
   final String historyJson;
@@ -42,13 +42,13 @@ class _ForwardedHistoryViewerWidgetState extends State<ForwardedHistoryViewerWid
           child: const Icon(CupertinoIcons.back, color: Color(0xFF007AFF)),
           onPressed: () => Navigator.of(context).pop(),
         ),
-        title: const Text(
+        title: Text(
           'Chat History',
           style: TextStyle(
             color: Colors.black,
             fontSize: 17,
             fontWeight: FontWeight.w600,
-            fontFamily: 'SF Pro Text',
+            fontFamily: chatMessageFontFamily,
           ),
         ),
         centerTitle: true,
@@ -130,7 +130,7 @@ class _ForwardedHistoryViewerWidgetState extends State<ForwardedHistoryViewerWid
                             // Render Content
                             if (content.isNotEmpty)
                               Text(
-                                stripMarkdownFormatting(content),
+                                content,
                                 style: const TextStyle(
                                   fontSize: 15,
                                   color: Colors.black,

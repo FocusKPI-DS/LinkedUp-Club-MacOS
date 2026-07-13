@@ -1,11 +1,17 @@
 import '/auth/firebase_auth/auth_util.dart';
+import '/utils/debug_log.dart';
+import '/utils/desktop_pointer.dart';
 import '/backend/backend.dart';
 import '/backend/schema/enums/enums.dart';
-import '/components/invite_friends_button_widget.dart';
+import '/pages/desktop_chat/new_message_dialog.dart';
 import '/flutter_flow/flutter_flow_animations.dart';
 import '/flutter_flow/flutter_flow_icon_button.dart';
 import '/flutter_flow/flutter_flow_util.dart';
 import '/utils/chat_helpers.dart';
+import '/pages/desktop_chat/desktop_safe_user_builder.dart';
+import '/pages/desktop_chat/windows_chat_list_labels.dart';
+import '/pages/desktop_chat/windows_firestore_gate.dart';
+import '/backend/firestore/firestore_desktop_adapter.dart';
 import '/pages/chat/chat_component/chat_thread_component/chat_thread_component_widget.dart';
 import '/pages/chat/chat_component/task_reminder_digest_card.dart';
 import '/pages/desktop_chat/desktop_chat_model.dart';
@@ -14,7 +20,7 @@ import '/pages/chat/user_profile_detail/user_profile_detail_widget.dart';
 import '/pages/chat/group_chat_detail/group_chat_detail_widget.dart';
 import '/pages/chat/group_chat_detail/meeting_transcripts_panel_widget.dart';
 import '/pages/chat/group_action_tasks/group_action_tasks_widget.dart';
-import '/pages/chat/add_group_members/add_group_members_widget.dart';
+import '/pages/chat/add_group_members/add_group_members_dialog.dart';
 import '/pages/chat/group_chat_detail/group_media_links_docs_widget.dart';
 import '/pages/chat/chat_history/chat_history_widget.dart';
 import '/pages/chat/chat_component/group_announcements_widget.dart';
@@ -25,7 +31,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:ui';
 import 'package:flutter/foundation.dart'
-    show kIsWeb, defaultTargetPlatform, TargetPlatform;
+    show kIsWeb, defaultTargetPlatform, TargetPlatform, listEquals;
 import 'package:flutter/scheduler.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:easy_debounce/easy_debounce.dart';
@@ -52,7 +58,7 @@ import 'package:branchio_dynamic_linking_akp5u6/custom_code/actions/index.dart'
 import 'package:branchio_dynamic_linking_akp5u6/flutter_flow/custom_functions.dart'
     as branchio_dynamic_linking_akp5u6_functions;
 import '/custom_code/actions/index.dart' as actions;
-import '/utils/markdown_to_quill_delta.dart';
+import '/backend/cloud_functions/callable_functions.dart';
 
 class DesktopChatWidget extends StatefulWidget {
   const DesktopChatWidget({Key? key}) : super(key: key);
@@ -70,9 +76,71 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
   final animationsMap = <String, AnimationInfo>{};
   final _chatThreadKey = GlobalKey<ChatThreadComponentWidgetState>();
 
+  // Sliding underline for group chat header tabs
+  final GlobalKey _groupTabRowKey = GlobalKey();
+  final List<GlobalKey> _groupTabKeys = List<GlobalKey>.generate(
+    GroupChatTab.values.length,
+    (_) => GlobalKey(),
+  );
+  double _groupTabIndicatorLeft = 0;
+  double _groupTabIndicatorWidth = 0;
+  bool _groupTabIndicatorReady = false;
+
   // Multi-message selection state
   bool _isSelectionMode = false;
   final Set<MessagesRecord> _selectedMessages = {};
+
+  /// Defer group-only Firestore widgets on Windows until the thread is stable.
+  bool _windowsGroupExtrasReady = false;
+  Timer? _windowsGroupExtrasTimer;
+  Timer? _chatFoldersPollTimer;
+
+  bool get _showWindowsGroupExtras {
+    if (kIsWeb || defaultTargetPlatform == TargetPlatform.macOS) return true;
+    if (Platform.isWindows || Platform.isLinux) return _windowsGroupExtrasReady;
+    return true;
+  }
+
+  void _onWindowsThreadOpened() {
+    if (kIsWeb || !(Platform.isWindows || Platform.isLinux)) return;
+    _windowsGroupExtrasReady = false;
+    _windowsGroupExtrasTimer?.cancel();
+    _model.chatFoldersSubscription?.cancel();
+    _model.chatFoldersSubscription = null;
+    _chatFoldersPollTimer?.cancel();
+    _chatFoldersPollTimer = null;
+    _windowsGroupExtrasTimer = Timer(const Duration(seconds: 4), () {
+      if (mounted) setState(() => _windowsGroupExtrasReady = true);
+    });
+  }
+
+  void _onWindowsThreadClosed() {
+    if (kIsWeb || !(Platform.isWindows || Platform.isLinux)) return;
+    _windowsGroupExtrasTimer?.cancel();
+    if (mounted) setState(() => _windowsGroupExtrasReady = false);
+    // Restart folder polling after leaving a thread. This runs on the REST
+    // poll path (useOnceFetch), which is safe on Windows/Linux — the previous
+    // guard made this a no-op and left folders stale after opening a chat.
+    _subscribeToChatFolders();
+  }
+
+  Widget _buildPlatformChatThread({Key? key}) {
+    final chat = _model.selectedChat;
+    if (chat == null) {
+      return const Center(child: Text('Select a conversation'));
+    }
+    return ChatThreadComponentWidget(
+      key: key ?? _chatThreadKey,
+      chatReference: chat,
+      activeSelectionId: ValueNotifier(null),
+      onMessageAction: _handleDesktopMessageAction,
+      onSidebarPreviewUpdate: chatController.applyLocalChatLastMessageFromPatch,
+      onMessagesMutated: () => chatController.refreshChats(force: true),
+      isSelectionMode: _isSelectionMode,
+      selectedMessages: _selectedMessages,
+      onMessageToggled: _toggleMessageSelection,
+    );
+  }
 
   void _toggleMessageSelection(MessagesRecord message) {
     setState(() {
@@ -94,12 +162,8 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
     });
   }
 
-  // Stable cache for user-doc futures so FutureBuilder doesn't reset on every rebuild
-  final Map<String, Future<UsersRecord>> _userDocFutureCache = {};
-
   Future<UsersRecord> _getOrCreateUserFuture(DocumentReference ref) =>
-      _userDocFutureCache.putIfAbsent(
-          ref.id, () => UsersRecord.getDocumentOnce(ref));
+      chatController.getOrCreateUserFuture(ref);
 
   // Track previous friends count for notifications
   int _previousFriendsCount = 0;
@@ -117,13 +181,16 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     _model = createModel(context, () => DesktopChatModel());
-    // Use Get.put with permanent: true to keep controller persistent across navigation
-    // This preserves knownUnreadChats and locallySeenChats state
-    chatController = Get.put(ChatController(), permanent: true);
+    // Reuse existing controller when switching back to Chat tab.
+    try {
+      chatController = Get.find<ChatController>();
+    } catch (_) {
+      chatController = Get.put(ChatController(), permanent: true);
+    }
 
     _model.tabController = TabController(
       vsync: this,
-      length: 3, // All, Unread, Inactive
+      length: 2, // All, Unread
       initialIndex: 0,
     )..addListener(() {
         safeSetState(() {});
@@ -159,12 +226,16 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
             _model.showUserProfilePanel = false;
             _model.userProfileUser = null;
             _model.showTasksPanel = false;
+            _model.groupChatTab = GroupChatTab.messages;
             // Set the selected chat
             _model.selectedChat = selectedChat;
-            print(
+            debugLog(
                 'DesktopChat: Synced selectedChat to model: ${selectedChat.reference.id}');
+            _onWindowsThreadOpened();
           } else {
             _model.selectedChat = null;
+            _onWindowsThreadClosed();
+            chatController.resumeListListeners();
           }
         });
       }
@@ -172,8 +243,17 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
 
     // Initialize presence system after a delay to ensure user is loaded
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (DesktopSafeUserBuilder.useOnceFetch) {
+        debugLog('🪟 [DesktopChat] Windows chat tab opened (poll mode, no list streams)');
+      }
       Future.delayed(Duration(milliseconds: 500), () {
-        _initializePresence();
+        if (!DesktopSafeUserBuilder.useOnceFetch) {
+          _initializePresence();
+        }
+        // Load chat folders on every platform. On Windows/Linux this uses the
+        // REST poll path (no live streams), so it's safe under useOnceFetch.
+        // Without this, previously created folders wouldn't appear until the
+        // user created a new folder (which triggers a manual refresh).
         _subscribeToChatFolders();
       });
       // Clear dock badge when chat page is opened (macOS)
@@ -183,9 +263,206 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
     });
   }
 
+  /// Fetches the latest folders from the backend and updates state right away.
+  /// Used after creating a folder so it appears without waiting for the poll
+  /// timer (Windows/Linux) or stream event. If the fetch returns nothing (or
+  /// throws), [fallback] performs an optimistic local update.
+  Future<void> _refreshChatFoldersNow({VoidCallback? fallback}) async {
+    if (currentUserReference == null) return;
+    try {
+      final folders = await fsQueryChatFolders(currentUserReference!);
+      if (!mounted) return;
+      setState(() {
+        if (folders.isNotEmpty) {
+          _model.chatFolders = folders;
+        } else {
+          fallback?.call();
+        }
+      });
+    } catch (e) {
+      debugLog('Error refreshing chat folders after create: $e');
+      if (mounted && fallback != null) {
+        setState(fallback);
+      }
+    }
+  }
+
+  ChatFoldersRecord _folderWithCollapsed(
+    ChatFoldersRecord folder,
+    bool isCollapsed,
+  ) {
+    return ChatFoldersRecord.getDocumentFromData(
+      {
+        ...folder.snapshotData,
+        'is_collapsed': isCollapsed,
+      },
+      folder.reference,
+    );
+  }
+
+  ChatFoldersRecord _folderWithName(
+    ChatFoldersRecord folder,
+    String name,
+  ) {
+    return ChatFoldersRecord.getDocumentFromData(
+      {
+        ...folder.snapshotData,
+        'name': name,
+        'updated_at': getCurrentTimestamp,
+      },
+      folder.reference,
+    );
+  }
+
+  ChatFoldersRecord _folderWithChatIds(
+    ChatFoldersRecord folder,
+    List<String> chatIds,
+  ) {
+    return ChatFoldersRecord.getDocumentFromData(
+      {
+        ...folder.snapshotData,
+        'chat_ids': chatIds,
+        'updated_at': getCurrentTimestamp,
+      },
+      folder.reference,
+    );
+  }
+
+  /// Updates folder membership in local state so the sidebar moves chats
+  /// immediately (Windows polls folders every 30s without this).
+  void _applyLocalChatFolderMembership({
+    required Iterable<String> chatIds,
+    String? targetFolderId,
+  }) {
+    final ids = chatIds.toSet();
+    setState(() {
+      _model.chatFolders = _model.chatFolders.map((folder) {
+        var next = folder.chatIds.where((id) => !ids.contains(id)).toList();
+        if (targetFolderId != null && folder.reference.id == targetFolderId) {
+          for (final id in ids) {
+            if (!next.contains(id)) next.add(id);
+          }
+        }
+        if (listEquals(next, folder.chatIds)) return folder;
+        return _folderWithChatIds(folder, next);
+      }).toList();
+    });
+  }
+
+  void _applyLocalRemoveChatsFromOtherFolders(
+    Iterable<String> chatIds, {
+    required String exceptFolderId,
+  }) {
+    final ids = chatIds.toSet();
+    setState(() {
+      _model.chatFolders = _model.chatFolders.map((folder) {
+        if (folder.reference.id == exceptFolderId) return folder;
+        final next = folder.chatIds.where((id) => !ids.contains(id)).toList();
+        if (listEquals(next, folder.chatIds)) return folder;
+        return _folderWithChatIds(folder, next);
+      }).toList();
+    });
+  }
+
+  Future<void> _handleRenameFolder(
+    ChatFoldersRecord folder,
+    String newName,
+  ) async {
+    final trimmed = newName.trim();
+    if (trimmed.isEmpty || trimmed == folder.name) return;
+
+    final previousFolders = _model.chatFolders;
+    setState(() {
+      _model.chatFolders = _model.chatFolders.map((f) {
+        if (f.reference.id != folder.reference.id) return f;
+        return _folderWithName(f, trimmed);
+      }).toList();
+    });
+
+    try {
+      await fsPatchDocument(folder.reference, {
+        'name': trimmed,
+        'updated_at': getCurrentTimestamp,
+      });
+    } catch (e) {
+      debugLog('❌ Error renaming folder: $e');
+      if (mounted) {
+        setState(() => _model.chatFolders = previousFolders);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error renaming folder: $e'),
+            backgroundColor: Color(0xFFEF4444),
+          ),
+        );
+      }
+    }
+  }
+
+  void _toggleFolderCollapsed(ChatFoldersRecord folder) {
+    final nextCollapsed = !folder.isCollapsed;
+    setState(() {
+      _model.chatFolders = _model.chatFolders.map((f) {
+        if (f.reference.id != folder.reference.id) return f;
+        return _folderWithCollapsed(f, nextCollapsed);
+      }).toList();
+    });
+    fsPatchDocument(folder.reference, {'is_collapsed': nextCollapsed});
+  }
+
+  /// Deletes a folder and removes it from the sidebar immediately. On
+  /// Windows/Linux the folder list only refreshes via a 30s poll, so without
+  /// the optimistic removal the folder would linger until the next poll.
+  Future<void> _deleteFolder(ChatFoldersRecord folder) async {
+    final previousFolders = _model.chatFolders;
+    setState(() {
+      _model.chatFolders = _model.chatFolders
+          .where((f) => f.reference.id != folder.reference.id)
+          .toList();
+    });
+    try {
+      await fsDeleteDocument(folder.reference);
+    } catch (e) {
+      debugLog('❌ Error deleting folder: $e');
+      // Restore on failure so the UI reflects the real state.
+      if (mounted) {
+        setState(() => _model.chatFolders = previousFolders);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error deleting folder: $e'),
+            backgroundColor: Color(0xFFEF4444),
+          ),
+        );
+      }
+    }
+  }
+
   void _subscribeToChatFolders() {
     if (currentUserReference == null) return;
     _model.chatFoldersSubscription?.cancel();
+    _chatFoldersPollTimer?.cancel();
+
+    if (useWindowsFirestoreRest) {
+      Future<void> poll() async {
+        try {
+          final folders = await fsQueryChatFolders(currentUserReference!);
+          if (mounted) {
+            setState(() {
+              _model.chatFolders = folders;
+            });
+          }
+        } catch (e) {
+          debugLog('Error polling chat folders: $e');
+        }
+      }
+
+      poll();
+      _chatFoldersPollTimer = Timer.periodic(
+        const Duration(seconds: 30),
+        (_) => poll(),
+      );
+      return;
+    }
+
     _model.chatFoldersSubscription = queryChatFoldersRecord(
       parent: currentUserReference,
       queryBuilder: (q) => q.orderBy('order'),
@@ -218,7 +495,7 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
     _resetInactivityTimer();
     // Update to online if currently away
     if (currentUserReference != null) {
-      UsersRecord.getDocumentOnce(currentUserReference!).then((user) {
+      fsGetUserOnce(currentUserReference!).then((user) {
         if (!user.isOnline) {
           _updateOnlineStatus(true);
         }
@@ -242,7 +519,7 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
     }
 
     try {
-      await currentUserReference!.update({
+      await fsPatchDocument(currentUserReference!, {
         'is_online': isOnline,
       });
     } catch (e) {}
@@ -251,6 +528,7 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     super.didChangeAppLifecycleState(state);
+    if (DesktopSafeUserBuilder.useOnceFetch) return;
     switch (state) {
       case AppLifecycleState.resumed:
         // App is active, set user to online
@@ -273,9 +551,12 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _inactivityTimer?.cancel();
+    _windowsGroupExtrasTimer?.cancel();
+    _chatFoldersPollTimer?.cancel();
     _selectedChatSubscription?.cancel();
-    // Set user to offline when disposing
-    _updateOnlineStatus(false);
+    if (!DesktopSafeUserBuilder.useOnceFetch) {
+      _updateOnlineStatus(false);
+    }
     _model.dispose();
     // DON'T delete ChatController - keep it persistent across navigation
     // This preserves knownUnreadChats and locallySeenChats state
@@ -338,6 +619,7 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
                 mainAxisSize: MainAxisSize.max,
                 children: [
                   _buildHeader(),
+                  _buildGroupFoldersToggle(),
                   _buildNavigationTabs(),
                   _buildSearchBar(),
                   _buildChatList(),
@@ -412,7 +694,7 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
                       size: 18,
                     ),
                   ),
-                ),
+                ).withClickCursor(),
               ),
             ),
           // Collapsed avatar list (shown when collapsed)
@@ -475,6 +757,14 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
                     // Scrollable avatar list
                     Expanded(
                       child: Obx(() {
+                        if (!_sidebarListReady) {
+                          return Center(
+                            child: CircularProgressIndicator(
+                              color: Color.fromARGB(255, 16, 184, 239),
+                            ),
+                          );
+                        }
+
                         final filteredChats = chatController.filteredChats;
                         return ListView.builder(
                           padding: EdgeInsets.symmetric(vertical: 6),
@@ -598,36 +888,27 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
         decoration: BoxDecoration(
           color: Colors.white,
           shape: BoxShape.circle,
+          border: Border.all(color: Color(0xFFE5E7EB), width: 1),
         ),
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(size / 2),
-          child: CachedNetworkImage(
-            imageUrl: chat.chatImageUrl,
-            width: size,
-            height: size,
-            fit: BoxFit.cover,
-            memCacheWidth: 72,
-            memCacheHeight: 72,
-            placeholder: (context, url) => Container(
-              width: size,
-              height: size,
-              decoration: BoxDecoration(
-                color: Color(0xFFE5E7EB),
-                shape: BoxShape.circle,
+        clipBehavior: Clip.antiAlias,
+        child: chat.chatImageUrl.isNotEmpty
+            ? CachedNetworkImage(
+                imageUrl: chat.chatImageUrl,
+                fit: BoxFit.cover,
+                width: double.infinity,
+                height: double.infinity,
+                memCacheWidth: 72,
+                memCacheHeight: 72,
+                placeholder: (context, url) => Center(
+                  child: Icon(Icons.group, color: Color(0xFF6B7280), size: 18),
+                ),
+                errorWidget: (context, url, error) => Center(
+                  child: Icon(Icons.group, color: Color(0xFF6B7280), size: 18),
+                ),
+              )
+            : Center(
+                child: Icon(Icons.group, color: Color(0xFF6B7280), size: 18),
               ),
-              child: Icon(Icons.group, color: Color(0xFF6B7280), size: 18),
-            ),
-            errorWidget: (context, url, error) => Container(
-              width: size,
-              height: size,
-              decoration: BoxDecoration(
-                color: Color(0xFFE5E7EB),
-                shape: BoxShape.circle,
-              ),
-              child: Icon(Icons.group, color: Color(0xFF6B7280), size: 18),
-            ),
-          ),
-        ),
       );
     } else {
       final otherUserRef = chat.members.firstWhere(
@@ -635,15 +916,16 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
         orElse: () => chat.members.first,
       );
 
-      return StreamBuilder<UsersRecord>(
-        stream: UsersRecord.getDocument(otherUserRef),
+      return DesktopSafeUserBuilder(
+        userRef: otherUserRef,
+        fetchOnce: _getOrCreateUserFuture,
         builder: (context, userSnapshot) {
           String imageUrl = '';
           if (otherUserRef.path.contains('ai_agent_summerai')) {
             imageUrl =
                 'https://firebasestorage.googleapis.com/v0/b/linkedup-c3e29.firebasestorage.app/o/asset%2Fsoftware-agent.png?alt=media&token=99761584-999d-4f8e-b3d1-f9d1baf86120';
-          } else if (userSnapshot.hasData && userSnapshot.data != null) {
-            imageUrl = userSnapshot.data?.photoUrl ?? '';
+          } else if (userSnapshot != null) {
+            imageUrl = userSnapshot.photoUrl;
           }
 
           return Container(
@@ -652,6 +934,7 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
             decoration: BoxDecoration(
               color: Color(0xFF3B82F6),
               shape: BoxShape.circle,
+              border: Border.all(color: Color(0xFFE5E7EB), width: 1),
             ),
             child: ClipRRect(
               borderRadius: BorderRadius.circular(size / 2),
@@ -687,7 +970,8 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
   }
 
   Widget _buildHeader() {
-    final isChatMode = _model.sidebarMode == SidebarMode.chat;
+    final isChatMode =
+        !kShowFoldersSidebar || _model.sidebarMode == SidebarMode.chat;
     return Container(
       width: double.infinity,
       height: 80,
@@ -716,25 +1000,30 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
               ),
             ),
             SizedBox(width: 8),
-            // Mode switch icons
-            Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                _buildModeIcon(
-                  icon: CupertinoIcons.chat_bubble_2_fill,
-                  tooltip: 'Chat',
-                  isActive: isChatMode,
-                  onTap: () => setState(() => _model.sidebarMode = SidebarMode.chat),
-                ),
-                SizedBox(width: 4),
-                _buildModeIcon(
-                  icon: CupertinoIcons.folder_fill,
-                  tooltip: 'Folders',
-                  isActive: !isChatMode,
-                  onTap: () => setState(() => _model.sidebarMode = SidebarMode.folders),
-                ),
-                SizedBox(width: 8),
-                // New chat menu
+            // Mode switch icons (folders toggle hidden via kShowFoldersSidebar)
+            if (kShowFoldersSidebar)
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  _buildModeIcon(
+                    icon: CupertinoIcons.chat_bubble_2_fill,
+                    tooltip: 'Chat',
+                    isActive: isChatMode,
+                    onTap: () =>
+                        setState(() => _model.sidebarMode = SidebarMode.chat),
+                  ),
+                  SizedBox(width: 4),
+                  _buildModeIcon(
+                    icon: CupertinoIcons.folder_fill,
+                    tooltip: 'Folders',
+                    isActive: !isChatMode,
+                    onTap: () => setState(
+                        () => _model.sidebarMode = SidebarMode.folders),
+                  ),
+                  SizedBox(width: 8),
+                ],
+              ),
+            // New chat menu
                 PopupMenuButton<int>(
                   offset: const Offset(0, 40),
                   shape: RoundedRectangleBorder(
@@ -743,80 +1032,76 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
                   ),
                   color: Colors.white,
                   elevation: 8,
-                  tooltip: 'New Chat',
+                  tooltip: 'Create new',
                   onSelected: (value) {
-                    setState(() {
+                    if (value == 1) {
                       _clearAllViews();
-                      if (value == 1) {
-                        _model.showNewMessageView = true;
-                        _model.selectedChat = null;
-                        chatController.selectedChat.value = null;
-                        _model.newMessageSearchController?.clear();
-                      } else if (value == 2) {
-                        _model.showGroupCreation = true;
-                        _model.selectedChat = null;
-                        chatController.selectedChat.value = null;
-                        _model.groupName = '';
-                        _model.selectedMembers = [];
-                        _model.groupNameController?.clear();
-                        _model.groupImagePath = null;
-                        _model.groupImageUrl = null;
-                        _model.isUploadingImage = false;
-                      }
-                    });
+                      _model.selectedChat = null;
+                      chatController.selectedChat.value = null;
+                      _showNewMessageDialog();
+                    } else if (value == 2) {
+                      _showCreateFolderDialog();
+                    }
                   },
                   itemBuilder: (context) => [
                     PopupMenuItem<int>(
                       value: 1,
-                      child: Row(
-                        children: [
-                          Icon(CupertinoIcons.person_fill,
-                              color: Color(0xFF3B82F6), size: 18),
-                          SizedBox(width: 12),
-                          Text(
-                            'Direct Message',
-                            style: TextStyle(
-                              fontFamily: 'Inter',
-                              fontSize: 14,
-                              fontWeight: FontWeight.w500,
-                              color: Color(0xFF1F2937),
+                      mouseCursor: SystemMouseCursors.click,
+                      child: desktopClickableMenuChild(
+                        Row(
+                          children: [
+                            Icon(Icons.maps_ugc_rounded,
+                                color: Color(0xFF3B82F6), size: 20),
+                            SizedBox(width: 12),
+                            Text(
+                              'New Message',
+                              style: TextStyle(
+                                fontFamily: 'Inter',
+                                fontSize: 14,
+                                fontWeight: FontWeight.w500,
+                                color: Color(0xFF1F2937),
+                              ),
                             ),
-                          ),
-                        ],
+                          ],
+                        ),
                       ),
                     ),
                     PopupMenuDivider(height: 1),
                     PopupMenuItem<int>(
                       value: 2,
-                      child: Row(
-                        children: [
-                          Icon(CupertinoIcons.group_solid,
-                              color: Color(0xFF3B82F6), size: 20),
-                          SizedBox(width: 12),
-                          Text(
-                            'Group Chat',
-                            style: TextStyle(
-                              fontFamily: 'Inter',
-                              fontSize: 14,
-                              fontWeight: FontWeight.w500,
-                              color: Color(0xFF1F2937),
+                      mouseCursor: SystemMouseCursors.click,
+                      child: desktopClickableMenuChild(
+                        Row(
+                          children: [
+                            Icon(Icons.create_new_folder_rounded,
+                                color: Color(0xFF3B82F6), size: 20),
+                            SizedBox(width: 12),
+                            Text(
+                              'New Folder',
+                              style: TextStyle(
+                                fontFamily: 'Inter',
+                                fontSize: 14,
+                                fontWeight: FontWeight.w500,
+                                color: Color(0xFF1F2937),
+                              ),
                             ),
-                          ),
-                        ],
+                          ],
+                        ),
                       ),
                     ),
                   ],
-                  child: Padding(
-                    padding: const EdgeInsets.all(4.0),
-                    child: Icon(
-                      Icons.add_rounded,
-                      color: Color(0xFF374151),
-                      size: 26,
+                  child: MouseRegion(
+                    cursor: SystemMouseCursors.click,
+                    child: Padding(
+                      padding: const EdgeInsets.all(4.0),
+                      child: Icon(
+                        Icons.add_rounded,
+                        color: Color(0xFF374151),
+                        size: 26,
+                      ),
                     ),
                   ),
                 ),
-              ],
-            ),
           ],
         ),
       ),
@@ -950,7 +1235,7 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
                       size: 16,
                     ),
                   ),
-                );
+                ).withClickCursor();
               }
               // Show ⌘K shortcut hint when not searching
               return Padding(
@@ -979,9 +1264,79 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
     );
   }
 
+  /// macOS-style toggle above the All/Unread tabs that switches the sidebar
+  /// into the folder-grouped view when enabled.
+  Widget _buildGroupFoldersToggle() {
+    void toggle() {
+      final value = !FFAppState().groupFoldersEnabled;
+      setState(() {
+        FFAppState().groupFoldersEnabled = value;
+        _model.groupFoldersEnabled = value;
+      });
+    }
+
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: toggle,
+      child: Container(
+        width: double.infinity,
+        decoration: BoxDecoration(
+          color: Color.fromRGBO(250, 252, 255, 1),
+        ),
+        padding: const EdgeInsets.fromLTRB(16, 10, 16, 8),
+        child: Row(
+          children: [
+            Expanded(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Enable group folders',
+                    style: TextStyle(
+                      fontFamily: 'Inter',
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                      color: Color(0xFF111827),
+                    ),
+                  ),
+                  SizedBox(height: 2),
+                  Text(
+                    'Group related chats under a shared topic',
+                    style: TextStyle(
+                      fontFamily: 'Inter',
+                      fontSize: 11,
+                      fontWeight: FontWeight.w400,
+                      color: Color(0xFF9CA3AF),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            SizedBox(width: 12),
+            Transform.scale(
+              scale: 0.7,
+              alignment: Alignment.centerRight,
+              child: CupertinoSwitch(
+                value: FFAppState().groupFoldersEnabled,
+                activeColor: Color(0xFF3B82F6),
+                onChanged: (value) {
+                  setState(() {
+                    FFAppState().groupFoldersEnabled = value;
+                    _model.groupFoldersEnabled = value;
+                  });
+                },
+              ),
+            ),
+          ],
+        ),
+      ),
+    ).withClickCursor();
+  }
+
   Widget _buildNavigationTabs() {
     // In folders mode, don't show tab bar
-    if (_model.sidebarMode == SidebarMode.folders) {
+    if (kShowFoldersSidebar && _model.sidebarMode == SidebarMode.folders) {
       return SizedBox.shrink();
     }
     return Container(
@@ -999,8 +1354,6 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
             Expanded(child: _buildTab('All', 0)),
             SizedBox(width: 8),
             Expanded(child: _buildTab('Unread', 1)),
-            SizedBox(width: 8),
-            Expanded(child: _buildTab('Inactive', 2)),
           ],
         ),
       ),
@@ -1051,12 +1404,24 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
           overflow: TextOverflow.ellipsis,
         ),
       ),
-    );
+    ).withClickCursor();
   }
+
+  bool get _sidebarListReady =>
+      !DesktopSafeUserBuilder.useOnceFetch ||
+      chatController.desktopSidebarReady.value;
 
   Widget _buildChatList() {
     return Expanded(
       child: Obx(() {
+        if (!_sidebarListReady) {
+          return Center(
+            child: CircularProgressIndicator(
+              color: Color.fromARGB(255, 16, 184, 239),
+            ),
+          );
+        }
+
         switch (chatController.chatState.value) {
           case ChatState.loading:
             return Center(
@@ -1146,10 +1511,11 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
 
             return Stack(
               children: [
-                // Show flat chat list or folder view based on sidebar mode
-                _model.sidebarMode == SidebarMode.chat
-                    ? _buildFlatChatListView(allChats)
-                    : _buildFolderListView(allChats),
+                // Show folder-grouped view when "Enable group folders" is on,
+                // otherwise the flat chat list.
+                FFAppState().groupFoldersEnabled
+                    ? _buildFolderListView(allChats)
+                    : _buildFlatChatListView(allChats),
                 // Quick search dropdown overlay
                 if (_model.showQuickSearch && chatController.searchQuery.value.isNotEmpty)
                   _buildQuickSearchDropdown(allChats),
@@ -1247,7 +1613,7 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
                     ],
                   ),
                 ),
-              ),
+              ).withClickCursor(),
               // Divider
               if (quickChats.isNotEmpty)
                 Divider(height: 1, color: Color(0xFFE5E7EB)),
@@ -1305,7 +1671,7 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
           ],
         ),
       ),
-    );
+    ).withClickCursor();
   }
 
   final GlobalKey<ChatThreadComponentWidgetState> _searchPreviewThreadKey =
@@ -1370,7 +1736,7 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
                   ),
                   child: Icon(Icons.close, size: 18, color: Color(0xFF6B7280)),
                 ),
-              ),
+              ).withClickCursor(),
             ],
           ),
         ),
@@ -1458,7 +1824,7 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
                                 ),
                               ),
                             ),
-                          ),
+                          ).withClickCursor(),
                           SizedBox(width: 8),
                           GestureDetector(
                             onTap: () {
@@ -1468,7 +1834,7 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
                               });
                             },
                             child: Icon(Icons.close, size: 16, color: Color(0xFF9CA3AF)),
-                          ),
+                          ).withClickCursor(),
                         ],
                       ),
                     ),
@@ -1480,6 +1846,10 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
                         chatReference: _model.searchPreviewChat,
                         activeSelectionId: ValueNotifier(null),
                         onMessageAction: _handleDesktopMessageAction,
+                        onSidebarPreviewUpdate:
+                            chatController.applyLocalChatLastMessageFromPatch,
+                        onMessagesMutated: () =>
+                            chatController.refreshChats(force: true),
                         isSelectionMode: false,
                         selectedMessages: {},
                         onMessageToggled: (_) {},
@@ -1501,6 +1871,17 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
       return ListView(
         padding: EdgeInsets.zero,
         children: [
+          // Matching chats section
+          if (chatResults.isNotEmpty) ...[
+            _buildSearchSectionHeader(
+              'Chats',
+              chatResults.length,
+              Icons.chat_bubble_outline,
+            ),
+            for (final chat in chatResults)
+              _buildSearchChatItem(chat),
+          ],
+
           // Message results section
           if (isSearching)
             Padding(
@@ -1542,7 +1923,7 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
           ],
 
           // No results at all
-          if (!isSearching && messageResults.isEmpty)
+          if (!isSearching && chatResults.isEmpty && messageResults.isEmpty)
             Padding(
               padding: EdgeInsets.symmetric(vertical: 40),
               child: Center(
@@ -1633,7 +2014,7 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
         onMute: _handleMuteNotifications,
         onMarkUnread: (chat) => chatController.markChatAsUnread(chat),
         onMoveToFolder: _showMoveToFolderMenu,
-        onToggleInactive: (chat) => chatController.toggleManualInactive(chat),
+        onRename: _showRenameGroupChatDialog,
         getOrCreateUserFuture: _getOrCreateUserFuture,
       );
     });
@@ -1859,38 +2240,67 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
   }
 
   String _formatSearchResultTime(DateTime time) {
+    final local = time.toLocal();
     final now = DateTime.now();
-    final diff = now.difference(time);
+    final diff = now.difference(local);
     if (diff.inDays == 0) {
-      return '${time.hour.toString().padLeft(2, '0')}:${time.minute.toString().padLeft(2, '0')}';
+      return DateFormat('h:mm a').format(local);
     } else if (diff.inDays == 1) {
       return 'Yesterday';
     } else if (diff.inDays < 7) {
       const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-      return days[time.weekday - 1];
+      return days[local.weekday - 1];
     } else {
-      return '${time.month.toString().padLeft(2, '0')}/${time.day.toString().padLeft(2, '0')}/${time.year}';
+      return '${local.month.toString().padLeft(2, '0')}/${local.day.toString().padLeft(2, '0')}/${local.year}';
     }
   }
 
   /// Flat chat list (Chat mode): Pinned at top, then all chats by time.
+  bool _shouldShowInactiveSection() {
+    final tabIndex = _model.tabController?.index ?? 0;
+    return tabIndex == 0 &&
+        chatController.chatFilter.value == 'All' &&
+        chatController.searchQuery.value.isEmpty;
+  }
+
+  List<ChatsRecord> _getInactiveChats() {
+    if (!_shouldShowInactiveSection()) return const [];
+    return chatController.getInactiveChatsForSidebar();
+  }
+
+  List<Widget> _buildInactiveSection() {
+    // Always show the Inactive header on the All tab, even when there are no
+    // inactive chats (parity with how the Pinned section is presented).
+    if (!_shouldShowInactiveSection()) return const [];
+    final inactive = chatController.getInactiveChatsForSidebar();
+
+    return [
+      _buildSmartFolderHeader(
+        'Inactive',
+        inactive.length,
+        Icons.archive_outlined,
+        _model.isInactiveCollapsed,
+        () => setState(
+            () => _model.isInactiveCollapsed = !_model.isInactiveCollapsed),
+      ),
+      if (!_model.isInactiveCollapsed)
+        for (final chat in inactive) _buildFolderChatItem(chat),
+    ];
+  }
+
   Widget _buildFlatChatListView(List<ChatsRecord> filteredChats) {
     final userRef = currentUserReference;
     final pinned = filteredChats.where((c) => c.isPinnedByUser(userRef)).toList();
     final rest = filteredChats.where((c) => !c.isPinnedByUser(userRef)).toList();
+    final inactive = _getInactiveChats();
 
-    if (filteredChats.isEmpty) {
+    if (filteredChats.isEmpty && inactive.isEmpty) {
       final tabIndex = _model.tabController?.index ?? 0;
-      final emptyMessage = tabIndex == 2
-          ? 'No inactive chats'
-          : tabIndex == 1
-              ? 'No unread chats'
-              : 'No chats yet';
-      final emptyIcon = tabIndex == 2
-          ? Icons.archive_outlined
-          : tabIndex == 1
-              ? Icons.mark_email_read_outlined
-              : CupertinoIcons.chat_bubble_2;
+      final emptyMessage =
+          tabIndex == 1 ? 'No unread chats' : 'No chats yet';
+      final emptyIcon = tabIndex == 1
+          ? Icons.mark_email_read_outlined
+          : CupertinoIcons.chat_bubble_2;
       return Center(
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -1924,78 +2334,65 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
             () => setState(() => _model.isPinnedCollapsed = !_model.isPinnedCollapsed),
           ),
           if (!_model.isPinnedCollapsed)
-            for (final chat in pinned) _buildFolderChatItem(chat),
+            for (final chat in pinned) _buildFolderChatItem(chat, showPinIcon: false),
         ],
 
         // All other chats — flat, sorted by time (already sorted by controller)
         if (rest.isNotEmpty) ...[
-          // Small "Recent" label divider
-          Padding(
-            padding: const EdgeInsets.fromLTRB(28, 12, 16, 4),
-            child: Text(
-              _model.tabController?.index == 2 ? 'Inactive' : 'Recent',
-              style: TextStyle(
-                fontFamily: 'Inter',
-                fontSize: 11,
-                fontWeight: FontWeight.w600,
-                color: Color(0xFF9CA3AF),
-                letterSpacing: 0.5,
-              ),
-            ),
+          _buildSmartFolderHeader(
+            'Recent',
+            rest.length,
+            Icons.history_rounded,
+            _model.isRecentCollapsed,
+            () => setState(
+                () => _model.isRecentCollapsed = !_model.isRecentCollapsed),
           ),
-          for (final chat in rest) _buildFolderChatItem(chat),
+          if (!_model.isRecentCollapsed)
+            for (final chat in rest) _buildFolderChatItem(chat),
         ],
+
+        ..._buildInactiveSection(),
       ],
     );
+  }
+
+  /// Chat IDs that belong to a custom folder. Such chats live exclusively
+  /// under their folder and are hidden from the Pinned/Group/DM sections so
+  /// each chat only ever appears in one place.
+  Set<String> _folderedChatIds() {
+    final ids = <String>{};
+    for (final folder in _model.chatFolders) {
+      ids.addAll(folder.chatIds);
+    }
+    return ids;
   }
 
   Widget _buildFolderListView(List<ChatsRecord> filteredChats) {
     // Smart folder classification
     // Combine pinned DMs and Groups into a single "Pinned" section
     final userRef = currentUserReference;
+    final folderedIds = _folderedChatIds();
+    // Pinned takes precedence over folders: a pinned chat always shows in the
+    // Pinned section (and is excluded from its folder below).
     final pinned = filteredChats
         .where((c) => c.isPinnedByUser(userRef))
         .toList();
     final groups = filteredChats
-        .where((c) => !c.isPinnedByUser(userRef) && c.isGroup)
+        .where((c) =>
+            !c.isPinnedByUser(userRef) &&
+            c.isGroup &&
+            !folderedIds.contains(c.reference.id))
         .toList();
     final dms = filteredChats
-        .where((c) => !c.isPinnedByUser(userRef) && !c.isGroup)
+        .where((c) =>
+            !c.isPinnedByUser(userRef) &&
+            !c.isGroup &&
+            !folderedIds.contains(c.reference.id))
         .toList();
 
     return ListView(
       padding: EdgeInsets.zero,
       children: [
-        // Compact "New Folder" link at top (Slack-style)
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-          child: GestureDetector(
-            onTap: () => _showCreateFolderDialog(),
-            child: MouseRegion(
-              cursor: SystemMouseCursors.click,
-              child: Padding(
-                padding: EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                child: Row(
-                  children: [
-                    Icon(Icons.add_rounded,
-                        size: 14, color: Color(0xFF9CA3AF)),
-                    SizedBox(width: 6),
-                    Text(
-                      'New Folder',
-                      style: TextStyle(
-                        fontFamily: 'Inter',
-                        fontSize: 12,
-                        fontWeight: FontWeight.w500,
-                        color: Color(0xFF9CA3AF),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-        ),
-
         // Pinned (combined DM and Groups)
         if (pinned.isNotEmpty) ...[
           _buildSmartFolderHeader(
@@ -2007,8 +2404,12 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
           ),
           if (!_model.isPinnedCollapsed)
             for (final chat in pinned)
-              _buildFolderChatItem(chat),
+              _buildFolderChatItem(chat, showPinIcon: false),
         ],
+
+        // Custom folders (user-created)
+        for (final folder in _model.chatFolders)
+          _buildFolderSection(folder, filteredChats),
 
         // Group
         if (groups.isNotEmpty) ...[
@@ -2038,9 +2439,7 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
               _buildFolderChatItem(chat),
         ],
 
-        // Custom folders (user-created)
-        for (final folder in _model.chatFolders)
-          _buildFolderSection(folder, filteredChats),
+        ..._buildInactiveSection(),
       ],
     );
   }
@@ -2099,14 +2498,17 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
           ],
         ),
       ),
-    );
+    ).withClickCursor();
   }
 
   Widget _buildFolderSection(
       ChatFoldersRecord folder, List<ChatsRecord> filteredChats) {
-    // Only show chats in this folder that match the current tab filter
+    // Only show chats in this folder that match the current tab filter.
+    // Pinned chats take precedence and live in the Pinned section instead.
     final folderChats = filteredChats
-        .where((c) => folder.chatIds.contains(c.reference.id))
+        .where((c) =>
+            folder.chatIds.contains(c.reference.id) &&
+            !c.isPinnedByUser(currentUserReference))
         .toList();
 
     // Count unread in this folder
@@ -2143,8 +2545,7 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
     return GestureDetector(
       onTap: () {
         if (folder != null) {
-          // Toggle collapse
-          folder.reference.update({'is_collapsed': !isCollapsed});
+          _toggleFolderCollapsed(folder);
         }
       },
       onSecondaryTapUp: folder != null
@@ -2244,7 +2645,7 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
           ],
         ),
       ),
-    );
+    ).withClickCursor();
   }
 
   Widget _buildUnfiledHeader(int count) {
@@ -2299,10 +2700,10 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
           ],
         ),
       ),
-    );
+    ).withClickCursor();
   }
 
-  Widget _buildFolderChatItem(ChatsRecord chat) {
+  Widget _buildFolderChatItem(ChatsRecord chat, {bool showPinIcon = true}) {
     return Obx(() {
       final _ = chatController.chats.length;
       final __ = chatController.locallySeenChats.length;
@@ -2316,6 +2717,7 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
         key: ValueKey('folder_chat_${chat.reference.id}'),
         chat: chat,
         isSelected: isSelected,
+        showPinIcon: showPinIcon,
         onTap: () {
           setState(() {
             _clearAllViews();
@@ -2330,7 +2732,7 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
         onMute: _handleMuteNotifications,
         onMarkUnread: (chat) => chatController.markChatAsUnread(chat),
         onMoveToFolder: _showMoveToFolderMenu,
-        onToggleInactive: (chat) => chatController.toggleManualInactive(chat),
+        onRename: _showRenameGroupChatDialog,
         getOrCreateUserFuture: _getOrCreateUserFuture,
       );
     });
@@ -2338,147 +2740,366 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
 
   // ─── Folder Management Dialogs ───
 
-  void _showCreateFolderDialog() {
+  /// Single-popup create-folder flow:
+  ///   Step 1 — Enter a name for your folder
+  ///   Step 2 — Add Chats (Groups | Direct Messages side by side)
+  void _showCreateFolderDialog() async {
     final nameController = TextEditingController();
+    final selectedIds = <String>{};
+    final groupsScrollController = ScrollController();
+    final dmsScrollController = ScrollController();
+
+    final allChats = chatController.chats;
+    final allGroups = allChats.where((c) => c.isGroup).toList();
+    final allDMs = allChats.where((c) => !c.isGroup).toList();
+
+    // Pre-resolve DM display names from the other participant.
+    final dmNameMap = <String, String>{};
+    for (final dm in allDMs) {
+      if (dm.title.isNotEmpty) {
+        dmNameMap[dm.reference.id] = dm.title;
+      } else {
+        try {
+          final otherUserRef = dm.members.firstWhere(
+            (m) => m != currentUserReference,
+            orElse: () => dm.members.first,
+          );
+          final user = await _getOrCreateUserFuture(otherUserRef);
+          dmNameMap[dm.reference.id] =
+              user.displayName.isNotEmpty ? user.displayName : 'User';
+        } catch (_) {
+          dmNameMap[dm.reference.id] = 'Direct Message';
+        }
+      }
+    }
+
+    // Chats already filed in another folder are locked out (one folder each).
+    final chatFolderMap = <String, List<String>>{};
+    final lockedChatIds = <String>{};
+    for (final folder in _model.chatFolders) {
+      for (final chatId in folder.chatIds) {
+        chatFolderMap.putIfAbsent(chatId, () => []).add(folder.name);
+        lockedChatIds.add(chatId);
+      }
+    }
+
+    bool isSelectable(ChatsRecord c) =>
+        !lockedChatIds.contains(c.reference.id) &&
+        !c.isPinnedByUser(currentUserReference);
+
+    if (!mounted) return;
     showDialog(
       context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: Colors.white,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        title: Text(
-          'New Folder',
-          style: TextStyle(
-            fontFamily: 'Inter',
-            fontSize: 16,
-            fontWeight: FontWeight.w600,
-            color: Color(0xFF111827),
-          ),
-        ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Step 1: Enter a name for your folder',
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) {
+          Widget buildColumn(
+            String label,
+            IconData icon,
+            List<ChatsRecord> chats,
+            ScrollController scrollController, {
+            bool isDm = false,
+          }) {
+            return Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _buildPickerSectionLabel(label, icon, chats.length),
+                  SizedBox(height: 4),
+                  Expanded(
+                    child: chats.isEmpty
+                        ? Center(
+                            child: Text(
+                              'None',
+                              style: TextStyle(
+                                fontFamily: 'Inter',
+                                fontSize: 12,
+                                color: Color(0xFF9CA3AF),
+                              ),
+                            ),
+                          )
+                        : Scrollbar(
+                            controller: scrollController,
+                            thumbVisibility: true,
+                            child: ListView(
+                              controller: scrollController,
+                              padding: EdgeInsets.only(right: 8),
+                              children: [
+                                for (final chat in chats)
+                                  _buildPickerChatRow(
+                                    chat: chat,
+                                    resolvedName: isDm
+                                        ? dmNameMap[chat.reference.id]
+                                        : null,
+                                    isChecked:
+                                        selectedIds.contains(chat.reference.id),
+                                    isAlreadyInFolder: false,
+                                    isLockedInOtherFolder: lockedChatIds
+                                        .contains(chat.reference.id),
+                                    isPinned: chat
+                                        .isPinnedByUser(currentUserReference),
+                                    folderNames:
+                                        chatFolderMap[chat.reference.id],
+                                    onTap: () {
+                                      if (!isSelectable(chat)) return;
+                                      setDialogState(() {
+                                        if (selectedIds
+                                            .contains(chat.reference.id)) {
+                                          selectedIds.remove(chat.reference.id);
+                                        } else {
+                                          selectedIds.add(chat.reference.id);
+                                        }
+                                      });
+                                    },
+                                  ),
+                              ],
+                            ),
+                          ),
+                  ),
+                ],
+              ),
+            );
+          }
+
+          return AlertDialog(
+            backgroundColor: Colors.white,
+            shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            title: Text(
+              'New Folder',
               style: TextStyle(
                 fontFamily: 'Inter',
-                fontSize: 12,
-                color: Color(0xFF6B7280),
-              ),
-            ),
-            SizedBox(height: 8),
-            TextField(
-              controller: nameController,
-              autofocus: true,
-              decoration: InputDecoration(
-                hintText: 'Folder name',
-                hintStyle: TextStyle(
-                  fontFamily: 'Inter',
-                  color: Color(0xFF9CA3AF),
-                ),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(8),
-                  borderSide: BorderSide(color: Color(0xFFE5E7EB)),
-                ),
-                focusedBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(8),
-                  borderSide: BorderSide(color: Color(0xFF3B82F6)),
-                ),
-                contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-              ),
-              style: TextStyle(
-                fontFamily: 'Inter',
-                fontSize: 14,
+                fontSize: 16,
+                fontWeight: FontWeight.w600,
                 color: Color(0xFF111827),
               ),
-              onSubmitted: (value) {
-                if (value.trim().isNotEmpty) {
+            ),
+            content: SizedBox(
+              width: 560,
+              height: MediaQuery.of(ctx).size.height / 2,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // ── Step 1: Name ──
+                  Text(
+                    'Step 1: Enter a name for your folder',
+                    style: TextStyle(
+                      fontFamily: 'Inter',
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: Color(0xFF6B7280),
+                    ),
+                  ),
+                  SizedBox(height: 8),
+                  TextField(
+                    controller: nameController,
+                    autofocus: true,
+                    decoration: InputDecoration(
+                      hintText: 'Folder name',
+                      hintStyle: TextStyle(
+                        fontFamily: 'Inter',
+                        color: Color(0xFF9CA3AF),
+                      ),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(8),
+                        borderSide: BorderSide(color: Color(0xFFE5E7EB)),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(8),
+                        borderSide: BorderSide(color: Color(0xFF3B82F6)),
+                      ),
+                      contentPadding:
+                          EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                    ),
+                    style: TextStyle(
+                      fontFamily: 'Inter',
+                      fontSize: 14,
+                      color: Color(0xFF111827),
+                    ),
+                  ),
+                  SizedBox(height: 16),
+                  // ── Step 2: Add Chats ──
+                  Row(
+                    children: [
+                      Text(
+                        'Step 2: Add Chats',
+                        style: TextStyle(
+                          fontFamily: 'Inter',
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          color: Color(0xFF6B7280),
+                        ),
+                      ),
+                      Spacer(),
+                      Text(
+                        '${selectedIds.length} selected',
+                        style: TextStyle(
+                          fontFamily: 'Inter',
+                          fontSize: 12,
+                          color: Color(0xFF9CA3AF),
+                        ),
+                      ),
+                    ],
+                  ),
+                  SizedBox(height: 8),
+                  Divider(height: 1, color: Color(0xFFE5E7EB)),
+                  SizedBox(height: 8),
+                  // Groups | Direct Messages side by side
+                  Expanded(
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        buildColumn(
+                          'Groups',
+                          Icons.group_outlined,
+                          allGroups,
+                          groupsScrollController,
+                        ),
+                        Padding(
+                          padding: EdgeInsets.symmetric(horizontal: 8),
+                          child: VerticalDivider(
+                            width: 1,
+                            color: Color(0xFFE5E7EB),
+                          ),
+                        ),
+                        buildColumn(
+                          'Direct Messages',
+                          Icons.person_outline_rounded,
+                          allDMs,
+                          dmsScrollController,
+                          isDm: true,
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(ctx).pop(),
+                style: desktopClickableButtonStyle(null),
+                child: Text(
+                  'Cancel',
+                  style: TextStyle(
+                    fontFamily: 'Inter',
+                    color: Color(0xFF6B7280),
+                  ),
+                ),
+              ),
+              TextButton(
+                onPressed: () {
+                  final name = nameController.text.trim();
+                  if (name.isEmpty) return;
                   Navigator.of(ctx).pop();
-                  _showSelectGroupsForFolderDialog(value.trim());
-                }
-              },
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(),
-            child: Text(
-              'Cancel',
-              style: TextStyle(
-                fontFamily: 'Inter',
-                color: Color(0xFF6B7280),
+                  _createFolder(name, selectedChatIds: selectedIds.toList());
+                },
+                style: desktopClickableButtonStyle(null),
+                child: Text(
+                  'Create Folder',
+                  style: TextStyle(
+                    fontFamily: 'Inter',
+                    color: Color(0xFF3B82F6),
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
               ),
-            ),
-          ),
-          TextButton(
-            onPressed: () {
-              if (nameController.text.trim().isNotEmpty) {
-                Navigator.of(ctx).pop();
-                _showSelectGroupsForFolderDialog(nameController.text.trim());
-              }
-            },
-            child: Text(
-              'Next',
-              style: TextStyle(
-                fontFamily: 'Inter',
-                color: Color(0xFF3B82F6),
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          ),
-        ],
+            ],
+          );
+        },
       ),
     );
   }
 
-  /// Step 2: Show a searchable chat selection dialog with Groups/DMs sections
-  void _showSelectGroupsForFolderDialog(String folderName) {
-    _showChatPickerDialog(
-      title: 'Add Chats to "$folderName"',
-      subtitle: 'Step 2: Select chats to add to this folder',
-      actionLabel: 'Create Folder',
-      existingChatIds: <String>{},
-      onConfirm: (selectedIds) {
-        _createFolder(folderName, selectedChatIds: selectedIds.toList());
-      },
-    );
+  /// Dialog to add chats to an existing folder (from the + button)
+  /// Removes the given chat IDs from every folder except [exceptFolderId], so a
+  /// chat can only ever belong to a single folder.
+  Future<void> _removeChatsFromOtherFolders(
+    Iterable<String> chatIds, {
+    required String exceptFolderId,
+  }) async {
+    final ids = chatIds.toList();
+    final previousFolders = _model.chatFolders;
+    _applyLocalRemoveChatsFromOtherFolders(ids, exceptFolderId: exceptFolderId);
+    for (final folder in previousFolders) {
+      if (folder.reference.id == exceptFolderId) continue;
+      final toRemove =
+          ids.where((id) => folder.chatIds.contains(id)).toList();
+      if (toRemove.isEmpty) continue;
+      try {
+        await fsArrayRemove(folder.reference, 'chat_ids', toRemove);
+        await fsPatchDocument(folder.reference, {
+          'updated_at': getCurrentTimestamp,
+        });
+      } catch (e) {
+        debugLog('❌ Error removing chats from folder ${folder.name}: $e');
+      }
+    }
   }
 
-  /// Dialog to add chats to an existing folder (from the + button)
   void _showAddChatsToExistingFolderDialog(ChatFoldersRecord folder) {
     _showChatPickerDialog(
       title: 'Add Chats to "${folder.name}"',
       subtitle: 'Select chats to add',
       actionLabel: 'Add to Folder',
       existingChatIds: folder.chatIds.toSet(),
+      currentFolderId: folder.reference.id,
       onConfirm: (selectedIds) async {
         if (selectedIds.isEmpty) return;
+        final previousFolders = _model.chatFolders;
+        _applyLocalChatFolderMembership(
+          chatIds: selectedIds,
+          targetFolderId: folder.reference.id,
+        );
         try {
-          await folder.reference.update({
-            'chat_ids': FieldValue.arrayUnion(selectedIds.toList()),
-            'updated_at': FieldValue.serverTimestamp(),
+          await fsArrayUnion(
+            folder.reference,
+            'chat_ids',
+            selectedIds.toList(),
+          );
+          await fsPatchDocument(folder.reference, {
+            'updated_at': getCurrentTimestamp,
           });
+          // A chat belongs to only one folder — drop it from any others.
+          await _removeChatsFromOtherFolders(
+            selectedIds,
+            exceptFolderId: folder.reference.id,
+          );
         } catch (e) {
-          print('❌ Error adding chats to folder: $e');
+          debugLog('❌ Error adding chats to folder: $e');
+          if (mounted) {
+            setState(() => _model.chatFolders = previousFolders);
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('Error adding chats to folder: $e'),
+                backgroundColor: Color(0xFFEF4444),
+              ),
+            );
+          }
         }
       },
     );
   }
 
   /// Shared chat picker dialog showing Groups, DMs, and existing folder reference
+  ///
+  /// [currentFolderId] is the folder being edited (null when creating a new one).
+  /// A chat may only ever live in a single folder, so any chat already filed in
+  /// a *different* folder is locked: it renders grayed out and cannot be picked.
   void _showChatPickerDialog({
     required String title,
     required String subtitle,
     required String actionLabel,
     required Set<String> existingChatIds,
     required Function(Set<String>) onConfirm,
+    String? currentFolderId,
   }) async {
     final allChats = chatController.chats;
     final allGroups = allChats.where((c) => c.isGroup).toList();
     final allDMs = allChats.where((c) => !c.isGroup).toList();
     final selectedIds = <String>{};
     final searchQuery = ValueNotifier<String>('');
+    final groupsScrollController = ScrollController();
+    final dmsScrollController = ScrollController();
 
     // Pre-resolve DM display names from other user
     final dmNameMap = <String, String>{};
@@ -2499,11 +3120,15 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
       }
     }
 
-    // Build folder lookup: chatId -> list of folder names
+    // Build folder lookup for chats already filed in a *different* folder.
+    // These are locked out of the picker so a chat can only belong to one folder.
     final chatFolderMap = <String, List<String>>{};
+    final lockedChatIds = <String>{};
     for (final folder in _model.chatFolders) {
+      if (folder.reference.id == currentFolderId) continue;
       for (final chatId in folder.chatIds) {
         chatFolderMap.putIfAbsent(chatId, () => []).add(folder.name);
+        lockedChatIds.add(chatId);
       }
     }
 
@@ -2535,8 +3160,8 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
               ],
             ),
             content: SizedBox(
-              width: 400,
-              height: 480,
+              width: 560,
+              height: MediaQuery.of(ctx).size.height / 2,
               child: Column(
                 children: [
                   // Search bar
@@ -2564,7 +3189,10 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
                         onTap: () {
                           setDialogState(() {
                             final allSelectableIds = allFiltered
-                                .where((c) => !existingChatIds.contains(c.reference.id))
+                                .where((c) =>
+                                    !existingChatIds.contains(c.reference.id) &&
+                                    !lockedChatIds.contains(c.reference.id) &&
+                                    !c.isPinnedByUser(currentUserReference))
                                 .map((c) => c.reference.id)
                                 .toSet();
                             if (selectedIds.containsAll(allSelectableIds)) {
@@ -2578,7 +3206,7 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
                           'Select All',
                           style: TextStyle(fontFamily: 'Inter', fontSize: 12, fontWeight: FontWeight.w500, color: Color(0xFF3B82F6)),
                         ),
-                      ),
+                      ).withClickCursor(),
                       Spacer(),
                       Text(
                         '${selectedIds.length} selected',
@@ -2588,61 +3216,118 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
                   ),
                   SizedBox(height: 8),
                   Divider(height: 1, color: Color(0xFFE5E7EB)),
-                  // Chat list with sections
+                  SizedBox(height: 8),
+                  // Groups | Direct Messages side by side
                   Expanded(
-                    child: ListView(
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        // ── Groups Section ──
-                        if (filteredGroups.isNotEmpty) ...[
-                          _buildPickerSectionLabel('Groups', Icons.group_outlined, filteredGroups.length),
-                          for (final chat in filteredGroups)
-                            _buildPickerChatRow(
-                              chat: chat,
-                              isChecked: selectedIds.contains(chat.reference.id),
-                              isAlreadyInFolder: existingChatIds.contains(chat.reference.id),
-                              folderNames: chatFolderMap[chat.reference.id],
-                              onTap: () {
-                                if (existingChatIds.contains(chat.reference.id)) return;
-                                setDialogState(() {
-                                  if (selectedIds.contains(chat.reference.id)) {
-                                    selectedIds.remove(chat.reference.id);
-                                  } else {
-                                    selectedIds.add(chat.reference.id);
-                                  }
-                                });
-                              },
-                            ),
-                          SizedBox(height: 8),
-                        ],
-                        // ── DMs Section ──
-                        if (filteredDMs.isNotEmpty) ...[
-                          _buildPickerSectionLabel('Direct Messages', Icons.person_outline_rounded, filteredDMs.length),
-                          for (final chat in filteredDMs)
-                            _buildPickerChatRow(
-                              chat: chat,
-                              resolvedName: dmNameMap[chat.reference.id],
-                              isChecked: selectedIds.contains(chat.reference.id),
-                              isAlreadyInFolder: existingChatIds.contains(chat.reference.id),
-                              folderNames: chatFolderMap[chat.reference.id],
-                              onTap: () {
-                                if (existingChatIds.contains(chat.reference.id)) return;
-                                setDialogState(() {
-                                  if (selectedIds.contains(chat.reference.id)) {
-                                    selectedIds.remove(chat.reference.id);
-                                  } else {
-                                    selectedIds.add(chat.reference.id);
-                                  }
-                                });
-                              },
-                            ),
-                        ],
-                        if (filteredGroups.isEmpty && filteredDMs.isEmpty)
-                          Padding(
-                            padding: EdgeInsets.only(top: 40),
-                            child: Center(
-                              child: Text('No chats found', style: TextStyle(fontFamily: 'Inter', fontSize: 13, color: Color(0xFF9CA3AF))),
-                            ),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              _buildPickerSectionLabel('Groups', Icons.group_outlined, filteredGroups.length),
+                              SizedBox(height: 4),
+                              Expanded(
+                                child: filteredGroups.isEmpty
+                                    ? Center(
+                                        child: Text(
+                                          query.isEmpty ? 'None' : 'No chats found',
+                                          style: TextStyle(fontFamily: 'Inter', fontSize: 12, color: Color(0xFF9CA3AF)),
+                                        ),
+                                      )
+                                    : Scrollbar(
+                                        controller: groupsScrollController,
+                                        thumbVisibility: true,
+                                        child: ListView(
+                                          controller: groupsScrollController,
+                                          padding: EdgeInsets.only(right: 8),
+                                          children: [
+                                            for (final chat in filteredGroups)
+                                              _buildPickerChatRow(
+                                                chat: chat,
+                                                isChecked: selectedIds.contains(chat.reference.id),
+                                                isAlreadyInFolder: existingChatIds.contains(chat.reference.id),
+                                                isLockedInOtherFolder: lockedChatIds.contains(chat.reference.id),
+                                                isPinned: chat.isPinnedByUser(currentUserReference),
+                                                folderNames: chatFolderMap[chat.reference.id],
+                                                onTap: () {
+                                                  if (existingChatIds.contains(chat.reference.id)) return;
+                                                  if (lockedChatIds.contains(chat.reference.id)) return;
+                                                  if (chat.isPinnedByUser(currentUserReference)) return;
+                                                  setDialogState(() {
+                                                    if (selectedIds.contains(chat.reference.id)) {
+                                                      selectedIds.remove(chat.reference.id);
+                                                    } else {
+                                                      selectedIds.add(chat.reference.id);
+                                                    }
+                                                  });
+                                                },
+                                              ),
+                                          ],
+                                        ),
+                                      ),
+                              ),
+                            ],
                           ),
+                        ),
+                        Padding(
+                          padding: EdgeInsets.symmetric(horizontal: 8),
+                          child: VerticalDivider(
+                            width: 1,
+                            color: Color(0xFFE5E7EB),
+                          ),
+                        ),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              _buildPickerSectionLabel('Direct Messages', Icons.person_outline_rounded, filteredDMs.length),
+                              SizedBox(height: 4),
+                              Expanded(
+                                child: filteredDMs.isEmpty
+                                    ? Center(
+                                        child: Text(
+                                          query.isEmpty ? 'None' : 'No chats found',
+                                          style: TextStyle(fontFamily: 'Inter', fontSize: 12, color: Color(0xFF9CA3AF)),
+                                        ),
+                                      )
+                                    : Scrollbar(
+                                        controller: dmsScrollController,
+                                        thumbVisibility: true,
+                                        child: ListView(
+                                          controller: dmsScrollController,
+                                          padding: EdgeInsets.only(right: 8),
+                                          children: [
+                                            for (final chat in filteredDMs)
+                                              _buildPickerChatRow(
+                                                chat: chat,
+                                                resolvedName: dmNameMap[chat.reference.id],
+                                                isChecked: selectedIds.contains(chat.reference.id),
+                                                isAlreadyInFolder: existingChatIds.contains(chat.reference.id),
+                                                isLockedInOtherFolder: lockedChatIds.contains(chat.reference.id),
+                                                isPinned: chat.isPinnedByUser(currentUserReference),
+                                                folderNames: chatFolderMap[chat.reference.id],
+                                                onTap: () {
+                                                  if (existingChatIds.contains(chat.reference.id)) return;
+                                                  if (lockedChatIds.contains(chat.reference.id)) return;
+                                                  if (chat.isPinnedByUser(currentUserReference)) return;
+                                                  setDialogState(() {
+                                                    if (selectedIds.contains(chat.reference.id)) {
+                                                      selectedIds.remove(chat.reference.id);
+                                                    } else {
+                                                      selectedIds.add(chat.reference.id);
+                                                    }
+                                                  });
+                                                },
+                                              ),
+                                          ],
+                                        ),
+                                      ),
+                              ),
+                            ],
+                          ),
+                        ),
                       ],
                     ),
                   ),
@@ -2691,17 +3376,25 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
     String? resolvedName,
     required bool isChecked,
     required bool isAlreadyInFolder,
+    bool isLockedInOtherFolder = false,
+    bool isPinned = false,
     List<String>? folderNames,
     required VoidCallback onTap,
   }) {
     final displayName = resolvedName ?? (chat.title.isNotEmpty ? chat.title : (chat.isGroup ? 'Group Chat' : 'Direct Message'));
     final isGroup = chat.isGroup;
-    final opacity = isAlreadyInFolder ? 0.5 : 1.0;
+    // Disabled when already in this folder, filed in another folder, or pinned.
+    // Pinned chats take precedence and live in the Pinned section only.
+    final isDisabled = isAlreadyInFolder || isLockedInOtherFolder || isPinned;
+    final opacity = isDisabled ? 0.5 : 1.0;
 
     return Opacity(
       opacity: opacity,
       child: InkWell(
-        onTap: isAlreadyInFolder ? null : onTap,
+        mouseCursor: isDisabled
+            ? SystemMouseCursors.forbidden
+            : MaterialStateMouseCursor.clickable,
+        onTap: isDisabled ? null : onTap,
         borderRadius: BorderRadius.circular(6),
         child: Padding(
           padding: EdgeInsets.symmetric(horizontal: 4, vertical: 5),
@@ -2787,6 +3480,20 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
                         'Already in this folder',
                         style: TextStyle(fontFamily: 'Inter', fontSize: 10, color: Color(0xFF9CA3AF), fontStyle: FontStyle.italic),
                       ),
+                    if (isPinned && !isAlreadyInFolder)
+                      Padding(
+                        padding: EdgeInsets.only(top: 2),
+                        child: Row(
+                          children: [
+                            Icon(Icons.push_pin_rounded, size: 10, color: Color(0xFF9CA3AF)),
+                            SizedBox(width: 3),
+                            Text(
+                              "Pinned — can't be added to folders",
+                              style: TextStyle(fontFamily: 'Inter', fontSize: 10, color: Color(0xFF9CA3AF), fontStyle: FontStyle.italic),
+                            ),
+                          ],
+                        ),
+                      ),
                   ],
                 ),
               ),
@@ -2799,25 +3506,62 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
 
   Future<void> _createFolder(String name, {List<String>? selectedChatIds}) async {
     if (currentUserReference == null) {
-      print('❌ _createFolder: currentUserReference is null');
+      debugLog('❌ _createFolder: currentUserReference is null');
       return;
     }
     try {
       final nextOrder = _model.chatFolders.length;
-      final docRef = ChatFoldersRecord.createDoc(currentUserReference!);
-      print('📁 Creating folder "$name" at ${docRef.path}');
-      await docRef.set({
-        'name': name,
-        'order': nextOrder,
-        'is_collapsed': false,
-        'chat_ids': selectedChatIds ?? <String>[],
-        'created_at': FieldValue.serverTimestamp(),
-        'updated_at': FieldValue.serverTimestamp(),
-      });
-      print('✅ Folder "$name" created successfully with ${selectedChatIds?.length ?? 0} groups');
+      debugLog('📁 Creating folder "$name"');
+      final docRef = await fsCreateChatFolderDocument(
+        userRef: currentUserReference!,
+        data: {
+          'name': name,
+          'order': nextOrder,
+          'is_collapsed': false,
+          'chat_ids': selectedChatIds ?? <String>[],
+          'created_at': getCurrentTimestamp,
+          'updated_at': getCurrentTimestamp,
+        },
+      );
+      debugLog('✅ Folder "$name" created successfully with ${selectedChatIds?.length ?? 0} groups');
+
+      // Make the folder visible immediately. On Windows/Linux the folder list
+      // is refreshed via a 30s poll (no live stream), so without this the new
+      // folder wouldn't appear until the next poll. We refresh from the backend
+      // and fall back to an optimistic local insert if the fetch is empty/slow.
+      await _refreshChatFoldersNow(
+        fallback: () {
+          if (_model.chatFolders.any((f) => f.reference.id == docRef.id)) {
+            return;
+          }
+          _model.chatFolders = [
+            ..._model.chatFolders,
+            ChatFoldersRecord.getDocumentFromData(
+              {
+                'name': name,
+                'order': nextOrder,
+                'is_collapsed': false,
+                'chat_ids': selectedChatIds ?? <String>[],
+                'created_at': getCurrentTimestamp,
+                'updated_at': getCurrentTimestamp,
+              },
+              docRef,
+            ),
+          ];
+        },
+      );
+
+      // A chat belongs to only one folder — drop the newly added chats from
+      // any other folders they may have been in.
+      if (selectedChatIds != null && selectedChatIds.isNotEmpty) {
+        await _removeChatsFromOtherFolders(
+          selectedChatIds,
+          exceptFolderId: docRef.id,
+        );
+      }
     } catch (e, stack) {
-      print('❌ Error creating folder: $e');
-      print(stack);
+      debugLog('❌ Error creating folder: $e');
+      debugLog(stack);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -2830,6 +3574,166 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
   }
 
 
+
+  void _showRenameGroupChatDialog(ChatsRecord chat) {
+    if (!chat.isGroup ||
+        !ChatHelpers.isGroupOwner(chat, currentUserReference)) {
+      return;
+    }
+
+    final controller = TextEditingController(text: chat.title);
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: Colors.white,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        title: Text(
+          'Rename Group',
+          style: TextStyle(
+            fontFamily: 'Inter',
+            fontSize: 16,
+            fontWeight: FontWeight.w600,
+            color: Color(0xFF111827),
+          ),
+        ),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          decoration: InputDecoration(
+            hintText: 'Group name',
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(8),
+              borderSide: BorderSide(color: Color(0xFFE5E7EB)),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(8),
+              borderSide: BorderSide(color: Color(0xFF3B82F6)),
+            ),
+            contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          ),
+          style: TextStyle(
+            fontFamily: 'Inter',
+            fontSize: 14,
+            color: Color(0xFF111827),
+          ),
+          onSubmitted: (value) {
+            final name = value.trim();
+            if (name.isNotEmpty) {
+              Navigator.of(ctx).pop();
+              _handleRenameGroupChat(chat, name);
+            }
+          },
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: Text(
+              'Cancel',
+              style: TextStyle(
+                fontFamily: 'Inter',
+                color: Color(0xFF6B7280),
+              ),
+            ),
+          ),
+          TextButton(
+            onPressed: () {
+              final name = controller.text.trim();
+              if (name.isEmpty) return;
+              Navigator.of(ctx).pop();
+              _handleRenameGroupChat(chat, name);
+            },
+            child: Text(
+              'Rename',
+              style: TextStyle(
+                fontFamily: 'Inter',
+                color: Color(0xFF3B82F6),
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _handleRenameGroupChat(
+    ChatsRecord chat,
+    String newName,
+  ) async {
+    if (!chat.isGroup ||
+        !ChatHelpers.isGroupOwner(chat, currentUserReference)) {
+      return;
+    }
+
+    final oldName = chat.title;
+    if (oldName == newName) return;
+
+    try {
+      await fsPatchDocument(chat.reference, {'title': newName});
+
+      final userName = currentUserDisplayName.isNotEmpty
+          ? currentUserDisplayName
+          : (currentUserDocument?.displayName ?? 'Someone');
+      final systemMessage =
+          '$userName updated the group name from "$oldName" to "$newName"';
+
+      await fsCreateMessage(chat.reference, {
+        'content': systemMessage,
+        'created_at': getCurrentTimestamp,
+        'sender_ref': currentUserReference,
+        'sender_name': userName,
+        'sender_photo': currentUserPhoto.isNotEmpty
+            ? currentUserPhoto
+            : (currentUserDocument?.photoUrl ?? ''),
+        'is_system_message': true,
+        'is_read_by': [currentUserReference],
+      });
+
+      await fsPatchDocument(chat.reference, {
+        'last_message': systemMessage,
+        'last_message_at': getCurrentTimestamp,
+        'last_message_sent': currentUserReference,
+      });
+
+      chatController.applyLocalChatLastMessageFromPatch(chat.reference, {
+        'title': newName,
+        'last_message': systemMessage,
+        'last_message_at': getCurrentTimestamp,
+        'last_message_sent': currentUserReference,
+      });
+
+      if (_model.selectedChat?.reference.id == chat.reference.id) {
+        final data = Map<String, dynamic>.from(chat.snapshotData);
+        data['title'] = newName;
+        data['last_message'] = systemMessage;
+        data['last_message_at'] = getCurrentTimestamp;
+        data['last_message_sent'] = currentUserReference;
+        setState(() {
+          _model.selectedChat =
+              ChatsRecord.getDocumentFromData(data, chat.reference);
+        });
+      }
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Group renamed successfully'),
+            backgroundColor: Color(0xFF10B981),
+          ),
+        );
+      }
+    } catch (e) {
+      debugLog('❌ Error renaming group chat: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error renaming group: $e'),
+            backgroundColor: Color(0xFFEF4444),
+          ),
+        );
+      }
+    }
+  }
 
   void _showRenameFolderDialog(ChatFoldersRecord folder) {
     final controller = TextEditingController(text: folder.name);
@@ -2868,12 +3772,10 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
             color: Color(0xFF111827),
           ),
           onSubmitted: (value) {
-            if (value.trim().isNotEmpty) {
-              folder.reference.update({
-                'name': value.trim(),
-                'updated_at': getCurrentTimestamp,
-              });
+            final name = value.trim();
+            if (name.isNotEmpty) {
               Navigator.of(ctx).pop();
+              _handleRenameFolder(folder, name);
             }
           },
         ),
@@ -2885,13 +3787,10 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
           ),
           TextButton(
             onPressed: () {
-              if (controller.text.trim().isNotEmpty) {
-                folder.reference.update({
-                  'name': controller.text.trim(),
-                  'updated_at': getCurrentTimestamp,
-                });
-                Navigator.of(ctx).pop();
-              }
+              final name = controller.text.trim();
+              if (name.isEmpty) return;
+              Navigator.of(ctx).pop();
+              _handleRenameFolder(folder, name);
             },
             child: Text('Rename',
                 style: TextStyle(
@@ -2920,7 +3819,7 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
           ),
         ),
         content: Text(
-          'Delete "${folder.name}"? Chats will be moved to Unfiled.',
+          'Delete the folder "${folder.name}"? Chats will not be deleted.',
           style: TextStyle(
             fontFamily: 'Inter',
             fontSize: 14,
@@ -2935,8 +3834,8 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
           ),
           TextButton(
             onPressed: () {
-              folder.reference.delete();
               Navigator.of(ctx).pop();
+              _deleteFolder(folder);
             },
             child: Text('Delete',
                 style: TextStyle(
@@ -2996,42 +3895,56 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
   }
 
   void _showMoveToFolderMenu(Offset position, ChatsRecord chat) {
+    // A chat can only live in one folder. If it's already filed, every other
+    // folder is disabled — the user must "Move to Unfiled" first to relocate it.
+    // Pinned chats take precedence and can't be added to any folder.
+    final isFiledElsewhere = _model.chatFolders
+        .any((f) => f.chatIds.contains(chat.reference.id));
+    final isPinned = chat.isPinnedByUser(currentUserReference);
     final items = <PopupMenuEntry<String>>[
       // Existing folders
       for (final folder in _model.chatFolders)
-        PopupMenuItem<String>(
-          value: folder.reference.id,
-          child: Row(
-            children: [
-              Icon(
-                folder.chatIds.contains(chat.reference.id)
-                    ? Icons.folder_rounded
-                    : Icons.folder_outlined,
-                size: 16,
-                color: folder.chatIds.contains(chat.reference.id)
-                    ? Color(0xFF3B82F6)
-                    : Color(0xFF374151),
-              ),
-              SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  folder.name,
-                  style: TextStyle(
-                    fontFamily: 'Inter',
-                    fontSize: 13,
-                    color: Color(0xFF111827),
-                    fontWeight: folder.chatIds.contains(chat.reference.id)
-                        ? FontWeight.w600
-                        : FontWeight.w400,
+        () {
+          final containsChat = folder.chatIds.contains(chat.reference.id);
+          final isLocked = isPinned || (isFiledElsewhere && !containsChat);
+          return PopupMenuItem<String>(
+            value: folder.reference.id,
+            enabled: !isLocked,
+            child: Opacity(
+              opacity: isLocked ? 0.4 : 1.0,
+              child: Row(
+                children: [
+                  Icon(
+                    containsChat
+                        ? Icons.folder_rounded
+                        : Icons.folder_outlined,
+                    size: 16,
+                    color: containsChat
+                        ? Color(0xFF3B82F6)
+                        : Color(0xFF374151),
                   ),
-                  overflow: TextOverflow.ellipsis,
-                ),
+                  SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      folder.name,
+                      style: TextStyle(
+                        fontFamily: 'Inter',
+                        fontSize: 13,
+                        color: Color(0xFF111827),
+                        fontWeight: containsChat
+                            ? FontWeight.w600
+                            : FontWeight.w400,
+                      ),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                  if (containsChat)
+                    Icon(Icons.check, size: 14, color: Color(0xFF3B82F6)),
+                ],
               ),
-              if (folder.chatIds.contains(chat.reference.id))
-                Icon(Icons.check, size: 14, color: Color(0xFF3B82F6)),
-            ],
-          ),
-        ),
+            ),
+          );
+        }(),
       if (_model.chatFolders.isNotEmpty) PopupMenuDivider(),
       // Remove from folder
       PopupMenuItem<String>(
@@ -3081,35 +3994,76 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
         _showCreateFolderDialog();
         return;
       }
+
+      final chatId = chat.reference.id;
+      final previousFolders = _model.chatFolders;
+
       if (value == '_remove') {
-        // Remove from all folders
-        for (final folder in _model.chatFolders) {
-          if (folder.chatIds.contains(chat.reference.id)) {
-            await folder.reference.update({
-              'chat_ids': FieldValue.arrayRemove([chat.reference.id]),
-              'updated_at': getCurrentTimestamp,
-            });
+        _applyLocalChatFolderMembership(chatIds: [chatId]);
+        try {
+          for (final folder in previousFolders) {
+            if (folder.chatIds.contains(chatId)) {
+              await fsArrayRemove(
+                folder.reference,
+                'chat_ids',
+                [chatId],
+              );
+              await fsPatchDocument(folder.reference, {
+                'updated_at': getCurrentTimestamp,
+              });
+            }
+          }
+        } catch (e) {
+          debugLog('❌ Error moving chat to unfiled: $e');
+          if (mounted) {
+            setState(() => _model.chatFolders = previousFolders);
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('Error moving chat: $e'),
+                backgroundColor: Color(0xFFEF4444),
+              ),
+            );
           }
         }
         return;
       }
-      // Move to selected folder
-      // First remove from all other folders
-      for (final folder in _model.chatFolders) {
-        if (folder.reference.id != value &&
-            folder.chatIds.contains(chat.reference.id)) {
-          await folder.reference.update({
-            'chat_ids': FieldValue.arrayRemove([chat.reference.id]),
-            'updated_at': getCurrentTimestamp,
-          });
+
+      _applyLocalChatFolderMembership(
+        chatIds: [chatId],
+        targetFolderId: value,
+      );
+      try {
+        for (final folder in previousFolders) {
+          if (folder.reference.id != value &&
+              folder.chatIds.contains(chatId)) {
+            await fsArrayRemove(
+              folder.reference,
+              'chat_ids',
+              [chatId],
+            );
+            await fsPatchDocument(folder.reference, {
+              'updated_at': getCurrentTimestamp,
+            });
+          }
+        }
+        final targetRef =
+            currentUserReference!.collection('chat_folders').doc(value);
+        await fsArrayUnion(targetRef, 'chat_ids', [chatId]);
+        await fsPatchDocument(targetRef, {
+          'updated_at': getCurrentTimestamp,
+        });
+      } catch (e) {
+        debugLog('❌ Error moving chat to folder: $e');
+        if (mounted) {
+          setState(() => _model.chatFolders = previousFolders);
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Error moving chat to folder: $e'),
+              backgroundColor: Color(0xFFEF4444),
+            ),
+          );
         }
       }
-      // Then add to selected folder
-      final targetRef = currentUserReference!.collection('chat_folders').doc(value);
-      await targetRef.update({
-        'chat_ids': FieldValue.arrayUnion([chat.reference.id]),
-        'updated_at': getCurrentTimestamp,
-      });
     });
   }
 
@@ -3118,7 +4072,7 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
       (member) => member != currentUserReference,
       orElse: () => chat.members.first,
     );
-    return await UsersRecord.getDocumentOnce(otherUserRef);
+    return await fsGetUserOnce(otherUserRef);
   }
 
   Widget _buildGroupCreationViewRight() {
@@ -3178,7 +4132,7 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
                     size: 20,
                   ),
                 ),
-              ),
+              ).withClickCursor(),
             ],
           ),
         ),
@@ -3325,7 +4279,7 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
                                       ],
                                     ),
                         ),
-                      ),
+                      ).withClickCursor(),
                       SizedBox(width: 16),
                       // Image controls
                       Expanded(
@@ -3509,10 +4463,11 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
                         width: 1,
                       ),
                     ),
-                    child: StreamBuilder<UsersRecord>(
-                      stream: UsersRecord.getDocument(currentUserReference!),
-                      builder: (context, currentUserSnapshot) {
-                        if (!currentUserSnapshot.hasData) {
+                    child: DesktopSafeUserBuilder(
+                      userRef: currentUserReference!,
+                      fetchOnce: _getOrCreateUserFuture,
+                      builder: (context, currentUser) {
+                        if (currentUser == null) {
                           return Center(
                             child: CircularProgressIndicator(
                               color: Color(0xFF3B82F6),
@@ -3520,7 +4475,6 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
                           );
                         }
 
-                        final currentUser = currentUserSnapshot.data!;
                         final connections = currentUser.friends;
 
                         if (connections.isEmpty) {
@@ -3568,14 +4522,14 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
                           itemBuilder: (context, index) {
                             final connectionRef = connections[index];
 
-                            return StreamBuilder<UsersRecord>(
-                              stream: UsersRecord.getDocument(connectionRef),
-                              builder: (context, userSnapshot) {
-                                if (!userSnapshot.hasData) {
+                            return DesktopSafeUserBuilder(
+                              userRef: connectionRef,
+                              fetchOnce: _getOrCreateUserFuture,
+                              builder: (context, user) {
+                                if (user == null) {
                                   return SizedBox.shrink();
                                 }
 
-                                final user = userSnapshot.data!;
                                 final isCurrentUser =
                                     user.reference == currentUserReference;
                                 final isSelected = _model.selectedMembers
@@ -3597,6 +4551,7 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
                                 }
 
                                 return InkWell(
+                                  mouseCursor: MaterialStateMouseCursor.clickable,
                                   onTap: () {
                                     setState(() {
                                       if (isSelected) {
@@ -3789,8 +4744,201 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
   }
 
   void _clearAllViews() {
-    _model.showNewMessageView = false;
     _model.showGroupCreation = false;
+    _model.newMessageSelectedMembers = [];
+    _model.isCreatingNewMessageChat = false;
+    _model.groupChatTab = GroupChatTab.messages;
+  }
+
+  List<(String, GroupChatTab, IconData)> _chatHeaderTabConfigs(ChatsRecord chat) {
+    const dmTabs = <(String, GroupChatTab, IconData)>[
+      ('Messages', GroupChatTab.messages, Icons.chat_bubble_outline_rounded),
+      ('Files and Links', GroupChatTab.filesAndLinks, Icons.folder_outlined),
+      ('Action Tasks', GroupChatTab.actionTasks, Icons.checklist_rounded),
+      ('Pinned Messages', GroupChatTab.pinnedMessages, Icons.push_pin_outlined),
+    ];
+    if (!chat.isGroup) return dmTabs;
+
+    return [
+      ...dmTabs.sublist(0, 3),
+      ('Announcements', GroupChatTab.announcements, Icons.campaign_outlined),
+      dmTabs[3],
+    ];
+  }
+
+  void _selectGroupChatTab(GroupChatTab tab) {
+    final chat = _model.selectedChat;
+    if (chat != null &&
+        !chat.isGroup &&
+        tab == GroupChatTab.announcements) {
+      tab = GroupChatTab.messages;
+    }
+    setState(() {
+      _model.groupChatTab = tab;
+      _model.showTasksPanel = false;
+      _model.showAnnouncementsPanel = false;
+      _model.showPinnedMessagesPopup = false;
+      _model.pinnedMessagesPopupChat = null;
+      _model.showGroupFilesPopup = false;
+      _model.groupFilesPopupChat = null;
+    });
+    _scheduleGroupTabIndicatorUpdate();
+  }
+
+  void _scheduleGroupTabIndicatorUpdate() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+
+      final chat = _model.selectedChat;
+      if (chat == null) return;
+
+      final tabConfigs = _chatHeaderTabConfigs(chat);
+      final tabIndex =
+          tabConfigs.indexWhere((config) => config.$2 == _model.groupChatTab);
+      if (tabIndex < 0 || tabIndex >= _groupTabKeys.length) return;
+
+      final tabContext = _groupTabKeys[tabIndex].currentContext;
+      final rowContext = _groupTabRowKey.currentContext;
+      if (tabContext == null || rowContext == null) return;
+
+      final tabBox = tabContext.findRenderObject() as RenderBox?;
+      final rowBox = rowContext.findRenderObject() as RenderBox?;
+      if (tabBox == null || !tabBox.hasSize || rowBox == null) return;
+
+      final tabOffset = tabBox.localToGlobal(Offset.zero, ancestor: rowBox);
+      final nextLeft = tabOffset.dx;
+      final nextWidth = tabBox.size.width;
+
+      if (_groupTabIndicatorLeft == nextLeft &&
+          _groupTabIndicatorWidth == nextWidth &&
+          _groupTabIndicatorReady) {
+        return;
+      }
+
+      setState(() {
+        _groupTabIndicatorLeft = nextLeft;
+        _groupTabIndicatorWidth = nextWidth;
+        _groupTabIndicatorReady = true;
+      });
+    });
+  }
+
+  Widget _buildChatTabBody(ChatsRecord chat) {
+    switch (_model.groupChatTab) {
+      case GroupChatTab.messages:
+        return Column(
+          children: [
+            if (chat.isGroup) _buildAnnouncementBanner(chat),
+            Expanded(
+              child: _buildPlatformChatThread(key: _chatThreadKey),
+            ),
+            if (_isSelectionMode) _buildSelectionBar(),
+          ],
+        );
+      case GroupChatTab.filesAndLinks:
+        return GroupMediaLinksDocsWidget(
+          key: ValueKey('chat-media-${chat.reference.path}'),
+          chatDoc: chat,
+          embedded: true,
+        );
+      case GroupChatTab.actionTasks:
+        return GroupActionTasksWidget(chatDoc: chat, embedded: true);
+      case GroupChatTab.announcements:
+        return GroupAnnouncementsWidget(chatDoc: chat, embedded: true);
+      case GroupChatTab.pinnedMessages:
+        return ColoredBox(
+          color: Colors.white,
+          child: _buildPinnedMessagesPopupContent(chat, inTabView: true),
+        );
+    }
+  }
+
+  Widget _buildChatHeaderTabs(ChatsRecord chat) {
+    _scheduleGroupTabIndicatorUpdate();
+
+    final tabConfigs = _chatHeaderTabConfigs(chat);
+
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          padding: const EdgeInsets.fromLTRB(20, 12, 20, 0),
+          child: Stack(
+            key: _groupTabRowKey,
+            clipBehavior: Clip.none,
+            children: [
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  for (var i = 0; i < tabConfigs.length; i++) ...[
+                    if (i > 0) const SizedBox(width: 20),
+                    _buildGroupChatHeaderTabItem(
+                      tabConfigs[i].$1,
+                      tabConfigs[i].$2,
+                      tabConfigs[i].$3,
+                      key: _groupTabKeys[i],
+                    ),
+                  ],
+                ],
+              ),
+              if (_groupTabIndicatorReady)
+                AnimatedPositioned(
+                  duration: const Duration(milliseconds: 250),
+                  curve: Curves.easeInOutCubic,
+                  left: _groupTabIndicatorLeft,
+                  bottom: 0,
+                  width: _groupTabIndicatorWidth,
+                  height: 2,
+                  child: const ColoredBox(color: Color(0xFF3B82F6)),
+                ),
+            ],
+          ),
+        ),
+        const Divider(height: 1, thickness: 1, color: Color(0xFFE5E7EB)),
+      ],
+    );
+  }
+
+  Widget _buildGroupChatHeaderTabItem(
+    String label,
+    GroupChatTab tab,
+    IconData icon, {
+    Key? key,
+  }) {
+    final isSelected = _model.groupChatTab == tab;
+    const activeBlue = Color(0xFF3B82F6);
+    const inactiveColor = Color(0xFF6B7280);
+
+    return InkWell(
+      key: key,
+      mouseCursor: MaterialStateMouseCursor.clickable,
+      onTap: () => _selectGroupChatTab(tab),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              icon,
+              size: 16,
+              color: isSelected ? activeBlue : inactiveColor,
+            ),
+            const SizedBox(width: 6),
+            Text(
+              label,
+              style: TextStyle(
+                fontFamily: 'Inter',
+                fontSize: 13,
+                fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
+                color: isSelected ? activeBlue : inactiveColor,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   Future<void> _startNewChatWithUser(UsersRecord user) async {
@@ -3929,7 +5077,7 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
         if (currentUserReference != null) {
           try {
             final currentUser =
-                await UsersRecord.getDocumentOnce(currentUserReference!);
+                await fsGetUserOnce(currentUserReference!);
             memberNames.add(currentUser.displayName.isNotEmpty
                 ? currentUser.displayName
                 : currentUser.email.split('@')[0]);
@@ -3941,7 +5089,7 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
         // Get selected member names
         for (final memberRef in _model.selectedMembers) {
           try {
-            final user = await UsersRecord.getDocumentOnce(memberRef);
+            final user = await fsGetUserOnce(memberRef);
             memberNames.add(user.displayName.isNotEmpty
                 ? user.displayName
                 : user.email.split('@')[0]);
@@ -3955,7 +5103,7 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
       }
 
       // Create the group chat
-      final newChatRef = await ChatsRecord.collection.add({
+      final newChatRef = await fsCreateChat({
         ...createChatsRecordData(
           title: groupName,
           isGroup: true,
@@ -3979,7 +5127,7 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
       final greeting =
           '${currentUserDisplayName.isNotEmpty ? currentUserDisplayName : "You"} created the group';
 
-      await newChatRef.collection('messages').add({
+      await fsCreateMessage(newChatRef, {
         'content': greeting,
         'created_at': getCurrentTimestamp,
         'sender_ref': currentUserReference,
@@ -3988,14 +5136,14 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
       });
 
       // Update chat with last message
-      await newChatRef.update({
+      await fsPatchDocument(newChatRef, {
         'last_message': greeting,
         'last_message_at': getCurrentTimestamp,
         'last_message_sent': currentUserReference,
       });
 
       // Get the created chat document
-      final newChat = await ChatsRecord.getDocumentOnce(newChatRef);
+      final newChat = await fsGetChatOnce(newChatRef);
 
       // Select the new group chat
       setState(() {
@@ -4028,497 +5176,60 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
     }
   }
 
-  Widget _buildNewMessageView() {
-    return Container(
-      width: double.infinity,
-      height: double.infinity,
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [
-            Colors.white,
-            Color(0xFFF0F4FF),
-            Color(0xFFE8F0FE),
-          ],
-        ),
-      ),
-      child: Column(
-        children: [
-          // Header
-          Container(
-            width: double.infinity,
-            padding: EdgeInsetsDirectional.fromSTEB(32, 32, 32, 24),
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.topRight,
-                colors: [
-                  Colors.white,
-                  Color(0xFFF8FAFF),
-                ],
-              ),
-              boxShadow: [
-                BoxShadow(
-                  color: Color(0x0D000000),
-                  blurRadius: 8,
-                  offset: Offset(0, 2),
-                ),
-              ],
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    GestureDetector(
-                      onTap: () {
-                        setState(() {
-                          _model.showNewMessageView = false;
-                          _model.newMessageSearchController?.clear();
-                        });
-                      },
-                      child: Container(
-                        padding: EdgeInsets.all(8),
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.circular(8),
-                          border: Border.all(
-                            color: Color(0xFFE5E7EB),
-                            width: 1,
-                          ),
-                        ),
-                        child: Icon(
-                          Icons.close,
-                          color: Color(0xFF6B7280),
-                          size: 20,
-                        ),
-                      ),
-                    ),
-                    SizedBox(width: 12),
-                    Container(
-                      padding: EdgeInsets.all(6),
-                      decoration: BoxDecoration(
-                        color: Color(0xFF3B82F6).withOpacity(0.1),
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      child: Icon(
-                        Icons.chat_bubble_outline,
-                        color: Color(0xFF3B82F6),
-                        size: 20,
-                      ),
-                    ),
-                    SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'Start a New Direct Message',
-                            style: TextStyle(
-                              fontFamily: 'Inter',
-                              color: Color(0xFF1A1F36),
-                              fontSize: 20,
-                              fontWeight: FontWeight.w600,
-                              letterSpacing: -0.3,
-                            ),
-                          ),
-                          SizedBox(height: 6),
-                          Text(
-                            'Search for a colleague to begin a private conversation',
-                            style: TextStyle(
-                              fontFamily: 'Inter',
-                              color: Color(0xFF64748B),
-                              fontSize: 13,
-                              fontWeight: FontWeight.w400,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-          // Search bar
-          Container(
-            width: double.infinity,
-            padding: EdgeInsetsDirectional.fromSTEB(32, 20, 32, 16),
-            decoration: BoxDecoration(
-              color: Colors.transparent,
-            ),
-            child: Container(
-              height: 44,
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(
-                  color: Color(0xFFE2E8F0),
-                  width: 1.5,
-                ),
-                boxShadow: [
-                  BoxShadow(
-                    color: Color(0xFF3B82F6).withOpacity(0.08),
-                    blurRadius: 12,
-                    offset: Offset(0, 4),
-                  ),
-                ],
-              ),
-              child: TextFormField(
-                controller: _model.newMessageSearchController,
-                onChanged: (value) {
-                  setState(() {});
-                },
-                decoration: InputDecoration(
-                  hintText: 'Search by name or email',
-                  hintStyle: TextStyle(
-                    fontFamily: 'Inter',
-                    color: Color(0xFF94A3B8),
-                    fontSize: 14,
-                    fontWeight: FontWeight.w400,
-                  ),
-                  border: InputBorder.none,
-                  contentPadding:
-                      EdgeInsetsDirectional.fromSTEB(16, 12, 16, 12),
-                  prefixIcon: Padding(
-                    padding: EdgeInsetsDirectional.only(start: 14, end: 10),
-                    child: Icon(
-                      Icons.search_rounded,
-                      color: Color(0xFF3B82F6),
-                      size: 20,
-                    ),
-                  ),
-                ),
-                style: TextStyle(
-                  fontFamily: 'Inter',
-                  color: Color(0xFF1A1F36),
-                  fontSize: 14,
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-            ),
-          ),
-          // Invite friends buttons
-          Container(
-            width: double.infinity,
-            padding: EdgeInsetsDirectional.fromSTEB(32, 12, 32, 12),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                InviteFriendsButtonWidget(),
-                SizedBox(width: 16),
-                _buildEmailInviteButton(),
-              ],
-            ),
-          ),
-          // Suggested connections list
-          Expanded(
-            child: Container(
-              width: double.infinity,
-              padding: EdgeInsetsDirectional.fromSTEB(32, 8, 32, 32),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Padding(
-                    padding: EdgeInsetsDirectional.only(start: 4, bottom: 12),
-                    child: Row(
-                      children: [
-                        Container(
-                          width: 3,
-                          height: 14,
-                          decoration: BoxDecoration(
-                            color: Color(0xFF3B82F6),
-                            borderRadius: BorderRadius.circular(2),
-                          ),
-                        ),
-                        SizedBox(width: 8),
-                        Text(
-                          'SUGGESTED',
-                          style: TextStyle(
-                            fontFamily: 'Inter',
-                            color: Color(0xFF475569),
-                            fontSize: 11,
-                            fontWeight: FontWeight.w700,
-                            letterSpacing: 1.2,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  Expanded(
-                    child: StreamBuilder<UsersRecord>(
-                      stream: UsersRecord.getDocument(currentUserReference!),
-                      builder: (context, currentUserSnapshot) {
-                        if (!currentUserSnapshot.hasData) {
-                          return Center(
-                            child: CircularProgressIndicator(
-                              color: Color.fromARGB(255, 16, 184, 239),
-                            ),
-                          );
-                        }
-
-                        final currentUser = currentUserSnapshot.data!;
-                        final connections = currentUser.friends;
-
-                        if (connections.isEmpty) {
-                          return Center(
-                            child: Column(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Container(
-                                  width: 80,
-                                  height: 80,
-                                  decoration: BoxDecoration(
-                                    color: Color(0xFF3B82F6).withOpacity(0.1),
-                                    shape: BoxShape.circle,
-                                  ),
-                                  child: Icon(
-                                    Icons.people_outline_rounded,
-                                    color: Color(0xFF3B82F6),
-                                    size: 40,
-                                  ),
-                                ),
-                                SizedBox(height: 24),
-                                Text(
-                                  'No connections',
-                                  style: TextStyle(
-                                    fontFamily: 'Inter',
-                                    color: Color(0xFF1A1F36),
-                                    fontSize: 18,
-                                    fontWeight: FontWeight.w600,
-                                    letterSpacing: -0.3,
-                                  ),
-                                ),
-                                SizedBox(height: 8),
-                                Text(
-                                  'Add connections to start chatting',
-                                  style: TextStyle(
-                                    fontFamily: 'Inter',
-                                    color: Color(0xFF64748B),
-                                    fontSize: 15,
-                                    fontWeight: FontWeight.w400,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          );
-                        }
-
-                        final searchQuery = _model
-                                .newMessageSearchController?.text
-                                .toLowerCase() ??
-                            '';
-
-                        return ListView.builder(
-                          itemCount: connections.length,
-                          itemBuilder: (context, index) {
-                            final connectionRef = connections[index];
-
-                            return StreamBuilder<UsersRecord>(
-                              stream: UsersRecord.getDocument(connectionRef),
-                              builder: (context, userSnapshot) {
-                                if (!userSnapshot.hasData) {
-                                  return SizedBox.shrink();
-                                }
-
-                                final user = userSnapshot.data!;
-                                final isCurrentUser =
-                                    user.reference == currentUserReference;
-
-                                if (isCurrentUser) {
-                                  return SizedBox.shrink();
-                                }
-
-                                // Filter by search query
-                                if (searchQuery.isNotEmpty) {
-                                  final displayName =
-                                      user.displayName.toLowerCase();
-                                  final email = user.email.toLowerCase();
-                                  if (!displayName.contains(searchQuery) &&
-                                      !email.contains(searchQuery)) {
-                                    return SizedBox.shrink();
-                                  }
-                                }
-
-                                return Container(
-                                  margin: EdgeInsets.only(bottom: 8),
-                                  decoration: BoxDecoration(
-                                    color: Colors.white,
-                                    borderRadius: BorderRadius.circular(8),
-                                    border: Border.all(
-                                      color: Color(0xFFE2E8F0),
-                                      width: 1,
-                                    ),
-                                    boxShadow: [
-                                      BoxShadow(
-                                        color: Color(0x0A000000),
-                                        blurRadius: 8,
-                                        offset: Offset(0, 2),
-                                      ),
-                                    ],
-                                  ),
-                                  child: Material(
-                                    color: Colors.transparent,
-                                    child: InkWell(
-                                      onTap: () async {
-                                        await _startNewChatWithUser(user);
-                                        setState(() {
-                                          _model.showNewMessageView = false;
-                                        });
-                                      },
-                                      borderRadius: BorderRadius.circular(8),
-                                      child: Container(
-                                        padding: EdgeInsetsDirectional.fromSTEB(
-                                            16, 12, 16, 12),
-                                        child: Row(
-                                          children: [
-                                            // Avatar with gradient border
-                                            Container(
-                                              width: 48,
-                                              height: 48,
-                                              decoration: BoxDecoration(
-                                                shape: BoxShape.circle,
-                                                gradient: LinearGradient(
-                                                  colors: [
-                                                    Color(0xFF3B82F6),
-                                                    Color(0xFF60A5FA),
-                                                  ],
-                                                ),
-                                                boxShadow: [
-                                                  BoxShadow(
-                                                    color: Color(0xFF3B82F6)
-                                                        .withOpacity(0.3),
-                                                    blurRadius: 8,
-                                                    offset: Offset(0, 2),
-                                                  ),
-                                                ],
-                                              ),
-                                              padding: EdgeInsets.all(2),
-                                              child: Container(
-                                                decoration: BoxDecoration(
-                                                  shape: BoxShape.circle,
-                                                  color: Colors.white,
-                                                ),
-                                                child: ClipRRect(
-                                                  borderRadius:
-                                                      BorderRadius.circular(22),
-                                                  child: CachedNetworkImage(
-                                                    imageUrl: user.photoUrl,
-                                                    width: 44,
-                                                    height: 44,
-                                                    fit: BoxFit.cover,
-                                                    placeholder:
-                                                        (context, url) =>
-                                                            Container(
-                                                      width: 44,
-                                                      height: 44,
-                                                      decoration: BoxDecoration(
-                                                        color:
-                                                            Color(0xFFF1F5F9),
-                                                        shape: BoxShape.circle,
-                                                      ),
-                                                      child: Icon(
-                                                        Icons.person_rounded,
-                                                        color:
-                                                            Color(0xFF64748B),
-                                                        size: 20,
-                                                      ),
-                                                    ),
-                                                    errorWidget:
-                                                        (context, url, error) =>
-                                                            Container(
-                                                      width: 44,
-                                                      height: 44,
-                                                      decoration: BoxDecoration(
-                                                        color:
-                                                            Color(0xFFF1F5F9),
-                                                        shape: BoxShape.circle,
-                                                      ),
-                                                      child: Icon(
-                                                        Icons.person_rounded,
-                                                        color:
-                                                            Color(0xFF64748B),
-                                                        size: 20,
-                                                      ),
-                                                    ),
-                                                  ),
-                                                ),
-                                              ),
-                                            ),
-                                            SizedBox(width: 12),
-                                            // User info
-                                            Expanded(
-                                              child: Column(
-                                                crossAxisAlignment:
-                                                    CrossAxisAlignment.start,
-                                                children: [
-                                                  Text(
-                                                    user.displayName,
-                                                    style: TextStyle(
-                                                      fontFamily: 'Inter',
-                                                      color: Color(0xFF111827),
-                                                      fontSize: 14,
-                                                      fontWeight:
-                                                          FontWeight.w500,
-                                                    ),
-                                                  ),
-                                                  SizedBox(height: 2),
-                                                  Text(
-                                                    user.email,
-                                                    style: TextStyle(
-                                                      fontFamily: 'Inter',
-                                                      color: Color(0xFF6B7280),
-                                                      fontSize: 12,
-                                                      fontWeight:
-                                                          FontWeight.w400,
-                                                    ),
-                                                  ),
-                                                ],
-                                              ),
-                                            ),
-                                            // Start Chat button
-                                            Container(
-                                              width: 36,
-                                              height: 36,
-                                              decoration: BoxDecoration(
-                                                color: Color(0xFF3B82F6)
-                                                    .withOpacity(0.1),
-                                                borderRadius:
-                                                    BorderRadius.circular(8),
-                                              ),
-                                              child: Icon(
-                                                Icons.arrow_forward_rounded,
-                                                color: Color(0xFF3B82F6),
-                                                size: 18,
-                                              ),
-                                            ),
-                                          ],
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                                );
-                              },
-                            );
-                          },
-                        );
-                      },
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ],
-      ),
+  Future<void> _showNewMessageDialog() async {
+    await showNewMessageDialog(
+      context: context,
+      searchController: _model.newMessageSearchController!,
+      initialSelectedMembers: _model.newMessageSelectedMembers,
+      fetchUser: _getOrCreateUserFuture,
+      onSubmit: _createChatFromNewMessageSelection,
     );
+
+    if (mounted) {
+      setState(() {
+        _model.newMessageSelectedMembers = [];
+        _model.newMessageSearchController?.clear();
+        _model.isCreatingNewMessageChat = false;
+      });
+    }
+  }
+
+  /// Creates a direct message when a single person is selected, or a group
+  /// chat when multiple people are selected, from the New Message dialog.
+  Future<void> _createChatFromNewMessageSelection(
+    List<DocumentReference> selected,
+  ) async {
+    if (selected.isEmpty) return;
+
+    _model.newMessageSelectedMembers = List.from(selected);
+    setState(() => _model.isCreatingNewMessageChat = true);
+    try {
+      if (selected.length == 1) {
+        final user = await _getOrCreateUserFuture(selected.first);
+        await _startNewChatWithUser(user);
+      } else {
+        _model.selectedMembers = List.from(selected);
+        _model.groupName = '';
+        _model.groupNameController?.clear();
+        _model.groupImagePath = null;
+        _model.groupImageUrl = null;
+        _model.isUploadingImage = false;
+        await _createGroup();
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _model.isCreatingNewMessageChat = false;
+          _model.newMessageSelectedMembers = [];
+          _model.newMessageSearchController?.clear();
+        });
+      }
+    }
   }
 
   Widget _buildRightPanel() {
     // Determine if any right-side panel should be shown
     final showAnyPanel = _model.showGroupCreation ||
-        _model.showNewMessageView ||
         (_model.showGroupInfoPanel && _model.groupInfoChat != null) ||
         (_model.showUserProfilePanel && _model.userProfileUser != null) ||
         _model.showChatHistoryPanel ||
@@ -4543,7 +5254,7 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
                   onTap: () {
                     setState(() {
                       _model.showGroupCreation = false;
-                      _model.showNewMessageView = false;
+                      _model.newMessageSelectedMembers = [];
                       _model.showGroupInfoPanel = false;
                       _model.groupInfoChat = null;
                       _model.showUserProfilePanel = false;
@@ -4555,7 +5266,7 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
                   child: Container(
                     color: Colors.black.withOpacity(0.3),
                   ),
-                ),
+                ).withClickCursor(),
               ),
               // Right-side panels
               if (_model.showGroupCreation)
@@ -4568,13 +5279,6 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
                     _model.groupImagePath = null;
                     _model.groupImageUrl = null;
                     _model.isUploadingImage = false;
-                  });
-                }),
-              if (_model.showNewMessageView)
-                _buildRightSidePanel(_buildNewMessageView(), () {
-                  setState(() {
-                    _model.showNewMessageView = false;
-                    _model.newMessageSearchController?.clear();
                   });
                 }),
 
@@ -4673,10 +5377,10 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
                         onTap: () {},
                         behavior: HitTestBehavior.opaque,
                         child: _buildMeetingTranscriptsPopupCard(),
-                      ),
+                      ).withClickCursor(),
                     ),
                   ),
-                ),
+                ).withClickCursor(),
               ),
 
             // Pinned Messages popup overlay
@@ -4698,10 +5402,10 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
                         onTap: () {},
                         behavior: HitTestBehavior.opaque,
                         child: _buildPinnedMessagesPopupCard(),
-                      ),
+                      ).withClickCursor(),
                     ),
                   ),
-                ),
+                ).withClickCursor(),
               ),
             // Group Files popup overlay
             if (_model.showGroupFilesPopup &&
@@ -4722,10 +5426,10 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
                         onTap: () {},
                         behavior: HitTestBehavior.opaque,
                         child: _buildGroupFilesPopupCard(),
-                      ),
+                      ).withClickCursor(),
                     ),
                   ),
-                ),
+                ).withClickCursor(),
               ),
           ],
         ),
@@ -4842,6 +5546,7 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
                   ),
                   Spacer(),
                   InkWell(
+                    mouseCursor: MaterialStateMouseCursor.clickable,
                     onTap: () {
                       setState(() {
                         _model.showPinnedMessagesPopup = false;
@@ -4861,108 +5566,9 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
                 ],
               ),
             ),
-            // Content — stream of pinned messages
+            // Content — pinned messages
             Flexible(
-              child: StreamBuilder<List<MessagesRecord>>(
-                stream: queryMessagesRecord(
-                  parent: chat.reference,
-                  queryBuilder: (q) => q
-                      .where('is_pinned', isEqualTo: true),
-                ),
-                builder: (context, snapshot) {
-                  if (snapshot.connectionState == ConnectionState.waiting) {
-                    return Padding(
-                      padding: const EdgeInsets.all(40),
-                      child: Center(
-                        child: SizedBox(
-                          width: 28,
-                          height: 28,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                            valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF3B82F6)),
-                          ),
-                        ),
-                      ),
-                    );
-                  }
-
-                  final pinnedMessages = (snapshot.data ?? [])
-                    ..sort((a, b) {
-                      final aTime = a.createdAt;
-                      final bTime = b.createdAt;
-                      if (aTime == null && bTime == null) return 0;
-                      if (aTime == null) return 1;
-                      if (bTime == null) return -1;
-                      return bTime.compareTo(aTime); // descending
-                    });
-
-                  if (pinnedMessages.isEmpty) {
-                    return Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 48, horizontal: 24),
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(
-                            Icons.push_pin_outlined,
-                            size: 48,
-                            color: Color(0xFFD1D5DB),
-                          ),
-                          SizedBox(height: 12),
-                          Text(
-                            'No pinned messages',
-                            style: TextStyle(
-                              fontFamily: 'Inter',
-                              fontSize: 15,
-                              fontWeight: FontWeight.w500,
-                              color: Color(0xFF6B7280),
-                            ),
-                          ),
-                          SizedBox(height: 4),
-                          Text(
-                            'Long-press a message and select "Pin" to pin it here.',
-                            textAlign: TextAlign.center,
-                            style: TextStyle(
-                              fontFamily: 'Inter',
-                              fontSize: 13,
-                              color: Color(0xFF9CA3AF),
-                            ),
-                          ),
-                        ],
-                      ),
-                    );
-                  }
-
-                  return ListView.separated(
-                    shrinkWrap: true,
-                    padding: const EdgeInsets.symmetric(vertical: 8),
-                    itemCount: pinnedMessages.length,
-                    separatorBuilder: (_, __) => Divider(
-                      height: 1,
-                      color: Color(0xFFF3F4F6),
-                      indent: 16,
-                      endIndent: 16,
-                    ),
-                    itemBuilder: (context, index) {
-                      final msg = pinnedMessages[index];
-                      // Resolve sender name: use senderName if available, otherwise look up from senderRef
-                      final hasSenderRef = msg.senderRef != null;
-                      final rawSenderName = msg.senderName;
-
-                      // If senderName is empty but we have a senderRef, resolve it
-                      if (rawSenderName.isEmpty && hasSenderRef) {
-                        return FutureBuilder<UsersRecord>(
-                          future: _getOrCreateUserFuture(msg.senderRef!),
-                          builder: (context, userSnapshot) {
-                            final resolvedName = userSnapshot.data?.displayName ?? 'Unknown';
-                            return _buildPinnedMessageTile(msg, resolvedName);
-                          },
-                        );
-                      }
-                      return _buildPinnedMessageTile(msg, rawSenderName.isNotEmpty ? rawSenderName : 'Unknown');
-                    },
-                  );
-                },
-              ),
+              child: _buildPinnedMessagesPopupContent(chat),
             ),
           ],
         ),
@@ -4970,88 +5576,209 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
     );
   }
 
-  Widget _buildPinnedMessageTile(MessagesRecord msg, String senderName) {
-    final content = msg.content.isNotEmpty
-        ? msg.content
-        : (msg.attachmentUrl.isNotEmpty
-            ? '📎 Attachment'
-            : (msg.image.isNotEmpty
-                ? '🖼️ Image'
-                : '💬 Message'));
-    final timestamp = msg.createdAt;
-    final timeStr = timestamp != null
-        ? '${timestamp.month}/${timestamp.day}/${timestamp.year} ${timestamp.hour}:${timestamp.minute.toString().padLeft(2, '0')}'
-        : '';
+  Widget _buildPinnedMessagesPopupContent(
+    ChatsRecord chat, {
+    bool inTabView = false,
+  }) {
+    Widget buildBody(AsyncSnapshot<List<MessagesRecord>> snapshot) {
+      if (snapshot.connectionState == ConnectionState.waiting &&
+          !snapshot.hasData) {
+        return Padding(
+          padding: const EdgeInsets.all(40),
+          child: Center(
+            child: SizedBox(
+              width: 28,
+              height: 28,
+              child: CircularProgressIndicator(
+                strokeWidth: 2,
+                valueColor:
+                    AlwaysStoppedAnimation<Color>(Color(0xFF3B82F6)),
+              ),
+            ),
+          ),
+        );
+      }
 
-    return InkWell(
-      onTap: () {
-        final messageId = msg.reference.id;
-        setState(() {
-          _model.showPinnedMessagesPopup = false;
-          _model.pinnedMessagesPopupChat = null;
+      final pinnedMessages = (snapshot.data ?? [])
+        ..sort((a, b) {
+          final aTime = a.createdAt;
+          final bTime = b.createdAt;
+          if (aTime == null && bTime == null) return 0;
+          if (aTime == null) return 1;
+          if (bTime == null) return -1;
+          return bTime.compareTo(aTime);
         });
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          _chatThreadKey.currentState?.scrollToMessage(messageId);
-        });
-      },
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Icon(Icons.push_pin, size: 14, color: Color(0xFF3B82F6)),
-                SizedBox(width: 6),
-                Text(
-                  senderName,
-                  style: TextStyle(
-                    fontFamily: 'Inter',
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
-                    color: Color(0xFF111827),
-                  ),
-                ),
-                Spacer(),
-                Text(
-                  timeStr,
-                  style: TextStyle(
-                    fontFamily: 'Inter',
-                    fontSize: 11,
-                    color: Color(0xFF9CA3AF),
-                  ),
-                ),
-              ],
-            ),
-            SizedBox(height: 6),
-            Text(
-              content.length > 200 ? '${content.substring(0, 200)}...' : content,
-              style: TextStyle(
-                fontFamily: 'Inter',
-                fontSize: 13.5,
-                color: Color(0xFF374151),
-                height: 1.4,
+
+      if (pinnedMessages.isEmpty) {
+        return Padding(
+          padding: const EdgeInsets.symmetric(vertical: 48, horizontal: 24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                Icons.push_pin_outlined,
+                size: 48,
+                color: Color(0xFFD1D5DB),
               ),
-              maxLines: 4,
-              overflow: TextOverflow.ellipsis,
-            ),
-            if (msg.image.isNotEmpty || msg.images.isNotEmpty)
-              Padding(
-                padding: const EdgeInsets.only(top: 6),
-                child: Row(
-                  children: [
-                    Icon(Icons.image, size: 14, color: Color(0xFF9CA3AF)),
-                    SizedBox(width: 4),
-                    Text(
-                      '${1 + msg.images.length} image(s)',
-                      style: TextStyle(fontFamily: 'Inter', fontSize: 12, color: Color(0xFF9CA3AF)),
-                    ),
-                  ],
+              SizedBox(height: 12),
+              Text(
+                'No pinned messages',
+                style: TextStyle(
+                  fontFamily: 'Inter',
+                  fontSize: 15,
+                  fontWeight: FontWeight.w500,
+                  color: Color(0xFF6B7280),
                 ),
               ),
-          ],
+              SizedBox(height: 4),
+              Text(
+                'Long-press a message and select "Pin" to pin it here.',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontFamily: 'Inter',
+                  fontSize: 13,
+                  color: Color(0xFF9CA3AF),
+                ),
+              ),
+            ],
+          ),
+        );
+      }
+
+      return ListView.separated(
+        shrinkWrap: !inTabView,
+        padding: EdgeInsets.symmetric(
+          vertical: 8,
+          horizontal: inTabView ? 4 : 0,
         ),
+        itemCount: pinnedMessages.length,
+        separatorBuilder: (_, __) => Divider(
+          height: 1,
+          color: Color(0xFFF3F4F6),
+          indent: 16,
+          endIndent: 16,
+        ),
+        itemBuilder: (context, index) {
+          final msg = pinnedMessages[index];
+          final senderName =
+              msg.senderName.isNotEmpty ? msg.senderName : 'Unknown';
+          final content = msg.content.isNotEmpty
+              ? msg.content
+              : (msg.attachmentUrl.isNotEmpty
+                  ? '📎 Attachment'
+                  : (msg.image.isNotEmpty ? '🖼️ Image' : '💬 Message'));
+          final timestamp = msg.createdAt?.toLocal();
+          final timeStr = timestamp != null
+              ? DateFormat('M/d/yyyy h:mm a').format(timestamp)
+              : '';
+
+          return InkWell(
+            mouseCursor: MaterialStateMouseCursor.clickable,
+            onTap: () {
+              final messageId = msg.reference.id;
+              if (inTabView) {
+                _selectGroupChatTab(GroupChatTab.messages);
+              } else {
+                setState(() {
+                  _model.showPinnedMessagesPopup = false;
+                  _model.pinnedMessagesPopupChat = null;
+                });
+              }
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                _chatThreadKey.currentState?.scrollToMessage(messageId);
+              });
+            },
+            child: Padding(
+              padding: const EdgeInsets.symmetric(
+                horizontal: 16,
+                vertical: 12,
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Icon(
+                        Icons.push_pin,
+                        size: 14,
+                        color: Color(0xFF3B82F6),
+                      ),
+                      SizedBox(width: 6),
+                      Text(
+                        senderName,
+                        style: TextStyle(
+                          fontFamily: 'Inter',
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                          color: Color(0xFF111827),
+                        ),
+                      ),
+                      Spacer(),
+                      Text(
+                        timeStr,
+                        style: TextStyle(
+                          fontFamily: 'Inter',
+                          fontSize: 11,
+                          color: Color(0xFF9CA3AF),
+                        ),
+                      ),
+                    ],
+                  ),
+                  SizedBox(height: 6),
+                  Text(
+                    content.length > 200
+                        ? '${content.substring(0, 200)}...'
+                        : content,
+                    style: TextStyle(
+                      fontFamily: 'Inter',
+                      fontSize: 13.5,
+                      color: Color(0xFF374151),
+                      height: 1.4,
+                    ),
+                    maxLines: 4,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  if (msg.image.isNotEmpty || msg.images.isNotEmpty)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 6),
+                      child: Row(
+                        children: [
+                          Icon(Icons.image,
+                              size: 14, color: Color(0xFF9CA3AF)),
+                          SizedBox(width: 4),
+                          Text(
+                            '${1 + msg.images.length} image(s)',
+                            style: TextStyle(
+                              fontFamily: 'Inter',
+                              fontSize: 12,
+                              color: Color(0xFF9CA3AF),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          );
+        },
+      );
+    }
+
+    if (useWindowsFirestoreRest) {
+      return _RestPollBuilder<List<MessagesRecord>>(
+        interval: const Duration(seconds: 10),
+        fetch: () => fsQueryPinnedMessages(chat.reference),
+        builder: (context, snapshot) => buildBody(snapshot),
+      );
+    }
+
+    return StreamBuilder<List<MessagesRecord>>(
+      stream: queryMessagesRecord(
+        parent: chat.reference,
+        queryBuilder: (q) => q.where('is_pinned', isEqualTo: true),
       ),
+      builder: (context, snapshot) => buildBody(snapshot),
     );
   }
 
@@ -5133,6 +5860,7 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
                   ),
                   Spacer(),
                   InkWell(
+                    mouseCursor: MaterialStateMouseCursor.clickable,
                     onTap: () {
                       setState(() {
                         _model.showGroupFilesPopup = false;
@@ -5154,183 +5882,7 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
             ),
             // Content
             Flexible(
-              child: StreamBuilder<List<MessagesRecord>>(
-                stream: queryMessagesRecord(
-                  parent: chat.reference,
-                  queryBuilder: (q) => q.orderBy('created_at', descending: true),
-                ),
-                builder: (context, snapshot) {
-                  if (snapshot.connectionState == ConnectionState.waiting) {
-                    return Padding(
-                      padding: const EdgeInsets.all(60),
-                      child: Center(
-                        child: SizedBox(width: 32, height: 32, child: CircularProgressIndicator(strokeWidth: 2.5, valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF3B82F6)))),
-                      ),
-                    );
-                  }
-
-                  // Strict filter: must have attachment_url, exclude images/audio/video
-                  final fileMessages = (snapshot.data ?? []).where((msg) {
-                    if (msg.attachmentUrl.isEmpty) return false;
-                    if (msg.messageType == MessageType.image ||
-                        msg.messageType == MessageType.voice ||
-                        msg.messageType == MessageType.video) return false;
-                    if (msg.image.isNotEmpty || msg.images.isNotEmpty) return false;
-                    if (msg.audio.isNotEmpty || msg.video.isNotEmpty) return false;
-                    return true;
-                  }).toList();
-
-                  if (fileMessages.isEmpty) {
-                    return Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 80, horizontal: 40),
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(Icons.folder_open_rounded, size: 56, color: Color(0xFFD1D5DB)),
-                          SizedBox(height: 16),
-                          Text('No files shared yet', style: TextStyle(fontFamily: 'Inter', fontSize: 16, fontWeight: FontWeight.w500, color: Color(0xFF6B7280))),
-                          SizedBox(height: 6),
-                          Text('Files shared in this group will appear here.', textAlign: TextAlign.center, style: TextStyle(fontFamily: 'Inter', fontSize: 13, color: Color(0xFF9CA3AF))),
-                        ],
-                      ),
-                    );
-                  }
-
-                  return Column(
-                    children: [
-                      // Count bar
-                      Container(
-                        padding: EdgeInsets.symmetric(horizontal: 24, vertical: 10),
-                        decoration: BoxDecoration(border: Border(bottom: BorderSide(color: Color(0xFFF3F4F6), width: 1))),
-                        child: Row(
-                          children: [
-                            Text('${fileMessages.length} file${fileMessages.length == 1 ? '' : 's'}', style: TextStyle(fontFamily: 'Inter', fontSize: 12, fontWeight: FontWeight.w500, color: Color(0xFF6B7280))),
-                            Spacer(),
-                            Text('Sorted by newest', style: TextStyle(fontFamily: 'Inter', fontSize: 11, color: Color(0xFF9CA3AF))),
-                          ],
-                        ),
-                      ),
-                      Expanded(
-                        child: ListView.builder(
-                          padding: const EdgeInsets.symmetric(vertical: 4),
-                          itemCount: fileMessages.length,
-                          itemBuilder: (context, index) {
-                            final msg = fileMessages[index];
-                            final senderName = msg.senderName.isNotEmpty ? msg.senderName : 'Unknown';
-                            final timestamp = msg.createdAt;
-                            final daysAgo = timestamp != null ? DateTime.now().difference(timestamp).inDays : 0;
-                            final daysAgoStr = daysAgo == 0 ? 'Today' : (daysAgo == 1 ? 'Yesterday' : '$daysAgo days ago');
-                            final isExpired = daysAgo > 30;
-
-                            // Resolve file name: file_name field > content > URL extraction with timestamp stripping
-                            final fileUrl = msg.attachmentUrl;
-                            String fileName;
-                            final storedFileName = msg.snapshotData['file_name'];
-                            if (storedFileName is String && storedFileName.trim().isNotEmpty) {
-                              fileName = storedFileName.trim();
-                            } else if (msg.content.isNotEmpty && msg.content.contains('.') && msg.content.length < 150 && !msg.content.contains('/') && msg.content.split(' ').length < 8) {
-                              fileName = msg.content;
-                            } else {
-                              // Extract from URL and strip timestamp prefix
-                              try {
-                                final decodedPath = Uri.decodeComponent(fileUrl);
-                                final match = RegExp(r'\/([^\/\?]+)\?').firstMatch(decodedPath);
-                                String raw = '';
-                                if (match != null) {
-                                  raw = match.group(1)!;
-                                } else {
-                                  final uri = Uri.parse(fileUrl);
-                                  raw = uri.pathSegments.isNotEmpty ? uri.pathSegments.last : 'file';
-                                  if (raw.contains('/')) raw = raw.split('/').last;
-                                  if (raw.contains('?')) raw = raw.split('?').first;
-                                }
-                                raw = Uri.decodeComponent(raw);
-                                // Strip leading timestamp prefix: "1775578299259_filename.ext" → "filename.ext"
-                                final stripped = raw.replaceFirst(RegExp(r'^\d{10,}_'), '');
-                                fileName = (stripped.isNotEmpty && stripped.contains('.')) ? stripped : (raw.isNotEmpty ? raw : 'File');
-                              } catch (_) {
-                                fileName = 'File';
-                              }
-                            }
-
-                            final ext = fileName.split('.').last.toLowerCase();
-                            IconData fileIcon;
-                            Color fileIconColor;
-                            if (['pdf'].contains(ext)) { fileIcon = Icons.picture_as_pdf_rounded; fileIconColor = Color(0xFFDC2626); }
-                            else if (['doc', 'docx'].contains(ext)) { fileIcon = Icons.description_rounded; fileIconColor = Color(0xFF2563EB); }
-                            else if (['xls', 'xlsx', 'csv'].contains(ext)) { fileIcon = Icons.table_chart_rounded; fileIconColor = Color(0xFF059669); }
-                            else if (['ppt', 'pptx'].contains(ext)) { fileIcon = Icons.slideshow_rounded; fileIconColor = Color(0xFFEA580C); }
-                            else if (['zip', 'rar', '7z', 'tar', 'gz'].contains(ext)) { fileIcon = Icons.folder_zip_rounded; fileIconColor = Color(0xFF7C3AED); }
-                            else if (['env', 'txt', 'json', 'yml', 'yaml', 'md', 'js', 'dart', 'py'].contains(ext)) { fileIcon = Icons.code_rounded; fileIconColor = Color(0xFF475569); }
-                            else { fileIcon = Icons.insert_drive_file_rounded; fileIconColor = Color(0xFF6B7280); }
-
-                            return InkWell(
-                              onTap: isExpired ? null : () async {
-                                if (fileUrl.isNotEmpty) {
-                                  await qurioLaunchUrl(fileUrl);
-                                }
-                              },
-                              child: Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
-                                decoration: BoxDecoration(border: Border(bottom: BorderSide(color: Color(0xFFF3F4F6), width: 1))),
-                                child: Row(
-                                  children: [
-                                    Container(
-                                      width: 44, height: 44,
-                                      decoration: BoxDecoration(color: isExpired ? Color(0xFFF3F4F6) : fileIconColor.withOpacity(0.1), borderRadius: BorderRadius.circular(10)),
-                                      child: Center(child: Icon(fileIcon, size: 22, color: isExpired ? Color(0xFFD1D5DB) : fileIconColor)),
-                                    ),
-                                    SizedBox(width: 14),
-                                    Expanded(
-                                      child: Column(
-                                        crossAxisAlignment: CrossAxisAlignment.start,
-                                        children: [
-                                          Text(fileName, style: TextStyle(fontFamily: 'Inter', fontSize: 14, fontWeight: FontWeight.w500, color: isExpired ? Color(0xFF9CA3AF) : Color(0xFF111827), decoration: isExpired ? TextDecoration.lineThrough : null), maxLines: 1, overflow: TextOverflow.ellipsis),
-                                          SizedBox(height: 4),
-                                          Row(children: [
-                                            Icon(Icons.person_outline, size: 12, color: Color(0xFFBBBFCA)),
-                                            SizedBox(width: 4),
-                                            Text(senderName, style: TextStyle(fontFamily: 'Inter', fontSize: 12, color: Color(0xFF9CA3AF))),
-                                            SizedBox(width: 12),
-                                            Icon(Icons.access_time, size: 12, color: Color(0xFFBBBFCA)),
-                                            SizedBox(width: 4),
-                                            Text(daysAgoStr, style: TextStyle(fontFamily: 'Inter', fontSize: 12, color: Color(0xFF9CA3AF))),
-                                          ]),
-                                        ],
-                                      ),
-                                    ),
-                                    SizedBox(width: 12),
-                                    if (isExpired)
-                                      Container(
-                                        padding: EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                                        decoration: BoxDecoration(color: Color(0xFFFEF2F2), borderRadius: BorderRadius.circular(6), border: Border.all(color: Color(0xFFFECACA))),
-                                        child: Row(mainAxisSize: MainAxisSize.min, children: [
-                                          Icon(Icons.timer_off_rounded, size: 12, color: Color(0xFFEF4444)),
-                                          SizedBox(width: 4),
-                                          Text('Expired', style: TextStyle(fontFamily: 'Inter', fontSize: 11, fontWeight: FontWeight.w500, color: Color(0xFFEF4444))),
-                                        ]),
-                                      )
-                                    else
-                                      Container(
-                                        padding: EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                                        decoration: BoxDecoration(color: Color(0xFFEFF6FF), borderRadius: BorderRadius.circular(6), border: Border.all(color: Color(0xFFBFDBFE))),
-                                        child: Row(mainAxisSize: MainAxisSize.min, children: [
-                                          Icon(Icons.download_rounded, size: 14, color: Color(0xFF3B82F6)),
-                                          SizedBox(width: 4),
-                                          Text('Download', style: TextStyle(fontFamily: 'Inter', fontSize: 12, fontWeight: FontWeight.w500, color: Color(0xFF3B82F6))),
-                                        ]),
-                                      ),
-                                  ],
-                                ),
-                              ),
-                            );
-                          },
-                        ),
-                      ),
-                    ],
-                  );
-                },
-              ),
+              child: _buildGroupFilesPopupContent(chat),
             ),
           ],
         ),
@@ -5338,8 +5890,326 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
     );
   }
 
+  Widget _buildGroupFilesPopupContent(ChatsRecord chat) {
+    Widget buildBody(AsyncSnapshot<List<MessagesRecord>> snapshot) {
+      if (snapshot.connectionState == ConnectionState.waiting &&
+          !snapshot.hasData) {
+        return Padding(
+          padding: const EdgeInsets.all(60),
+          child: Center(
+            child: SizedBox(
+              width: 32,
+              height: 32,
+              child: CircularProgressIndicator(
+                strokeWidth: 2.5,
+                valueColor:
+                    AlwaysStoppedAnimation<Color>(Color(0xFF3B82F6)),
+              ),
+            ),
+          ),
+        );
+      }
 
+      final fileMessages = (snapshot.data ?? []).where((msg) {
+        if (msg.attachmentUrl.isEmpty) return false;
+        if (msg.messageType == MessageType.image ||
+            msg.messageType == MessageType.voice ||
+            msg.messageType == MessageType.video) {
+          return false;
+        }
+        if (msg.image.isNotEmpty || msg.images.isNotEmpty) return false;
+        if (msg.audio.isNotEmpty || msg.video.isNotEmpty) return false;
+        return true;
+      }).toList();
 
+      if (fileMessages.isEmpty) {
+        return Padding(
+          padding: const EdgeInsets.symmetric(vertical: 80, horizontal: 40),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.folder_open_rounded,
+                  size: 56, color: Color(0xFFD1D5DB)),
+              SizedBox(height: 16),
+              Text('No files shared yet',
+                  style: TextStyle(
+                      fontFamily: 'Inter',
+                      fontSize: 16,
+                      fontWeight: FontWeight.w500,
+                      color: Color(0xFF6B7280))),
+              SizedBox(height: 6),
+              Text('Files shared in this group will appear here.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                      fontFamily: 'Inter',
+                      fontSize: 13,
+                      color: Color(0xFF9CA3AF))),
+            ],
+          ),
+        );
+      }
+
+      return Column(
+        children: [
+          Container(
+            padding: EdgeInsets.symmetric(horizontal: 24, vertical: 10),
+            decoration: BoxDecoration(
+                border: Border(
+                    bottom: BorderSide(color: Color(0xFFF3F4F6), width: 1))),
+            child: Row(
+              children: [
+                Text(
+                    '${fileMessages.length} file${fileMessages.length == 1 ? '' : 's'}',
+                    style: TextStyle(
+                        fontFamily: 'Inter',
+                        fontSize: 12,
+                        fontWeight: FontWeight.w500,
+                        color: Color(0xFF6B7280))),
+                Spacer(),
+                Text('Sorted by newest',
+                    style: TextStyle(
+                        fontFamily: 'Inter',
+                        fontSize: 11,
+                        color: Color(0xFF9CA3AF))),
+              ],
+            ),
+          ),
+          Expanded(
+            child: ListView.builder(
+              padding: const EdgeInsets.symmetric(vertical: 4),
+              itemCount: fileMessages.length,
+              itemBuilder: (context, index) {
+                final msg = fileMessages[index];
+                final senderName =
+                    msg.senderName.isNotEmpty ? msg.senderName : 'Unknown';
+                final timestamp = msg.createdAt;
+                final daysAgo = timestamp != null
+                    ? DateTime.now().difference(timestamp).inDays
+                    : 0;
+                final daysAgoStr = daysAgo == 0
+                    ? 'Today'
+                    : (daysAgo == 1 ? 'Yesterday' : '$daysAgo days ago');
+                final isExpired = daysAgo > 30;
+
+                final fileUrl = msg.attachmentUrl;
+                String fileName;
+                final storedFileName = msg.snapshotData['file_name'];
+                if (storedFileName is String &&
+                    storedFileName.trim().isNotEmpty) {
+                  fileName = storedFileName.trim();
+                } else if (msg.content.isNotEmpty &&
+                    msg.content.contains('.') &&
+                    msg.content.length < 150 &&
+                    !msg.content.contains('/') &&
+                    msg.content.split(' ').length < 8) {
+                  fileName = msg.content;
+                } else {
+                  try {
+                    final decodedPath = Uri.decodeComponent(fileUrl);
+                    final match =
+                        RegExp(r'\/([^\/\?]+)\?').firstMatch(decodedPath);
+                    String raw = '';
+                    if (match != null) {
+                      raw = match.group(1)!;
+                    } else {
+                      final uri = Uri.parse(fileUrl);
+                      raw = uri.pathSegments.isNotEmpty
+                          ? uri.pathSegments.last
+                          : 'file';
+                      if (raw.contains('/')) raw = raw.split('/').last;
+                      if (raw.contains('?')) raw = raw.split('?').first;
+                    }
+                    raw = Uri.decodeComponent(raw);
+                    final stripped =
+                        raw.replaceFirst(RegExp(r'^\d{10,}_'), '');
+                    fileName = (stripped.isNotEmpty && stripped.contains('.'))
+                        ? stripped
+                        : (raw.isNotEmpty ? raw : 'File');
+                  } catch (_) {
+                    fileName = 'File';
+                  }
+                }
+
+                final ext = fileName.split('.').last.toLowerCase();
+                IconData fileIcon;
+                Color fileIconColor;
+                if (['pdf'].contains(ext)) {
+                  fileIcon = Icons.picture_as_pdf_rounded;
+                  fileIconColor = Color(0xFFDC2626);
+                } else if (['doc', 'docx'].contains(ext)) {
+                  fileIcon = Icons.description_rounded;
+                  fileIconColor = Color(0xFF2563EB);
+                } else if (['xls', 'xlsx', 'csv'].contains(ext)) {
+                  fileIcon = Icons.table_chart_rounded;
+                  fileIconColor = Color(0xFF059669);
+                } else if (['ppt', 'pptx'].contains(ext)) {
+                  fileIcon = Icons.slideshow_rounded;
+                  fileIconColor = Color(0xFFEA580C);
+                } else if (['zip', 'rar', '7z', 'tar', 'gz'].contains(ext)) {
+                  fileIcon = Icons.folder_zip_rounded;
+                  fileIconColor = Color(0xFF7C3AED);
+                } else if ([
+                  'env',
+                  'txt',
+                  'json',
+                  'yml',
+                  'yaml',
+                  'md',
+                  'js',
+                  'dart',
+                  'py'
+                ].contains(ext)) {
+                  fileIcon = Icons.code_rounded;
+                  fileIconColor = Color(0xFF475569);
+                } else {
+                  fileIcon = Icons.insert_drive_file_rounded;
+                  fileIconColor = Color(0xFF6B7280);
+                }
+
+                return InkWell(
+                  mouseCursor: MaterialStateMouseCursor.clickable,
+                  onTap: isExpired
+                      ? null
+                      : () async {
+                          if (fileUrl.isNotEmpty) {
+                            await qurioLaunchUrl(fileUrl);
+                          }
+                        },
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 24, vertical: 14),
+                    decoration: BoxDecoration(
+                        border: Border(
+                            bottom: BorderSide(
+                                color: Color(0xFFF3F4F6), width: 1))),
+                    child: Row(
+                      children: [
+                        Container(
+                          width: 44,
+                          height: 44,
+                          decoration: BoxDecoration(
+                              color: isExpired
+                                  ? Color(0xFFF3F4F6)
+                                  : fileIconColor.withOpacity(0.1),
+                              borderRadius: BorderRadius.circular(10)),
+                          child: Center(
+                              child: Icon(fileIcon,
+                                  size: 22,
+                                  color: isExpired
+                                      ? Color(0xFFD1D5DB)
+                                      : fileIconColor)),
+                        ),
+                        SizedBox(width: 14),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(fileName,
+                                  style: TextStyle(
+                                      fontFamily: 'Inter',
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.w500,
+                                      color: isExpired
+                                          ? Color(0xFF9CA3AF)
+                                          : Color(0xFF111827),
+                                      decoration: isExpired
+                                          ? TextDecoration.lineThrough
+                                          : null),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis),
+                              SizedBox(height: 4),
+                              Row(children: [
+                                Icon(Icons.person_outline,
+                                    size: 12, color: Color(0xFFBBBFCA)),
+                                SizedBox(width: 4),
+                                Text(senderName,
+                                    style: TextStyle(
+                                        fontFamily: 'Inter',
+                                        fontSize: 12,
+                                        color: Color(0xFF9CA3AF))),
+                                SizedBox(width: 12),
+                                Icon(Icons.access_time,
+                                    size: 12, color: Color(0xFFBBBFCA)),
+                                SizedBox(width: 4),
+                                Text(daysAgoStr,
+                                    style: TextStyle(
+                                        fontFamily: 'Inter',
+                                        fontSize: 12,
+                                        color: Color(0xFF9CA3AF))),
+                              ]),
+                            ],
+                          ),
+                        ),
+                        SizedBox(width: 12),
+                        if (isExpired)
+                          Container(
+                            padding: EdgeInsets.symmetric(
+                                horizontal: 10, vertical: 5),
+                            decoration: BoxDecoration(
+                                color: Color(0xFFFEF2F2),
+                                borderRadius: BorderRadius.circular(6),
+                                border:
+                                    Border.all(color: Color(0xFFFECACA))),
+                            child: Row(mainAxisSize: MainAxisSize.min, children: [
+                              Icon(Icons.timer_off_rounded,
+                                  size: 12, color: Color(0xFFEF4444)),
+                              SizedBox(width: 4),
+                              Text('Expired',
+                                  style: TextStyle(
+                                      fontFamily: 'Inter',
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w500,
+                                      color: Color(0xFFEF4444))),
+                            ]),
+                          )
+                        else
+                          Container(
+                            padding: EdgeInsets.symmetric(
+                                horizontal: 12, vertical: 6),
+                            decoration: BoxDecoration(
+                                color: Color(0xFFEFF6FF),
+                                borderRadius: BorderRadius.circular(6),
+                                border:
+                                    Border.all(color: Color(0xFFBFDBFE))),
+                            child: Row(mainAxisSize: MainAxisSize.min, children: [
+                              Icon(Icons.download_rounded,
+                                  size: 14, color: Color(0xFF3B82F6)),
+                              SizedBox(width: 4),
+                              Text('Download',
+                                  style: TextStyle(
+                                      fontFamily: 'Inter',
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w500,
+                                      color: Color(0xFF3B82F6))),
+                            ]),
+                          ),
+                      ],
+                    ),
+                  ),
+                );
+              },
+            ),
+          ),
+        ],
+      );
+    }
+
+    if (useWindowsFirestoreRest) {
+      return _RestPollBuilder<List<MessagesRecord>>(
+        interval: const Duration(seconds: 15),
+        fetch: () => fsQueryChatMessages(chat.reference, limit: 200),
+        builder: (context, snapshot) => buildBody(snapshot),
+      );
+    }
+
+    return StreamBuilder<List<MessagesRecord>>(
+      stream: queryMessagesRecord(
+        parent: chat.reference,
+        queryBuilder: (q) => q.orderBy('created_at', descending: true),
+      ),
+      builder: (context, snapshot) => buildBody(snapshot),
+    );
+  }
 
   Widget _buildDefaultChatView() {
     // Full search page takes priority
@@ -5350,92 +6220,9 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
     return _model.selectedChat != null
         ? Column(
             children: [
-              // Top panel with user info
               _buildChatHeader(),
-              // Live Meeting Banner (only for group chats)
-              if (_model.selectedChat!.isGroup)
-                MeetingBannerWidget(chat: _model.selectedChat!),
-              // Pinned Announcement Banner (only for group chats)
-              if (_model.selectedChat!.isGroup)
-                _buildAnnouncementBanner(_model.selectedChat!),
-              // Action Items Stats Section removed
-              // Tasks panel or Chat thread component
               Expanded(
-                child: Stack(
-                  children: [
-                    // Always show chat thread
-                    Column(
-                      children: [
-                        Expanded(
-                          child: ChatThreadComponentWidget(
-                            key: _chatThreadKey,
-                            chatReference: _model.selectedChat,
-                            activeSelectionId: ValueNotifier(null),
-                            onMessageAction: _handleDesktopMessageAction,
-                            isSelectionMode: _isSelectionMode,
-                            selectedMessages: _selectedMessages,
-                            onMessageToggled: _toggleMessageSelection,
-                          ),
-                        ),
-                        if (_isSelectionMode)
-                          _buildSelectionBar(),
-                      ],
-                    ),
-                    // Tasks panel overlay (only for group chats when toggled)
-                    if (_model.showTasksPanel && _model.selectedChat!.isGroup) ...[
-                      // Semi-transparent overlay background
-                      Positioned.fill(
-                        child: GestureDetector(
-                          onTap: () {
-                            setState(() {
-                              _model.showTasksPanel = false;
-                            });
-                          },
-                          child: Container(
-                            color: Colors.black.withOpacity(0.3),
-                          ),
-                        ),
-                      ),
-                      // Tasks panel on the right
-                      Positioned(
-                        right: 0,
-                        top: 0,
-                        bottom: 0,
-                        child: Container(
-                          width: MediaQuery.of(context).size.width * 0.4,
-                          constraints: BoxConstraints(
-                            minWidth: 300,
-                            maxWidth: 500,
-                          ),
-                          decoration: BoxDecoration(
-                            color: FlutterFlowTheme.of(context)
-                                .secondaryBackground,
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors.black.withOpacity(0.2),
-                                blurRadius: 10,
-                                offset: Offset(-2, 0),
-                              ),
-                            ],
-                          ),
-                          child: GroupActionTasksWidget(
-                            chatDoc: _model.selectedChat,
-                            onClose: () {
-                              setState(() {
-                                _model.showTasksPanel = false;
-                              });
-                            },
-                          ),
-                        ).animate().slideX(
-                              begin: 1.0,
-                              end: 0.0,
-                              duration: Duration(milliseconds: 300),
-                              curve: Curves.easeOut,
-                            ),
-                      ),
-                    ],
-                  ],
-                ),
+                child: _buildChatTabBody(_model.selectedChat!),
               ),
             ],
           )
@@ -5443,116 +6230,24 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    // Gradient circle backdrop with chat icon
-                    Container(
-                      width: 120,
-                      height: 120,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        gradient: LinearGradient(
-                          begin: Alignment.topLeft,
-                          end: Alignment.bottomRight,
-                          colors: [
-                            Color(0xFFE0E7FF).withOpacity(0.6),
-                            Color(0xFFEDE9FE).withOpacity(0.6),
-                            Color(0xFFF0F4FF).withOpacity(0.4),
-                          ],
-                        ),
-                      ),
-                      child: Stack(
-                        alignment: Alignment.center,
-                        children: [
-                          // Overlapping chat bubbles
-                          Icon(
-                            Icons.forum_rounded,
-                            color: Color(0xFF94A3B8),
-                            size: 48,
-                          ),
-                          // Sparkle accent
-                          Positioned(
-                            top: 24,
-                            right: 24,
-                            child: Icon(
-                              Icons.auto_awesome,
-                              color: Color(0xFFA78BFA),
-                              size: 18,
-                            ),
-                          ),
-                        ],
-                      ),
+                    Icon(
+                      Icons.chat_bubble_outline,
+                      color: Color(0xFF9CA3AF),
+                      size: 64,
                     ),
-                    SizedBox(height: 24),
-                    // Title
+                    SizedBox(height: 16),
                     Text(
-                      'Start a conversation',
+                      'Select a chat to start messaging',
                       style: TextStyle(
                         fontFamily: 'Inter',
-                        color: Color(0xFF374151),
-                        fontSize: 20,
-                        fontWeight: FontWeight.w600,
-                        letterSpacing: -0.3,
+                        color: Color(0xFF6B7280),
+                        fontSize: 18,
+                        fontWeight: FontWeight.w500,
                       ),
-                    ),
-                    SizedBox(height: 8),
-                    // Subtitle
-                    Text(
-                      'Choose a chat from the sidebar to begin messaging',
-                      style: TextStyle(
-                        fontFamily: 'Inter',
-                        color: Color(0xFF9CA3AF),
-                        fontSize: 14,
-                        fontWeight: FontWeight.w400,
-                      ),
-                    ),
-                    SizedBox(height: 24),
-                    // Keyboard shortcut tips
-                    Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        _buildShortcutPill('⌘N', 'New Message'),
-                        SizedBox(width: 8),
-                        _buildShortcutPill('⌘K', 'Search'),
-                      ],
                     ),
                   ],
                 ),
               );
-  }
-
-  Widget _buildShortcutPill(String shortcut, String label) {
-    return Container(
-      padding: EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-      decoration: BoxDecoration(
-        color: Color(0xFFF1F5F9),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: Color(0xFFE2E8F0), width: 0.5),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text(
-            shortcut,
-            style: TextStyle(
-              fontFamily: 'Inter',
-              fontSize: 11,
-              fontWeight: FontWeight.w600,
-              color: Color(0xFF94A3B8),
-              letterSpacing: 0.3,
-            ),
-          ),
-          SizedBox(width: 6),
-          Text(
-            label,
-            style: TextStyle(
-              fontFamily: 'Inter',
-              fontSize: 12,
-              fontWeight: FontWeight.w400,
-              color: Color(0xFF94A3B8),
-            ),
-          ),
-        ],
-      ),
-    );
   }
 
   Widget _buildRightSidePanel(Widget content, VoidCallback onClose,
@@ -5592,188 +6287,142 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
 
     return Container(
       width: double.infinity,
-      padding: EdgeInsetsDirectional.fromSTEB(20, 16, 20, 16),
+      padding: const EdgeInsetsDirectional.fromSTEB(20, 16, 20, 0),
       decoration: BoxDecoration(
         color: Color.fromRGBO(250, 252, 255, 1), // Match left sidebar color
-        border: Border(
-          bottom: BorderSide(
-            color: Color(0xFFE5E7EB),
-            width: 1,
-          ),
-        ),
       ),
-      child: Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
         children: [
-          // User avatar
-          _buildHeaderAvatar(chat),
-          SizedBox(width: 12),
-          // User info
-          Expanded(
-            child: _buildHeaderName(chat),
-          ),
-          // Google Meet icon
-          if (chat.isGroup)
-            Tooltip(
-              message: chat.hasActiveMeeting
-                  ? 'Join active meeting'
-                  : 'Start a Google Meet',
-              child: InkWell(
-                onTap: () async {
-                  if (chat.hasActiveMeeting) {
-                    // Join existing meeting
-                    await MeetingService.joinMeeting(chatRef: chat.reference);
-                    await qurioLaunchUrl(chat.activeMeetingUrl);
-                  } else {
-                    // Try one-click first (uses Qurio token or Firebase popup)
-                    final meetUrl = await GoogleMeetCreator.createInstantMeeting(
-                      chatTitle: chat.title.isNotEmpty ? chat.title : 'Quick Meeting',
+          _buildChatHeaderMainRow(chat),
+          _buildChatHeaderTabs(chat),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildChatHeaderMainRow(ChatsRecord chat) {
+    return Row(
+      children: [
+        // User avatar
+        _buildHeaderAvatar(chat),
+        SizedBox(width: 12),
+        // User info
+        Expanded(
+          child: _buildHeaderName(chat),
+        ),
+        if (chat.isGroup) _buildGroupMembersHeaderButton(chat),
+        _buildChatSearchHeaderButton(),
+        // Google Meet icon
+        if (chat.isGroup)
+          Tooltip(
+            message: chat.hasActiveMeeting
+                ? 'Join active meeting'
+                : 'Start a Google Meet',
+            child: InkWell(
+              mouseCursor: MaterialStateMouseCursor.clickable,
+              onTap: () async {
+                if (chat.hasActiveMeeting) {
+                  // Join existing meeting
+                  await MeetingService.joinMeeting(chatRef: chat.reference);
+                  await qurioLaunchUrl(chat.activeMeetingUrl);
+                } else {
+                  // Try one-click first (uses Qurio token or Firebase popup)
+                  final meetUrl = await GoogleMeetCreator.createInstantMeeting(
+                    chatTitle: chat.title.isNotEmpty ? chat.title : 'Quick Meeting',
+                  );
+                  if (meetUrl != null) {
+                    await MeetingService.startMeeting(
+                      chatRef: chat.reference,
+                      meetUrl: meetUrl,
+                      starterName: currentUserDocument?.displayName,
                     );
-                    if (meetUrl != null) {
+                    await qurioLaunchUrl(meetUrl);
+                  } else {
+                    // Fallback: dialog for manual link
+                    final manualUrl = await _showStartMeetingDialog();
+                    if (manualUrl != null && manualUrl.isNotEmpty) {
                       await MeetingService.startMeeting(
                         chatRef: chat.reference,
-                        meetUrl: meetUrl,
+                        meetUrl: manualUrl,
                         starterName: currentUserDocument?.displayName,
                       );
-                      await qurioLaunchUrl(meetUrl);
-                    } else {
-                      // Fallback: dialog for manual link
-                      final manualUrl = await _showStartMeetingDialog();
-                      if (manualUrl != null && manualUrl.isNotEmpty) {
-                        await MeetingService.startMeeting(
-                          chatRef: chat.reference,
-                          meetUrl: manualUrl,
-                          starterName: currentUserDocument?.displayName,
-                        );
-                        await qurioLaunchUrl(manualUrl);
-                      }
+                      await qurioLaunchUrl(manualUrl);
                     }
                   }
-                },
-                borderRadius: BorderRadius.circular(8),
-                child: Padding(
-                  padding: EdgeInsetsDirectional.fromSTEB(0, 0, 12, 0),
-                  child: Image.asset(
-                    'assets/images/gmeet.png',
-                    width: 28,
-                    height: 28,
-                    fit: BoxFit.contain,
-                  ),
+                }
+              },
+              borderRadius: BorderRadius.circular(8),
+              child: Padding(
+                padding: EdgeInsetsDirectional.fromSTEB(0, 0, 12, 0),
+                child: Image.asset(
+                  'assets/images/gmeet.png',
+                  width: 28,
+                  height: 28,
+                  fit: BoxFit.contain,
                 ),
               ),
             ),
-          // Audio/Video call icons removed for macOS (Zego not supported)
-          // Call icons will show on iOS, Android, and Web builds
+          ),
+        // Audio/Video call icons removed for macOS (Zego not supported)
+        // Call icons will show on iOS, Android, and Web builds
 
-          // More options button - dropdown menu for group chats
-          chat.isGroup
-              ? PopupMenuButton<String>(
-                  onSelected: (String value) {
-                    if (value == 'search') {
-                      setState(() {
-                        _model.showChatHistoryPanel = true;
-                        _model.showGroupCreation = false;
-                        _model.showNewMessageView = false;
-                        _model.showGroupInfoPanel = false;
-                        _model.groupInfoChat = null;
-                        _model.showUserProfilePanel = false;
-                        _model.userProfileUser = null;
-                      });
-                    } else if (value == 'add_members') {
-                      _navigateToAddMembers(chat);
-                    } else if (value == 'media') {
-                      _navigateToMedia(chat);
-                    } else if (value == 'tasks') {
-                      _navigateToTasks(chat);
-                    } else if (value == 'group_info') {
-                      _viewGroupChat(chat);
-                    } else if (value == 'meeting_transcripts') {
-                      setState(() {
-                        _model.showMeetingTranscriptsPopup = true;
-                        _model.meetingTranscriptsPopupChat = chat;
-                      });
-                    } else if (value == 'announcements') {
-                      setState(() {
-                        _model.showAnnouncementsPanel = true;
-                        _model.showGroupCreation = false;
-                        _model.showNewMessageView = false;
-                        _model.showGroupInfoPanel = false;
-                        _model.groupInfoChat = null;
-                        _model.showUserProfilePanel = false;
-                        _model.userProfileUser = null;
-                        _model.showChatHistoryPanel = false;
-                      });
-                    } else if (value == 'pinned_messages') {
-                      setState(() {
-                        _model.showPinnedMessagesPopup = true;
-                        _model.pinnedMessagesPopupChat = chat;
-                      });
-                    } else if (value == 'group_files') {
-                      setState(() {
-                        _model.showGroupFilesPopup = true;
-                        _model.groupFilesPopupChat = chat;
-                      });
-                    }
-                  },
-                  itemBuilder: (BuildContext context) {
-                    // Group chat options
-                    return <PopupMenuEntry<String>>[
-                      PopupMenuItem<String>(
-                        value: 'search',
-                        child: Row(
-                          children: [
-                            Icon(
-                              Icons.search_rounded,
-                              color: Color(0xFF374151),
-                              size: 18,
-                            ),
-                            SizedBox(width: 12),
-                            Text(
-                              'Search in chat',
-                              style: TextStyle(
-                                fontFamily: 'Inter',
-                                color: Color(0xFF111827),
-                                fontSize: 14,
-                                fontWeight: FontWeight.w500,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      if (ChatHelpers.isGroupAdmin(chat, currentUserReference))
-                        PopupMenuItem<String>(
-                          value: 'add_members',
-                          child: Row(
-                            children: [
-                              Icon(
-                                Icons.person_add,
-                                color: Color(0xFF374151),
-                                size: 18,
-                              ),
-                              SizedBox(width: 12),
-                              Text(
-                                'Add Members',
-                                style: TextStyle(
-                                  fontFamily: 'Inter',
-                                  color: Color(0xFF111827),
-                                  fontSize: 14,
-                                  fontWeight: FontWeight.w500,
-                                ),
-                              ),
-                            ],
+        // More options button - dropdown menu for group chats
+        chat.isGroup
+            ? PopupMenuButton<String>(
+                onSelected: (String value) {
+                  if (value == 'search') {
+                    _openChatSearchPanel();
+                  } else if (value == 'add_members') {
+                    _navigateToAddMembers(chat);
+                  } else if (value == 'group_info') {
+                    _viewGroupChat(chat);
+                  } else if (value == 'meeting_transcripts') {
+                    setState(() {
+                      _model.showMeetingTranscriptsPopup = true;
+                      _model.meetingTranscriptsPopupChat = chat;
+                    });
+                  }
+                },
+                itemBuilder: (BuildContext context) {
+                  // Group chat options
+                  return <PopupMenuEntry<String>>[
+                    PopupMenuItem<String>(
+                      value: 'search',
+                      child: Row(
+                        children: [
+                          Icon(
+                            Icons.search_rounded,
+                            color: Color(0xFF374151),
+                            size: 18,
                           ),
-                        ),
+                          SizedBox(width: 12),
+                          Text(
+                            'Search in chat',
+                            style: TextStyle(
+                              fontFamily: 'Inter',
+                              color: Color(0xFF111827),
+                              fontSize: 14,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    if (ChatHelpers.isGroupAdmin(chat, currentUserReference))
                       PopupMenuItem<String>(
-                        value: 'media',
+                        value: 'add_members',
                         child: Row(
                           children: [
                             Icon(
-                              Icons.photo_library,
+                              Icons.person_add,
                               color: Color(0xFF374151),
                               size: 18,
                             ),
                             SizedBox(width: 12),
                             Text(
-                              'Media',
+                              'Add Members',
                               style: TextStyle(
                                 fontFamily: 'Inter',
                                 color: Color(0xFF111827),
@@ -5784,165 +6433,69 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
                           ],
                         ),
                       ),
-                      PopupMenuItem<String>(
-                        value: 'tasks',
-                        child: Row(
-                          children: [
-                            Icon(
-                              Icons.checklist,
-                              color: Color(0xFF374151),
-                              size: 18,
+                    PopupMenuDivider(),
+                    PopupMenuItem<String>(
+                      value: 'meeting_transcripts',
+                      child: Row(
+                        children: [
+                          Icon(
+                            Icons.description_outlined,
+                            color: Color(0xFF374151),
+                            size: 18,
+                          ),
+                          SizedBox(width: 12),
+                          Text(
+                            'Meeting Transcripts',
+                            style: TextStyle(
+                              fontFamily: 'Inter',
+                              color: Color(0xFF111827),
+                              fontSize: 14,
+                              fontWeight: FontWeight.w500,
                             ),
-                            SizedBox(width: 12),
-                            Text(
-                              'Tasks',
-                              style: TextStyle(
-                                fontFamily: 'Inter',
-                                color: Color(0xFF111827),
-                                fontSize: 14,
-                                fontWeight: FontWeight.w500,
-                              ),
-                            ),
-                          ],
-                        ),
+                          ),
+                        ],
                       ),
-                      PopupMenuItem<String>(
-                        value: 'announcements',
-                        child: Row(
-                          children: [
-                            Icon(
-                              Icons.campaign_rounded,
-                              color: Color(0xFF374151),
-                              size: 18,
+                    ),
+                    PopupMenuItem<String>(
+                      value: 'group_info',
+                      child: Row(
+                        children: [
+                          Icon(
+                            Icons.info_outline,
+                            color: Color(0xFF374151),
+                            size: 18,
+                          ),
+                          SizedBox(width: 12),
+                          Text(
+                            'Group Info',
+                            style: TextStyle(
+                              fontFamily: 'Inter',
+                              color: Color(0xFF111827),
+                              fontSize: 14,
+                              fontWeight: FontWeight.w500,
                             ),
-                            SizedBox(width: 12),
-                            Text(
-                              'Announcements',
-                              style: TextStyle(
-                                fontFamily: 'Inter',
-                                color: Color(0xFF111827),
-                                fontSize: 14,
-                                fontWeight: FontWeight.w500,
-                              ),
-                            ),
-                          ],
-                        ),
+                          ),
+                        ],
                       ),
-                      PopupMenuItem<String>(
-                        value: 'pinned_messages',
-                        child: Row(
-                          children: [
-                            Icon(
-                              Icons.push_pin_outlined,
-                              color: Color(0xFF374151),
-                              size: 18,
-                            ),
-                            SizedBox(width: 12),
-                            Text(
-                              'Pinned Messages',
-                              style: TextStyle(
-                                fontFamily: 'Inter',
-                                color: Color(0xFF111827),
-                                fontSize: 14,
-                                fontWeight: FontWeight.w500,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      PopupMenuItem<String>(
-                        value: 'group_files',
-                        child: Row(
-                          children: [
-                            Icon(
-                              Icons.folder_outlined,
-                              color: Color(0xFF374151),
-                              size: 18,
-                            ),
-                            SizedBox(width: 12),
-                            Text(
-                              'Group Files',
-                              style: TextStyle(
-                                fontFamily: 'Inter',
-                                color: Color(0xFF111827),
-                                fontSize: 14,
-                                fontWeight: FontWeight.w500,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      PopupMenuDivider(),
-                      PopupMenuItem<String>(
-                        value: 'meeting_transcripts',
-                        child: Row(
-                          children: [
-                            Icon(
-                              Icons.description_outlined,
-                              color: Color(0xFF374151),
-                              size: 18,
-                            ),
-                            SizedBox(width: 12),
-                            Text(
-                              'Meeting Transcripts',
-                              style: TextStyle(
-                                fontFamily: 'Inter',
-                                color: Color(0xFF111827),
-                                fontSize: 14,
-                                fontWeight: FontWeight.w500,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      PopupMenuItem<String>(
-                        value: 'group_info',
-                        child: Row(
-                          children: [
-                            Icon(
-                              Icons.info_outline,
-                              color: Color(0xFF374151),
-                              size: 18,
-                            ),
-                            SizedBox(width: 12),
-                            Text(
-                              'Group Info',
-                              style: TextStyle(
-                                fontFamily: 'Inter',
-                                color: Color(0xFF111827),
-                                fontSize: 14,
-                                fontWeight: FontWeight.w500,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ];
-                  },
-                  icon: Icon(
-                    Icons.more_vert,
-                    color: Color(0xFF9CA3AF),
-                    size: 20,
-                  ),
-                  tooltip: 'More options',
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  color: Colors.white,
-                  elevation: 8,
-                )
-              : PopupMenuButton<String>(
+                    ),
+                  ];
+                },
+                icon: Icon(
+                  Icons.more_vert,
+                  color: Color(0xFF9CA3AF),
+                  size: 20,
+                ),
+                tooltip: 'More options',
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                color: Colors.white,
+                elevation: 8,
+              )
+            : PopupMenuButton<String>(
                   onSelected: (String value) {
                     if (value == 'search') {
-                      setState(() {
-                        _model.showChatHistoryPanel = true;
-                        _model.showGroupCreation = false;
-                        _model.showNewMessageView = false;
-                        _model.showGroupInfoPanel = false;
-                        _model.groupInfoChat = null;
-                        _model.showUserProfilePanel = false;
-                        _model.userProfileUser = null;
-                      });
+                      _openChatSearchPanel();
                     } else if (value == 'profile') {
                       _viewUserProfile(chat);
                     } else if (value == 'block_toggle') {
@@ -6046,8 +6599,7 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
                     borderRadius: BorderRadius.circular(8),
                   ),
                 ),
-        ],
-      ),
+      ],
     );
   }
 
@@ -6061,8 +6613,7 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
     final path = _normalizeActionItemPath(actionItemRefPath);
     try {
       final ref = FirebaseFirestore.instance.doc(path);
-      final snap = await ref.get();
-      if (!snap.exists) {
+      if (!await fsDocumentExists(ref)) {
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -6079,10 +6630,7 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
         );
         return;
       }
-      await ref.update({
-        'status': 'completed',
-        'completed_time': FieldValue.serverTimestamp(),
-      });
+      await fsMarkActionItemDone(ref);
     } on FirebaseException catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -6110,8 +6658,7 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
     final path = _normalizeActionItemPath(actionItemRefPath);
     try {
       final ref = FirebaseFirestore.instance.doc(path);
-      final snap = await ref.get();
-      if (!snap.exists) {
+      if (!await fsDocumentExists(ref)) {
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -6121,9 +6668,7 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
         );
         return;
       }
-      await ref.update({
-        'last_reminder_at': FieldValue.delete(),
-      });
+      await fsDeleteDocumentField(ref, 'last_reminder_at');
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -6156,14 +6701,44 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
   }
 
   Widget _buildActionItemsStats(ChatsRecord chat) {
-    return StreamBuilder<List<ActionItemsRecord>>(
-      stream: queryActionItemsRecord(
-        queryBuilder: (actionItemsRecord) => actionItemsRecord.where(
-          'chat_ref',
-          isEqualTo: chat.reference,
-        ),
+    if (useWindowsFirestoreRest) {
+      return _RestPollBuilder<List<ActionItemsRecord>>(
+        interval: const Duration(seconds: 20),
+        fetch: () => fsQueryActionItemsByChat(chat.reference),
+        builder: (context, snapshot) =>
+            _buildActionItemsStatsBody(context, chat, snapshot),
+      );
+    }
+
+    final stream = queryActionItemsRecord(
+      queryBuilder: (actionItemsRecord) => actionItemsRecord.where(
+        'chat_ref',
+        isEqualTo: chat.reference,
       ),
-      builder: (context, snapshot) {
+    );
+
+    if (!kIsWeb && (Platform.isWindows || Platform.isLinux)) {
+      return _DeferredFirestoreStream<List<ActionItemsRecord>>(
+        delay: const Duration(milliseconds: 1200),
+        stream: stream,
+        placeholder: const SizedBox.shrink(),
+        builder: (context, snapshot) =>
+            _buildActionItemsStatsBody(context, chat, snapshot),
+      );
+    }
+
+    return StreamBuilder<List<ActionItemsRecord>>(
+      stream: stream,
+      builder: (context, snapshot) =>
+          _buildActionItemsStatsBody(context, chat, snapshot),
+    );
+  }
+
+  Widget _buildActionItemsStatsBody(
+    BuildContext context,
+    ChatsRecord chat,
+    AsyncSnapshot<List<ActionItemsRecord>> snapshot,
+  ) {
         if (!snapshot.hasData) {
           return SizedBox.shrink();
         }
@@ -6256,6 +6831,7 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
                       ),
                       SizedBox(width: 8),
                       InkWell(
+                        mouseCursor: MaterialStateMouseCursor.clickable,
                         onTap: () {
                           setState(() {
                             _model.isActionItemsExpanded =
@@ -6431,8 +7007,6 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
             ],
           ),
         );
-      },
-    );
   }
 
   /// Show a dialog to start a new meeting.
@@ -6472,6 +7046,7 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
             const SizedBox(height: 16),
             // Quick create button
             InkWell(
+              mouseCursor: MaterialStateMouseCursor.clickable,
               onTap: () async {
                 // Open meet.google.com/new in browser, user copies the link
                 await qurioLaunchUrl('https://meet.google.com/new');
@@ -6598,6 +7173,161 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
 
   /// Announcement banner — shows the latest pinned announcement below the chat header.
   Widget _buildAnnouncementBanner(ChatsRecord chat) {
+    Widget buildBanner(List<AnnouncementsRecord> items, {Object? error}) {
+      if (error != null) {
+        debugLog('❌ [AnnouncementBanner] Stream error: $error');
+        return const SizedBox.shrink();
+      }
+      if (items.isEmpty) {
+        return const SizedBox.shrink();
+      }
+
+      final ann = items.first;
+      final isConfirmed = currentUserReference != null &&
+          ann.confirmedBy.contains(currentUserReference);
+
+      // Hide banner once the user has confirmed
+      if (isConfirmed) return const SizedBox.shrink();
+
+      final memberCount = chat.members.length;
+      final confirmedCount = ann.confirmedBy.length;
+
+      return GestureDetector(
+        onTap: () => _selectGroupChatTab(GroupChatTab.announcements),
+        child: Container(
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              colors: [
+                const Color(0xFF3B82F6).withOpacity(0.08),
+                const Color(0xFF3B82F6).withOpacity(0.04),
+              ],
+            ),
+            border: const Border(
+              bottom: BorderSide(
+                color: Color(0xFFE5E7EB),
+                width: 1,
+              ),
+            ),
+          ),
+          child: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(4),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF3B82F6).withOpacity(0.15),
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: const Icon(Icons.campaign_rounded,
+                    color: Color(0xFF3B82F6), size: 16),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      ann.content.length > 80
+                          ? '${ann.content.substring(0, 80)}...'
+                          : ann.content,
+                      style: const TextStyle(
+                        fontFamily: 'Inter',
+                        color: Color(0xFF1E40AF),
+                        fontSize: 12.5,
+                        fontWeight: FontWeight.w500,
+                        height: 1.3,
+                      ),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      '$confirmedCount/$memberCount confirmed',
+                      style: TextStyle(
+                        fontFamily: 'Inter',
+                        color: const Color(0xFF6B7280),
+                        fontSize: 11,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              if (!isConfirmed)
+                InkWell(
+                  mouseCursor: MaterialStateMouseCursor.clickable,
+                  onTap: () async {
+                    if (currentUserReference == null) return;
+                    await fsArrayUnion(
+                      ann.reference,
+                      'confirmed_by',
+                      [currentUserReference],
+                    );
+                  },
+                  borderRadius: BorderRadius.circular(6),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 10, vertical: 5),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF3B82F6),
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: const Text(
+                      'Confirm',
+                      style: TextStyle(
+                        fontFamily: 'Inter',
+                        color: Colors.white,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ),
+                )
+              else
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF10B981).withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: const Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.check_circle,
+                          color: Color(0xFF10B981), size: 13),
+                      SizedBox(width: 3),
+                      Text(
+                        'Confirmed',
+                        style: TextStyle(
+                          fontFamily: 'Inter',
+                          color: Color(0xFF10B981),
+                          fontSize: 11,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              const SizedBox(width: 6),
+              const Icon(Icons.chevron_right,
+                  color: Color(0xFF9CA3AF), size: 18),
+            ],
+          ),
+        ),
+      ).withClickCursor().withClickCursor();
+    }
+
+    if (useWindowsFirestoreRest) {
+      return _RestPollBuilder<List<AnnouncementsRecord>>(
+        interval: const Duration(seconds: 15),
+        fetch: () => fsQueryPinnedAnnouncements(chat.reference),
+        builder: (context, snapshot) =>
+            buildBanner(snapshot.data ?? [], error: snapshot.error),
+      );
+    }
+
     return StreamBuilder<List<AnnouncementsRecord>>(
       stream: queryAnnouncementsRecord(
         parent: chat.reference,
@@ -6607,157 +7337,9 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
       ),
       builder: (context, snapshot) {
         if (snapshot.hasError) {
-          print('❌ [AnnouncementBanner] Stream error: ${snapshot.error}');
-          return const SizedBox.shrink();
+          return buildBanner([], error: snapshot.error);
         }
-        if (!snapshot.hasData || snapshot.data!.isEmpty) {
-          return const SizedBox.shrink();
-        }
-
-        final ann = snapshot.data!.first;
-        final isConfirmed = currentUserReference != null &&
-            ann.confirmedBy.contains(currentUserReference);
-
-        // Hide banner once the user has confirmed
-        if (isConfirmed) return const SizedBox.shrink();
-
-        final memberCount = chat.members.length;
-        final confirmedCount = ann.confirmedBy.length;
-
-        return GestureDetector(
-          onTap: () {
-            setState(() {
-              _model.showAnnouncementsPanel = true;
-              _model.showGroupCreation = false;
-              _model.showNewMessageView = false;
-              _model.showGroupInfoPanel = false;
-              _model.groupInfoChat = null;
-              _model.showUserProfilePanel = false;
-              _model.userProfileUser = null;
-              _model.showChatHistoryPanel = false;
-            });
-          },
-          child: Container(
-            width: double.infinity,
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                colors: [
-                  const Color(0xFF3B82F6).withOpacity(0.08),
-                  const Color(0xFF3B82F6).withOpacity(0.04),
-                ],
-              ),
-              border: const Border(
-                bottom: BorderSide(
-                  color: Color(0xFFE5E7EB),
-                  width: 1,
-                ),
-              ),
-            ),
-            child: Row(
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(4),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF3B82F6).withOpacity(0.15),
-                    borderRadius: BorderRadius.circular(6),
-                  ),
-                  child: const Icon(Icons.campaign_rounded,
-                      color: Color(0xFF3B82F6), size: 16),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        ann.content.length > 80
-                            ? '${ann.content.substring(0, 80)}...'
-                            : ann.content,
-                        style: const TextStyle(
-                          fontFamily: 'Inter',
-                          color: Color(0xFF1E40AF),
-                          fontSize: 12.5,
-                          fontWeight: FontWeight.w500,
-                          height: 1.3,
-                        ),
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      const SizedBox(height: 3),
-                      Text(
-                        '$confirmedCount/$memberCount confirmed',
-                        style: TextStyle(
-                          fontFamily: 'Inter',
-                          color: const Color(0xFF6B7280),
-                          fontSize: 11,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(width: 8),
-                if (!isConfirmed)
-                  InkWell(
-                    onTap: () async {
-                      if (currentUserReference == null) return;
-                      await ann.reference.update({
-                        'confirmed_by':
-                            FieldValue.arrayUnion([currentUserReference]),
-                      });
-                    },
-                    borderRadius: BorderRadius.circular(6),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 10, vertical: 5),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFF3B82F6),
-                        borderRadius: BorderRadius.circular(6),
-                      ),
-                      child: const Text(
-                        'Confirm',
-                        style: TextStyle(
-                          fontFamily: 'Inter',
-                          color: Colors.white,
-                          fontSize: 11,
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-                    ),
-                  )
-                else
-                  Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF10B981).withOpacity(0.1),
-                      borderRadius: BorderRadius.circular(6),
-                    ),
-                    child: const Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(Icons.check_circle,
-                            color: Color(0xFF10B981), size: 13),
-                        SizedBox(width: 3),
-                        Text(
-                          'Confirmed',
-                          style: TextStyle(
-                            fontFamily: 'Inter',
-                            color: Color(0xFF10B981),
-                            fontSize: 11,
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                const SizedBox(width: 6),
-                const Icon(Icons.chevron_right,
-                    color: Color(0xFF9CA3AF), size: 18),
-              ],
-            ),
-          ),
-        );
+        return buildBanner(snapshot.data ?? []);
       },
     );
   }
@@ -6820,9 +7402,10 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
         orElse: () => chat.members.first,
       );
 
-      return StreamBuilder<UsersRecord>(
-        stream: UsersRecord.getDocument(otherUserRef),
-        builder: (context, userSnapshot) {
+      return DesktopSafeUserBuilder(
+        userRef: otherUserRef,
+        fetchOnce: _getOrCreateUserFuture,
+        builder: (context, user) {
           String imageUrl = '';
           bool isOnline = false;
 
@@ -6830,12 +7413,13 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
           if (otherUserRef.path.contains('ai_agent_summerai')) {
             imageUrl =
                 'https://firebasestorage.googleapis.com/v0/b/linkedup-c3e29.firebasestorage.app/o/asset%2Fsoftware-agent.png?alt=media&token=99761584-999d-4f8e-b3d1-f9d1baf86120';
-          } else if (userSnapshot.hasData && userSnapshot.data != null) {
-            imageUrl = userSnapshot.data?.photoUrl ?? '';
-            isOnline = userSnapshot.data?.isOnline ?? false;
+          } else if (user != null) {
+            imageUrl = user.photoUrl;
+            isOnline = user.isOnline;
           }
 
           return InkWell(
+            mouseCursor: MaterialStateMouseCursor.clickable,
             onTap: () {
               if (!otherUserRef.path.contains('ai_agent_summerai')) {
                 context.pushNamed(
@@ -6938,16 +7522,45 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
 
   Widget _buildHeaderName(ChatsRecord chat) {
     if (chat.isGroup) {
-      return Text(
-        chat.title.isNotEmpty ? chat.title : 'Group Chat',
-        style: TextStyle(
-          fontFamily: 'Inter',
-          color: Color(0xFF1F2937),
-          fontSize: 16,
-          fontWeight: FontWeight.w600,
-        ),
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
+      final title = chat.title.isNotEmpty ? chat.title : 'Group Chat';
+      final canRename =
+          ChatHelpers.isGroupOwner(chat, currentUserReference);
+
+      return Row(
+        children: [
+          Flexible(
+            child: Text(
+              title,
+              style: TextStyle(
+                fontFamily: 'Inter',
+                color: Color(0xFF1F2937),
+                fontSize: 16,
+                fontWeight: FontWeight.w600,
+              ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+          if (canRename) ...[
+            const SizedBox(width: 6),
+            Tooltip(
+              message: 'Rename group',
+              child: InkWell(
+                mouseCursor: MaterialStateMouseCursor.clickable,
+                onTap: () => _showRenameGroupChatDialog(chat),
+                borderRadius: BorderRadius.circular(6),
+                child: Padding(
+                  padding: const EdgeInsets.all(4),
+                  child: Icon(
+                    Icons.edit_outlined,
+                    size: 16,
+                    color: Color(0xFF9CA3AF),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ],
       );
     } else {
       // For direct chats, get the other user's name
@@ -6958,6 +7571,23 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
 
       // Use cached name when available
       final cachedName = chatController.getCachedDisplayName(otherUserRef.id);
+      if (windowsChatListSkipUserFetch) {
+        return Text(
+          windowsChatDmListLabel(
+            otherUserRef: otherUserRef,
+            cachedName: cachedName,
+          ),
+          style: TextStyle(
+            fontFamily: 'Inter',
+            color: Color(0xFF1F2937),
+            fontSize: 16,
+            fontWeight: FontWeight.w600,
+          ),
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+        );
+      }
+
       if (cachedName != null && cachedName.isNotEmpty) {
         return Text(
           cachedName,
@@ -7006,6 +7636,636 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
     }
   }
 
+  void _openChatSearchPanel() {
+    setState(() {
+      _model.showChatHistoryPanel = true;
+      _model.showGroupCreation = false;
+      _model.showGroupInfoPanel = false;
+      _model.groupInfoChat = null;
+      _model.showUserProfilePanel = false;
+      _model.userProfileUser = null;
+    });
+  }
+
+  Widget _buildChatSearchHeaderButton() {
+    return Tooltip(
+      message: 'Search in chat',
+      child: InkWell(
+        mouseCursor: MaterialStateMouseCursor.clickable,
+        onTap: _openChatSearchPanel,
+        borderRadius: BorderRadius.circular(8),
+        child: Padding(
+          padding: EdgeInsetsDirectional.fromSTEB(0, 0, 12, 0),
+          child: Icon(
+            Icons.search_rounded,
+            color: Color(0xFF6B7280),
+            size: 22,
+          ),
+        ),
+      ),
+    );
+  }
+
+  List<DocumentReference> _sortGroupMembers(ChatsRecord chat) {
+    final sortedMembers = List<DocumentReference>.from(chat.members);
+    sortedMembers.sort((a, b) {
+      if (a == chat.admin) return -1;
+      if (b == chat.admin) return 1;
+      if (a == chat.createdBy) return -1;
+      if (b == chat.createdBy) return 1;
+      return 0;
+    });
+    return sortedMembers;
+  }
+
+  Widget _buildGroupMembersHeaderButton(ChatsRecord chat) {
+    final members = chat.members;
+    final displayCount = members.length > 3 ? 3 : members.length;
+    const double avatarSize = 24.0;
+    const double spacing = 14.0;
+    final double stackWidth =
+        displayCount > 0 ? avatarSize + (displayCount - 1) * spacing : 0;
+    final remaining = members.length - displayCount;
+
+    return Tooltip(
+      message: '${members.length} members',
+      child: InkWell(
+        mouseCursor: MaterialStateMouseCursor.clickable,
+        onTap: () => _showGroupMembersDialog(chat),
+        borderRadius: BorderRadius.circular(8),
+        child: Padding(
+          padding: EdgeInsetsDirectional.fromSTEB(0, 0, 12, 0),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (members.isEmpty)
+                Icon(
+                  Icons.people_outline_rounded,
+                  size: 22,
+                  color: Color(0xFF6B7280),
+                )
+              else ...[
+                SizedBox(
+                  width: stackWidth + (remaining > 0 ? 18 : 0),
+                  height: avatarSize,
+                  child: Stack(
+                    clipBehavior: Clip.none,
+                    children: [
+                      for (int i = 0; i < displayCount; i++)
+                        Positioned(
+                          left: i * spacing,
+                          child: _buildMemberAvatarChip(
+                            members[i],
+                            avatarSize,
+                          ),
+                        ),
+                      if (remaining > 0)
+                        Positioned(
+                          left: displayCount * spacing,
+                          child: Container(
+                            width: avatarSize,
+                            height: avatarSize,
+                            decoration: BoxDecoration(
+                              color: Color(0xFFE5E7EB),
+                              shape: BoxShape.circle,
+                              border: Border.all(
+                                color: Colors.white,
+                                width: 1.5,
+                              ),
+                            ),
+                            alignment: Alignment.center,
+                            child: Text(
+                              '+$remaining',
+                              style: TextStyle(
+                                fontFamily: 'Inter',
+                                fontSize: 9,
+                                fontWeight: FontWeight.w600,
+                                color: Color(0xFF6B7280),
+                              ),
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildMemberAvatarChip(
+    DocumentReference userRef,
+    double size,
+  ) {
+    return Container(
+      width: size,
+      height: size,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        border: Border.all(color: Colors.white, width: 1.5),
+      ),
+      child: ClipOval(
+        child: DesktopSafeUserBuilder(
+          userRef: userRef,
+          fetchOnce: _getOrCreateUserFuture,
+          builder: (context, user) {
+            final imageUrl = userRef.path.contains('ai_agent_summerai')
+                ? 'https://firebasestorage.googleapis.com/v0/b/linkedup-c3e29.firebasestorage.app/o/asset%2Fsoftware-agent.png?alt=media&token=99761584-999d-4f8e-b3d1-f9d1baf86120'
+                : (user?.photoUrl ?? '');
+
+            return CachedNetworkImage(
+              imageUrl: imageUrl,
+              width: size,
+              height: size,
+              fit: BoxFit.cover,
+              memCacheWidth: (size * 2).round(),
+              memCacheHeight: (size * 2).round(),
+              placeholder: (context, url) => Container(
+                color: Color(0xFFF3F4F6),
+                child: Icon(
+                  Icons.person,
+                  color: Color(0xFF9CA3AF),
+                  size: size * 0.55,
+                ),
+              ),
+              errorWidget: (context, url, error) => Container(
+                color: Color(0xFFF3F4F6),
+                child: Icon(
+                  Icons.person,
+                  color: Color(0xFF9CA3AF),
+                  size: size * 0.55,
+                ),
+              ),
+            );
+          },
+        ),
+      ),
+    );
+  }
+
+  void _showGroupMembersDialog(ChatsRecord chat) {
+    showDialog(
+      context: context,
+      builder: (dialogContext) {
+        var members = _sortGroupMembers(chat);
+
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return Dialog(
+              backgroundColor: Colors.transparent,
+              insetPadding:
+                  const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
+              child: Container(
+                width: 360,
+                constraints:
+                    const BoxConstraints(maxWidth: 360, maxHeight: 520),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(12),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.08),
+                      blurRadius: 24,
+                      offset: Offset(0, 8),
+                    ),
+                  ],
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 20, vertical: 16),
+                      decoration: BoxDecoration(
+                        color: Color(0xFFFAFBFC),
+                        borderRadius: BorderRadius.only(
+                          topLeft: Radius.circular(12),
+                          topRight: Radius.circular(12),
+                        ),
+                        border: Border(
+                          bottom:
+                              BorderSide(color: Color(0xFFE5E7EB), width: 1),
+                        ),
+                      ),
+                      child: Row(
+                        children: [
+                          Container(
+                            width: 32,
+                            height: 32,
+                            decoration: BoxDecoration(
+                              color: Color(0xFFEFF6FF),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Icon(
+                              Icons.people_rounded,
+                              color: Color(0xFF3B82F6),
+                              size: 18,
+                            ),
+                          ),
+                          SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'Group Members',
+                                  style: TextStyle(
+                                    fontFamily: 'Inter',
+                                    color: Color(0xFF111827),
+                                    fontSize: 15,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                                Text(
+                                  '${members.length} members',
+                                  style: TextStyle(
+                                    fontFamily: 'Inter',
+                                    color: Color(0xFF6B7280),
+                                    fontSize: 12,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          IconButton(
+                            onPressed: () => Navigator.pop(dialogContext),
+                            icon: Icon(Icons.close_rounded,
+                                color: Color(0xFF9CA3AF), size: 20),
+                            padding: EdgeInsets.zero,
+                            constraints: BoxConstraints(),
+                          ),
+                        ],
+                      ),
+                    ),
+                    Flexible(
+                      child: ListView.separated(
+                        shrinkWrap: true,
+                        padding: const EdgeInsets.symmetric(vertical: 8),
+                        itemCount: members.length +
+                            (ChatHelpers.isGroupAdmin(
+                                    chat, currentUserReference)
+                                ? 1
+                                : 0),
+                        separatorBuilder: (_, __) => Divider(
+                          height: 1,
+                          indent: 68,
+                          color: Color(0xFFF3F4F6),
+                        ),
+                        itemBuilder: (context, index) {
+                          final canManageMembers = ChatHelpers.isGroupAdmin(
+                              chat, currentUserReference);
+                          if (canManageMembers && index == 0) {
+                            return _buildAddMemberListRow(
+                              onTap: () {
+                                Navigator.pop(dialogContext);
+                                _showAddMembersDialog(chat);
+                              },
+                            );
+                          }
+                          final memberIndex =
+                              canManageMembers ? index - 1 : index;
+                          final memberRef = members[memberIndex];
+                          return _buildGroupMemberRow(
+                            chat,
+                            memberRef,
+                            dialogContext,
+                            onMemberRemoved: () {
+                              setDialogState(() {
+                                members = List<DocumentReference>.from(members)
+                                  ..removeWhere(
+                                      (ref) => ref.id == memberRef.id);
+                              });
+                            },
+                          );
+                        },
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Future<void> _confirmAndRemoveGroupMember({
+    required ChatsRecord chat,
+    required UsersRecord user,
+    required BuildContext dialogContext,
+    required VoidCallback onMemberRemoved,
+  }) async {
+    final confirmed = await showDialog<bool>(
+      context: dialogContext,
+      barrierColor: Colors.black.withOpacity(0.5),
+      builder: (context) => Dialog(
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+        ),
+        backgroundColor: Colors.white,
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Remove member',
+                style: TextStyle(
+                  fontFamily: 'Inter',
+                  fontSize: 18,
+                  fontWeight: FontWeight.w600,
+                  color: Color(0xFF1A1F36),
+                ),
+              ),
+              SizedBox(height: 12),
+              Text(
+                'Are you sure you want to remove ${user.displayName} from the group?',
+                style: TextStyle(
+                  fontFamily: 'Inter',
+                  fontSize: 14,
+                  color: Color(0xFF6B7280),
+                  height: 1.5,
+                ),
+              ),
+              SizedBox(height: 24),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  TextButton(
+                    onPressed: () => Navigator.pop(context, false),
+                    child: Text(
+                      'Cancel',
+                      style: TextStyle(
+                        fontFamily: 'Inter',
+                        color: Color(0xFF6B7280),
+                      ),
+                    ),
+                  ),
+                  SizedBox(width: 8),
+                  ElevatedButton(
+                    onPressed: () => Navigator.pop(context, true),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Color(0xFFEF4444),
+                      foregroundColor: Colors.white,
+                      elevation: 0,
+                    ),
+                    child: Text(
+                      'Remove',
+                      style: TextStyle(fontFamily: 'Inter'),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+
+    if (confirmed != true) return;
+
+    try {
+      final updatedMembers = List<DocumentReference>.from(chat.members)
+        ..remove(user.reference);
+
+      await fsPatchDocument(chat.reference, {
+        'members': updatedMembers,
+      });
+
+      final actorName = currentUserDisplayName.isNotEmpty
+          ? currentUserDisplayName
+          : (currentUserDocument?.displayName ?? 'Someone');
+      final systemMessage =
+          '$actorName removed ${user.displayName} from the group';
+
+      await fsCreateMessage(chat.reference, {
+        'content': systemMessage,
+        'created_at': getCurrentTimestamp,
+        'sender_ref': currentUserReference,
+        'sender_name': actorName,
+        'sender_photo': currentUserPhoto.isNotEmpty
+            ? currentUserPhoto
+            : (currentUserDocument?.photoUrl ?? ''),
+        'is_system_message': true,
+        'is_read_by': [currentUserReference],
+      });
+
+      await fsPatchDocument(chat.reference, {
+        'last_message': systemMessage,
+        'last_message_at': getCurrentTimestamp,
+        'last_message_sent': currentUserReference,
+      });
+
+      await chatController.refreshChats(force: true);
+      onMemberRemoved();
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('${user.displayName} removed from group'),
+            backgroundColor: Color(0xFF34C759),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to remove member'),
+            backgroundColor: Color(0xFFEF4444),
+          ),
+        );
+      }
+    }
+  }
+
+  Widget _buildGroupMemberRow(
+    ChatsRecord chat,
+    DocumentReference memberRef,
+    BuildContext dialogContext, {
+    VoidCallback? onMemberRemoved,
+  }) {
+    return DesktopSafeUserBuilder(
+      userRef: memberRef,
+      fetchOnce: _getOrCreateUserFuture,
+      builder: (context, user) {
+        if (user == null) {
+          return Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+            child: Row(
+              children: [
+                Container(
+                  width: 36,
+                  height: 36,
+                  decoration: BoxDecoration(
+                    color: Color(0xFFF3F4F6),
+                    shape: BoxShape.circle,
+                  ),
+                ),
+                SizedBox(width: 12),
+                Expanded(
+                  child: Container(
+                    height: 12,
+                    decoration: BoxDecoration(
+                      color: Color(0xFFF3F4F6),
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          );
+        }
+
+        final isOwner = ChatHelpers.isGroupOwner(chat, memberRef);
+        final isAdmin = ChatHelpers.isGroupAdmin(chat, memberRef);
+        final isCurrentUser = memberRef == currentUserReference;
+        final canRemove = ChatHelpers.canRemoveGroupMember(
+          chat,
+          currentUserReference,
+          memberRef,
+        );
+
+        return Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+          child: Row(
+            children: [
+              Expanded(
+                child: InkWell(
+                  mouseCursor: MaterialStateMouseCursor.clickable,
+                  onTap: () {
+                    Navigator.pop(dialogContext);
+                    context.pushNamed(
+                      UserSummaryWidget.routeName,
+                      queryParameters: {
+                        'userRef': serializeParam(
+                            memberRef, ParamType.DocumentReference),
+                      }.withoutNulls,
+                      extra: <String, dynamic>{
+                        'userRef': memberRef,
+                      },
+                    );
+                  },
+                  child: Row(
+                    children: [
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(18),
+                        child: CachedNetworkImage(
+                          imageUrl: memberRef.path.contains('ai_agent_summerai')
+                              ? 'https://firebasestorage.googleapis.com/v0/b/linkedup-c3e29.firebasestorage.app/o/asset%2Fsoftware-agent.png?alt=media&token=99761584-999d-4f8e-b3d1-f9d1baf86120'
+                              : user.photoUrl,
+                          width: 36,
+                          height: 36,
+                          fit: BoxFit.cover,
+                          placeholder: (context, url) => Container(
+                            width: 36,
+                            height: 36,
+                            color: Color(0xFFF3F4F6),
+                            child: Icon(Icons.person,
+                                color: Color(0xFF9CA3AF), size: 18),
+                          ),
+                          errorWidget: (context, url, error) => Container(
+                            width: 36,
+                            height: 36,
+                            color: Color(0xFFF3F4F6),
+                            child: Icon(Icons.person,
+                                color: Color(0xFF9CA3AF), size: 18),
+                          ),
+                        ),
+                      ),
+                      SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                Flexible(
+                                  child: Text(
+                                    user.displayName.isNotEmpty
+                                        ? user.displayName
+                                        : 'Unknown User',
+                                    style: TextStyle(
+                                      fontFamily: 'Inter',
+                                      color: Color(0xFF111827),
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.w500,
+                                    ),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                                if (isCurrentUser) ...[
+                                  SizedBox(width: 6),
+                                  Text(
+                                    '(You)',
+                                    style: TextStyle(
+                                      fontFamily: 'Inter',
+                                      color: Color(0xFF9CA3AF),
+                                      fontSize: 12,
+                                    ),
+                                  ),
+                                ],
+                              ],
+                            ),
+                            if (isOwner || isAdmin)
+                              Padding(
+                                padding: const EdgeInsets.only(top: 2),
+                                child: Text(
+                                  isOwner ? 'Owner' : 'Admin',
+                                  style: TextStyle(
+                                    fontFamily: 'Inter',
+                                    color: isOwner
+                                        ? Color(0xFFF59E0B)
+                                        : Color(0xFF3B82F6),
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              if (canRemove)
+                TextButton(
+                  onPressed: () => _confirmAndRemoveGroupMember(
+                    chat: chat,
+                    user: user,
+                    dialogContext: dialogContext,
+                    onMemberRemoved: onMemberRemoved ?? () {},
+                  ),
+                  style: TextButton.styleFrom(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    minimumSize: Size.zero,
+                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  ),
+                  child: Text(
+                    'Remove',
+                    style: TextStyle(
+                      fontFamily: 'Inter',
+                      color: Color(0xFFEF4444),
+                      fontSize: 13,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
   // Generate daily summary using Summer
   Future<void> _generateDailySummary(ChatsRecord chat) async {
     if (!chat.isGroup) return;
@@ -7015,11 +8275,11 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
     });
 
     try {
-      final callable = FirebaseFunctions.instance.httpsCallable('dailySummary');
-
-      await callable.call({
-        'chatId': chat.reference.id,
-      });
+      await invokeCloudFunction(
+        'dailySummary',
+        data: {'chatId': chat.reference.id},
+        timeout: const Duration(seconds: 120),
+      );
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -7047,7 +8307,7 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
         );
       }
     } catch (e) {
-      print('Error generating summary: $e');
+      debugLog('Error generating summary: $e');
 
       String errorMessage = 'Failed to generate summary. Please try again.';
 
@@ -7114,7 +8374,7 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
     );
 
     try {
-      final user = await UsersRecord.getDocumentOnce(otherUserRef);
+      final user = await fsGetUserOnce(otherUserRef);
       if (context.mounted) {
         // Show user profile inline in the right panel (macOS)
         setState(() {
@@ -7152,7 +8412,7 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
         chatController.blockedUserIds.value.contains(otherUserRef.id);
 
     try {
-      final user = await UsersRecord.getDocumentOnce(otherUserRef);
+      final user = await fsGetUserOnce(otherUserRef);
 
       if (isBlocked) {
         // Unblock Logic
@@ -7197,14 +8457,14 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
         );
 
         if (shouldUnblock == true) {
-          final blockedRecords = await BlockedUsersRecord.collection
-              .where('blocker_user', isEqualTo: currentUserReference)
-              .where('blocked_user', isEqualTo: otherUserRef)
-              .get();
-
-          for (var doc in blockedRecords.docs) {
-            await doc.reference.delete();
-          }
+          await fsUnblockUser(
+            blockerUser: currentUserReference!,
+            blockedUser: otherUserRef,
+          );
+          final unblockedIds =
+              Set<String>.from(chatController.blockedUserIds.value)
+                ..remove(otherUserRef.id);
+          chatController.blockedUserIds.value = unblockedIds;
 
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
@@ -7255,13 +8515,14 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
         );
 
         if (shouldBlock == true) {
-          await BlockedUsersRecord.collection.add({
-            ...createBlockedUsersRecordData(
-              blockerUser: currentUserReference,
-              blockedUser: otherUserRef,
-              createdAt: getCurrentTimestamp,
-            ),
-          });
+          await fsBlockUser(
+            blockerUser: currentUserReference!,
+            blockedUser: otherUserRef,
+          );
+          chatController.blockedUserIds.value = {
+            ...chatController.blockedUserIds.value,
+            otherUserRef.id,
+          };
 
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
@@ -7305,36 +8566,74 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
     }
   }
 
-  void _navigateToAddMembers(ChatsRecord chat) {
+  void _showAddMembersDialog(ChatsRecord chat) {
     if (!chat.isGroup) return;
-    Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (context) => AddGroupMembersWidget(chatDoc: chat),
-      ),
+    if (!ChatHelpers.isGroupAdmin(chat, currentUserReference)) return;
+
+    showAddGroupMembersDialog(
+      context: context,
+      chat: chat,
+      onMembersAdded: () async {
+        await chatController.refreshChats(force: true);
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Members added successfully'),
+              backgroundColor: Color(0xFF34C759),
+            ),
+          );
+        }
+      },
     );
   }
 
-  void _navigateToMedia(ChatsRecord chat) {
-    if (!chat.isGroup) return;
-    showDialog(
-      context: context,
-      builder: (ctx) => Dialog(
-        backgroundColor: Colors.white,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-        insetPadding: const EdgeInsets.symmetric(horizontal: 80, vertical: 40),
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 700, maxHeight: 600),
-          child: _MediaPopupContent(chatDoc: chat),
+  void _navigateToAddMembers(ChatsRecord chat) {
+    _showAddMembersDialog(chat);
+  }
+
+  Widget _buildAddMemberListRow({required VoidCallback onTap}) {
+    return InkWell(
+      mouseCursor: MaterialStateMouseCursor.clickable,
+      onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+        child: Row(
+          children: [
+            Container(
+              width: 36,
+              height: 36,
+              decoration: BoxDecoration(
+                color: Color(0xFFF3F4F6),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(
+                Icons.person_outline_rounded,
+                color: Color(0xFF9CA3AF),
+                size: 20,
+              ),
+            ),
+            SizedBox(width: 12),
+            Text(
+              'Add member',
+              style: TextStyle(
+                fontFamily: 'Inter',
+                color: Color(0xFF3B82F6),
+                fontSize: 14,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ],
         ),
       ),
     );
   }
 
+  void _navigateToMedia(ChatsRecord chat) {
+    _selectGroupChatTab(GroupChatTab.filesAndLinks);
+  }
+
   void _navigateToTasks(ChatsRecord chat) {
-    if (!chat.isGroup) return;
-    setState(() {
-      _model.showTasksPanel = true;
-    });
+    _selectGroupChatTab(GroupChatTab.actionTasks);
   }
 
   void _handlePinChat(ChatsRecord chat) async {
@@ -7344,14 +8643,17 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
       final isPinned = chat.isPinnedByUser(userRef);
 
       if (isPinned) {
-        await chat.reference.update({
-          'pinned_by': FieldValue.arrayRemove([userRef]),
-        });
+        await fsArrayRemove(chat.reference, 'pinned_by', [userRef]);
       } else {
-        await chat.reference.update({
-          'pinned_by': FieldValue.arrayUnion([userRef]),
-        });
+        await fsArrayUnion(chat.reference, 'pinned_by', [userRef]);
       }
+
+      chatController.applyLocalChatPinState(
+        chatRef: chat.reference,
+        userRef: userRef,
+        pinned: !isPinned,
+      );
+      await chatController.refreshChats(force: true);
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -7419,7 +8721,7 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
 
     if (shouldDelete == true) {
       try {
-        await chat.reference.delete();
+        await fsDeleteDocument(chat.reference);
         setState(() {
           _model.selectedChat = null;
         });
@@ -7737,7 +9039,7 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
     for (final m in messages) {
       if (m.senderRef != null && !userCache.containsKey(m.senderRef)) {
         try {
-          final doc = await UsersRecord.getDocumentOnce(m.senderRef!);
+          final doc = await fsGetUserOnce(m.senderRef!);
           userCache[m.senderRef!] = doc;
         } catch (_) {}
       }
@@ -7779,15 +9081,17 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
       forwardedHistory: historyJson,
     );
 
-    await MessagesRecord.createDoc(targetChat.reference).set(messageData);
-
-    await targetChat.reference.update({
-      'last_message': '[Chat History]',
-      'last_message_at': getCurrentTimestamp,
-      'last_message_sent': currentUserReference,
-      'last_message_type': MessageType.text.serialize(),
-      'last_message_seen': [currentUserReference],
-    });
+    await fsCreateMessageAndUpdateChat(
+      chatRef: targetChat.reference,
+      messageData: messageData,
+      chatUpdateData: {
+        'last_message': '[Chat History]',
+        'last_message_at': getCurrentTimestamp,
+        'last_message_sent': currentUserReference,
+        'last_message_type': MessageType.text.serialize(),
+        'last_message_seen': [currentUserReference],
+      },
+    );
   }
 
   void _deleteSelectedMessages() async {
@@ -7818,7 +9122,7 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
     if (shouldDelete == true) {
       for (final msg in _selectedMessages) {
         try {
-          await msg.reference.delete();
+          await fsDeleteDocument(msg.reference);
         } catch (_) {}
       }
       _exitSelectionMode();
@@ -7974,83 +9278,34 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
 
   Future<void> _executeForward(ChatsRecord targetChat, MessagesRecord message) async {
     try {
-      // Build forward data as a raw map to include all fields
-      // (createMessagesRecordData doesn't support images list, file_name, etc.)
-      final Map<String, dynamic> forwardData = {
-        'sender_ref': currentUserReference,
-        'content': message.content,
-        'created_at': getCurrentTimestamp,
-        'message_type': message.messageType?.serialize(),
-        'sender_name': currentUserDisplayName,
-        'sender_photo': currentUserPhoto,
-        'is_pinned': false,
-        'is_system_message': false,
-      };
+      final forwardData = createMessagesRecordData(
+        senderRef: currentUserReference,
+        content: message.content,
+        createdAt: getCurrentTimestamp,
+        messageType: message.messageType,
+        image: message.image,
+        video: message.video,
+        audio: message.audio,
+        attachmentUrl: message.attachmentUrl,
+        senderName: currentUserDisplayName,
+        senderPhoto: currentUserPhoto,
+      );
 
-      // Copy media fields if present
-      if (message.image.isNotEmpty) {
-        forwardData['image'] = message.image;
-      }
-      if (message.images.isNotEmpty) {
-        forwardData['images'] = message.images;
-      }
-      if (message.video.isNotEmpty) {
-        forwardData['video'] = message.video;
-      }
-      if (message.audio.isNotEmpty) {
-        forwardData['audio'] = message.audio;
-      }
-      if (message.audioPath.isNotEmpty) {
-        forwardData['audio_path'] = message.audioPath;
-      }
-      if (message.attachmentUrl.isNotEmpty) {
-        forwardData['attachment_url'] = message.attachmentUrl;
-      }
-      // Copy file_name if present (used by file message rendering)
-      final fileName = message.snapshotData['file_name'];
-      if (fileName is String && fileName.isNotEmpty) {
-        forwardData['file_name'] = fileName;
-      }
-      // Copy message_format if present (e.g. 'markdown')
-      final messageFormat = message.snapshotData['message_format'];
-      if (messageFormat is String && messageFormat.isNotEmpty) {
-        forwardData['message_format'] = messageFormat;
-      }
+      final previewText = message.content.length > 100
+          ? message.content.substring(0, 100)
+          : message.content;
 
-      await MessagesRecord.createDoc(targetChat.reference)
-          .set(forwardData);
-
-      // Build a meaningful last_message preview
-      String previewText = message.content;
-      if (previewText.isEmpty) {
-        switch (message.messageType) {
-          case MessageType.video:
-            previewText = '🎬 Video';
-            break;
-          case MessageType.image:
-            previewText = '📷 Photo';
-            break;
-          case MessageType.voice:
-            previewText = '🎤 Voice message';
-            break;
-          case MessageType.file:
-            previewText = '📎 File';
-            break;
-          default:
-            previewText = 'Message';
-            break;
-        }
-      } else if (previewText.length > 100) {
-        previewText = previewText.substring(0, 100);
-      }
-
-      await targetChat.reference.update({
-        'last_message': previewText,
-        'last_message_at': getCurrentTimestamp,
-        'last_message_sent': currentUserReference,
-        'last_message_type': message.messageType?.serialize() ?? 'M',
-        'last_message_seen': [currentUserReference],
-      });
+      await fsCreateMessageAndUpdateChat(
+        chatRef: targetChat.reference,
+        messageData: forwardData,
+        chatUpdateData: {
+          'last_message': previewText,
+          'last_message_at': getCurrentTimestamp,
+          'last_message_sent': currentUserReference,
+          'last_message_type': message.messageType?.serialize() ?? 'M',
+          'last_message_seen': [currentUserReference],
+        },
+      );
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -8072,153 +9327,6 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
       }
     }
   }
-
-  Widget _buildEmailInviteButton() {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: () => _showEmailInviteDialog(),
-        borderRadius: BorderRadius.circular(20.0),
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(20.0),
-          child: BackdropFilter(
-            filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
-            child: Container(
-              padding: const EdgeInsets.all(12.0),
-              decoration: BoxDecoration(
-                color: CupertinoColors.white.withOpacity(0.7),
-                borderRadius: BorderRadius.circular(20.0),
-                border: Border.all(
-                  color: CupertinoColors.white.withOpacity(0.8),
-                  width: 1.5,
-                ),
-                boxShadow: [
-                  BoxShadow(
-                    color: CupertinoColors.black.withOpacity(0.1),
-                    blurRadius: 10,
-                    offset: const Offset(0, 4),
-                    spreadRadius: 0,
-                  ),
-                ],
-              ),
-              child: Icon(
-                CupertinoIcons.mail_solid,
-                color: CupertinoColors.systemBlue,
-                size: 20.0,
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  void _showEmailInviteDialog() {
-    final emailController = TextEditingController();
-
-    showCupertinoDialog(
-      context: context,
-      builder: (dialogContext) => CupertinoAlertDialog(
-        title: Text('Invite via Email'),
-        content: Padding(
-          padding: const EdgeInsets.only(top: 10.0),
-          child: CupertinoTextField(
-            controller: emailController,
-            placeholder: 'Recipient Email',
-            keyboardType: TextInputType.emailAddress,
-          ),
-        ),
-        actions: [
-          CupertinoDialogAction(
-            child: Text('Cancel'),
-            onPressed: () => Navigator.pop(dialogContext),
-          ),
-          CupertinoDialogAction(
-            child: Text('Send Invite'),
-            onPressed: () async {
-              final email = emailController.text.trim();
-              if (email.isEmpty || !email.contains('@')) {
-                Navigator.pop(dialogContext);
-                return;
-              }
-              Navigator.pop(dialogContext);
-
-              try {
-                final userUid = currentUserUid.isNotEmpty
-                    ? currentUserUid
-                    : (currentUserReference?.id ?? '');
-                final referralLink = 'https://lona.club/invite/$userUid';
-
-                await actions.sendResendInvite(
-                  email: email,
-                  senderName: currentUserDisplayName,
-                  referralLink: referralLink,
-                );
-
-                // Show green tick overlay
-                _showSuccessTick();
-              } catch (e) {
-                // Silently fail
-              }
-            },
-          ),
-        ],
-      ),
-    );
-  }
-
-  void _showSuccessTick() {
-    final overlay = Overlay.of(context);
-    late OverlayEntry entry;
-
-    entry = OverlayEntry(
-      builder: (context) => Positioned(
-        top: 50,
-        left: 0,
-        right: 0,
-        child: Center(
-          child: TweenAnimationBuilder<double>(
-            tween: Tween(begin: 0.0, end: 1.0),
-            duration: Duration(milliseconds: 300),
-            builder: (context, value, child) {
-              return Opacity(
-                opacity: value,
-                child: Transform.scale(
-                  scale: value,
-                  child: Container(
-                    padding: EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: Color(0xFF10B981),
-                      shape: BoxShape.circle,
-                      boxShadow: [
-                        BoxShadow(
-                          color: Color(0xFF10B981).withOpacity(0.3),
-                          blurRadius: 20,
-                          spreadRadius: 5,
-                        ),
-                      ],
-                    ),
-                    child: Icon(
-                      Icons.check,
-                      color: Colors.white,
-                      size: 32,
-                    ),
-                  ),
-                ),
-              );
-            },
-          ),
-        ),
-      ),
-    );
-
-    overlay.insert(entry);
-
-    // Remove after 1.5 seconds
-    Future.delayed(Duration(milliseconds: 1500), () {
-      entry.remove();
-    });
-  }
 }
 
 // Optimized chat list item widget to prevent flickering
@@ -8233,8 +9341,9 @@ class _ChatListItem extends StatefulWidget {
   final Function(ChatsRecord) onMute;
   final Function(ChatsRecord) onMarkUnread;
   final Function(Offset, ChatsRecord)? onMoveToFolder;
-  final Function(ChatsRecord)? onToggleInactive;
+  final Function(ChatsRecord)? onRename;
   final Future<UsersRecord> Function(DocumentReference) getOrCreateUserFuture;
+  final bool showPinIcon;
 
   const _ChatListItem({
     Key? key,
@@ -8248,8 +9357,9 @@ class _ChatListItem extends StatefulWidget {
     required this.onMute,
     required this.onMarkUnread,
     this.onMoveToFolder,
-    this.onToggleInactive,
+    this.onRename,
     required this.getOrCreateUserFuture,
+    this.showPinIcon = true,
   }) : super(key: key);
 
   @override
@@ -8260,6 +9370,35 @@ class _ChatListItemState extends State<_ChatListItem>
     with AutomaticKeepAliveClientMixin {
   @override
   bool get wantKeepAlive => true;
+
+  Future<int>? _unreadCountFuture;
+
+  @override
+  void initState() {
+    super.initState();
+    _ensureUnreadCountFuture();
+  }
+
+  @override
+  void didUpdateWidget(covariant _ChatListItem oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    final chatChanged =
+        oldWidget.chat.reference.id != widget.chat.reference.id;
+    final becameUnread =
+        !oldWidget.hasUnreadMessages && widget.hasUnreadMessages;
+    if (chatChanged || becameUnread) {
+      _unreadCountFuture = null;
+      _ensureUnreadCountFuture();
+    }
+  }
+
+  void _ensureUnreadCountFuture() {
+    if (!useWindowsFirestoreRest) return;
+    _unreadCountFuture ??= _fetchUnreadCount(widget.chat).then((count) {
+      widget.chatController.cacheUnreadCount(widget.chat.reference.id, count);
+      return count;
+    });
+  }
 
   void _showContextMenu(BuildContext context, Offset position) {
     showMenu(
@@ -8365,23 +9504,21 @@ class _ChatListItemState extends State<_ChatListItem>
               ],
             ),
           ),
-        if (widget.onToggleInactive != null)
+        if (widget.chat.isGroup &&
+            widget.onRename != null &&
+            ChatHelpers.isGroupOwner(widget.chat, currentUserReference))
           PopupMenuItem<String>(
-            value: 'toggle_inactive',
+            value: 'rename',
             child: Row(
               children: [
                 Icon(
-                  widget.chatController.isManuallyInactive(widget.chat)
-                      ? Icons.unarchive_outlined
-                      : Icons.archive_outlined,
+                  Icons.edit_outlined,
                   color: Color(0xFF374151),
                   size: 18,
                 ),
                 SizedBox(width: 12),
                 Text(
-                  widget.chatController.isManuallyInactive(widget.chat)
-                      ? 'Move to Active'
-                      : 'Move to Inactive',
+                  'Rename Group',
                   style: TextStyle(
                     fontFamily: 'Inter',
                     color: Color(0xFF111827),
@@ -8430,8 +9567,8 @@ class _ChatListItemState extends State<_ChatListItem>
         }
       } else if (value == 'move_to_folder') {
         widget.onMoveToFolder?.call(position, widget.chat);
-      } else if (value == 'toggle_inactive') {
-        widget.onToggleInactive?.call(widget.chat);
+      } else if (value == 'rename') {
+        widget.onRename?.call(widget.chat);
       }
     });
   }
@@ -8445,137 +9582,124 @@ class _ChatListItemState extends State<_ChatListItem>
         _showContextMenu(context, details.globalPosition);
       },
       child: InkWell(
+        mouseCursor: MaterialStateMouseCursor.clickable,
         onTap: widget.onTap,
-        child: Container(
-          width: double.infinity,
-          padding: EdgeInsetsDirectional.fromSTEB(12, 8, 12, 8),
-          decoration: BoxDecoration(
-            color: widget.isSelected
-                ? Colors.white
-                : Colors.transparent, // White for selected
-            borderRadius: BorderRadius.circular(8),
-            border: widget.isSelected
-                ? Border.all(
-                    color: Color.fromRGBO(
-                        230, 235, 245, 1), // Light border for selected
-                    width: 1,
-                  )
-                : Border(
-                    bottom: BorderSide(
-                      color: Color.fromRGBO(230, 235, 245, 1), // Light border
-                      width: 1,
-                    ),
-                  ),
-            boxShadow: widget.isSelected
-                ? [
-                    BoxShadow(
-                      color:
-                          Color.fromRGBO(0, 0, 0, 0.05), // Neutral gray shadow
-                      blurRadius: 8,
-                      offset: Offset(0, 2),
-                      spreadRadius: 0,
-                    ),
-                  ]
-                : null,
-          ),
+        child: IntrinsicHeight(
           child: Row(
-            mainAxisSize: MainAxisSize.max,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              // Avatar
-              _buildChatAvatar(widget.chat),
-              SizedBox(width: 12),
-              // Chat Info
-              Expanded(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        // Pin icon if chat is pinned
-                        if (widget.chat.isPinnedByUser(currentUserReference)) ...[
-                          Icon(
-                            Icons.push_pin,
-                            color: Color(0xFF000000), // Black
-                            size: 16,
-                          ),
-                          SizedBox(width: 4),
-                        ],
-                        Expanded(
-                          child: _getChatDisplayName(widget.chat,
-                              isSelected: widget.isSelected),
-                        ),
-                      ],
-                    ),
-                    SizedBox(height: 2),
-                    _getLastMessagePreview(widget.chat,
-                        isSelected: widget.isSelected),
-                  ],
-                ),
-              ),
-              // Timestamp and unread count badge
-              Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: [
-                  Row(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.center,
-                    children: [
-                      // Normal Badge (Blue dot)
-                      if (widget.hasUnreadMessages)
-                        Container(
-                          width: 10,
-                          height: 10,
-                          margin: EdgeInsets.only(right: 8),
-                          decoration: BoxDecoration(
-                            color: Color(0xFF3B82F6),
-                            shape: BoxShape.circle,
-                            boxShadow: [
-                              BoxShadow(
-                                color: Color(0x4D3B82F6),
-                                blurRadius: 4,
-                                spreadRadius: 1,
-                              ),
-                            ],
-                          ),
-                        ),
-                      // Timestamp
-                      Text(
-                        widget.chat.lastMessageAt != null
-                            ? () {
-                                final now = DateTime.now();
-                                final messageTime = widget.chat.lastMessageAt!;
-                                final difference = now.difference(messageTime);
-
-                                // If within 24 hours, show time only
-                                if (difference.inHours < 24) {
-                                  return DateFormat('h:mm a')
-                                      .format(messageTime);
-                                } else {
-                                  // Otherwise show date in MM/DD/YYYY format
-                                  return DateFormat('MM/dd/yyyy')
-                                      .format(messageTime);
-                                }
-                              }()
-                            : 'Unknown',
-                        style: TextStyle(
-                          fontFamily: 'Inter',
-                          color: widget.isSelected
-                              ? Color(0xFF6B7280)
-                              : Color(0xFF9CA3AF),
-                          fontSize: 11,
-                        ),
-                      ),
-                    ],
+              if (widget.isSelected)
+                Container(
+                  width: 3,
+                  decoration: BoxDecoration(
+                    color: Color(0xFF3B82F6),
+                    borderRadius: BorderRadius.circular(2),
                   ),
-                ],
+                ),
+              Expanded(
+                child: Padding(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+                  child: Container(
+                    width: double.infinity,
+                    padding:
+                        const EdgeInsetsDirectional.fromSTEB(16, 12, 16, 12),
+                    decoration: BoxDecoration(
+                      color: widget.isSelected
+                          ? Colors.white
+                          : Colors.transparent,
+                      borderRadius: BorderRadius.circular(8),
+                      border: widget.isSelected
+                          ? Border.all(
+                              color: Color.fromRGBO(230, 235, 245, 1),
+                              width: 1,
+                            )
+                          : Border(
+                              bottom: BorderSide(
+                                color: Color.fromRGBO(230, 235, 245, 1),
+                                width: 1,
+                              ),
+                            ),
+                      boxShadow: widget.isSelected
+                          ? [
+                              BoxShadow(
+                                color: Color.fromRGBO(0, 0, 0, 0.05),
+                                blurRadius: 8,
+                                offset: Offset(0, 2),
+                                spreadRadius: 0,
+                              ),
+                            ]
+                          : null,
+                    ),
+                    child: IntrinsicHeight(
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          _buildChatAvatar(widget.chat),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  children: [
+                                    if (widget.showPinIcon &&
+                                        widget.chat.isPinnedByUser(
+                                            currentUserReference)) ...[
+                                      const Icon(
+                                        Icons.push_pin,
+                                        color: Color(0xFF000000),
+                                        size: 16,
+                                      ),
+                                      const SizedBox(width: 4),
+                                    ],
+                                    Expanded(
+                                      child: _getChatDisplayName(widget.chat,
+                                          isSelected: widget.isSelected),
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 4),
+                                _getLastMessagePreview(widget.chat,
+                                    isSelected: widget.isSelected),
+                                if (widget.chat.isGroup &&
+                                    widget.chat.members.isNotEmpty) ...[
+                                  const SizedBox(height: 4),
+                                  _buildGroupMemberCountBadge(widget.chat),
+                                ],
+                              ],
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                          SizedBox(
+                            width: 56,
+                            child: Stack(
+                              clipBehavior: Clip.none,
+                              children: [
+                                Align(
+                                  alignment: Alignment.topRight,
+                                  child: _buildMessageTimestamp(),
+                                ),
+                                if (widget.hasUnreadMessages)
+                                  Align(
+                                    alignment: Alignment.centerRight,
+                                    child: _buildUnreadCountBadge(),
+                                  ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
               ),
             ],
           ),
         ),
       ),
-    );
+    ).withClickCursor().withClickCursor();
   }
 
   Widget _buildChatAvatar(ChatsRecord chat) {
@@ -8586,47 +9710,42 @@ class _ChatListItemState extends State<_ChatListItem>
         decoration: BoxDecoration(
           color: Colors.white,
           shape: BoxShape.circle,
+          border: Border.all(color: Color(0xFFE5E7EB), width: 1),
         ),
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(18),
-          child: CachedNetworkImage(
-            imageUrl: chat.chatImageUrl,
-            width: 36,
-            height: 36,
-            fit: BoxFit.cover,
-            memCacheWidth: 72,
-            memCacheHeight: 72,
-            maxWidthDiskCache: 72,
-            maxHeightDiskCache: 72,
-            filterQuality: FilterQuality.high,
-            placeholder: (context, url) => Container(
-              width: 36,
-              height: 36,
-              decoration: BoxDecoration(
-                color: Colors.white,
-                shape: BoxShape.circle,
+        clipBehavior: Clip.antiAlias,
+        child: chat.chatImageUrl.isNotEmpty
+            ? CachedNetworkImage(
+                imageUrl: chat.chatImageUrl,
+                fit: BoxFit.cover,
+                width: double.infinity,
+                height: double.infinity,
+                memCacheWidth: 72,
+                memCacheHeight: 72,
+                maxWidthDiskCache: 72,
+                maxHeightDiskCache: 72,
+                filterQuality: FilterQuality.high,
+                placeholder: (context, url) => Center(
+                  child: Icon(
+                    Icons.group,
+                    color: Color(0xFF6B7280),
+                    size: 18,
+                  ),
+                ),
+                errorWidget: (context, url, error) => Center(
+                  child: Icon(
+                    Icons.group,
+                    color: Color(0xFF6B7280),
+                    size: 18,
+                  ),
+                ),
+              )
+            : Center(
+                child: Icon(
+                  Icons.group,
+                  color: Color(0xFF6B7280),
+                  size: 18,
+                ),
               ),
-              child: Icon(
-                Icons.group,
-                color: Color(0xFF6B7280),
-                size: 18,
-              ),
-            ),
-            errorWidget: (context, url, error) => Container(
-              width: 36,
-              height: 36,
-              decoration: BoxDecoration(
-                color: Colors.white,
-                shape: BoxShape.circle,
-              ),
-              child: Icon(
-                Icons.group,
-                color: Color(0xFF6B7280),
-                size: 18,
-              ),
-            ),
-          ),
-        ),
       );
     } else {
       // For direct chats, get the other user's profile picture
@@ -8635,9 +9754,10 @@ class _ChatListItemState extends State<_ChatListItem>
         orElse: () => chat.members.first,
       );
 
-      return StreamBuilder<UsersRecord>(
-        stream: UsersRecord.getDocument(otherUserRef),
-        builder: (context, userSnapshot) {
+      return DesktopSafeUserBuilder(
+        userRef: otherUserRef,
+        fetchOnce: widget.getOrCreateUserFuture,
+        builder: (context, user) {
           String imageUrl = '';
           bool isOnline = false;
 
@@ -8645,13 +9765,9 @@ class _ChatListItemState extends State<_ChatListItem>
           if (otherUserRef.path.contains('ai_agent_summerai')) {
             imageUrl =
                 'https://firebasestorage.googleapis.com/v0/b/linkedup-c3e29.firebasestorage.app/o/asset%2Fsoftware-agent.png?alt=media&token=99761584-999d-4f8e-b3d1-f9d1baf86120';
-          } else if (userSnapshot.hasData && userSnapshot.data != null) {
-            imageUrl = userSnapshot.data?.photoUrl ?? '';
-            isOnline = userSnapshot.data?.isOnline ?? false;
-          } else if (userSnapshot.hasError) {
-            // Error loading user
-          } else {
-            // Loading user data
+          } else if (user != null) {
+            imageUrl = user.photoUrl;
+            isOnline = user.isOnline;
           }
 
           return Stack(
@@ -8663,6 +9779,7 @@ class _ChatListItemState extends State<_ChatListItem>
                 decoration: BoxDecoration(
                   color: Color(0xFF3B82F6),
                   shape: BoxShape.circle,
+                  border: Border.all(color: Color(0xFFE5E7EB), width: 1),
                 ),
                 child: ClipRRect(
                   borderRadius: BorderRadius.circular(18),
@@ -8743,8 +9860,7 @@ class _ChatListItemState extends State<_ChatListItem>
         chat.title.isNotEmpty ? chat.title : 'Group Chat',
         style: TextStyle(
           fontFamily: 'Inter',
-          color:
-              Color(0xFF111827), // Dark text for both selected and unselected
+          color: Color(0xFF111827),
           fontSize: 13,
           fontWeight: FontWeight.w500,
         ),
@@ -8761,6 +9877,24 @@ class _ChatListItemState extends State<_ChatListItem>
       // Use cached name when available to avoid "Direct Chat" flash on rebuilds
       final cachedName =
           widget.chatController.getCachedDisplayName(otherUserRef.id);
+
+      if (windowsChatListSkipUserFetch) {
+        return Text(
+          windowsChatDmListLabel(
+            otherUserRef: otherUserRef,
+            cachedName: cachedName,
+          ),
+          style: TextStyle(
+            fontFamily: 'Inter',
+            color: Color(0xFF111827),
+            fontSize: 13,
+            fontWeight: FontWeight.w500,
+          ),
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+        );
+      }
+
       if (cachedName != null && cachedName.isNotEmpty) {
         return Text(
           cachedName,
@@ -8810,7 +9944,195 @@ class _ChatListItemState extends State<_ChatListItem>
     }
   }
 
+  Widget _buildMessageTimestamp() {
+    final timestampText = widget.chat.lastMessageAt != null
+        ? () {
+            final now = DateTime.now();
+            final messageTime = widget.chat.lastMessageAt!.toLocal();
+            final difference = now.difference(messageTime);
+
+            if (difference.inHours < 24) {
+              return DateFormat('h:mm a').format(messageTime);
+            }
+            return DateFormat('MM/dd/yyyy').format(messageTime);
+          }()
+        : 'Unknown';
+
+    return Text(
+      timestampText,
+      style: TextStyle(
+        fontFamily: 'Inter',
+        color: widget.isSelected ? Color(0xFF6B7280) : Color(0xFF9CA3AF),
+        fontSize: 11,
+      ),
+    );
+  }
+
+  Widget _buildUnreadCountBadge() {
+    Widget badge(int count) {
+      const badgeHeight = 16.0;
+      final display = count > 99 ? '99+' : '$count';
+      final badgeWidth = display.length > 2
+          ? 26.0
+          : (display.length > 1 ? 20.0 : badgeHeight);
+
+      return Container(
+        width: badgeWidth,
+        height: badgeHeight,
+        decoration: BoxDecoration(
+          color: Color(0xFF3B82F6),
+          borderRadius: BorderRadius.circular(badgeHeight / 2),
+          boxShadow: [
+            BoxShadow(
+              color: Color(0x4D3B82F6),
+              blurRadius: 3,
+              spreadRadius: 0.5,
+            ),
+          ],
+        ),
+        alignment: Alignment.center,
+        child: Text(
+          display,
+          style: TextStyle(
+            fontFamily: 'Inter',
+            color: Colors.white,
+            fontSize: display.length > 2 ? 7 : 9,
+            fontWeight: FontWeight.w700,
+            height: 1,
+          ),
+          textAlign: TextAlign.center,
+          textHeightBehavior: const TextHeightBehavior(
+            applyHeightToFirstAscent: false,
+            applyHeightToLastDescent: false,
+          ),
+        ),
+      );
+    }
+
+    if (useWindowsFirestoreRest) {
+      return FutureBuilder<int>(
+        future: _unreadCountFuture,
+        initialData: widget.chatController
+            .getCachedUnreadCount(widget.chat.reference.id),
+        builder: (context, snapshot) {
+          final count = snapshot.data;
+          if (count == null || count <= 0) {
+            return const SizedBox.shrink();
+          }
+          return badge(count);
+        },
+      );
+    }
+
+    return StreamBuilder<int>(
+      stream: widget.chatController.getUnreadMessageCount(widget.chat),
+      initialData: widget.chatController
+          .getCachedUnreadCount(widget.chat.reference.id),
+      builder: (context, snapshot) {
+        final count = snapshot.data;
+        if (count == null || count <= 0) {
+          return const SizedBox.shrink();
+        }
+        return badge(count);
+      },
+    );
+  }
+
+  Future<int> _fetchUnreadCount(ChatsRecord chat) async {
+    if (currentUserReference == null) return 0;
+
+    try {
+      final messages =
+          await fsQueryChatMessages(chat.reference, limit: 500);
+      int count = 0;
+
+      for (final message in messages) {
+        final isUnread = message.senderRef != currentUserReference &&
+            !message.isSystemMessage &&
+            !message.isReadBy.contains(currentUserReference);
+
+        if (isUnread) {
+          count++;
+        } else if (message.senderRef == currentUserReference ||
+            message.isReadBy.contains(currentUserReference)) {
+          break;
+        }
+      }
+
+      return count;
+    } catch (_) {
+      return widget.chatController
+              .getCachedUnreadCount(chat.reference.id) ??
+          0;
+    }
+  }
+
+  Widget _buildGroupMemberCountBadge(ChatsRecord chat) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(
+          Icons.people_outline,
+          size: 12,
+          color: Color(0xFF9CA3AF),
+        ),
+        SizedBox(width: 2),
+        Text(
+          '${chat.members.length}',
+          style: TextStyle(
+            fontFamily: 'Inter',
+            color: Color(0xFF9CA3AF),
+            fontSize: 11,
+            fontWeight: FontWeight.w500,
+          ),
+        ),
+      ],
+    );
+  }
+
   Widget _getLastMessagePreview(ChatsRecord chat, {bool isSelected = false}) {
+    String _groupSenderPrefix() {
+      if (chat.lastMessageSent == null) return '';
+      if (chat.lastMessageSent == currentUserReference) return 'You: ';
+      if (DesktopSafeUserBuilder.useOnceFetch) {
+        final cached = widget.chatController
+            .getCachedDisplayName(chat.lastMessageSent!.id);
+        if (cached != null && cached.isNotEmpty) {
+          return '${cached.split(' ').first}: ';
+        }
+        return '';
+      }
+      return '';
+    }
+
+    Widget _richPreview(String prefix, String text) {
+      return Text.rich(
+        TextSpan(
+          children: [
+            TextSpan(
+              text: prefix,
+              style: TextStyle(
+                fontFamily: 'Inter',
+                color: isSelected ? Color(0xFF6B7280) : Color(0xFF374151),
+                fontSize: 11,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            TextSpan(
+              text: text,
+              style: TextStyle(
+                fontFamily: 'Inter',
+                color: isSelected ? Color(0xFF9CA3AF) : Color(0xFF6B7280),
+                fontSize: 11,
+              ),
+            ),
+          ],
+        ),
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+      );
+    }
+
     // If lastMessage is empty, check lastMessageType to show appropriate preview
     if (chat.lastMessage.isEmpty) {
       // Check if there's a message type (video, image, etc.)
@@ -8837,12 +10159,16 @@ class _ChatListItemState extends State<_ChatListItem>
 
         // For group chats, we might want to show sender name too
         if (chat.isGroup && chat.lastMessageSent != null) {
-          return StreamBuilder<UsersRecord>(
-            stream: UsersRecord.getDocument(chat.lastMessageSent!),
-            builder: (context, snapshot) {
+          if (DesktopSafeUserBuilder.useOnceFetch) {
+            return _richPreview(_groupSenderPrefix(), previewText);
+          }
+          return DesktopSafeUserBuilder(
+            userRef: chat.lastMessageSent!,
+            fetchOnce: widget.getOrCreateUserFuture,
+            builder: (context, sender) {
               String prefix = '';
-              if (snapshot.hasData && snapshot.data != null) {
-                final senderName = snapshot.data!.displayName;
+              if (sender != null) {
+                final senderName = sender.displayName;
                 final firstName = senderName.split(' ').first;
                 if (chat.lastMessageSent == currentUserReference) {
                   prefix = 'You: ';
@@ -8908,12 +10234,20 @@ class _ChatListItemState extends State<_ChatListItem>
 
     // For group chats, show sender name
     if (chat.isGroup && chat.lastMessageSent != null) {
-      return StreamBuilder<UsersRecord>(
-        stream: UsersRecord.getDocument(chat.lastMessageSent!),
-        builder: (context, snapshot) {
+      final body = chat.lastMessage.replaceAllMapped(
+        RegExp(r'<@[^|]+\|([^>]+)>'),
+        (m) => '@${m.group(1)}',
+      );
+      if (DesktopSafeUserBuilder.useOnceFetch) {
+        return _richPreview(_groupSenderPrefix(), body);
+      }
+      return DesktopSafeUserBuilder(
+        userRef: chat.lastMessageSent!,
+        fetchOnce: widget.getOrCreateUserFuture,
+        builder: (context, sender) {
           String prefix = '';
-          if (snapshot.hasData && snapshot.data != null) {
-            final senderName = snapshot.data!.displayName;
+          if (sender != null) {
+            final senderName = sender.displayName;
             // Get first name only
             final firstName = senderName.split(' ').first;
             // Check if it's the current user
@@ -8936,7 +10270,10 @@ class _ChatListItemState extends State<_ChatListItem>
                   ),
                 ),
                 TextSpan(
-                  text: stripMarkdownFormatting(chat.lastMessage),
+                  text: chat.lastMessage.replaceAllMapped(
+                    RegExp(r'<@[^|]+\|([^>]+)>'),
+                    (m) => '@${m.group(1)}',
+                  ),
                   style: TextStyle(
                     fontFamily: 'Inter',
                     color: isSelected ? Color(0xFF9CA3AF) : Color(0xFF6B7280),
@@ -8954,7 +10291,10 @@ class _ChatListItemState extends State<_ChatListItem>
 
     // For DMs, just show the message
     return Text(
-      stripMarkdownFormatting(chat.lastMessage),
+      chat.lastMessage.replaceAllMapped(
+        RegExp(r'<@[^|]+\|([^>]+)>'),
+        (m) => '@${m.group(1)}',
+      ),
       style: TextStyle(
         fontFamily: 'Inter',
         color: isSelected ? Color(0xFF9CA3AF) : Color(0xFF6B7280),
@@ -8984,6 +10324,7 @@ class _ForwardModeOption extends StatelessWidget {
     return Material(
       color: Colors.transparent,
       child: InkWell(
+        mouseCursor: MaterialStateMouseCursor.clickable,
         borderRadius: BorderRadius.circular(12),
         onTap: onTap,
         child: Container(
@@ -9030,337 +10371,112 @@ class _ForwardModeOption extends StatelessWidget {
   }
 }
 
-/// Compact media popup shown as a dialog overlay instead of full-screen page.
-class _MediaPopupContent extends StatefulWidget {
-  final ChatsRecord chatDoc;
-  const _MediaPopupContent({required this.chatDoc});
+/// Delays subscribing to a Firestore stream on Windows/Linux to reduce
+/// concurrent native channel traffic when opening a chat thread.
+class _DeferredFirestoreStream<T> extends StatefulWidget {
+  const _DeferredFirestoreStream({
+    required this.delay,
+    required this.stream,
+    required this.builder,
+    this.placeholder = const SizedBox.shrink(),
+  });
+
+  final Duration delay;
+  final Stream<T> stream;
+  final Widget placeholder;
+  final Widget Function(BuildContext context, AsyncSnapshot<T> snapshot) builder;
 
   @override
-  State<_MediaPopupContent> createState() => _MediaPopupContentState();
+  State<_DeferredFirestoreStream<T>> createState() =>
+      _DeferredFirestoreStreamState<T>();
 }
 
-class _MediaPopupContentState extends State<_MediaPopupContent>
-    with SingleTickerProviderStateMixin {
-  late TabController _tabController;
-  List<MessagesRecord>? _messages;
+class _DeferredFirestoreStreamState<T> extends State<_DeferredFirestoreStream<T>> {
+  Stream<T>? _activeStream;
 
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 3, vsync: this);
-    _loadMessages();
-  }
-
-  Future<void> _loadMessages() async {
-    final msgs = await queryMessagesRecordOnce(
-      parent: widget.chatDoc.reference,
-    );
-    if (mounted) setState(() => _messages = msgs);
-  }
-
-  @override
-  void dispose() {
-    _tabController.dispose();
-    super.dispose();
-  }
-
-  List<String> _getImages() {
-    if (_messages == null) return [];
-    final allImages = <String>[];
-    for (final msg in _messages!) {
-      if (msg.messageType == MessageType.image ||
-          msg.image != '' ||
-          msg.images.isNotEmpty) {
-        if (msg.image != '') allImages.add(msg.image);
-        if (msg.images.isNotEmpty) allImages.addAll(msg.images);
-      }
-    }
-    return allImages;
-  }
-
-  List<Map<String, dynamic>> _getLinks() {
-    if (_messages == null) return [];
-    final links = <Map<String, dynamic>>[];
-    final urlRegex = RegExp(r'https?://[^\s<>"{}|\\^`\[\]]+', caseSensitive: false);
-    for (final msg in _messages!) {
-      if (msg.content.isNotEmpty) {
-        for (final match in urlRegex.allMatches(msg.content)) {
-          final url = match.group(0)!;
-          if (!links.any((l) => l['url'] == url)) {
-            links.add({
-              'url': url,
-              'preview': msg.content.length > 80
-                  ? msg.content.substring(0, 80) + '...'
-                  : msg.content,
-            });
-          }
-        }
-      }
-    }
-    return links;
-  }
-
-  List<Map<String, dynamic>> _getDocs() {
-    if (_messages == null) return [];
-    final docs = <Map<String, dynamic>>[];
-    for (final msg in _messages!) {
-      if (msg.attachmentUrl.isNotEmpty) {
-        docs.add({
-          'url': msg.attachmentUrl,
-          'fileName': msg.content.isNotEmpty ? msg.content : 'file_${msg.reference.id}',
-          'sender': msg.senderName.isNotEmpty ? msg.senderName : null,
-        });
-      }
-    }
-    return docs;
+    Future.delayed(widget.delay, () {
+      if (mounted) setState(() => _activeStream = widget.stream);
+    });
   }
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        // Header
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
-          decoration: BoxDecoration(
-            color: Color(0xFFFAFBFC),
-            borderRadius: BorderRadius.only(
-              topLeft: Radius.circular(14),
-              topRight: Radius.circular(14),
-            ),
-            border: Border(bottom: BorderSide(color: Color(0xFFE5E7EB), width: 1)),
-          ),
-          child: Row(
-            children: [
-              Container(
-                width: 32, height: 32,
-                decoration: BoxDecoration(
-                  color: Color(0xFFEFF6FF),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Center(child: Icon(Icons.photo_library_rounded, size: 18, color: Color(0xFF3B82F6))),
-              ),
-              SizedBox(width: 10),
-              Text('Media, Links & Docs', style: TextStyle(fontFamily: 'Inter', fontSize: 16, fontWeight: FontWeight.w600, color: Color(0xFF111827))),
-              Spacer(),
-              InkWell(
-                onTap: () => Navigator.of(context).pop(),
-                borderRadius: BorderRadius.circular(8),
-                child: Container(
-                  padding: const EdgeInsets.all(5),
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: Color(0xFFE5E7EB)),
-                  ),
-                  child: Icon(Icons.close, size: 16, color: Color(0xFF6B7280)),
-                ),
-              ),
-            ],
-          ),
-        ),
-        // Tabs
-        Container(
-          decoration: BoxDecoration(
-            border: Border(bottom: BorderSide(color: Color(0xFFF3F4F6), width: 1)),
-          ),
-          child: TabBar(
-            controller: _tabController,
-            labelColor: Color(0xFF3B82F6),
-            unselectedLabelColor: Color(0xFF9CA3AF),
-            labelStyle: TextStyle(fontFamily: 'Inter', fontSize: 13, fontWeight: FontWeight.w600),
-            unselectedLabelStyle: TextStyle(fontFamily: 'Inter', fontSize: 13, fontWeight: FontWeight.w400),
-            indicatorColor: Color(0xFF3B82F6),
-            indicatorWeight: 2,
-            tabs: const [Tab(text: 'Media'), Tab(text: 'Docs'), Tab(text: 'Links')],
-          ),
-        ),
-        // Content
-        Expanded(
-          child: _messages == null
-              ? Center(child: SizedBox(width: 28, height: 28, child: CircularProgressIndicator(strokeWidth: 2.5, valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF3B82F6)))))
-              : TabBarView(
-                  controller: _tabController,
-                  children: [
-                    _buildMediaGrid(),
-                    _buildDocsList(),
-                    _buildLinksList(),
-                  ],
-                ),
-        ),
-      ],
+    if (_activeStream == null) return widget.placeholder;
+    return StreamBuilder<T>(
+      stream: _activeStream,
+      builder: widget.builder,
     );
   }
+}
 
-  Widget _buildMediaGrid() {
-    final images = _getImages();
-    if (images.isEmpty) {
-      return Center(
-        child: Column(mainAxisSize: MainAxisSize.min, children: [
-          Icon(Icons.photo_library_outlined, size: 48, color: Color(0xFFD1D5DB)),
-          SizedBox(height: 12),
-          Text('No media shared yet', style: TextStyle(fontFamily: 'Inter', fontSize: 14, color: Color(0xFF9CA3AF))),
-        ]),
-      );
-    }
-    return GridView.builder(
-      padding: const EdgeInsets.all(12),
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 4,
-        crossAxisSpacing: 6,
-        mainAxisSpacing: 6,
-      ),
-      itemCount: images.length,
-      itemBuilder: (context, index) {
-        final url = images[index];
-        return InkWell(
-          onTap: () => showDialog(
-            context: context,
-            builder: (_) => Dialog(
-              backgroundColor: Colors.black,
-              insetPadding: EdgeInsets.zero,
-              child: Stack(
-                children: [
-                  Center(
-                    child: InteractiveViewer(
-                      child: CachedNetworkImage(imageUrl: url, fit: BoxFit.contain),
-                    ),
-                  ),
-                  Positioned(
-                    top: 16, right: 16,
-                    child: IconButton(
-                      icon: Icon(Icons.close, color: Colors.white, size: 28),
-                      onPressed: () => Navigator.of(context).pop(),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-          borderRadius: BorderRadius.circular(8),
-          child: Hero(
-            tag: url,
-            transitionOnUserGestures: true,
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(8),
-              child: CachedNetworkImage(
-                imageUrl: url,
-                fit: BoxFit.cover,
-                placeholder: (_, __) => Container(color: Color(0xFFF3F4F6)),
-                errorWidget: (_, __, ___) => Container(
-                  color: Color(0xFFF3F4F6),
-                  child: Icon(Icons.broken_image_outlined, color: Color(0xFFD1D5DB), size: 24),
-                ),
-              ),
-            ),
-          ),
-        );
-      },
-    );
+/// Periodic REST fetch for Windows/Linux — same UI as StreamBuilder, no native plugin.
+class _RestPollBuilder<T> extends StatefulWidget {
+  const _RestPollBuilder({
+    required this.interval,
+    required this.fetch,
+    required this.builder,
+  });
+
+  final Duration interval;
+  final Future<T> Function() fetch;
+  final Widget Function(BuildContext context, AsyncSnapshot<T> snapshot) builder;
+
+  @override
+  State<_RestPollBuilder<T>> createState() => _RestPollBuilderState<T>();
+}
+
+class _RestPollBuilderState<T> extends State<_RestPollBuilder<T>> {
+  T? _data;
+  Object? _error;
+  bool _loading = true;
+  Timer? _timer;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+    _timer = Timer.periodic(widget.interval, (_) => _load());
   }
 
-  Widget _buildDocsList() {
-    final docs = _getDocs();
-    if (docs.isEmpty) {
-      return Center(
-        child: Column(mainAxisSize: MainAxisSize.min, children: [
-          Icon(Icons.folder_open_outlined, size: 48, color: Color(0xFFD1D5DB)),
-          SizedBox(height: 12),
-          Text('No documents shared yet', style: TextStyle(fontFamily: 'Inter', fontSize: 14, color: Color(0xFF9CA3AF))),
-        ]),
-      );
-    }
-    return ListView.builder(
-      padding: const EdgeInsets.symmetric(vertical: 4),
-      itemCount: docs.length,
-      itemBuilder: (context, index) {
-        final doc = docs[index];
-        final fileName = doc['fileName'] as String;
-        final url = doc['url'] as String;
-        final sender = doc['sender'] as String?;
-        final ext = fileName.split('.').last.toLowerCase();
-        IconData icon;
-        Color iconColor;
-        if (ext == 'pdf') { icon = Icons.picture_as_pdf_rounded; iconColor = Color(0xFFDC2626); }
-        else if (['doc', 'docx'].contains(ext)) { icon = Icons.description_rounded; iconColor = Color(0xFF2563EB); }
-        else if (['xls', 'xlsx', 'csv'].contains(ext)) { icon = Icons.table_chart_rounded; iconColor = Color(0xFF059669); }
-        else { icon = Icons.insert_drive_file_rounded; iconColor = Color(0xFF6B7280); }
-
-        return InkWell(
-          onTap: () async {
-            final uri = Uri.parse(url);
-            if (await canLaunchUrl(uri)) await launchUrl(uri, mode: LaunchMode.externalApplication);
-          },
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-            decoration: BoxDecoration(border: Border(bottom: BorderSide(color: Color(0xFFF3F4F6), width: 1))),
-            child: Row(children: [
-              Container(
-                width: 38, height: 38,
-                decoration: BoxDecoration(color: iconColor.withOpacity(0.1), borderRadius: BorderRadius.circular(8)),
-                child: Center(child: Icon(icon, size: 20, color: iconColor)),
-              ),
-              SizedBox(width: 12),
-              Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                Text(fileName, style: TextStyle(fontFamily: 'Inter', fontSize: 13, fontWeight: FontWeight.w500, color: Color(0xFF111827)), maxLines: 1, overflow: TextOverflow.ellipsis),
-                if (sender != null) ...[
-                  SizedBox(height: 2),
-                  Text(sender, style: TextStyle(fontFamily: 'Inter', fontSize: 11, color: Color(0xFF9CA3AF))),
-                ],
-              ])),
-              Icon(Icons.download_rounded, size: 18, color: Color(0xFF3B82F6)),
-            ]),
-          ),
-        );
-      },
-    );
+  @override
+  void dispose() {
+    _timer?.cancel();
+    super.dispose();
   }
 
-  Widget _buildLinksList() {
-    final links = _getLinks();
-    if (links.isEmpty) {
-      return Center(
-        child: Column(mainAxisSize: MainAxisSize.min, children: [
-          Icon(Icons.link_off_rounded, size: 48, color: Color(0xFFD1D5DB)),
-          SizedBox(height: 12),
-          Text('No links shared yet', style: TextStyle(fontFamily: 'Inter', fontSize: 14, color: Color(0xFF9CA3AF))),
-        ]),
-      );
+  Future<void> _load() async {
+    try {
+      final result = await widget.fetch();
+      if (mounted) {
+        setState(() {
+          _data = result;
+          _error = null;
+          _loading = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _error = e;
+          _loading = false;
+        });
+      }
     }
-    return ListView.builder(
-      padding: const EdgeInsets.symmetric(vertical: 4),
-      itemCount: links.length,
-      itemBuilder: (context, index) {
-        final link = links[index];
-        final url = link['url'] as String;
-        final preview = link['preview'] as String?;
-        return InkWell(
-          onTap: () async {
-            final uri = Uri.parse(url);
-            if (await canLaunchUrl(uri)) await launchUrl(uri, mode: LaunchMode.externalApplication);
-          },
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-            decoration: BoxDecoration(border: Border(bottom: BorderSide(color: Color(0xFFF3F4F6), width: 1))),
-            child: Row(children: [
-              Container(
-                width: 38, height: 38,
-                decoration: BoxDecoration(color: Color(0xFFEFF6FF), borderRadius: BorderRadius.circular(8)),
-                child: Center(child: Icon(Icons.link_rounded, size: 20, color: Color(0xFF3B82F6))),
-              ),
-              SizedBox(width: 12),
-              Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                Text(url, style: TextStyle(fontFamily: 'Inter', fontSize: 13, fontWeight: FontWeight.w500, color: Color(0xFF3B82F6)), maxLines: 1, overflow: TextOverflow.ellipsis),
-                if (preview != null) ...[
-                  SizedBox(height: 2),
-                  Text(preview, style: TextStyle(fontFamily: 'Inter', fontSize: 11, color: Color(0xFF9CA3AF)), maxLines: 1, overflow: TextOverflow.ellipsis),
-                ],
-              ])),
-              Icon(Icons.open_in_new_rounded, size: 16, color: Color(0xFF9CA3AF)),
-            ]),
-          ),
-        );
-      },
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return widget.builder(
+      context,
+      _loading && _data == null
+          ? AsyncSnapshot<T>.waiting()
+          : _error != null
+              ? AsyncSnapshot<T>.withError(
+                  ConnectionState.done, _error!, StackTrace.current)
+              : AsyncSnapshot<T>.withData(ConnectionState.done, _data as T),
     );
   }
 }

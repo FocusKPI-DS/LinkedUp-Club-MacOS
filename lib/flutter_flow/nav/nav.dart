@@ -28,6 +28,7 @@ import '/pages/profile_settings/profile_settings_widget.dart';
 import '/pages/invite_friends/invite_friends_widget.dart';
 import '/pages/user_summary/user_summary_widget.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
+import '/utils/debug_log.dart';
 import 'dart:io' show Platform;
 import 'package:branchio_dynamic_linking_akp5u6/index.dart'
     as $branchio_dynamic_linking_akp5u6;
@@ -116,19 +117,23 @@ GoRouter createRouter(AppStateNotifier appStateNotifier) {
         path: '/',
         builder: (context, params) {
           // Check for tab query parameter
-          print('🔍 _initialize route builder called');
-          print('   params.allParams: ${params.state.allParams}');
-          print(
+          debugLog('🔍 _initialize route builder called');
+          debugLog('   params.allParams: ${params.state.allParams}');
+          debugLog(
               '   params.uri.queryParameters: ${params.state.uri.queryParameters}');
           final tab = params.getParam('tab', ParamType.String);
-          print('   Extracted tab parameter: $tab');
+          debugLog('   Extracted tab parameter: $tab');
           final result = appStateNotifier.loggedIn
               ? (!kIsWeb && Platform.isIOS
                   ? NavBarPage(initialPage: tab ?? 'MobileChat')
                   : NavBarPage(initialPage: tab))
               : const WelcomeWidget();
-          print(
-              '   Returning NavBarPage with initialPage: ${tab ?? 'MobileChat'}');
+          final initialPageLabel = !appStateNotifier.loggedIn
+              ? 'Welcome'
+              : (!kIsWeb && Platform.isIOS)
+                  ? (tab ?? 'MobileChat')
+                  : (tab ?? 'Home');
+          debugLog('   Returning NavBarPage with initialPage: $initialPageLabel');
           return result;
         },
       ),
@@ -223,8 +228,9 @@ GoRouter createRouter(AppStateNotifier appStateNotifier) {
         path: MobileSettingsWidget.routePath,
         requireAuth: true,
         builder: (context, params) {
-          // Redirect macOS and web to desktop settings page
-          if (kIsWeb || (!kIsWeb && Platform.isMacOS)) {
+          // Redirect macOS, Windows, and web to desktop settings page
+          if (kIsWeb ||
+              (!kIsWeb && (Platform.isMacOS || Platform.isWindows))) {
             return params.isEmpty
                 ? NavBarPage(initialPage: 'ProfileSettings')
                 : const ProfileSettingsWidget();

@@ -38,6 +38,12 @@ class _AIAssistantWidgetState extends State<AIAssistantWidget> {
     super.dispose();
   }
 
+  DateTime? _parseTimestamp(dynamic value) {
+    if (value is Timestamp) return value.toDate();
+    if (value is DateTime) return value;
+    return null;
+  }
+
   void _scrollToBottom() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (_scrollController.hasClients) {
@@ -287,14 +293,14 @@ class _AIAssistantWidgetState extends State<AIAssistantWidget> {
                   final conversationTitle =
                       data['title'] as String? ?? 'New Chat';
                   final lastMessage = data['last_message'] as String? ?? '';
-                  final lastMessageAt = data['last_message_at'] as Timestamp?;
+                  final lastMessageAt = _parseTimestamp(data['last_message_at']);
                   final isPinned = data['is_pinned'] as bool? ?? false;
                   final isCurrentConversation = conversation.id == currentId;
 
                   String timeAgo = 'Just now';
                   if (lastMessageAt != null) {
                     final now = DateTime.now();
-                    final messageTime = lastMessageAt.toDate();
+                    final messageTime = lastMessageAt;
                     final difference = now.difference(messageTime);
 
                     if (difference.inMinutes < 1) {

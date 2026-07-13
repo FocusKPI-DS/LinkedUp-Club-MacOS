@@ -10,6 +10,12 @@ node_modules/
 
 # Build artifacts
 *.dmg
+dist/
+installer/Harvest.wxs
+installer/obj/
+
+# Local tooling (optional on machine)
+tool/nuget.exe
 
 # Agent
 .agent/
@@ -22,6 +28,12 @@ node_modules/
 # OS
 .DS_Store
 Thumbs.db
+
+# Windows Google OAuth (copy env.json.example → env.json, fill in, do not commit)
+env.json
+
+# Cursor (local IDE ignore rules)
+.cursorignore
 
 # Firebase Service Account Keys (SENSITIVE!)
 firebase/functions/serviceAccountKey.json

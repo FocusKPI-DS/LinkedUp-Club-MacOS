@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart' show kIsWeb;
+import '/utils/debug_log.dart';
 import 'qurio_message_handler_stub.dart'
     if (dart.library.html) 'qurio_message_handler_web.dart' as handler;
 import 'qurio_embedded_check_stub.dart'
@@ -53,13 +54,13 @@ class QurioEmbedded {
       _embedded = hasParam || isInIframe;
 
       if (_embedded) {
-        print('[QurioEmbedded] ✅ Running embedded inside Qurio'
+        debugLog('[QurioEmbedded] ✅ Running embedded inside Qurio'
             ' (param=$hasParam, iframe=$isInIframe)');
         // Start listening for postMessage from Qurio parent window
         handler.startListening();
       }
     } catch (e) {
-      print('[QurioEmbedded] ❌ Error checking embedded status: $e');
+      debugLog('[QurioEmbedded] ❌ Error checking embedded status: $e');
       _embedded = false;
     }
   }

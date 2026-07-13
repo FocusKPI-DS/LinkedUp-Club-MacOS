@@ -1,4 +1,6 @@
+import '/auth/onboarding_gate.dart';
 import '/auth/firebase_auth/auth_util.dart';
+import '/backend/firestore/firestore_desktop_adapter.dart';
 import '/backend/backend.dart';
 import '/backend/firebase_storage/storage.dart';
 import '/backend/schema/enums/enums.dart';
@@ -8,6 +10,7 @@ import '/flutter_flow/flutter_flow_util.dart';
 import '/flutter_flow/flutter_flow_widgets.dart';
 import '/flutter_flow/upload_data.dart';
 import '/flutter_flow/nav/nav.dart' show appNavigatorKey;
+import 'dart:async';
 import 'dart:io';
 import 'dart:math';
 import 'dart:ui';
@@ -53,6 +56,7 @@ class _OnboardingProfileWidgetState extends State<OnboardingProfileWidget>
   final scaffoldKey = GlobalKey<ScaffoldState>();
 
   final animationsMap = <String, AnimationInfo>{};
+  bool _checkingExistingProfile = true;
 
   @override
   void initState() {
@@ -61,6 +65,16 @@ class _OnboardingProfileWidgetState extends State<OnboardingProfileWidget>
 
     // On page load action.
     SchedulerBinding.instance.addPostFrameCallback((_) async {
+      final alreadyComplete = await resolveOnboardingComplete();
+      if (!mounted) return;
+      if (alreadyComplete) {
+        unawaited(markOnboardingCompleteIfFilledProfile());
+        context.go('/');
+        return;
+      }
+
+      setState(() => _checkingExistingProfile = false);
+
       await actions.closekeyboard();
       await actions.dismissKeyboard(
         context,
@@ -213,6 +227,13 @@ class _OnboardingProfileWidgetState extends State<OnboardingProfileWidget>
   @override
   Widget build(BuildContext context) {
     context.watch<FFAppState>();
+
+    if (_checkingExistingProfile) {
+      return Scaffold(
+        backgroundColor: FlutterFlowTheme.of(context).primaryBackground,
+        body: const Center(child: CircularProgressIndicator()),
+      );
+    }
 
     return Builder(
       builder: (context) => GestureDetector(
@@ -3831,7 +3852,7 @@ class _OnboardingProfileWidgetState extends State<OnboardingProfileWidget>
                                 curve: Curves.ease,
                               );
                             } else {
-                              await currentUserReference!.update({
+                              await fsPatchDocument(currentUserReference!, {
                                 ...createUsersRecordData(
                                   photoUrl: _model.userProfile,
                                   uid: currentUserReference?.id,

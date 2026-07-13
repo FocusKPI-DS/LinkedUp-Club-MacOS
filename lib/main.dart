@@ -1,11 +1,12 @@
 import 'dart:async';
 import 'dart:io' show Platform;
 import 'dart:math';
-import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/foundation.dart' show kIsWeb, PlatformDispatcher;
 import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/services.dart';
+import '/utils/desktop_pointer.dart';
 import 'package:provider/provider.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_web_plugins/url_strategy.dart';
@@ -28,6 +29,9 @@ import '/main/home/home_widget.dart';
 import '/pages/mobile_chat/mobile_chat_widget.dart';
 import '/pages/desktop_chat/desktop_chat_widget.dart';
 import '/pages/desktop_chat/chat_controller.dart';
+import '/pages/desktop_chat/desktop_safe_user_builder.dart';
+import '/pages/desktop_chat/rest_poll_builder.dart';
+import '/backend/firestore/firestore_desktop_adapter.dart';
 import '/pages/gmail/gmail_widget.dart';
 import '/pages/gmail/gmail_mobile_widget.dart';
 import '/pages/connections/connections_widget.dart';
@@ -48,6 +52,9 @@ import 'package:branchio_dynamic_linking_akp5u6/library_values.dart'
 import 'package:linkedup/backend/schema/structs/index.dart';
 import 'package:linkedup/custom_code/services/web_notification_service.dart';
 import 'package:linkedup/custom_code/services/app_update_service.dart';
+import 'package:linkedup/custom_code/widgets/app_update_dialog.dart';
+import 'package:linkedup/custom_code/widgets/windows_tray_host.dart';
+import 'package:linkedup/utils/debug_log.dart';
 import 'package:linkedup/utils/qurio_embedded.dart';
 import 'package:adaptive_platform_ui/adaptive_platform_ui.dart';
 import 'package:share_plus/share_plus.dart';
@@ -55,6 +62,20 @@ import 'package:url_launcher/url_launcher.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  await WindowsTrayHost.prepareWindow();
+
+  FlutterError.onError = (details) {
+    FlutterError.presentError(details);
+    debugLog('FlutterError: ${details.exceptionAsString()}');
+    if (details.stack != null) {
+      debugLog('${details.stack}');
+    }
+  };
+  PlatformDispatcher.instance.onError = (error, stack) {
+    debugLog('Uncaught error: $error');
+    debugLog('$stack');
+    return true;
+  };
 
   // Detect if running embedded inside Qurio desktop app (checks ?embedded=qurio URL param)
   QurioEmbedded.initialize();
@@ -144,8 +165,10 @@ void main() async {
       ],
       child: MyApp(),
     ));
-  } catch (e) {
+  } catch (e, stackTrace) {
     // Error during app initialization
+    debugLog('App initialization error: $e');
+    debugLog('$stackTrace');
     // Run app with minimal configuration if initialization fails
     runApp(MaterialApp(
       home: Scaffold(
@@ -172,6 +195,11 @@ bool _gmailPrefetchTriggered = false;
 /// Delayed so it doesn't compete with app startup and other Firebase traffic.
 void _triggerGmailPrefetchIfConnected() async {
   if (_gmailPrefetchTriggered) {
+    return;
+  }
+
+  // Defer Gmail cloud prefetch on desktop — reduces Firestore/API load at login.
+  if (!kIsWeb && (Platform.isWindows || Platform.isLinux)) {
     return;
   }
 
@@ -222,12 +250,12 @@ void _initializePushNotificationsAsync() async {
     try {
       // Listen for foreground FCM messages (when tab is open)
       FirebaseMessaging.onMessage.listen((RemoteMessage message) async {
-        print('🔔 [WEB] FOREGROUND FCM NOTIFICATION RECEIVED!');
-        print('   Title: ${message.notification?.title}');
-        print('   Body: ${message.notification?.body}');
-        print('   Data Keys: ${message.data.keys.toList()}');
-        print('   Raw Data: ${message.data}');
-        print('   Sender Ref: ${message.data['sender_ref']}');
+        debugLog('🔔 [WEB] FOREGROUND FCM NOTIFICATION RECEIVED!');
+        debugLog('   Title: ${message.notification?.title}');
+        debugLog('   Body: ${message.notification?.body}');
+        debugLog('   Data Keys: ${message.data.keys.toList()}');
+        debugLog('   Raw Data: ${message.data}');
+        debugLog('   Sender Ref: ${message.data['sender_ref']}');
 
         // Check if sender is blocked
         if (currentUserReference != null) {
@@ -272,7 +300,7 @@ void _initializePushNotificationsAsync() async {
                   }
                 }
               } catch (e) {
-                print('⚠️ Error parsing parameterData: $e');
+                debugLog('⚠️ Error parsing parameterData: $e');
               }
             }
 
@@ -290,13 +318,13 @@ void _initializePushNotificationsAsync() async {
               });
 
               if (isBlocked) {
-                print(
+                debugLog(
                     '🚫 [WEB] Notification suppressed: Sender $senderId is blocked');
                 return;
               }
             }
           } catch (e) {
-            print('⚠️ Error checking blocked status for notification: $e');
+            debugLog('⚠️ Error checking blocked status for notification: $e');
           }
         }
 
@@ -310,20 +338,20 @@ void _initializePushNotificationsAsync() async {
 
       // Listen for notification taps
       FirebaseMessaging.onMessageOpenedApp.listen((RemoteMessage message) {
-        print('🔔 [WEB] FCM notification tapped!');
-        print('   Title: ${message.notification?.title}');
-        print('   Data: ${message.data}');
+        debugLog('🔔 [WEB] FCM notification tapped!');
+        debugLog('   Title: ${message.notification?.title}');
+        debugLog('   Data: ${message.data}');
       });
 
       // Listen for token refresh
       FirebaseMessaging.instance.onTokenRefresh.listen((newToken) {
-        print('🔄 [WEB] FCM token refreshed: ${newToken.substring(0, 10)}...');
+        debugLog('🔄 [WEB] FCM token refreshed: ${newToken.substring(0, 10)}...');
       });
 
-      print('✅ Web FCM notification handlers initialized');
+      debugLog('✅ Web FCM notification handlers initialized');
     } catch (e) {
-      print('❌ Web FCM notification setup failed: $e');
-      print('   Stack trace: ${StackTrace.current}');
+      debugLog('❌ Web FCM notification setup failed: $e');
+      debugLog('   Stack trace: ${StackTrace.current}');
     }
   }
   // Handle macOS/iOS platforms
@@ -358,17 +386,17 @@ void _initializePushNotificationsAsync() async {
           const platform = MethodChannel('com.linkedup.notifications');
           platform.setMethodCallHandler((call) async {
             if (call.method == 'onNotificationTapped') {
-              print('📱 [FLUTTER] Received notification tap from iOS native');
+              debugLog('📱 [FLUTTER] Received notification tap from iOS native');
               final data = call.arguments as Map<dynamic, dynamic>?;
               if (data != null) {
-                print('   Data received: $data');
+                debugLog('   Data received: $data');
                 // Convert data to String keys
                 final messageData = <String, dynamic>{};
                 for (final entry in data.entries) {
                   messageData[entry.key.toString()] = entry.value;
                 }
-                print('   Converted data: $messageData');
-                print('   initialPageName: ${messageData['initialPageName']}');
+                debugLog('   Converted data: $messageData');
+                debugLog('   initialPageName: ${messageData['initialPageName']}');
 
                 // Create a RemoteMessage manually
                 final message = RemoteMessage(
@@ -376,15 +404,15 @@ void _initializePushNotificationsAsync() async {
                       messageData['google.c.a.e'] as String?,
                   data: messageData,
                 );
-                print(
+                debugLog(
                     '   Created RemoteMessage, calling handleNotificationNavigation...');
                 await handleNotificationNavigation(message);
               } else {
-                print('   ⚠️ No data received from iOS');
+                debugLog('   ⚠️ No data received from iOS');
               }
             }
           });
-          print('✅ Method channel handler set up for iOS notification taps');
+          debugLog('✅ Method channel handler set up for iOS notification taps');
 
           // Register for remote notifications after permission is granted
           try {
@@ -409,33 +437,33 @@ void _initializePushNotificationsAsync() async {
               try {
                 if (retries > 0) {
                   await Future.delayed(const Duration(seconds: 2));
-                  print(
+                  debugLog(
                       '🔄 Retry ${retries + 1}/$maxRetries getting FCM token...');
                 }
                 fcmToken = await messaging.getToken();
               } catch (e) {
-                print(
+                debugLog(
                     '⚠️ Error getting FCM token (attempt ${retries + 1}): $e');
               }
               retries++;
             }
 
             if (fcmToken != null) {
-              print(
+              debugLog(
                   '✅ FCM Token obtained: ${fcmToken.substring(0, min(10, fcmToken.length))}...');
               if (currentUserReference != null) {
                 try {
                   await actions.ensureFcmToken(currentUserReference!);
                 } catch (e) {
-                  print('⚠️ Failed to save FCM token: $e');
+                  debugLog('⚠️ Failed to save FCM token: $e');
                 }
               }
             } else {
-              print('❌ Failed to get FCM token after $maxRetries attempts');
+              debugLog('❌ Failed to get FCM token after $maxRetries attempts');
             }
           } catch (e) {
-            print('⚠️ iOS: Token check failed: $e');
-            print(
+            debugLog('⚠️ iOS: Token check failed: $e');
+            debugLog(
                 '   Note: Native iOS logs appear in Xcode console, not Flutter console');
           }
         }
@@ -446,22 +474,22 @@ void _initializePushNotificationsAsync() async {
         });
 
         // Listen for notification taps (when app is opened from notification)
-        print('🔍 Setting up onMessageOpenedApp listener...');
+        debugLog('🔍 Setting up onMessageOpenedApp listener...');
         FirebaseMessaging.onMessageOpenedApp.listen((RemoteMessage message) {
-          print('📱 [MAIN] Notification tapped - navigating...');
-          print('   Message ID: ${message.messageId}');
-          print('   Data: ${message.data}');
-          print('   Data keys: ${message.data.keys}');
-          print('   initialPageName: ${message.data['initialPageName']}');
-          print('   parameterData: ${message.data['parameterData']}');
+          debugLog('📱 [MAIN] Notification tapped - navigating...');
+          debugLog('   Message ID: ${message.messageId}');
+          debugLog('   Data: ${message.data}');
+          debugLog('   Data keys: ${message.data.keys}');
+          debugLog('   initialPageName: ${message.data['initialPageName']}');
+          debugLog('   parameterData: ${message.data['parameterData']}');
           handleNotificationNavigation(message);
         });
-        print('✅ onMessageOpenedApp listener registered');
+        debugLog('✅ onMessageOpenedApp listener registered');
 
         // Check if app was opened from a notification (when app was terminated)
         final initialMessage = await messaging.getInitialMessage();
         if (initialMessage != null) {
-          print('📱 App opened from notification (terminated) - navigating...');
+          debugLog('📱 App opened from notification (terminated) - navigating...');
           // Wait for app to finish initializing, then navigate
           WidgetsBinding.instance.addPostFrameCallback((_) async {
             await Future.delayed(const Duration(milliseconds: 500));
@@ -477,18 +505,18 @@ void _initializePushNotificationsAsync() async {
               try {
                 await actions.ensureFcmToken(currentUserReference!);
               } catch (e) {
-                print('⚠️ Failed to save refreshed FCM token: $e');
+                debugLog('⚠️ Failed to save refreshed FCM token: $e');
               }
             });
           }
         });
       } else {
-        print(
+        debugLog(
             '❌ Notifications NOT authorized! Status: ${settings.authorizationStatus}');
       }
     } catch (e) {
-      print('❌ Push notification setup failed: $e');
-      print('   Stack trace: ${StackTrace.current}');
+      debugLog('❌ Push notification setup failed: $e');
+      debugLog('   Stack trace: ${StackTrace.current}');
     }
   }
 }
@@ -596,6 +624,8 @@ class _MyAppState extends State<MyApp> {
           .map((e) => getRoute(e))
           .toList();
   late Stream<BaseAuthUser> userStream;
+  Timer? _windowsUpdateCheckTimer;
+  bool _updateDialogShowing = false;
 
   final authUserSub = authenticatedUserStream.listen((user) {
     // Trigger Gmail prefetch when user is authenticated
@@ -605,12 +635,15 @@ class _MyAppState extends State<MyApp> {
       // Ensure FCM token is saved when user logs in
       // This handles the case where token was obtained before login
       Future.delayed(const Duration(seconds: 1), () async {
+        if (!kIsWeb && (Platform.isWindows || Platform.isLinux)) {
+          return;
+        }
         try {
           if (currentUserReference != null) {
             await actions.ensureFcmToken(currentUserReference!);
           }
         } catch (e) {
-          print('⚠️ Failed to ensure FCM token after login: $e');
+          debugLog('⚠️ Failed to ensure FCM token after login: $e');
         }
       });
     }
@@ -639,6 +672,7 @@ class _MyAppState extends State<MyApp> {
 
   @override
   void dispose() {
+    _windowsUpdateCheckTimer?.cancel();
     authUserSub.cancel();
     // fcmTokenSub.cancel(); // Commented out since fcmTokenSub is disabled
     super.dispose();
@@ -674,210 +708,92 @@ class _MyAppState extends State<MyApp> {
       }
     }
 
-    // Check for app updates after initialization (iOS and macOS)
-    if (!kIsWeb && (Platform.isIOS || Platform.isMacOS)) {
+    // Check for app updates after initialization
+    if (!kIsWeb &&
+        (Platform.isIOS || Platform.isMacOS || Platform.isWindows)) {
       _checkForAppUpdate();
+    }
+
+    // Windows: poll GitHub releases every minute while testing
+    if (!kIsWeb && Platform.isWindows) {
+      _windowsUpdateCheckTimer = Timer.periodic(
+        AppUpdateService.checkInterval,
+        (_) => _checkForAppUpdate(immediate: true),
+      );
     }
   }
 
   /// Check for app updates and show alert if update is available
-  Future<void> _checkForAppUpdate() async {
+  Future<void> _checkForAppUpdate({
+    bool force = false,
+    bool immediate = false,
+  }) async {
+    if (_updateDialogShowing) return;
     try {
-      // Wait for the app to fully render
-      await Future.delayed(const Duration(seconds: 3));
+      if (!force && !immediate) {
+        await Future.delayed(const Duration(seconds: 3));
+      }
 
-      final hasUpdate = await AppUpdateService.checkForUpdate();
+      final hasUpdate = await AppUpdateService.checkForUpdate(force: force);
       if (hasUpdate == true && mounted) {
         WidgetsBinding.instance.addPostFrameCallback((_) {
           final context = appNavigatorKey.currentContext;
-          if (context != null && mounted) {
-            _showUpdateDialog(context);
+          if (context == null || !mounted || _updateDialogShowing) return;
+          _updateDialogShowing = true;
+          Future<void> dialogFuture;
+          if (Platform.isMacOS) {
+            dialogFuture = AppUpdateDialog.showMac(context);
+          } else if (Platform.isWindows) {
+            dialogFuture = AppUpdateDialog.showWindows(context);
+          } else {
+            dialogFuture = _showUpdateDialog(context);
           }
+          dialogFuture.whenComplete(() {
+            _updateDialogShowing = false;
+          });
         });
       }
     } catch (e) {
-      print('Error checking for app update: $e');
+      debugLog('Error checking for app update: $e');
     }
   }
 
-  /// Show a macOS-native styled update dialog pointing to the App Store
+  /// Show update alert dialog for iOS (App Store)
   Future<void> _showUpdateDialog(BuildContext context) async {
     try {
-      final latestVersion =
-          await AppUpdateService.fetchLatestVersionFromAppStore();
-      if (latestVersion == null || !mounted) return;
-
-      final currentVersion = await AppUpdateService.getCurrentVersion();
-
-      if (!mounted) return;
-
-      await showDialog(
+      await AdaptiveAlertDialog.show(
         context: context,
-        barrierDismissible: true,
-        barrierColor: Colors.black.withOpacity(0.3),
-        builder: (dialogCtx) => Center(
-          child: Material(
-            color: Colors.transparent,
-            child: Container(
-              width: 360,
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(10),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(0.15),
-                    blurRadius: 20,
-                    offset: const Offset(0, 4),
-                  ),
-                ],
-              ),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  // Header
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(20, 20, 20, 0),
-                    child: Column(
-                      children: [
-                        Container(
-                          width: 40,
-                          height: 40,
-                          decoration: BoxDecoration(
-                            color: const Color(0xFF007AFF).withOpacity(0.1),
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                          child: const Icon(
-                            Icons.system_update_rounded,
-                            color: Color(0xFF007AFF),
-                            size: 22,
-                          ),
-                        ),
-                        const SizedBox(height: 12),
-                        const Text(
-                          'Update Available',
-                          style: TextStyle(
-                            fontFamily: 'SF Pro Text',
-                            fontSize: 15,
-                            fontWeight: FontWeight.w600,
-                            color: Color(0xFF1D1D1F),
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          'Lona v$latestVersion is now available.\nYou are currently on v$currentVersion.',
-                          textAlign: TextAlign.center,
-                          style: const TextStyle(
-                            fontFamily: 'SF Pro Text',
-                            fontSize: 13,
-                            fontWeight: FontWeight.w400,
-                            color: Color(0xFF636366),
-                            height: 1.5,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 20),
-                  // Divider
-                  Container(height: 0.5, color: const Color(0xFFE5E5E5)),
-                  // Buttons
-                  IntrinsicHeight(
-                    child: Row(
-                      children: [
-                        // Skip This Version
-                        Expanded(
-                          child: InkWell(
-                            onTap: () {
-                              AppUpdateService.skipVersion(latestVersion);
-                              Navigator.pop(dialogCtx);
-                            },
-                            borderRadius: const BorderRadius.only(
-                              bottomLeft: Radius.circular(10),
-                            ),
-                            child: const Padding(
-                              padding: EdgeInsets.symmetric(vertical: 12),
-                              child: Text(
-                                'Skip',
-                                textAlign: TextAlign.center,
-                                style: TextStyle(
-                                  fontFamily: 'SF Pro Text',
-                                  fontSize: 13,
-                                  fontWeight: FontWeight.w400,
-                                  color: Color(0xFF8E8E93),
-                                ),
-                              ),
-                            ),
-                          ),
-                        ),
-                        Container(width: 0.5, color: const Color(0xFFE5E5E5)),
-                        // Later
-                        Expanded(
-                          child: InkWell(
-                            onTap: () => Navigator.pop(dialogCtx),
-                            child: const Padding(
-                              padding: EdgeInsets.symmetric(vertical: 12),
-                              child: Text(
-                                'Later',
-                                textAlign: TextAlign.center,
-                                style: TextStyle(
-                                  fontFamily: 'SF Pro Text',
-                                  fontSize: 13,
-                                  fontWeight: FontWeight.w400,
-                                  color: Color(0xFF636366),
-                                ),
-                              ),
-                            ),
-                          ),
-                        ),
-                        Container(width: 0.5, color: const Color(0xFFE5E5E5)),
-                        // Update
-                        Expanded(
-                          child: InkWell(
-                            onTap: () async {
-                              Navigator.pop(dialogCtx);
-                              final appStoreUrl =
-                                  AppUpdateService.getAppStoreUrl();
-                              final uri = Uri.parse(appStoreUrl);
-                              if (await canLaunchUrl(uri)) {
-                                await launchUrl(uri,
-                                    mode: LaunchMode.externalApplication);
-                              }
-                            },
-                            borderRadius: const BorderRadius.only(
-                              bottomRight: Radius.circular(10),
-                            ),
-                            child: const Padding(
-                              padding: EdgeInsets.symmetric(vertical: 12),
-                              child: Text(
-                                'Update',
-                                textAlign: TextAlign.center,
-                                style: TextStyle(
-                                  fontFamily: 'SF Pro Text',
-                                  fontSize: 13,
-                                  fontWeight: FontWeight.w600,
-                                  color: Color(0xFF007AFF),
-                                ),
-                              ),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
+        title: 'Update Available',
+        message:
+            'A new version of Lona is available on the App Store. Please update to continue using the latest features and improvements.',
+        icon: 'arrow.down.circle.fill',
+        actions: [
+          AlertAction(
+            title: 'Later',
+            style: AlertActionStyle.cancel,
+            onPressed: () {},
           ),
-        ),
+          AlertAction(
+            title: 'Update',
+            style: AlertActionStyle.primary,
+            onPressed: () async {
+              final appStoreUrl = AppUpdateService.getAppStoreUrl();
+              final uri = Uri.parse(appStoreUrl);
+              if (await canLaunchUrl(uri)) {
+                await launchUrl(uri, mode: LaunchMode.externalApplication);
+              }
+            },
+          ),
+        ],
       );
     } catch (e) {
-      print('Error showing update dialog: $e');
+      debugLog('Error showing update dialog: $e');
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp.router(
+    final app = MaterialApp.router(
       debugShowCheckedModeBanner: false,
       title: 'Lona',
       scrollBehavior: MyAppScrollBehavior(),
@@ -896,6 +812,18 @@ class _MyAppState extends State<MyApp> {
           seedColor: Colors.blue,
           brightness: Brightness.light,
         ),
+        textButtonTheme: TextButtonThemeData(
+          style: desktopClickableButtonStyle(null),
+        ),
+        elevatedButtonTheme: ElevatedButtonThemeData(
+          style: desktopClickableButtonStyle(null),
+        ),
+        outlinedButtonTheme: OutlinedButtonThemeData(
+          style: desktopClickableButtonStyle(null),
+        ),
+        iconButtonTheme: IconButtonThemeData(
+          style: desktopClickableButtonStyle(null),
+        ),
       ),
       darkTheme: ThemeData(
         brightness: Brightness.dark,
@@ -905,19 +833,26 @@ class _MyAppState extends State<MyApp> {
           seedColor: Colors.blue,
           brightness: Brightness.dark,
         ),
+        textButtonTheme: TextButtonThemeData(
+          style: desktopClickableButtonStyle(null),
+        ),
+        elevatedButtonTheme: ElevatedButtonThemeData(
+          style: desktopClickableButtonStyle(null),
+        ),
+        outlinedButtonTheme: OutlinedButtonThemeData(
+          style: desktopClickableButtonStyle(null),
+        ),
+        iconButtonTheme: IconButtonThemeData(
+          style: desktopClickableButtonStyle(null),
+        ),
       ),
       themeMode: _themeMode,
       routerConfig: _router,
-      builder: (context, child) {
-        final scale = FFAppState().uiScale;
-        return MediaQuery(
-          data: MediaQuery.of(context).copyWith(
-            textScaler: TextScaler.linear(scale),
-          ),
-          child: child ?? const SizedBox.shrink(),
-        );
-      },
     );
+    if (WindowsTrayHost.isEnabled) {
+      return WindowsTrayHost(child: app);
+    }
+    return app;
   }
 }
 
@@ -939,11 +874,19 @@ class NavBarPage extends StatefulWidget {
 
 /// This is the private State class that goes with NavBarPage.
 class _NavBarPageState extends State<NavBarPage> with WidgetsBindingObserver {
-  String _currentPageName = 'DesktopChat'; // Default to Chat (Home is hidden)
+  String _currentPageName = 'Home';
   late Widget? _currentPage;
 
-  // Persistent MobileChatWidget to preserve state across parent rebuilds
-  late final Widget _mobileChatWidget;
+  // Lazy-init chat UIs so Windows does not load chat stack at login (Home first).
+  Widget? _mobileChatWidgetCache;
+  Widget get _mobileChatWidget =>
+      _mobileChatWidgetCache ??= const MobileChatWidget(
+        key: ValueKey('mobile_chat_widget'),
+      );
+
+  Widget? _desktopChatWidgetCache;
+  Widget get _desktopChatWidget =>
+      _desktopChatWidgetCache ??= const DesktopChatWidget();
 
   // Presence system for online status (like Slack)
   Timer? _inactivityTimer;
@@ -953,17 +896,8 @@ class _NavBarPageState extends State<NavBarPage> with WidgetsBindingObserver {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    // Set platform-appropriate default page (Home is hidden)
-    if (!kIsWeb && Platform.isIOS) {
-      _currentPageName = 'MobileChat';
-    }
     _currentPageName = widget.initialPage ?? _currentPageName;
     _currentPage = widget.page;
-
-    // Initialize MobileChatWidget once to preserve its state
-    _mobileChatWidget = const MobileChatWidget(
-      key: ValueKey('mobile_chat_widget'),
-    );
 
     // Initialize presence system after a delay to ensure user is loaded
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -985,7 +919,14 @@ class _NavBarPageState extends State<NavBarPage> with WidgetsBindingObserver {
   // Track user activity and reset inactivity timer
   void _trackActivity() {
     _resetInactivityTimer();
-    if (currentUserReference != null) {
+    if (currentUserReference == null) return;
+    if (useWindowsFirestoreRest) {
+      fsTryGetUserOnce(currentUserReference!).then((user) {
+        if (user != null && !user.isOnline) {
+          _updateOnlineStatus(true);
+        }
+      });
+    } else {
       UsersRecord.getDocumentOnce(currentUserReference!).then((user) {
         if (!user.isOnline) {
           _updateOnlineStatus(true);
@@ -1007,9 +948,13 @@ class _NavBarPageState extends State<NavBarPage> with WidgetsBindingObserver {
     if (currentUserReference == null) return;
 
     try {
-      await currentUserReference!.update({
-        'is_online': isOnline,
-      });
+      if (useWindowsFirestoreRest) {
+        await fsPatchDocument(currentUserReference!, {'is_online': isOnline});
+      } else {
+        await currentUserReference!.update({
+          'is_online': isOnline,
+        });
+      }
     } catch (e) {
       // Silently fail - don't spam console
     }
@@ -1055,8 +1000,7 @@ class _NavBarPageState extends State<NavBarPage> with WidgetsBindingObserver {
         FFAppState().chatPageLastOpened = DateTime.now();
       }
     } else {
-      // Default to Chat instead of Home
-      _currentPageName = (!kIsWeb && Platform.isIOS) ? 'MobileChat' : 'DesktopChat';
+      _currentPageName = 'Home';
     }
   }
 
@@ -1069,7 +1013,7 @@ class _NavBarPageState extends State<NavBarPage> with WidgetsBindingObserver {
       'Home': const HomeWidget(),
       // 'Chat': const ChatWidget(), // Commented out - using MobileChat (now called Chat) instead
       'MobileChat': _mobileChatWidget, // Use stored instance to preserve state
-      'DesktopChat': DesktopChatWidget(), // Desktop chat for macOS
+      'DesktopChat': _desktopChatWidget, // Desktop chat for macOS / Windows
       'Gmail': const GmailWidget(), // Gmail page for macOS
       'GmailMobile': const GmailMobileWidget(), // Gmail mobile page for iOS
       'AIAssistant': const AIAssistantWidget(),
@@ -1084,13 +1028,20 @@ class _NavBarPageState extends State<NavBarPage> with WidgetsBindingObserver {
 
     // Create a mapping for the navbar items to their corresponding tab indices
     final navItemToIndex = {
-      // Home is hidden — not in navigation
-      // 'Home': 0,
-      'MobileChat': 0, // Chat - for iOS (now first item)
-      'DesktopChat': 0, // Desktop Chat - for macOS (now first item)
-      'Connections': 1, // Connections - for iOS and Desktop
-      'ProfileSettings': 2, // Settings - for macOS
-      'MobileSettings': 2, // Settings - for iOS
+      'Home': 0,
+      // 'Chat': 1, // Commented out - using MobileChat instead
+      'MobileChat': 1, // Chat (renamed from Mobile Chat) - for iOS
+      'DesktopChat': 1, // Desktop Chat - for macOS
+      // 'Gmail': 2, // Gmail - for macOS
+      // 'GmailMobile': 2, // Gmail Mobile - for iOS
+      // 'AIAssistant': 3, // Desktop AI Assistant - Removed
+      // 'MobileAssistant': 3, // Mobile AI Assistant - Removed
+      // 'Discover': 3, // Commented out
+      // 'Announcements':
+      //    5, // News - for desktop (Index 5 to avoid collision with Connections)
+      'Connections': 2, // Connections - for iOS and Desktop (Index 2)
+      'ProfileSettings': 3, // Settings - for macOS
+      'MobileSettings': 3, // Settings - for iOS (updated to index 3)
     };
 
     final currentIndex = navItemToIndex[_currentPageName] ?? 0;
@@ -1109,8 +1060,9 @@ class _NavBarPageState extends State<NavBarPage> with WidgetsBindingObserver {
             connectionRequestCount = userSnapshot.data!.friendRequests.length;
           }
 
-          // Map tab indices to page names (3 items: Chat, Connections, Settings — Home hidden)
+          // Map tab indices to page names (3 items: Home, Chat, Connections, Settings)
           final pageNames = [
+            'Home',
             'MobileChat',
             // 'GmailMobile',
             'Connections',
@@ -1119,6 +1071,10 @@ class _NavBarPageState extends State<NavBarPage> with WidgetsBindingObserver {
 
           // Build items with dynamic label for Connections
           final items = <AdaptiveNavigationDestination>[
+            AdaptiveNavigationDestination(
+              icon: 'house.fill',
+              label: 'Home',
+            ),
             AdaptiveNavigationDestination(
               icon: 'message.fill',
               label: 'Chat',
@@ -1143,7 +1099,7 @@ class _NavBarPageState extends State<NavBarPage> with WidgetsBindingObserver {
           ];
 
           return AdaptiveScaffold(
-            body: _currentPage ?? tabs[_currentPageName] ?? tabs['MobileChat']!,
+            body: _currentPage ?? tabs[_currentPageName] ?? tabs['Home']!,
             bottomNavigationBar: AdaptiveBottomNavigationBar(
               useNativeBottomBar: true,
               items: items,
@@ -1170,7 +1126,7 @@ class _NavBarPageState extends State<NavBarPage> with WidgetsBindingObserver {
             _buildVerticalNavBar(tabs, currentIndex, navItemToIndex),
             // Main Content Area
             Expanded(
-              child: _currentPage ?? tabs[_currentPageName] ?? tabs['DesktopChat']!,
+              child: _currentPage ?? tabs[_currentPageName] ?? tabs['Home']!,
             ),
           ],
         ),
@@ -1179,6 +1135,54 @@ class _NavBarPageState extends State<NavBarPage> with WidgetsBindingObserver {
   }
 
   Widget _buildNewsUnreadIndicator() {
+    Widget buildFromPosts(List<PostsRecord>? newsPosts) {
+      if (newsPosts == null || newsPosts.isEmpty) {
+        return SizedBox.shrink();
+      }
+
+      final latestNews = newsPosts.first;
+      final newsCreatedAt = latestNews.createdAt;
+      if (newsCreatedAt == null) {
+        return SizedBox.shrink();
+      }
+
+      final cutoff = DateTime.now().subtract(const Duration(hours: 48));
+      if (newsCreatedAt.isBefore(cutoff)) {
+        return SizedBox.shrink();
+      }
+
+      final lastOpened = FFAppState().newsPageLastOpened;
+      if (lastOpened != null && lastOpened.isAfter(newsCreatedAt)) {
+        return SizedBox.shrink();
+      }
+
+      return Positioned(
+        right: -6,
+        top: -6,
+        child: Container(
+          width: 8,
+          height: 8,
+          decoration: BoxDecoration(
+            color: Colors.red,
+            shape: BoxShape.circle,
+            border: Border.all(
+              color: Colors.white,
+              width: 1.5,
+            ),
+          ),
+        ),
+      );
+    }
+
+    if (useWindowsFirestoreRest) {
+      return RestPollBuilder<List<PostsRecord>>(
+        interval: const Duration(minutes: 2),
+        fetch: () => fsQueryLatestNewsPosts(),
+        builder: (context, snapshot) =>
+            buildFromPosts(snapshot.data),
+      );
+    }
+
     return StreamBuilder<List<PostsRecord>>(
       stream: queryPostsRecord(
         queryBuilder: (posts) => posts
@@ -1190,53 +1194,18 @@ class _NavBarPageState extends State<NavBarPage> with WidgetsBindingObserver {
         if (!snapshot.hasData) {
           return SizedBox.shrink();
         }
-
-        final newsPosts = snapshot.data!;
-        if (newsPosts.isEmpty) {
-          return SizedBox.shrink();
-        }
-
-        final latestNews = newsPosts.first;
-        final newsCreatedAt = latestNews.createdAt;
-        if (newsCreatedAt == null) {
-          return SizedBox.shrink();
-        }
-
-        // Check if there's new news within 48 hours
-        final cutoff = DateTime.now().subtract(const Duration(hours: 48));
-        if (newsCreatedAt.isBefore(cutoff)) {
-          return SizedBox.shrink();
-        }
-
-        // Check if News page was opened after the latest news was posted
-        final lastOpened = FFAppState().newsPageLastOpened;
-        if (lastOpened != null && lastOpened.isAfter(newsCreatedAt)) {
-          return SizedBox.shrink();
-        }
-
-        // Show red dot indicator
-        return Positioned(
-          right: -6,
-          top: -6,
-          child: Container(
-            width: 8,
-            height: 8,
-            decoration: BoxDecoration(
-              color: Colors.red,
-              shape: BoxShape.circle,
-              border: Border.all(
-                color: Colors.white,
-                width: 1.5,
-              ),
-            ),
-          ),
-        );
+        return buildFromPosts(snapshot.data);
       },
     );
   }
 
   Widget _buildChatUnreadIndicator() {
     if (currentUserReference == null) {
+      return SizedBox.shrink();
+    }
+
+    // Defer ChatController on Windows until user opens Chat (avoids post-login crash).
+    if (!kIsWeb && Platform.isWindows) {
       return SizedBox.shrink();
     }
 
@@ -1291,52 +1260,181 @@ class _NavBarPageState extends State<NavBarPage> with WidgetsBindingObserver {
       return SizedBox.shrink();
     }
 
-    return StreamBuilder<UsersRecord>(
-      stream: UsersRecord.getDocument(currentUserReference!),
-      builder: (context, snapshot) {
-        if (!snapshot.hasData) {
-          return SizedBox.shrink();
-        }
+    Widget buildBadge(UsersRecord? user) {
+      if (user == null) {
+        return SizedBox.shrink();
+      }
 
-        final user = snapshot.data!;
-        final requestCount = user.friendRequests.length;
+      final requestCount = user.friendRequests.length;
 
-        if (requestCount == 0) {
-          return SizedBox.shrink();
-        }
+      if (requestCount == 0) {
+        return SizedBox.shrink();
+      }
 
-        // Show blue badge with count
-        return Positioned(
-          right: -6,
-          top: -6,
-          child: Container(
-            padding: EdgeInsets.all(3),
-            decoration: BoxDecoration(
-              color: Color(0xFF3B82F6),
-              shape: BoxShape.circle,
-              border: Border.all(
+      return Positioned(
+        right: -6,
+        top: -6,
+        child: Container(
+          padding: EdgeInsets.all(3),
+          decoration: BoxDecoration(
+            color: Color(0xFF3B82F6),
+            shape: BoxShape.circle,
+            border: Border.all(
+              color: Colors.white,
+              width: 1.5,
+            ),
+          ),
+          constraints: BoxConstraints(
+            minWidth: 16,
+            minHeight: 16,
+          ),
+          child: Center(
+            child: Text(
+              requestCount > 99 ? '99+' : '$requestCount',
+              style: TextStyle(
                 color: Colors.white,
-                width: 1.5,
+                fontSize: 9,
+                fontWeight: FontWeight.w700,
               ),
+              textAlign: TextAlign.center,
             ),
-            constraints: BoxConstraints(
-              minWidth: 16,
-              minHeight: 16,
+          ),
+        ),
+      );
+    }
+
+    return DesktopSafeUserPollBuilder(
+      userRef: currentUserReference!,
+      fetchOnce: fsGetUserOnce,
+      builder: (context, user) => buildBadge(user),
+    );
+  }
+
+  Widget _buildSidebarUserAvatar({required bool isOnline}) {
+    return Stack(
+      clipBehavior: Clip.none,
+      children: [
+        Container(
+          width: 48,
+          height: 48,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            border: Border.all(
+              color: Colors.white,
+              width: 2,
             ),
-            child: Center(
-              child: Text(
-                requestCount > 99 ? '99+' : '$requestCount',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 9,
-                  fontWeight: FontWeight.w700,
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.08),
+                blurRadius: 8,
+                offset: Offset(0, 2),
+              ),
+            ],
+          ),
+          child: currentUserPhoto.isNotEmpty
+              ? ClipOval(
+                  child: CachedNetworkImage(
+                    imageUrl: currentUserPhoto,
+                    width: 48,
+                    height: 48,
+                    fit: BoxFit.cover,
+                    placeholder: (context, url) => Container(
+                      width: 48,
+                      height: 48,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: Color(0xFFE8EBED),
+                      ),
+                      child: Icon(
+                        Icons.person,
+                        color: Color(0xFF6B7280),
+                        size: 24,
+                      ),
+                    ),
+                    errorWidget: (context, url, error) => Container(
+                      width: 48,
+                      height: 48,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        gradient: LinearGradient(
+                          colors: [
+                            Color(0xFF2563EB),
+                            Color(0xFF1D4ED8),
+                          ],
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                        ),
+                      ),
+                      child: Center(
+                        child: Text(
+                          currentUserDisplayName.isNotEmpty
+                              ? currentUserDisplayName[0].toUpperCase()
+                              : 'U',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 18,
+                            fontWeight: FontWeight.w600,
+                            letterSpacing: 0.5,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                )
+              : Container(
+                  width: 48,
+                  height: 48,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    gradient: LinearGradient(
+                      colors: [
+                        Color(0xFF2563EB),
+                        Color(0xFF1D4ED8),
+                      ],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                    ),
+                  ),
+                  child: Center(
+                    child: Text(
+                      currentUserDisplayName.isNotEmpty
+                          ? currentUserDisplayName[0].toUpperCase()
+                          : 'U',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 18,
+                        fontWeight: FontWeight.w600,
+                        letterSpacing: 0.5,
+                      ),
+                    ),
+                  ),
                 ),
-                textAlign: TextAlign.center,
+        ),
+        if (isOnline)
+          Positioned(
+            right: 0,
+            bottom: 0,
+            child: Container(
+              width: 14,
+              height: 14,
+              decoration: BoxDecoration(
+                color: Color(0xFF10B981),
+                shape: BoxShape.circle,
+                border: Border.all(
+                  color: Colors.white,
+                  width: 2.5,
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: Color(0xFF10B981).withOpacity(0.3),
+                    blurRadius: 4,
+                    spreadRadius: 1,
+                  ),
+                ],
               ),
             ),
           ),
-        );
-      },
+      ],
     );
   }
 
@@ -1365,22 +1463,40 @@ class _NavBarPageState extends State<NavBarPage> with WidgetsBindingObserver {
   Widget _buildVerticalNavBar(Map<String, Widget> tabs, int currentIndex,
       Map<String, int> navItemToIndex) {
     final navItems = [
-      // Home is hidden — not in navigation
+      {
+        'icon': Icons.home_rounded,
+        'label': 'Home',
+        'page': 'Home',
+      },
       // {
-      //   'icon': Icons.home_rounded,
-      //   'label': 'Home',
-      //   'page': 'Home',
-      // },
+      //   'icon': Icons.chat_rounded,
+      //   'label': 'Chat',
+      //   'page': 'Chat',
+      // }, // Commented out - using DesktopChat for macOS and web
       {
         'icon': Icons.chat_bubble_outline_rounded,
         'label': 'Chat',
         'page': 'DesktopChat', // Desktop chat for macOS and web
       },
+      /*
+      {
+        'icon': Icons.mail_outline_rounded,
+        'label': 'Gmail',
+        'page': 'Gmail', // Gmail for macOS and web
+      },
+      */
       {
         'icon': Icons.people_rounded,
         'label': 'Connections',
         'page': 'Connections',
       },
+      /*
+      {
+        'icon': Icons.campaign_rounded,
+        'label': 'News',
+        'page': 'Announcements',
+      },
+      */
       {
         'icon': Icons.settings_outlined,
         'label': 'Settings',
@@ -1409,6 +1525,7 @@ class _NavBarPageState extends State<NavBarPage> with WidgetsBindingObserver {
               child: Material(
                 color: Colors.transparent,
                 child: InkWell(
+                  mouseCursor: MaterialStateMouseCursor.clickable,
                   onTap: () {
                     context.pushNamed(MobileSettingsWidget.routeName);
                   },
@@ -1416,143 +1533,12 @@ class _NavBarPageState extends State<NavBarPage> with WidgetsBindingObserver {
                   hoverColor: Color(0xFFE8EBED).withOpacity(0.5),
                   child: Container(
                     padding: EdgeInsets.all(2),
-                    child: StreamBuilder<UsersRecord>(
-                      stream: UsersRecord.getDocument(currentUserReference!),
-                      builder: (context, userSnapshot) {
-                        final isOnline = userSnapshot.hasData &&
-                            userSnapshot.data != null &&
-                            userSnapshot.data!.isOnline;
-
-                        return Stack(
-                          clipBehavior: Clip.none,
-                          children: [
-                            Container(
-                              width: 48,
-                              height: 48,
-                              decoration: BoxDecoration(
-                                shape: BoxShape.circle,
-                                border: Border.all(
-                                  color: Colors.white,
-                                  width: 2,
-                                ),
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: Colors.black.withOpacity(0.08),
-                                    blurRadius: 8,
-                                    offset: Offset(0, 2),
-                                  ),
-                                ],
-                              ),
-                              child: currentUserPhoto.isNotEmpty
-                                  ? ClipOval(
-                                      child: CachedNetworkImage(
-                                        imageUrl: currentUserPhoto,
-                                        width: 48,
-                                        height: 48,
-                                        fit: BoxFit.cover,
-                                        placeholder: (context, url) =>
-                                            Container(
-                                          width: 48,
-                                          height: 48,
-                                          decoration: BoxDecoration(
-                                            shape: BoxShape.circle,
-                                            color: Color(0xFFE8EBED),
-                                          ),
-                                          child: Icon(
-                                            Icons.person,
-                                            color: Color(0xFF6B7280),
-                                            size: 24,
-                                          ),
-                                        ),
-                                        errorWidget: (context, url, error) =>
-                                            Container(
-                                          width: 48,
-                                          height: 48,
-                                          decoration: BoxDecoration(
-                                            shape: BoxShape.circle,
-                                            gradient: LinearGradient(
-                                              colors: [
-                                                Color(0xFF2563EB),
-                                                Color(0xFF1D4ED8),
-                                              ],
-                                              begin: Alignment.topLeft,
-                                              end: Alignment.bottomRight,
-                                            ),
-                                          ),
-                                          child: Center(
-                                            child: Text(
-                                              currentUserDisplayName.isNotEmpty
-                                                  ? currentUserDisplayName[0]
-                                                      .toUpperCase()
-                                                  : 'U',
-                                              style: TextStyle(
-                                                color: Colors.white,
-                                                fontSize: 18,
-                                                fontWeight: FontWeight.w600,
-                                                letterSpacing: 0.5,
-                                              ),
-                                            ),
-                                          ),
-                                        ),
-                                      ),
-                                    )
-                                  : Container(
-                                      width: 48,
-                                      height: 48,
-                                      decoration: BoxDecoration(
-                                        shape: BoxShape.circle,
-                                        gradient: LinearGradient(
-                                          colors: [
-                                            Color(0xFF2563EB),
-                                            Color(0xFF1D4ED8),
-                                          ],
-                                          begin: Alignment.topLeft,
-                                          end: Alignment.bottomRight,
-                                        ),
-                                      ),
-                                      child: Center(
-                                        child: Text(
-                                          currentUserDisplayName.isNotEmpty
-                                              ? currentUserDisplayName[0]
-                                                  .toUpperCase()
-                                              : 'U',
-                                          style: TextStyle(
-                                            color: Colors.white,
-                                            fontSize: 18,
-                                            fontWeight: FontWeight.w600,
-                                            letterSpacing: 0.5,
-                                          ),
-                                        ),
-                                      ),
-                                    ),
-                            ),
-                            // Online status indicator - Teams style
-                            if (isOnline)
-                              Positioned(
-                                right: 0,
-                                bottom: 0,
-                                child: Container(
-                                  width: 14,
-                                  height: 14,
-                                  decoration: BoxDecoration(
-                                    color: Color(0xFF10B981),
-                                    shape: BoxShape.circle,
-                                    border: Border.all(
-                                      color: Colors.white,
-                                      width: 2.5,
-                                    ),
-                                    boxShadow: [
-                                      BoxShadow(
-                                        color:
-                                            Color(0xFF10B981).withOpacity(0.3),
-                                        blurRadius: 4,
-                                        spreadRadius: 1,
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ),
-                          ],
+                    child: DesktopSafeUserPollBuilder(
+                      userRef: currentUserReference!,
+                      fetchOnce: fsGetUserOnce,
+                      builder: (context, user) {
+                        return _buildSidebarUserAvatar(
+                          isOnline: user?.isOnline ?? false,
                         );
                       },
                     ),
@@ -1591,6 +1577,7 @@ class _NavBarPageState extends State<NavBarPage> with WidgetsBindingObserver {
                 bool isHovered = false;
 
                 return MouseRegion(
+                  cursor: SystemMouseCursors.click,
                   onEnter: (_) => setState(() => isHovered = true),
                   onExit: (_) => setState(() => isHovered = false),
                   child: Stack(
@@ -1603,6 +1590,7 @@ class _NavBarPageState extends State<NavBarPage> with WidgetsBindingObserver {
                         child: Material(
                           color: Colors.transparent,
                           child: InkWell(
+                            mouseCursor: MaterialStateMouseCursor.clickable,
                             onTap: () async {
                               await authManager.signOut();
                               if (context.mounted) {
@@ -1765,7 +1753,7 @@ class _NavBarPageState extends State<NavBarPage> with WidgetsBindingObserver {
               right: 16,
               child: GestureDetector(
                 onTap: () {
-                  print('🔘 Invite button tapped!');
+                  debugLog('🔘 Invite button tapped!');
                   _showInviteDialog(context);
                 },
                 behavior: HitTestBehavior.opaque,
@@ -1791,7 +1779,7 @@ class _NavBarPageState extends State<NavBarPage> with WidgetsBindingObserver {
                     size: 20,
                   ),
                 ),
-              ),
+              ).withClickCursor(),
             ),
           ],
         ),
@@ -1800,7 +1788,7 @@ class _NavBarPageState extends State<NavBarPage> with WidgetsBindingObserver {
   }
 
   void _showInviteDialog(BuildContext context) async {
-    print('🔘 Invite button tapped!');
+    debugLog('🔘 Invite button tapped!');
     try {
       // Show iOS 26+ adaptive dialog with invite options (iOS 26+ liquid glass effect)
       await AdaptiveAlertDialog.show(
@@ -1814,21 +1802,21 @@ class _NavBarPageState extends State<NavBarPage> with WidgetsBindingObserver {
             title: 'Cancel',
             style: AlertActionStyle.cancel,
             onPressed: () {
-              print('❌ Cancel pressed');
+              debugLog('❌ Cancel pressed');
             },
           ),
           AlertAction(
             title: 'Share',
             style: AlertActionStyle.primary,
             onPressed: () {
-              print('✅ Share pressed');
+              debugLog('✅ Share pressed');
               _shareInviteMessage(context);
             },
           ),
         ],
       );
     } catch (e) {
-      print('❌ Error showing invite dialog: $e');
+      debugLog('❌ Error showing invite dialog: $e');
     }
   }
 
@@ -2065,6 +2053,7 @@ class _NavItemWithTooltipState extends State<_NavItemWithTooltip> {
   @override
   Widget build(BuildContext context) {
     return MouseRegion(
+      cursor: SystemMouseCursors.click,
       onEnter: (_) => _showTooltip(),
       onExit: (_) => _hideTooltip(),
       child: Stack(
@@ -2102,6 +2091,7 @@ class _NavItemWithTooltipState extends State<_NavItemWithTooltip> {
             child: Material(
               color: Colors.transparent,
               child: InkWell(
+                mouseCursor: MaterialStateMouseCursor.clickable,
                 onTap: widget.onTap,
                 borderRadius: BorderRadius.circular(12),
                 hoverColor: Color(0xFFE8EBED).withOpacity(0.6),
@@ -2151,7 +2141,7 @@ class _NavItemWithTooltipState extends State<_NavItemWithTooltip> {
                                       size: 24,
                                     )
                                   : FaIcon(
-                                      widget.item['icon'] as IconData,
+                                      widget.item['icon'] as FaIconData,
                                       color: widget.isSelected
                                           ? Color(0xFF2563EB)
                                           : Color(0xFF6B7280),
@@ -2201,11 +2191,11 @@ class _AppUpdateButtonState extends State<_AppUpdateButton> {
     _checkForUpdate();
   }
 
-  Future<void> _checkForUpdate() async {
+  Future<void> _checkForUpdate({bool force = false}) async {
     if (_isChecking) return;
     _isChecking = true;
     try {
-      final result = await AppUpdateService.checkForUpdate();
+      final result = await AppUpdateService.checkForUpdate(force: force);
       if (mounted && result == true) {
         setState(() => _updateAvailable = true);
       }
@@ -2213,10 +2203,18 @@ class _AppUpdateButtonState extends State<_AppUpdateButton> {
     _isChecking = false;
   }
 
-  void _openAppStore() async {
-    final url = Uri.parse(AppUpdateService.getAppStoreUrl());
-    if (await canLaunchUrl(url)) {
-      await launchUrl(url);
+  void _openUpdateFlow() async {
+    final context = appNavigatorKey.currentContext;
+    if (context == null) return;
+    if (!kIsWeb && Platform.isMacOS) {
+      await AppUpdateDialog.showMac(context);
+    } else if (!kIsWeb && Platform.isWindows) {
+      await AppUpdateDialog.showWindows(context);
+    } else {
+      final url = Uri.parse(AppUpdateService.getAppStoreUrl());
+      if (await canLaunchUrl(url)) {
+        await launchUrl(url);
+      }
     }
   }
 
@@ -2225,6 +2223,7 @@ class _AppUpdateButtonState extends State<_AppUpdateButton> {
     return Container(
       margin: EdgeInsets.only(bottom: 8),
       child: MouseRegion(
+        cursor: SystemMouseCursors.click,
         onEnter: (_) => setState(() => _isHovered = true),
         onExit: (_) => setState(() => _isHovered = false),
         child: Tooltip(
@@ -2233,15 +2232,15 @@ class _AppUpdateButtonState extends State<_AppUpdateButton> {
           child: GestureDetector(
             onTap: () {
               if (_updateAvailable) {
-                _openAppStore();
+                _openUpdateFlow();
               } else {
-                // Re-check manually
-                _checkForUpdate().then((_) {
+                // Re-check manually (bypass rate limit)
+                _checkForUpdate(force: true).then((_) {
                   if (mounted && !_updateAvailable) {
                     ScaffoldMessenger.of(context).showSnackBar(
                       SnackBar(
-                        content: Text('You\'re on the latest version!', style: TextStyle(fontFamily: 'SF Pro Text')),
-                        backgroundColor: Color(0xFF007AFF),
+                        content: Text('You\'re on the latest version!', style: TextStyle(fontFamily: 'Inter')),
+                        backgroundColor: Color(0xFF3B82F6),
                         duration: Duration(seconds: 2),
                       ),
                     );
@@ -2260,13 +2259,13 @@ class _AppUpdateButtonState extends State<_AppUpdateButton> {
                     color: _isHovered
                         ? (_updateAvailable ? Color(0xFFDBEAFE) : Color(0xFFE8EBED).withOpacity(0.5))
                         : Colors.transparent,
-                    borderRadius: BorderRadius.circular(8),
+                    borderRadius: BorderRadius.circular(12),
                   ),
                   child: Center(
                     child: Icon(
                       Icons.system_update_rounded,
                       color: _updateAvailable
-                          ? Color(0xFF007AFF)
+                          ? Color(0xFF3B82F6)
                           : (_isHovered ? Color(0xFF374151) : Color(0xFF6B7280)),
                       size: 22,
                     ),
@@ -2281,7 +2280,7 @@ class _AppUpdateButtonState extends State<_AppUpdateButton> {
                       width: 10,
                       height: 10,
                       decoration: BoxDecoration(
-                        color: Color(0xFF007AFF),
+                        color: Color(0xFF3B82F6),
                         shape: BoxShape.circle,
                         border: Border.all(color: Color(0xFFF8F9FA), width: 2),
                       ),

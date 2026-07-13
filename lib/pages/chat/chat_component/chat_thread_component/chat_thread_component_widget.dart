@@ -1,4 +1,5 @@
 import '/backend/backend.dart';
+import '/utils/debug_log.dart';
 import '/custom_code/actions/ai_translation_service.dart';
 import '/auth/firebase_auth/auth_util.dart';
 import '/flutter_flow/flutter_flow_util.dart';
@@ -8,6 +9,7 @@ import '/backend/schema/enums/enums.dart';
 import 'package:ff_theme/flutter_flow/flutter_flow_theme.dart';
 import '../chat_thread/chat_thread_widget.dart';
 import '../rich_chat_input/rich_chat_input_widget.dart';
+import '/backend/firestore/firestore_desktop_adapter.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
@@ -16,14 +18,15 @@ import 'package:flutter/services.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter_quill/flutter_quill.dart';
 import 'package:flutter_quill/quill_delta.dart';
+import 'dart:async';
 import 'dart:io';
 import 'dart:typed_data';
 import 'package:desktop_drop/desktop_drop.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:emoji_picker_flutter/emoji_picker_flutter.dart';
 import 'web_paste_handler_bridge.dart';
-import '/utils/screen_capture.dart';
-import '/utils/markdown_to_quill_delta.dart';
+import 'desktop_clipboard_paste_helper.dart';
+import '/utils/chat_message_font.dart';
 
 export 'chat_thread_component_model.dart';
 
@@ -34,6 +37,8 @@ class ChatThreadComponentWidget extends StatefulWidget {
     this.onMessageLongPress,
     this.onTranslateMessage,
     this.onMessageAction,
+    this.onMessagesMutated,
+    this.onSidebarPreviewUpdate,
     this.activeSelectionId,
     this.isSelectionMode = false,
     this.selectedMessages,
@@ -45,6 +50,11 @@ class ChatThreadComponentWidget extends StatefulWidget {
       {bool clearSelection})? onMessageLongPress;
   final Function(MessagesRecord)? onTranslateMessage;
   final Function(String, MessagesRecord)? onMessageAction;
+  final VoidCallback? onMessagesMutated;
+  final void Function(
+    DocumentReference chatRef,
+    Map<String, dynamic> patch,
+  )? onSidebarPreviewUpdate;
   final ValueNotifier<String?>? activeSelectionId;
   final bool isSelectionMode;
   final Set<MessagesRecord>? selectedMessages;
@@ -68,14 +78,42 @@ class ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget> {
   final Map<String, String> _userNameCache = {};
   final Map<String, String> _userPhotoCache = {};
   final Set<String> _pendingNameLookups = {};
+  final Map<String, DocumentReference> _deferredUserLookups = {};
+  Timer? _userLookupDebounce;
+
+  static bool get _staggerDesktopFirestore =>
+      !kIsWeb && (Platform.isWindows || Platform.isLinux);
+
+  /// Defer message stream on Windows/Linux to avoid concurrent
+  /// Firestore channel traffic (native thread violations → crash).
+  bool _messagesStreamReady = true;
+
+  /// Windows/Linux: one-shot fetch instead of live stream (avoids native crash).
+  List<MessagesRecord>? _desktopMessages;
+  bool _desktopMessagesLoading = false;
+  bool _desktopLoadingOlder = false;
+  bool _desktopHasMoreOlder = true;
+  static const int _desktopPageSize = 40;
+  Timer? _desktopMessagesPollTimer;
+  VoidCallback? _desktopScrollListener;
 
   void _ensureUserCached(MessagesRecord message) {
     if (message.senderRef == null) return;
     final refId = message.senderRef!.id;
     if (_userNameCache.containsKey(refId)) return;
     if (_pendingNameLookups.contains(refId)) return;
+
+    if (_staggerDesktopFirestore) {
+      _deferredUserLookups[refId] = message.senderRef!;
+      _userLookupDebounce?.cancel();
+      _userLookupDebounce = Timer(const Duration(milliseconds: 600), () {
+        _flushDeferredUserLookups();
+      });
+      return;
+    }
+
     _pendingNameLookups.add(refId);
-    UsersRecord.getDocumentOnce(message.senderRef!).then((userDoc) {
+    fsGetUserOnce(message.senderRef!).then((userDoc) {
       if (mounted) {
         setState(() {
           _userNameCache[refId] = userDoc.displayName;
@@ -86,6 +124,29 @@ class ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget> {
     }).catchError((_) {
       _pendingNameLookups.remove(refId);
     });
+  }
+
+  Future<void> _flushDeferredUserLookups() async {
+    final refs = Map<String, DocumentReference>.from(_deferredUserLookups);
+    _deferredUserLookups.clear();
+    for (final entry in refs.entries) {
+      final refId = entry.key;
+      final ref = entry.value;
+      if (!mounted || _userNameCache.containsKey(refId)) continue;
+      if (_pendingNameLookups.contains(refId)) continue;
+      _pendingNameLookups.add(refId);
+      try {
+        final userDoc = await fsGetUserOnce(ref);
+        if (mounted) {
+          setState(() {
+            _userNameCache[refId] = userDoc.displayName;
+            _userPhotoCache[refId] = userDoc.photoUrl;
+          });
+        }
+      } catch (_) {}
+      _pendingNameLookups.remove(refId);
+      await Future.delayed(const Duration(milliseconds: 120));
+    }
   }
 
   String _resolveUserName(MessagesRecord message) {
@@ -123,6 +184,35 @@ class ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget> {
   }
 
   void scrollToMessage(String messageId) {
+    if (widget.chatReference == null) return;
+
+    if (useWindowsFirestoreRest) {
+      Future<void> findAndScroll() async {
+        List<MessagesRecord> messages;
+        if (_desktopMessages != null && _desktopMessages!.isNotEmpty) {
+          messages = _desktopMessages!;
+        } else {
+          messages = await fsQueryChatMessages(widget.chatReference!.reference);
+        }
+        for (int i = 0; i < messages.length; i++) {
+          if (messages[i].reference.id == messageId) {
+            _model.itemScrollController?.scrollTo(
+              index: i,
+              duration: const Duration(milliseconds: 300),
+              curve: Curves.easeInOut,
+            );
+            setHighlightedMessage(messageId);
+            Future.delayed(const Duration(seconds: 2), () {
+              setHighlightedMessage(null);
+            });
+            break;
+          }
+        }
+      }
+      findAndScroll();
+      return;
+    }
+
     // Query messages to find the index of the target message
     final messagesRef = widget.chatReference?.reference
         .collection('messages')
@@ -212,6 +302,11 @@ class ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget> {
     _model.messageFocusNode ??= FocusNode();
     _model.itemScrollController = ItemScrollController();
     _model.itemPositionsListener = ItemPositionsListener.create();
+    if (_staggerDesktopFirestore) {
+      _desktopScrollListener = _onDesktopMessageScroll;
+      _model.itemPositionsListener!.itemPositions
+          .addListener(_desktopScrollListener!);
+    }
 
     // Create shared QuillController for @ detection
     _quillController = QuillController.basic();
@@ -225,8 +320,21 @@ class ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget> {
       _unregisterWebPaste = registerWebPasteHandler(_handleWebPaste);
     }
 
-    // Load group members
-    _loadMembers();
+    if (_staggerDesktopFirestore) {
+      _messagesStreamReady = false;
+      _desktopMessages = null;
+      Future.delayed(const Duration(milliseconds: 1200), () {
+        if (mounted) {
+          setState(() => _messagesStreamReady = true);
+          _loadDesktopMessagesInitial();
+          _startDesktopMessagesPolling();
+        }
+      });
+      Future.delayed(const Duration(milliseconds: 2000), _loadMembers);
+    } else {
+      // Load group members
+      _loadMembers();
+    }
 
     // Restore draft for the initial chat
     final initialChatId = widget.chatReference?.reference.id;
@@ -251,50 +359,307 @@ class ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget> {
       _mentionRanges.clear();
       _filteredMentionUsers.clear();
       _mentionActive = false;
-      _loadMembers();
+      if (_staggerDesktopFirestore) {
+        Future.delayed(const Duration(milliseconds: 1500), _loadMembers);
+      } else {
+        _loadMembers();
+      }
 
       // Restore draft for the NEW chat
       final newChatId = widget.chatReference?.reference.id;
       if (newChatId != null) {
         _restoreDraft(newChatId);
       }
+
+      if (_staggerDesktopFirestore) {
+        _messagesStreamReady = false;
+        _desktopMessages = null;
+        _desktopHasMoreOlder = true;
+        _desktopLoadingOlder = false;
+        _desktopMessagesPollTimer?.cancel();
+        Future.delayed(const Duration(milliseconds: 1200), () {
+          if (mounted) {
+            setState(() => _messagesStreamReady = true);
+            _loadDesktopMessagesInitial();
+            _startDesktopMessagesPolling();
+          }
+        });
+      }
     }
   }
 
-  /// Global keyboard handler to intercept Cmd+V for file/image paste
-  /// and Backspace/Delete for atomic mention deletion.
-  /// Runs BEFORE the widget tree processes key events.
+  void _resetDesktopPaginationState() {
+    _desktopHasMoreOlder = true;
+    _desktopLoadingOlder = false;
+  }
+
+  void _onDesktopMessageScroll() {
+    if (!_staggerDesktopFirestore ||
+        _desktopLoadingOlder ||
+        !_desktopHasMoreOlder ||
+        _desktopMessages == null ||
+        _desktopMessages!.isEmpty) {
+      return;
+    }
+
+    final positions = _model.itemPositionsListener?.itemPositions.value;
+    if (positions == null || positions.isEmpty) return;
+
+    final maxVisibleIndex =
+        positions.map((position) => position.index).reduce((a, b) => a > b ? a : b);
+    final total = _desktopMessages!.length;
+    if (maxVisibleIndex >= total - 2) {
+      unawaited(_loadOlderDesktopMessages());
+    }
+  }
+
+  Future<void> _loadDesktopMessagesInitial() async {
+    if (!_staggerDesktopFirestore || widget.chatReference == null) return;
+    if (_desktopMessagesLoading) return;
+    _desktopMessagesLoading = true;
+    _resetDesktopPaginationState();
+    try {
+      final messages = await fsQueryChatMessages(
+        widget.chatReference!.reference,
+        limit: _desktopPageSize,
+      );
+      if (mounted) {
+        setState(() {
+          _desktopMessages = messages;
+          _desktopHasMoreOlder = messages.length >= _desktopPageSize;
+        });
+      }
+    } catch (e) {
+      debugLog('❌ [desktop-messages] fetch failed: $e');
+    } finally {
+      _desktopMessagesLoading = false;
+    }
+  }
+
+  Future<void> _loadOlderDesktopMessages() async {
+    if (!_staggerDesktopFirestore ||
+        widget.chatReference == null ||
+        _desktopLoadingOlder ||
+        !_desktopHasMoreOlder) {
+      return;
+    }
+    final current = _desktopMessages;
+    if (current == null || current.isEmpty) return;
+
+    final oldest = current.last;
+    if (oldest.createdAt == null) {
+      _desktopHasMoreOlder = false;
+      return;
+    }
+
+    _desktopLoadingOlder = true;
+    safeSetState(() {});
+    try {
+      final older = await fsQueryChatMessages(
+        widget.chatReference!.reference,
+        limit: _desktopPageSize,
+        startAfter: oldest,
+      );
+      if (!mounted) return;
+
+      if (older.isEmpty) {
+        setState(() => _desktopHasMoreOlder = false);
+        return;
+      }
+
+      final existingIds = current.map((m) => m.reference.id).toSet();
+      final toAdd =
+          older.where((m) => !existingIds.contains(m.reference.id)).toList();
+      setState(() {
+        _desktopMessages!.addAll(toAdd);
+        _desktopHasMoreOlder = older.length >= _desktopPageSize;
+      });
+    } catch (e) {
+      debugLog('❌ [desktop-messages] load older failed: $e');
+    } finally {
+      _desktopLoadingOlder = false;
+      if (mounted) safeSetState(() {});
+    }
+  }
+
+  Future<void> _syncDesktopMessages() async {
+    if (!_staggerDesktopFirestore || widget.chatReference == null) return;
+
+    try {
+      final recent = await fsQueryChatMessages(
+        widget.chatReference!.reference,
+        limit: _desktopPageSize,
+      );
+      if (!mounted) return;
+
+      if (_desktopMessages == null) {
+        setState(() {
+          _desktopMessages = recent;
+          _desktopHasMoreOlder = recent.length >= _desktopPageSize;
+        });
+        return;
+      }
+
+      final recentIds = recent.map((m) => m.reference.id).toSet();
+      final oldestRecentTime =
+          recent.isNotEmpty ? recent.last.createdAt : null;
+
+      final merged = <MessagesRecord>[...recent];
+
+      for (final message in _desktopMessages!) {
+        if (recentIds.contains(message.reference.id)) continue;
+        if (oldestRecentTime != null &&
+            message.createdAt != null &&
+            !message.createdAt!.isBefore(oldestRecentTime)) {
+          // Removed on server (unsend) within the recent window.
+          continue;
+        }
+        merged.add(message);
+      }
+
+      merged.sort((a, b) {
+        final aTime = a.createdAt;
+        final bTime = b.createdAt;
+        if (aTime == null && bTime == null) return 0;
+        if (aTime == null) return 1;
+        if (bTime == null) return -1;
+        return bTime.compareTo(aTime);
+      });
+
+      setState(() => _desktopMessages = merged);
+    } catch (e) {
+      debugLog('❌ [desktop-messages] sync failed: $e');
+    }
+  }
+
+  void _afterMessagesMutated() {
+    if (_staggerDesktopFirestore) {
+      unawaited(_syncDesktopMessages());
+    }
+    widget.onMessagesMutated?.call();
+  }
+
+  void _notifySidebarPreview(Map<String, dynamic> patch) {
+    final chatRef = widget.chatReference?.reference;
+    if (chatRef == null) return;
+    widget.onSidebarPreviewUpdate?.call(chatRef, patch);
+  }
+
+  Future<void> _pollDesktopMessagesTail() async {
+    await _syncDesktopMessages();
+  }
+
+  void _startDesktopMessagesPolling() {
+    _desktopMessagesPollTimer?.cancel();
+    _desktopMessagesPollTimer = Timer.periodic(
+      const Duration(seconds: 8),
+      (_) => _pollDesktopMessagesTail(),
+    );
+  }
+
+  void _refreshDesktopMessages() {
+    if (_staggerDesktopFirestore) {
+      unawaited(_syncDesktopMessages());
+    }
+  }
+
+  /// Global keyboard handler for Backspace/Delete atomic mention deletion.
   bool _globalKeyHandler(KeyEvent event) {
-    if (kIsWeb) return false; // Web uses browser paste events
-    
-    // Intercept Backspace for atomic mention deletion
+    if (kIsWeb) return false;
+
     if (event is KeyDownEvent &&
         (event.logicalKey == LogicalKeyboardKey.backspace ||
          event.logicalKey == LogicalKeyboardKey.delete)) {
       if (_tryAtomicMentionDelete()) {
-        return true; // Consume event — mention was deleted atomically
+        return true;
       }
     }
-    
-    if (event is KeyDownEvent &&
-        event.logicalKey == LogicalKeyboardKey.keyV &&
-        HardwareKeyboard.instance.isMetaPressed) {
-      // Check if pasteboard has image/file data before triggering paste handling
-      _pasteboardChannel.invokeMethod<Map>('hasImageOrFile').then((result) {
-        final hasImage = result?['hasImage'] == true;
-        final hasFile = result?['hasFile'] == true;
-        print('📋 [paste] Cmd+V detected — hasImage=$hasImage, hasFile=$hasFile');
-        if (hasImage || hasFile) {
-          _handlePasteFromClipboard();
-        }
-      });
-    }
-    // Return false so normal key handling continues via QuillEditor
+
     return false;
+  }
+
+  /// Tries to paste an image or file from the clipboard into pending attachments.
+  /// Returns true when clipboard content was handled as an attachment.
+  Future<bool> _tryPasteImageFromClipboard() async {
+    if (kIsWeb) return false;
+
+    try {
+      if (Platform.isMacOS) {
+        return await _tryPasteImageFromClipboardMacOS();
+      }
+      if (Platform.isWindows || Platform.isLinux) {
+        return await _tryPasteImageFromClipboardDesktop();
+      }
+    } catch (e) {
+      debugLog('📋 [paste] Error: $e');
+    }
+    return false;
+  }
+
+  Future<bool> _tryPasteImageFromClipboardMacOS() async {
+    final filePaths = await _pasteboardChannel.invokeMethod<List>('getFileURLs');
+    if (filePaths != null && filePaths.isNotEmpty) {
+      for (final pathObj in filePaths) {
+        final path = pathObj as String;
+        final file = File(path);
+        if (await file.exists()) {
+          final bytes = await file.readAsBytes();
+          final fileName = path.split('/').last;
+          _addPasteAttachment(
+            bytes: Uint8List.fromList(bytes),
+            fileName: fileName,
+            filePath: path,
+          );
+          debugLog('📋 [paste] Added file from clipboard: $fileName (${bytes.length} bytes)');
+        }
+      }
+      safeSetState(() {});
+      return true;
+    }
+
+    final rawImage =
+        await _pasteboardChannel.invokeMethod<dynamic>('getImageData');
+    final imageData = rawImage is Uint8List
+        ? rawImage
+        : (rawImage is List
+            ? Uint8List.fromList(rawImage.cast<int>())
+            : null);
+    if (imageData != null && imageData.isNotEmpty) {
+      final fileName =
+          'paste_${DateTime.now().millisecondsSinceEpoch}.png';
+      _addPasteAttachment(bytes: imageData, fileName: fileName);
+      debugLog('📋 [paste] Added image from clipboard: $fileName (${imageData.length} bytes)');
+      safeSetState(() {});
+      return true;
+    }
+
+    return false;
+  }
+
+  Future<bool> _tryPasteImageFromClipboardDesktop() async {
+    final items = await DesktopClipboardPasteHelper.readAll();
+    if (items.isEmpty) return false;
+
+    for (final item in items) {
+      _addPasteAttachment(
+        bytes: item.bytes,
+        fileName: item.fileName,
+        filePath: item.filePath,
+      );
+      debugLog('📋 [paste] Added from clipboard: ${item.fileName} (${item.bytes.length} bytes)');
+    }
+    safeSetState(() {});
+    return true;
   }
 
   @override
   void dispose() {
+    _userLookupDebounce?.cancel();
+    _desktopMessagesPollTimer?.cancel();
+    if (_desktopScrollListener != null) {
+      _model.itemPositionsListener?.itemPositions
+          .removeListener(_desktopScrollListener!);
+    }
     HardwareKeyboard.instance.removeHandler(_globalKeyHandler);
     _unregisterWebPaste?.call();
     _quillController?.removeListener(_onQuillTextChanged);
@@ -310,12 +675,12 @@ class ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget> {
     for (final ref in members) {
       if (ref == currentUserReference) continue;
       try {
-        final user = await UsersRecord.getDocumentOnce(ref);
+        final user = await fsGetUserOnce(ref);
         users.add(user);
       } catch (_) {}
     }
     if (mounted) {
-      print('📋 [_loadMembers] Loaded ${users.length} members for chat ${widget.chatReference!.reference.id}, total members in doc: ${members.length}');
+      debugLog('📋 [_loadMembers] Loaded ${users.length} members for chat ${widget.chatReference!.reference.id}, total members in doc: ${members.length}');
       setState(() => _memberUsers = users);
     }
   }
@@ -422,11 +787,6 @@ class ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget> {
   String _injectMentionMarkup(String plainText) {
     // Replace each @DisplayName with <@uid|DisplayName>
     var result = plainText;
-    print('🔍 [mention-inject] Input text: "$plainText"');
-    print('🔍 [mention-inject] Pending mentions count: ${_pendingMentions.length}');
-    for (final m in _pendingMentions) {
-      print('🔍 [mention-inject]   - uid=${m.uid}, displayName="${m.displayName}"');
-    }
     // Process longest names first to avoid partial matches
     final sorted = List<_MentionEntry>.from(_pendingMentions)
       ..sort((a, b) => b.displayName.length.compareTo(a.displayName.length));
@@ -437,24 +797,16 @@ class ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget> {
       final key = '${m.uid}_${m.displayName}';
       if (injected.contains(key)) continue;
       
-      final searchPattern = '@${m.displayName}';
-      final containsPattern = result.contains(searchPattern);
-      print('🔍 [mention-inject] Looking for "$searchPattern" in result: found=$containsPattern');
-      
       // Use replaceFirst to handle each mention occurrence
       final replaced = result.replaceFirst(
-        searchPattern,
+        '@${m.displayName}',
         '<@${m.uid}|${m.displayName}>',
       );
       if (replaced != result) {
         result = replaced;
         injected.add(key);
-        print('✅ [mention-inject] Replaced "$searchPattern" → markup');
-      } else {
-        print('❌ [mention-inject] FAILED to replace "$searchPattern" — not found in text!');
       }
     }
-    print('🔍 [mention-inject] Final result: "$result"');
     return result;
   }
 
@@ -511,7 +863,7 @@ class ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget> {
 
     final hasText = content.trim().isNotEmpty;
     final hasAttachments = _model.pendingAttachments.isNotEmpty;
-    print('📤 [send] _handleSendMessage called: hasText=$hasText, hasAttachments=$hasAttachments, content="${content.length > 50 ? content.substring(0, 50) : content}", targetChat=$targetChatId');
+    debugLog('📤 [send] _handleSendMessage called: hasText=$hasText, hasAttachments=$hasAttachments, content="${content.length > 50 ? content.substring(0, 50) : content}", targetChat=$targetChatId');
     if (!hasText && !hasAttachments) return;
 
     // Handle edit mode: update existing message instead of creating new
@@ -538,17 +890,18 @@ class ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget> {
       _pendingMentions.clear();
       _mentionRanges.clear();
       try {
-        await editMsg.reference.update({
+        await fsPatchDocument(editMsg.reference, {
           'content': processedContent,
           'is_edited': true,
           'edited_at': getCurrentTimestamp,
         });
-        print('✏️ [edit] Message updated: ${editMsg.reference.id}');
+        debugLog('✏️ [edit] Message updated: ${editMsg.reference.id}');
       } catch (e) {
-        print('❌ [edit] Error updating message: $e');
+        debugLog('❌ [edit] Error updating message: $e');
       }
       _model.editingMessage = null;
       safeSetState(() {});
+      _afterMessagesMutated();
       return;
     }
 
@@ -562,7 +915,7 @@ class ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget> {
       try {
         processedContent = await translateOutgoingMessage(processedContent);
       } catch (e) {
-        print('⚠️ [send] Outgoing translation failed (sending original): $e');
+        debugLog('⚠️ [send] Outgoing translation failed (sending original): $e');
       }
     }
 
@@ -576,102 +929,26 @@ class ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget> {
         _model.clearPendingAttachments();
         safeSetState(() {});
 
-        // Separate image attachments from non-image (video, file)
-        final imageAttachments = attachments.where((a) => a.type == AttachmentType.image).toList();
-        final otherAttachments = attachments.where((a) => a.type != AttachmentType.image).toList();
-
-        // Upload all images in parallel and batch into one message
-        if (imageAttachments.isNotEmpty) {
-          // Safety check before upload
-          if (widget.chatReference?.reference.id != targetChatId) {
-            print('⚠️ [send] Chat switched before image upload — aborting');
-            return;
-          }
-
-          final uploadedImageUrls = <String>[];
-          final uploadFutures = imageAttachments.map((att) async {
-            try {
-              print('⬆️ [upload] Starting image upload: ${att.fileName} (${att.file.bytes.length} bytes)');
-              final downloadUrl = await uploadData(att.file.storagePath, att.file.bytes)
-                  .timeout(const Duration(seconds: 60));
-              if (downloadUrl != null) {
-                print('⬆️ [upload] Image upload complete: $downloadUrl');
-                return downloadUrl;
-              } else {
-                print('❌ Failed to upload image: ${att.fileName}');
-                return null;
-              }
-            } catch (e) {
-              print('❌ Error uploading image ${att.fileName}: $e');
-              return null;
-            }
-          });
-
-          final results = await Future.wait(uploadFutures);
-          for (final url in results) {
-            if (url != null) uploadedImageUrls.add(url);
-          }
-
-          // Safety check after uploads
-          if (widget.chatReference?.reference.id != targetChatId) {
-            print('⚠️ [send] Chat switched after image uploads — aborting');
-            return;
-          }
-
-          if (uploadedImageUrls.isNotEmpty) {
-            Map<String, dynamic> messageData;
-            if (uploadedImageUrls.length == 1) {
-              // Single image — use legacy `image` field
-              messageData = createMessagesRecordData(
-                senderRef: currentUserReference,
-                content: '',
-                createdAt: getCurrentTimestamp,
-                messageType: MessageType.image,
-                image: uploadedImageUrls.first,
-              );
-            } else {
-              // Multiple images — only use `images` array, NOT `image`
-              messageData = createMessagesRecordData(
-                senderRef: currentUserReference,
-                content: '',
-                createdAt: getCurrentTimestamp,
-                messageType: MessageType.image,
-              );
-              messageData['images'] = uploadedImageUrls;
-            }
-
-            await MessagesRecord.createDoc(targetChatRef).set(messageData);
-            await targetChatRef.update({
-              'last_message': uploadedImageUrls.length == 1
-                  ? '📷 Photo'
-                  : '📷 ${uploadedImageUrls.length} Photos',
-              'last_message_at': getCurrentTimestamp,
-              'last_message_sent': currentUserReference,
-              'last_message_type': MessageType.image.serialize(),
-              'last_message_seen': [currentUserReference],
-            });
-          }
-        }
-
-        // Send non-image attachments (video, file) individually
-        for (final att in otherAttachments) {
+        for (final att in attachments) {
           try {
+            // Safety check: abort if user has switched to a different chat
             if (widget.chatReference?.reference.id != targetChatId) {
-              print('⚠️ [send] Chat switched during upload — aborting send to $targetChatId');
+              debugLog('⚠️ [send] Chat switched during upload — aborting send to $targetChatId');
               return;
             }
 
-            print('⬆️ [upload] Starting upload: ${att.fileName} (${att.file.bytes.length} bytes)');
+            debugLog('⬆️ [upload] Starting upload: ${att.fileName} (${att.file.bytes.length} bytes)');
             final downloadUrl = await uploadData(att.file.storagePath, att.file.bytes)
                 .timeout(const Duration(seconds: 60));
-            print('⬆️ [upload] Upload complete: $downloadUrl');
+            debugLog('⬆️ [upload] Upload complete: $downloadUrl');
             if (downloadUrl == null) {
-              print('❌ Failed to upload file: ${att.fileName}');
+              debugLog('❌ Failed to upload file: ${att.fileName}');
               continue;
             }
 
+            // Safety check again after upload completes
             if (widget.chatReference?.reference.id != targetChatId) {
-              print('⚠️ [send] Chat switched after upload — aborting send to $targetChatId');
+              debugLog('⚠️ [send] Chat switched after upload — aborting send to $targetChatId');
               return;
             }
 
@@ -680,7 +957,15 @@ class ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget> {
 
             switch (att.type) {
               case AttachmentType.image:
-                continue; // Already handled above
+                msgType = MessageType.image;
+                messageData = createMessagesRecordData(
+                  senderRef: currentUserReference,
+                  content: '',
+                  createdAt: getCurrentTimestamp,
+                  messageType: msgType,
+                  image: downloadUrl,
+                );
+                break;
               case AttachmentType.video:
                 msgType = MessageType.video;
                 messageData = createMessagesRecordData(
@@ -690,7 +975,6 @@ class ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget> {
                   messageType: msgType,
                   video: downloadUrl,
                 );
-                messageData['file_name'] = att.fileName;
                 break;
               case AttachmentType.file:
                 msgType = MessageType.file;
@@ -701,12 +985,22 @@ class ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget> {
                   messageType: msgType,
                   attachmentUrl: downloadUrl,
                 );
+                // Store filename separately so the file card picks it up via _getResolvedFileName()
                 messageData['file_name'] = att.fileName;
                 break;
             }
 
-            await MessagesRecord.createDoc(targetChatRef).set(messageData);
-            await targetChatRef.update({
+            // Use captured targetChatRef, not widget.chatReference
+            await fsCreateMessage(targetChatRef, messageData);
+
+            await fsPatchDocument(targetChatRef, {
+              'last_message': '📎 ${att.fileName}',
+              'last_message_at': getCurrentTimestamp,
+              'last_message_sent': currentUserReference,
+              'last_message_type': msgType.serialize(),
+              'last_message_seen': [currentUserReference],
+            });
+            _notifySidebarPreview({
               'last_message': '📎 ${att.fileName}',
               'last_message_at': getCurrentTimestamp,
               'last_message_sent': currentUserReference,
@@ -714,7 +1008,7 @@ class ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget> {
               'last_message_seen': [currentUserReference],
             });
           } catch (uploadError) {
-            print('❌ Error uploading ${att.fileName}: $uploadError');
+            debugLog('❌ Error uploading ${att.fileName}: $uploadError');
           }
         }
       }
@@ -723,7 +1017,7 @@ class ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget> {
       if (hasText) {
         // Safety check before sending text
         if (widget.chatReference?.reference.id != targetChatId) {
-          print('⚠️ [send] Chat switched before text send — aborting send to $targetChatId');
+          debugLog('⚠️ [send] Chat switched before text send — aborting send to $targetChatId');
           return;
         }
 
@@ -740,21 +1034,22 @@ class ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget> {
         );
 
         // Use captured targetChatRef, not widget.chatReference
-        await MessagesRecord.createDoc(targetChatRef)
-            .set(messageData);
+        await fsCreateMessage(targetChatRef, messageData);
 
         // Update chat's last_message fields for preview
         final previewContent = processedContent.replaceAllMapped(
           RegExp(r'<@[^|]+\|([^>]+)>'),
           (m) => '@${m.group(1)}',
         );
-        await targetChatRef.update({
+        final previewPatch = {
           'last_message': previewContent.length > 100 ? previewContent.substring(0, 100) : previewContent,
           'last_message_at': getCurrentTimestamp,
           'last_message_sent': currentUserReference,
           'last_message_type': MessageType.text.serialize(),
           'last_message_seen': [currentUserReference],
-        });
+        };
+        await fsPatchDocument(targetChatRef, previewPatch);
+        _notifySidebarPreview(previewPatch);
       }
 
       _model.messageTextController?.clear();
@@ -767,10 +1062,11 @@ class ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget> {
         _model.messageFocusNode?.requestFocus();
       }
     } catch (e) {
-      print('Error sending message: $e');
+      debugLog('Error sending message: $e');
     } finally {
       _model.isSending = false;
       safeSetState(() {});
+      _afterMessagesMutated();
     }
   }
 
@@ -791,7 +1087,7 @@ class ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget> {
         messageType: MessageType.text,
       );
 
-      await FirebaseFirestore.instance.collection('scheduled_messages').add({
+      await fsCreateScheduledMessage({
         'chat_ref': widget.chatReference!.reference,
         'scheduled_send_at': Timestamp.fromDate(scheduledAt),
         'status': 'pending',
@@ -812,7 +1108,7 @@ class ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget> {
         ),
       );
     } catch (e) {
-      print('Error scheduling message: $e');
+      debugLog('Error scheduling message: $e');
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: const Text('Failed to schedule message'),
@@ -831,7 +1127,7 @@ class ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget> {
     final targetChatRef = widget.chatReference!.reference;
     final targetChatId = targetChatRef.id;
 
-    print('🎙️ [send] _handleSendVoice called: path=$audioPath, duration=${duration.inSeconds}s, targetChat=$targetChatId, webBytes=${audioBytes?.length ?? 0}');
+    debugLog('🎙️ [send] _handleSendVoice called: path=$audioPath, duration=${duration.inSeconds}s, targetChat=$targetChatId, webBytes=${audioBytes?.length ?? 0}');
 
     _model.isSending = true;
     safeSetState(() {});
@@ -858,7 +1154,7 @@ class ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget> {
 
       final storagePath = 'users/$currentUserUid/uploads/${DateTime.now().millisecondsSinceEpoch}_$fileName';
 
-      print('⬆️ [upload] Uploading voice message to $storagePath');
+      debugLog('⬆️ [upload] Uploading voice message to $storagePath');
       final downloadUrl = await uploadData(storagePath, Uint8List.fromList(bytes));
       if (downloadUrl == null) {
         throw Exception('Failed to upload voice message.');
@@ -873,45 +1169,54 @@ class ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget> {
         audio: downloadUrl,
       );
 
-      await MessagesRecord.createDoc(targetChatRef).set(messageData);
+      await fsCreateMessage(targetChatRef, messageData);
 
       final lastMessageText = '[语音] ${duration.inSeconds}"';
       
-      await targetChatRef.update({
+      final voicePreviewPatch = {
         'last_message': lastMessageText,
         'last_message_at': getCurrentTimestamp,
         'last_message_sent': currentUserReference,
         'last_message_type': MessageType.voice.serialize(),
         'last_message_seen': [currentUserReference],
-      });
+      };
+      await fsPatchDocument(targetChatRef, voicePreviewPatch);
+      _notifySidebarPreview(voicePreviewPatch);
 
-      print('✅ [send] Voice message sent successfully');
+      debugLog('✅ [send] Voice message sent successfully');
 
       // Update unread counts (best-effort, don't fail the send if permissions are restricted)
-      try {
-        final chatDoc = await targetChatRef.get();
-        if (chatDoc.exists) {
-          final chatRecord = ChatsRecord.fromSnapshot(chatDoc);
-          final unreadCountQuery = await targetChatRef.collection('unread_counts').get();
-          for (final userRef in chatRecord.members) {
-            if (userRef != currentUserReference) {
-              final docs = unreadCountQuery.docs.where((d) => d.id == userRef.id);
-              final doc = docs.isNotEmpty ? docs.first : null;
-              if (doc != null) {
-                await doc.reference.update({'count': FieldValue.increment(1)});
-              } else {
-                await targetChatRef.collection('unread_counts').doc(userRef.id).set({'count': 1});
+      if (!useWindowsFirestoreRest) {
+        try {
+          final chatDoc = await targetChatRef.get();
+          if (chatDoc.exists) {
+            final chatRecord = ChatsRecord.fromSnapshot(chatDoc);
+            final unreadCountQuery =
+                await targetChatRef.collection('unread_counts').get();
+            for (final userRef in chatRecord.members) {
+              if (userRef != currentUserReference) {
+                final docs =
+                    unreadCountQuery.docs.where((d) => d.id == userRef.id);
+                final doc = docs.isNotEmpty ? docs.first : null;
+                if (doc != null) {
+                  await doc.reference.update({'count': FieldValue.increment(1)});
+                } else {
+                  await targetChatRef
+                      .collection('unread_counts')
+                      .doc(userRef.id)
+                      .set({'count': 1});
+                }
               }
             }
           }
+        } catch (unreadError) {
+          debugLog(
+              '⚠️ [send] Could not update unread counts (non-fatal): $unreadError');
         }
-      } catch (unreadError) {
-        print('⚠️ [send] Could not update unread counts (non-fatal): $unreadError');
       }
-
     } catch (e, stackTrace) {
-      print('❌ [send] Error sending voice message: $e');
-      print('❌ [send] Stack trace: $stackTrace');
+      debugLog('❌ [send] Error sending voice message: $e');
+      debugLog('❌ [send] Stack trace: $stackTrace');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -923,12 +1228,45 @@ class ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget> {
     } finally {
       _model.isSending = false;
       safeSetState(() {});
+      _afterMessagesMutated();
     }
   }
 
-  /// Checks macOS pasteboard for image data or file URLs and adds as pending attachments.
-  /// Uses native Swift MethodChannel to access NSPasteboard (works inside sandbox).
+  /// Checks pasteboard for image data or file URLs and adds as pending attachments.
+  /// macOS uses a native MethodChannel; Windows/Linux use [super_clipboard].
   static const _pasteboardChannel = MethodChannel('com.focuskpi.linkedup/pasteboard');
+
+  void _addPasteAttachment({
+    required Uint8List bytes,
+    required String fileName,
+    String? filePath,
+  }) {
+    final ext = fileName.split('.').last.toLowerCase();
+    final type = (ext == 'mp4' || ext == 'mov' || ext == 'avi' || ext == 'mkv')
+        ? AttachmentType.video
+        : (ext == 'png' ||
+                ext == 'jpg' ||
+                ext == 'jpeg' ||
+                ext == 'gif' ||
+                ext == 'webp' ||
+                ext == 'heic' ||
+                ext == 'bmp' ||
+                ext == 'tiff')
+            ? AttachmentType.image
+            : AttachmentType.file;
+
+    final storagePath =
+        'users/$currentUserUid/uploads/${DateTime.now().millisecondsSinceEpoch}_$fileName';
+    _model.addPendingAttachment(PendingAttachment(
+      file: SelectedFile(
+        storagePath: storagePath,
+        filePath: filePath,
+        bytes: bytes,
+      ),
+      fileName: fileName,
+      type: type,
+    ));
+  }
 
   /// Handles paste events from the web browser.
   void _handleWebPaste(List<WebPastedFile> files) {
@@ -950,79 +1288,9 @@ class ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget> {
         fileName: fileName,
         type: type,
       ));
-      print('📋 [web-paste] Added: $fileName (${file.bytes.length} bytes)');
+      debugLog('📋 [web-paste] Added: $fileName (${file.bytes.length} bytes)');
     }
     safeSetState(() {});
-  }
-
-  Future<void> _handlePasteFromClipboard() async {
-    if (kIsWeb || !Platform.isMacOS) return;
-    print('📋 [paste] _handlePasteFromClipboard called');
-
-    try {
-      // 1. Check for file URLs in clipboard (e.g. copied from Finder)
-      final filePaths = await _pasteboardChannel.invokeMethod<List>('getFileURLs');
-      if (filePaths != null && filePaths.isNotEmpty) {
-        for (final pathObj in filePaths) {
-          final path = pathObj as String;
-          final file = File(path);
-          if (await file.exists()) {
-            final bytes = await file.readAsBytes();
-            final fileName = path.split('/').last;
-            final ext = fileName.split('.').last.toLowerCase();
-            final type = (ext == 'mp4' || ext == 'mov' || ext == 'avi' || ext == 'mkv')
-                ? AttachmentType.video
-                : (ext == 'png' || ext == 'jpg' || ext == 'jpeg' || ext == 'gif' || ext == 'webp' || ext == 'heic')
-                    ? AttachmentType.image
-                    : AttachmentType.file;
-
-            final storagePath = 'users/$currentUserUid/uploads/${DateTime.now().millisecondsSinceEpoch}_$fileName';
-            _model.addPendingAttachment(PendingAttachment(
-              file: SelectedFile(
-                storagePath: storagePath,
-                filePath: path,
-                bytes: Uint8List.fromList(bytes),
-              ),
-              fileName: fileName,
-              type: type,
-            ));
-            print('📋 [paste] Added file from clipboard: $fileName (${bytes.length} bytes)');
-          }
-        }
-        if (filePaths.isNotEmpty) {
-          // Undo the text paste that QuillEditor performed (it pasted the filename as text)
-          Future.delayed(const Duration(milliseconds: 50), () {
-            _quillController?.undo();
-          });
-          safeSetState(() {});
-          return;
-        }
-      }
-
-      // 2. Check for image data in clipboard (e.g. screenshot)
-      final imageData = await _pasteboardChannel.invokeMethod<Uint8List>('getImageData');
-      if (imageData != null && imageData.isNotEmpty) {
-        final timestamp = DateTime.now().millisecondsSinceEpoch;
-        final fileName = 'paste_$timestamp.png';
-        final storagePath = 'users/$currentUserUid/uploads/$fileName';
-        _model.addPendingAttachment(PendingAttachment(
-          file: SelectedFile(
-            storagePath: storagePath,
-            bytes: imageData,
-          ),
-          fileName: fileName,
-          type: AttachmentType.image,
-        ));
-        print('📋 [paste] Added image from clipboard: $fileName (${imageData.length} bytes)');
-        // Undo the text paste that QuillEditor performed
-        Future.delayed(const Duration(milliseconds: 50), () {
-          _quillController?.undo();
-        });
-        safeSetState(() {});
-      }
-    } catch (e) {
-      print('📋 [paste] Error checking clipboard: $e');
-    }
   }
 
   bool _isDragging = false;
@@ -1052,12 +1320,200 @@ class ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget> {
           fileName: fileName,
           type: type,
         ));
-        print('📂 [drop] Added file: $fileName (${bytes.length} bytes)');
+        debugLog('📂 [drop] Added file: $fileName (${bytes.length} bytes)');
       } catch (e) {
-        print('📂 [drop] Error processing dropped file: $e');
+        debugLog('📂 [drop] Error processing dropped file: $e');
       }
     }
     safeSetState(() {});
+  }
+
+  void _scrollToMessageById(String messageId, List<MessagesRecord> messages) {
+    for (int i = 0; i < messages.length; i++) {
+      if (messages[i].reference.id == messageId) {
+        _model.itemScrollController?.scrollTo(
+          index: i,
+          duration: const Duration(milliseconds: 300),
+          curve: Curves.easeInOut,
+        );
+        return;
+      }
+    }
+  }
+
+  Widget _buildMessageScrollList(List<MessagesRecord> messages) {
+    if (messages.isEmpty) {
+      return const Center(child: Text('No messages yet'));
+    }
+    return ScrollablePositionedList.builder(
+      itemCount: messages.length,
+      itemScrollController: _model.itemScrollController,
+      itemPositionsListener: _model.itemPositionsListener,
+      reverse: true,
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      itemBuilder: (context, index) {
+        final message = messages[index];
+
+        bool showTimestamp = false;
+        bool isConsecutive = false;
+        bool isFollowedByConsecutive = false;
+
+        if (index == messages.length - 1) {
+          showTimestamp = true;
+        } else {
+          final previousMessage = messages[index + 1];
+          if (message.createdAt != null && previousMessage.createdAt != null) {
+            final difference =
+                message.createdAt!.difference(previousMessage.createdAt!);
+            if (difference.inMinutes.abs() >= 5) {
+              showTimestamp = true;
+            }
+          }
+          if (!showTimestamp &&
+              !message.isSystemMessage &&
+              !previousMessage.isSystemMessage &&
+              message.senderRef != null &&
+              previousMessage.senderRef != null) {
+            isConsecutive = message.senderRef == previousMessage.senderRef;
+          }
+        }
+
+        if (index > 0) {
+          final nextMessage = messages[index - 1];
+          var showTimestampBeforeNext = false;
+          if (message.createdAt != null && nextMessage.createdAt != null) {
+            final difference =
+                nextMessage.createdAt!.difference(message.createdAt!);
+            if (difference.inMinutes.abs() >= 5) {
+              showTimestampBeforeNext = true;
+            }
+          }
+          if (!showTimestampBeforeNext &&
+              !message.isSystemMessage &&
+              !nextMessage.isSystemMessage &&
+              message.senderRef != null &&
+              nextMessage.senderRef != null) {
+            isFollowedByConsecutive =
+                message.senderRef == nextMessage.senderRef;
+          }
+        }
+
+        if (message.senderRef != null &&
+            _resolveUserName(message).isEmpty) {
+          _ensureUserCached(message);
+        }
+
+        final resolvedName = _resolveUserName(message);
+
+        try {
+          return ChatThreadWidget(
+            key: ValueKey('msg_${message.reference.id}'),
+            message: message,
+            senderImage: _resolveUserPhoto(message),
+            name: resolvedName,
+            chatRef: widget.chatReference!.reference,
+            userRef: message.senderRef ?? currentUserReference,
+            action: () async {},
+            onMessageLongPress: widget.onMessageLongPress,
+            onMessageAction: widget.onMessageAction,
+            onMessagesMutated: _afterMessagesMutated,
+            activeSelectionId: widget.activeSelectionId,
+            isSelectionMode: widget.isSelectionMode,
+            selectedMessages: widget.selectedMessages,
+            onMessageToggled: widget.onMessageToggled,
+            isGroup: widget.chatReference?.isGroup ?? false,
+            isConsecutive: isConsecutive,
+            isFollowedByConsecutive: isFollowedByConsecutive,
+            showTimestamp: showTimestamp,
+            onReplyToMessage: (msg) {
+              setState(() {
+                _model.replyingToMessage = msg;
+              });
+              _model.messageFocusNode?.requestFocus();
+            },
+            onEditMessage: (msg) {
+              setState(() {
+                _model.editingMessage = msg;
+                _model.replyingToMessage = null;
+              });
+              if (_quillController != null) {
+                _quillController!.clear();
+                final content = msg.content;
+                _pendingMentions.clear();
+                _mentionRanges.clear();
+                if (content.isNotEmpty) {
+                  final mentionPattern = RegExp(r'<@([^|]+)\|([^>]+)>');
+                  final matches = mentionPattern.allMatches(content).toList();
+                  final display = content.replaceAllMapped(
+                    mentionPattern,
+                    (m) => '@${m.group(2)}',
+                  );
+                  for (final match in matches) {
+                    final uid = match.group(1)!;
+                    final displayName = match.group(2)!;
+                    _pendingMentions.add(_MentionEntry(
+                      uid: uid,
+                      displayName: displayName,
+                    ));
+                    final displayUpToThisPoint = content
+                        .substring(0, match.start)
+                        .replaceAllMapped(
+                          mentionPattern,
+                          (m) => '@${m.group(2)}',
+                        );
+                    final searchFrom = displayUpToThisPoint.length;
+                    final atName = '@$displayName';
+                    final mentionOffset = display.indexOf(atName, searchFrom);
+                    if (mentionOffset >= 0) {
+                      _mentionRanges.add(_MentionRange(
+                        uid: uid,
+                        displayName: displayName,
+                        offset: mentionOffset,
+                        length: atName.length,
+                      ));
+                    }
+                  }
+                  _quillController!.document.insert(0, display);
+                  _quillController!.moveCursorToEnd();
+                }
+              }
+              _model.messageFocusNode?.requestFocus();
+            },
+            onScrollToMessage: (messageId) {
+              _scrollToMessageById(messageId, messages);
+            },
+          );
+        } catch (e) {
+          debugLog(
+              '❌ [itemBuilder] Error rendering message ${message.reference.id}: $e');
+          return const SizedBox.shrink();
+        }
+      },
+    );
+  }
+
+  Widget _buildDesktopMessageList() {
+    if (_desktopMessages == null) {
+      return const Center(child: CircularProgressIndicator());
+    }
+    return Stack(
+      children: [
+        _buildMessageScrollList(_desktopMessages!),
+        if (_desktopLoadingOlder)
+          const Positioned(
+            top: 8,
+            left: 0,
+            right: 0,
+            child: Center(
+              child: SizedBox(
+                width: 22,
+                height: 22,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              ),
+            ),
+          ),
+      ],
+    );
   }
 
   @override
@@ -1066,11 +1522,7 @@ class ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget> {
       return const Center(child: CircularProgressIndicator());
     }
 
-    return DropTarget(
-      onDragDone: _handleDroppedFiles,
-      onDragEntered: (_) => safeSetState(() => _isDragging = true),
-      onDragExited: (_) => safeSetState(() => _isDragging = false),
-      child: Stack(
+    final threadBody = Stack(
         children: [
     GestureDetector(
       onTap: () {
@@ -1081,7 +1533,11 @@ class ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget> {
         children: [
           // Message List
           Expanded(
-            child: StreamBuilder<List<MessagesRecord>>(
+            child: !_messagesStreamReady
+                ? const Center(child: CircularProgressIndicator())
+                : _staggerDesktopFirestore
+                    ? _buildDesktopMessageList()
+                    : StreamBuilder<List<MessagesRecord>>(
               stream: queryMessagesRecord(
                 parent: widget.chatReference!.reference,
                 queryBuilder: (messagesRecord) =>
@@ -1089,7 +1545,7 @@ class ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget> {
               ),
               builder: (context, snapshot) {
                 if (snapshot.hasError) {
-                  print('❌ [StreamBuilder] Error: ${snapshot.error}');
+                  debugLog('❌ [StreamBuilder] Error: ${snapshot.error}');
                   return Center(
                     child: Text(
                       'Error loading messages',
@@ -1102,154 +1558,7 @@ class ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget> {
                 }
 
                 final messages = snapshot.data!;
-                if (messages.isEmpty) {
-                  return const Center(child: Text('No messages yet'));
-                }
-                return ScrollablePositionedList.builder(
-                  itemCount: messages.length,
-                  itemScrollController: _model.itemScrollController,
-                  itemPositionsListener: _model.itemPositionsListener,
-                  reverse: true,
-                  padding: const EdgeInsets.symmetric(vertical: 8),
-                  itemBuilder: (context, index) {
-                    final message = messages[index];
-
-                    // Calculate if we should show the timestamp divider (5 min difference)
-                    bool showTimestamp = false;
-                    bool isConsecutive = false;
-                    
-                    if (index == messages.length - 1) {
-                      // Always show for the very first message
-                      showTimestamp = true;
-                    } else {
-                      final previousMessage = messages[index + 1]; // chronologically older
-                      
-                      if (message.createdAt != null && previousMessage.createdAt != null) {
-                        final difference = message.createdAt!.difference(previousMessage.createdAt!);
-                        if (difference.inMinutes.abs() >= 5) {
-                          showTimestamp = true;
-                        }
-                      }
-                      
-                      // Identify continuous messages from the same sender
-                      if (!showTimestamp && message.senderRef != null && previousMessage.senderRef != null) {
-                        isConsecutive = message.senderRef == previousMessage.senderRef;
-                      }
-                    }
-
-                    // Resolve sender name with fallback
-                    final resolvedName = _resolveUserName(message);
-
-                    try {
-                      return ChatThreadWidget(
-                        key: ValueKey('msg_${message.reference.id}'),
-                        message: message,
-                        senderImage: _resolveUserPhoto(message),
-                        name: resolvedName,
-                        chatRef: widget.chatReference!.reference,
-                        userRef: message.senderRef ?? currentUserReference,
-                        action: () async {},
-                        onMessageLongPress: widget.onMessageLongPress,
-                        onMessageAction: widget.onMessageAction,
-                        activeSelectionId: widget.activeSelectionId,
-                        isSelectionMode: widget.isSelectionMode,
-                        selectedMessages: widget.selectedMessages,
-                        onMessageToggled: widget.onMessageToggled,
-                        isGroup: widget.chatReference?.isGroup ?? false,
-                        isConsecutive: isConsecutive,
-                        showTimestamp: showTimestamp,
-                        onReplyToMessage: (msg) {
-                          setState(() {
-                            _model.replyingToMessage = msg;
-                          });
-                          _model.messageFocusNode?.requestFocus();
-                        },
-                        onEditMessage: (msg) {
-                          setState(() {
-                            _model.editingMessage = msg;
-                            _model.replyingToMessage = null; // Clear reply if editing
-                          });
-                          // Pre-fill QuillEditor with the message content
-                          if (_quillController != null) {
-                            _quillController!.clear();
-                            final content = msg.content;
-                            // Clear any stale mention tracking
-                            _pendingMentions.clear();
-                            _mentionRanges.clear();
-                            if (content.isNotEmpty) {
-                              // Parse existing mentions from the message markup
-                              final mentionPattern = RegExp(r'<@([^|]+)\|([^>]+)>');
-                              final matches = mentionPattern.allMatches(content).toList();
-                              
-                              // Strip mention markup back to display names for editing
-                              final display = content.replaceAllMapped(
-                                mentionPattern,
-                                (m) => '@${m.group(2)}',
-                              );
-                              
-                              // Populate _pendingMentions and _mentionRanges from parsed mentions
-                              for (final match in matches) {
-                                final uid = match.group(1)!;
-                                final displayName = match.group(2)!;
-                                _pendingMentions.add(_MentionEntry(
-                                  uid: uid,
-                                  displayName: displayName,
-                                ));
-                                // Calculate position in the stripped display text
-                                // We need to find where @displayName appears  
-                                final atName = '@$displayName';
-                                int searchFrom = 0;
-                                // Find this specific mention occurrence
-                                final displayUpToThisPoint = content.substring(0, match.start).replaceAllMapped(
-                                  mentionPattern,
-                                  (m) => '@${m.group(2)}',
-                                );
-                                searchFrom = displayUpToThisPoint.length;
-                                final mentionOffset = display.indexOf(atName, searchFrom);
-                                if (mentionOffset >= 0) {
-                                  _mentionRanges.add(_MentionRange(
-                                    uid: uid,
-                                    displayName: displayName,
-                                    offset: mentionOffset,
-                                    length: atName.length,
-                                  ));
-                                }
-                              }
-                              
-                              // Convert markdown back to Quill Delta to preserve
-                              // formatting (bold, italic, etc.) in the editor
-                              final delta = markdownToQuillDelta(display);
-                              _quillController!.document = Document.fromDelta(delta);
-                              _quillController!.moveCursorToEnd();
-                            }
-                          }
-                          _model.messageFocusNode?.requestFocus();
-                        },
-                        onScrollToMessage: (messageId) {
-                          final messagesRef = widget.chatReference!.reference
-                              .collection('messages')
-                              .orderBy('created_at', descending: true);
-                          messagesRef.get().then((snapshot) {
-                            final docs = snapshot.docs;
-                            for (int i = 0; i < docs.length; i++) {
-                              if (docs[i].id == messageId) {
-                                _model.itemScrollController?.scrollTo(
-                                  index: i,
-                                  duration: const Duration(milliseconds: 300),
-                                  curve: Curves.easeInOut,
-                                );
-                                break;
-                              }
-                            }
-                          });
-                        },
-                      );
-                    } catch (e) {
-                      print('❌ [itemBuilder] Error rendering message ${message.reference.id}: $e');
-                      return const SizedBox.shrink();
-                    }
-                  },
-                );
+                return _buildMessageScrollList(messages);
               },
             ),
           ),
@@ -1362,7 +1671,7 @@ class ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget> {
                         Text(
                           'Editing message',
                           style: TextStyle(
-                            fontFamily: 'SF Pro Text',
+                            fontFamily: chatMessageFontFamily,
                             fontSize: 12,
                             fontWeight: FontWeight.w600,
                             color: const Color(0xFFFF9500),
@@ -1371,10 +1680,13 @@ class ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget> {
                         const SizedBox(height: 2),
                         Text(
                           _model.editingMessage!.content.isNotEmpty
-                              ? stripMarkdownFormatting(_model.editingMessage!.content)
+                              ? _model.editingMessage!.content.replaceAllMapped(
+                                  RegExp(r'<@[^|]+\|([^>]+)>'),
+                                  (m) => '@${m.group(1)}',
+                                )
                               : '📎 Attachment',
                           style: TextStyle(
-                            fontFamily: 'SF Pro Text',
+                            fontFamily: chatMessageFontFamily,
                             fontSize: 12,
                             color: FlutterFlowTheme.of(context).secondaryText,
                           ),
@@ -1436,7 +1748,7 @@ class ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget> {
                         Text(
                           _resolveUserName(_model.replyingToMessage!),
                           style: TextStyle(
-                            fontFamily: 'SF Pro Text',
+                            fontFamily: chatMessageFontFamily,
                             fontSize: 12,
                             fontWeight: FontWeight.w600,
                             color: FlutterFlowTheme.of(context).primary,
@@ -1445,14 +1757,14 @@ class ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget> {
                         const SizedBox(height: 2),
                         Text(
                           _model.replyingToMessage!.content.isNotEmpty
-                              ? stripMarkdownFormatting(_model.replyingToMessage!.content)
+                              ? _model.replyingToMessage!.content
                               : (_model.replyingToMessage!.image.isNotEmpty
                                   ? '📷 Photo'
                                   : (_model.replyingToMessage!.video.isNotEmpty
                                       ? '🎥 Video'
                                       : '📎 File')),
                           style: TextStyle(
-                            fontFamily: 'SF Pro Text',
+                            fontFamily: chatMessageFontFamily,
                             fontSize: 12,
                             color: FlutterFlowTheme.of(context).secondaryText,
                           ),
@@ -1565,7 +1877,7 @@ class ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget> {
                             child: Text(
                               user.displayName,
                               style: TextStyle(
-                                fontFamily: 'SF Pro Text',
+                                fontFamily: chatMessageFontFamily,
                                 fontSize: 13,
                                 fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
                                 color: FlutterFlowTheme.of(context).primaryText,
@@ -1582,8 +1894,14 @@ class ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget> {
               ),
             ),
 
-          // Rich Input Area
+          // Rich Input Area — always visible; message list loads independently
           RichChatInputWidget(
+            onTryPasteImage: !kIsWeb &&
+                    (Platform.isWindows ||
+                        Platform.isLinux ||
+                        Platform.isMacOS)
+                ? _tryPasteImageFromClipboard
+                : null,
             onSend: _handleSendMessage,
             onVoiceSend: _handleSendVoiceMessage,
             onScheduleMessage: _handleScheduleMessage,
@@ -1605,12 +1923,12 @@ class ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget> {
               }
             },
             onAttachment: () async {
-              print('📎 [onAttachment] File picker opening...');
+              debugLog('📎 [onAttachment] File picker opening...');
               try {
                 final selectedFiles = await selectFiles(
                   multiFile: false,
                 );
-                print('📎 [onAttachment] File picker returned: ${selectedFiles?.length ?? 0} files');
+                debugLog('📎 [onAttachment] File picker returned: ${selectedFiles?.length ?? 0} files');
                 if (selectedFiles != null && selectedFiles.isNotEmpty) {
                   final file = selectedFiles.first;
                   // Use the original file path (filePath) to get the real filename,
@@ -1618,7 +1936,7 @@ class ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget> {
                   final fileName = (file.filePath != null && file.filePath!.isNotEmpty)
                       ? file.filePath!.split('/').last
                       : file.storagePath.split('/').last;
-                  print('📎 [onAttachment] File: $fileName, bytes: ${file.bytes.length}');
+                  debugLog('📎 [onAttachment] File: $fileName, bytes: ${file.bytes.length}');
                   // Determine type from file extension
                   final ext = fileName.split('.').last.toLowerCase();
                   final type = (ext == 'mp4' || ext == 'mov' || ext == 'avi')
@@ -1631,15 +1949,15 @@ class ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget> {
                     fileName: fileName,
                     type: type,
                   ));
-                  print('📎 [onAttachment] Added to pendingAttachments, count: ${_model.pendingAttachments.length}');
+                  debugLog('📎 [onAttachment] Added to pendingAttachments, count: ${_model.pendingAttachments.length}');
                   safeSetState(() {});
                 }
               } catch (e) {
-                print('❌ [onAttachment] Error: $e');
+                debugLog('❌ [onAttachment] Error: $e');
               }
             },
             onPhotoLibrary: () async {
-              print('📸 [onPhotoLibrary] Opening photo library...');
+              debugLog('📸 [onPhotoLibrary] Opening photo library...');
               try {
                 final picker = ImagePicker();
                 final picked = await picker.pickImage(source: ImageSource.gallery, imageQuality: 85);
@@ -1659,11 +1977,11 @@ class ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget> {
                     fileName: fileName,
                     type: type,
                   ));
-                  print('📸 [onPhotoLibrary] Added: $fileName (${bytes.length} bytes)');
+                  debugLog('📸 [onPhotoLibrary] Added: $fileName (${bytes.length} bytes)');
                   safeSetState(() {});
                 }
               } catch (e) {
-                print('❌ [onPhotoLibrary] Error: $e');
+                debugLog('❌ [onPhotoLibrary] Error: $e');
               }
             },
             onEmoji: () {
@@ -1671,30 +1989,6 @@ class ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget> {
             },
             onCamera: () {
               // Camera logic
-            },
-            onScreenshot: () async {
-              print('📸 [onScreenshot] Taking screenshot...');
-              try {
-                final bytes = await ScreenCaptureWeb.captureScreenshot();
-                if (bytes != null && bytes.isNotEmpty) {
-                  final fileName = 'screenshot_${DateTime.now().millisecondsSinceEpoch}.png';
-                  final storagePath = 'users/$currentUserUid/uploads/${DateTime.now().millisecondsSinceEpoch}_$fileName';
-                  _model.addPendingAttachment(PendingAttachment(
-                    file: SelectedFile(
-                      storagePath: storagePath,
-                      bytes: bytes,
-                    ),
-                    fileName: fileName,
-                    type: AttachmentType.image,
-                  ));
-                  print('📸 [onScreenshot] Screenshot added as attachment: $fileName (${bytes.length} bytes)');
-                  safeSetState(() {});
-                } else {
-                  print('📸 [onScreenshot] Screenshot cancelled or empty');
-                }
-              } catch (e) {
-                print('❌ [onScreenshot] Error: $e');
-              }
             },
           ),
               ],
@@ -1727,7 +2021,7 @@ class ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget> {
                         Text(
                           'Drop files here',
                           style: TextStyle(
-                            fontFamily: 'SF Pro Text',
+                            fontFamily: chatMessageFontFamily,
                             fontSize: 16,
                             fontWeight: FontWeight.w600,
                             color: const Color(0xFF007AFF),
@@ -1740,8 +2034,17 @@ class ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget> {
               ),
             ),
         ], // Stack children
-      ), // Stack
-    ); // DropTarget
+      ); // Stack
+
+    if (_staggerDesktopFirestore) {
+      return threadBody;
+    }
+    return DropTarget(
+      onDragDone: _handleDroppedFiles,
+      onDragEntered: (_) => safeSetState(() => _isDragging = true),
+      onDragExited: (_) => safeSetState(() => _isDragging = false),
+      child: threadBody,
+    );
   }
 
   void _showInputEmojiPicker() {
@@ -1790,7 +2093,7 @@ class ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget> {
                           Text(
                             'Emoji',
                             style: TextStyle(
-                              fontFamily: 'SF Pro Text',
+                              fontFamily: chatMessageFontFamily,
                               fontSize: 14,
                               fontWeight: FontWeight.w600,
                               color: isDark ? Colors.white : Colors.black87,

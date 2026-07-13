@@ -1,5 +1,6 @@
 import '/auth/firebase_auth/auth_util.dart';
 import '/backend/backend.dart';
+import '/backend/firestore/firestore_desktop_adapter.dart';
 import '/flutter_flow/flutter_flow_util.dart';
 import '/flutter_flow/flutter_flow_widgets.dart';
 import 'package:ff_theme/flutter_flow/flutter_flow_theme.dart';
@@ -392,9 +393,10 @@ class _CreateWorkspaceWidgetState extends State<CreateWorkspaceWidget> {
         'member_count': 1,
       };
 
-      final workspaceRef = await FirebaseFirestore.instance
-          .collection('workspaces')
-          .add(workspaceData);
+      final workspaceRef = await fsCreateRootDocument(
+        collectionPath: 'workspaces',
+        data: workspaceData,
+      );
 
       // Add current user as owner to workspace members
       final memberData = {
@@ -404,12 +406,13 @@ class _CreateWorkspaceWidgetState extends State<CreateWorkspaceWidget> {
         'joined_time': getCurrentTimestamp,
       };
 
-      await FirebaseFirestore.instance
-          .collection('workspace_members')
-          .add(memberData);
+      await fsCreateRootDocument(
+        collectionPath: 'workspace_members',
+        data: memberData,
+      );
 
       // Update user's current workspace
-      await currentUser.update({
+      await fsPatchDocument(currentUser, {
         'current_workspace_ref': workspaceRef,
       });
 

@@ -1,5 +1,8 @@
 import '/auth/firebase_auth/auth_util.dart';
 import '/backend/backend.dart';
+import '/backend/firestore/firestore_desktop_adapter.dart';
+import '/pages/desktop_chat/desktop_safe_user_builder.dart';
+import '/pages/desktop_chat/rest_poll_builder.dart';
 import '/flutter_flow/flutter_flow_util.dart';
 import '/pages/mobile_chat/mobile_chat_widget.dart';
 import '/pages/user_summary/user_summary_widget.dart';
@@ -37,6 +40,7 @@ class _AddConnectionsWidgetState extends State<AddConnectionsWidget> {
   final ScrollController _scrollController = ScrollController();
   List<UsersRecord> _loadedUsers = [];
   DocumentSnapshot? _lastDocument;
+  String? _lastWindowsUserId;
   bool _isLoadingMore = false;
   bool _hasMoreUsers = true;
   bool _isInitialLoading = true;
@@ -100,15 +104,15 @@ class _AddConnectionsWidgetState extends State<AddConnectionsWidget> {
 
     try {
       // Get current user data to calculate mutual connections
-      final currentUserDoc = await currentUserReference!.get();
-      final currentUser = UsersRecord.fromSnapshot(currentUserDoc);
+      final currentUser = await fsGetUserOnce(currentUserReference!);
 
       // Fetch a larger batch of users to sort by mutual connections
-      // Fetch 50 users to have enough to sort and prioritize
-      final users = await queryUsersRecordOnce(
-        queryBuilder: (q) => q.limit(100),
-        limit: 100,
-      );
+      final users = useWindowsFirestoreRest
+          ? await fsQueryUsers(limit: 100)
+          : await queryUsersRecordOnce(
+              queryBuilder: (q) => q.limit(100),
+              limit: 100,
+            );
 
       // Filter out current user
       final filteredUsers = users
@@ -137,7 +141,11 @@ class _AddConnectionsWidgetState extends State<AddConnectionsWidget> {
 
       // Store the last user's document for pagination
       if (topUsers.isNotEmpty) {
-        _lastDocument = await topUsers.last.reference.get();
+        if (useWindowsFirestoreRest) {
+          _lastWindowsUserId = topUsers.last.reference.id;
+        } else {
+          _lastDocument = await topUsers.last.reference.get();
+        }
       }
 
       setState(() {
@@ -157,7 +165,8 @@ class _AddConnectionsWidgetState extends State<AddConnectionsWidget> {
   // Load more users for pagination
   Future<void> _loadMoreUsers() async {
     if (currentUserReference == null ||
-        _lastDocument == null ||
+        (!useWindowsFirestoreRest && _lastDocument == null) ||
+        (useWindowsFirestoreRest && _lastWindowsUserId == null) ||
         !_hasMoreUsers ||
         _isLoadingMore) {
       return;
@@ -169,17 +178,24 @@ class _AddConnectionsWidgetState extends State<AddConnectionsWidget> {
 
     try {
       // Get current user data to calculate mutual connections
-      final currentUserDoc = await currentUserReference!.get();
-      final currentUser = UsersRecord.fromSnapshot(currentUserDoc);
+      final currentUser = await fsGetUserOnce(currentUserReference!);
 
-      // Fetch next batch of users
-      Query query = UsersRecord.collection
-          .startAfterDocument(_lastDocument!)
-          .limit(100); // Fetch 100 to have enough to sort
+      final Iterable<UsersRecord> fetchedUsersIterable;
+      if (useWindowsFirestoreRest) {
+        fetchedUsersIterable = await fsQueryUsers(
+          limit: 100,
+          startAfterUserId: _lastWindowsUserId,
+        );
+      } else {
+        Query query = UsersRecord.collection
+            .startAfterDocument(_lastDocument!)
+            .limit(100);
+        final querySnapshot = await query.get();
+        fetchedUsersIterable = querySnapshot.docs
+            .map((doc) => UsersRecord.fromSnapshot(doc));
+      }
 
-      final querySnapshot = await query.get();
-      final fetchedUsers = querySnapshot.docs
-          .map((doc) => UsersRecord.fromSnapshot(doc))
+      final fetchedUsers = fetchedUsersIterable
           .where((user) => user.reference != currentUserReference)
           .where((user) => !_loadedUsers
               .any((loaded) => loaded.reference.id == user.reference.id))
@@ -215,7 +231,11 @@ class _AddConnectionsWidgetState extends State<AddConnectionsWidget> {
 
       if (newUsers.isNotEmpty) {
         // Store the last user's document for pagination
-        _lastDocument = await newUsers.last.reference.get();
+        if (useWindowsFirestoreRest) {
+          _lastWindowsUserId = newUsers.last.reference.id;
+        } else {
+          _lastDocument = await newUsers.last.reference.get();
+        }
 
         setState(() {
           _loadedUsers.addAll(newUsers);
@@ -248,169 +268,177 @@ class _AddConnectionsWidgetState extends State<AddConnectionsWidget> {
   @override
   Widget build(BuildContext context) {
     return SelectionContainer.disabled(
-      child: Scaffold(
+      child: CupertinoPageScaffold(
         backgroundColor: Colors.white,
-        body: Column(
-          children: [
-            // macOS-style toolbar
-            Container(
-              height: 52,
-              padding: EdgeInsets.symmetric(horizontal: 16),
-              decoration: BoxDecoration(
-                color: Color(0xFFFAFAFA),
-                border: Border(
-                  bottom: BorderSide(color: Color(0xFFE5E5E5), width: 0.5),
-                ),
-              ),
-              child: Row(
-                children: [
-                  // Back button
-                  Material(
-                    color: Colors.transparent,
-                    child: InkWell(
-                      onTap: () => Navigator.of(context).pop(),
-                      borderRadius: BorderRadius.circular(6),
-                      child: Container(
-                        padding: EdgeInsets.symmetric(horizontal: 8, vertical: 5),
-                        decoration: BoxDecoration(
-                          color: Color(0xFFF2F2F7),
-                          borderRadius: BorderRadius.circular(6),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(CupertinoIcons.chevron_left, size: 14, color: Color(0xFF007AFF)),
-                            SizedBox(width: 2),
-                            Text(
-                              'Back',
-                              style: TextStyle(
-                                fontFamily: 'SF Pro Text',
-                                fontSize: 12,
-                                fontWeight: FontWeight.w500,
-                                color: Color(0xFF007AFF),
-                              ),
+        child: Container(
+          color: Colors.white,
+          child: SafeArea(
+            bottom: false,
+            child: Column(
+              children: [
+                // Custom header with iOS 26 native back button
+                Container(
+                  height: 44,
+                  padding: EdgeInsets.symmetric(horizontal: 8),
+                  color: Colors.white,
+                  child: Row(
+                    children: [
+                      // Floating back button - iOS 26+ style with liquid glass effects
+                      LiquidStretch(
+                        stretch: 0.5,
+                        interactionScale: 1.05,
+                        child: GlassGlow(
+                          glowColor: Colors.white24,
+                          glowRadius: 1.0,
+                          child: AdaptiveFloatingActionButton(
+                            mini: true,
+                            backgroundColor: Colors.white,
+                            foregroundColor: Color(0xFF007AFF),
+                            onPressed: () => Navigator.of(context).pop(),
+                            child: Icon(
+                              CupertinoIcons.chevron_left,
+                              size: 17,
                             ),
-                          ],
+                          ),
                         ),
                       ),
-                    ),
+                      SizedBox(width: 8),
+                      // Centered title
+                      Expanded(
+                        child: Center(
+                          child: Text(
+                            'Add Connections',
+                            style: TextStyle(
+                              fontFamily: 'SF Pro Text',
+                              color: CupertinoColors.label,
+                              fontSize: 20,
+                              fontWeight: FontWeight.w600,
+                              letterSpacing: -0.41,
+                              decoration: TextDecoration.none,
+                            ),
+                          ),
+                        ),
+                      ),
+                      SizedBox(width: 8),
+                      // Invite friends button - iOS 26+ style with liquid glass effects
+                      LiquidStretch(
+                        stretch: 0.5,
+                        interactionScale: 1.05,
+                        child: GlassGlow(
+                          glowColor: Colors.white24,
+                          glowRadius: 1.0,
+                          child: AdaptiveFloatingActionButton(
+                            mini: true,
+                            backgroundColor: Colors.white,
+                            foregroundColor: Color(0xFF007AFF),
+                            onPressed: () => _showInviteDialog(context),
+                            child: Icon(
+                              CupertinoIcons.person_add_solid,
+                              size: 17,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
-                  SizedBox(width: 16),
-                  // Title
-                  Text(
-                    'Add Connections',
-                    style: TextStyle(
-                      fontFamily: 'SF Pro Text',
-                      fontSize: 15,
-                      fontWeight: FontWeight.w600,
-                      color: Color(0xFF1D1D1F),
+                ),
+                SizedBox(height: 8),
+                // Search bar
+                Container(
+                  width: double.infinity,
+                  padding: EdgeInsets.all(16),
+                  color: Colors.white,
+                  child: Container(
+                    height: 44,
+                    decoration: BoxDecoration(
+                      color: CupertinoColors.systemGrey6,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: CupertinoColors.separator,
+                        width: 0.5,
+                      ),
                     ),
-                  ),
-                  Spacer(),
-                  // Search field
-                  Container(
-                    width: 220,
-                    height: 28,
                     child: CupertinoTextField(
                       controller: _searchController,
                       autofocus: true,
-                      onChanged: (v) => setState(() => _searchQuery = v.toLowerCase()),
+                      onChanged: (value) {
+                        setState(() {
+                          _searchQuery = value.toLowerCase();
+                        });
+                      },
                       placeholder: 'Search by name or email',
                       placeholderStyle: TextStyle(
                         fontFamily: 'SF Pro Text',
-                        color: Color(0xFF8E8E93),
-                        fontSize: 12,
+                        color: CupertinoColors.systemGrey,
+                        fontSize: 14,
+                        fontWeight: FontWeight.w400,
+                        decoration: TextDecoration.none,
                       ),
-                      padding: EdgeInsets.symmetric(horizontal: 6, vertical: 5),
+                      padding:
+                          EdgeInsets.symmetric(horizontal: 12, vertical: 12),
                       prefix: Padding(
-                        padding: EdgeInsets.only(left: 6),
-                        child: Icon(CupertinoIcons.search, size: 14, color: Color(0xFF8E8E93)),
+                        padding: EdgeInsets.only(left: 12, right: 8),
+                        child: Icon(
+                          CupertinoIcons.search,
+                          color: CupertinoColors.systemBlue,
+                          size: 18,
+                        ),
                       ),
                       suffix: _searchQuery.isNotEmpty
                           ? GestureDetector(
-                              onTap: () => setState(() {
-                                _searchController.clear();
-                                _searchQuery = '';
-                              }),
+                              onTap: () {
+                                setState(() {
+                                  _searchController.clear();
+                                  _searchQuery = '';
+                                });
+                              },
                               child: Padding(
-                                padding: EdgeInsets.only(right: 6),
-                                child: Icon(CupertinoIcons.xmark_circle_fill, size: 13, color: Color(0xFFC7C7CC)),
+                                padding: EdgeInsets.only(right: 12),
+                                child: Icon(
+                                  CupertinoIcons.xmark_circle_fill,
+                                  color: CupertinoColors.systemGrey,
+                                  size: 16,
+                                ),
                               ),
                             )
                           : null,
                       style: TextStyle(
                         fontFamily: 'SF Pro Text',
-                        color: Color(0xFF1D1D1F),
-                        fontSize: 12,
+                        color: CupertinoColors.label,
+                        fontSize: 14,
+                        fontWeight: FontWeight.w400,
+                        decoration: TextDecoration.none,
                       ),
                       decoration: BoxDecoration(
-                        color: Color(0xFFF2F2F7),
-                        borderRadius: BorderRadius.circular(6),
+                        color: Colors.transparent,
+                        borderRadius: BorderRadius.circular(12),
                       ),
                     ),
                   ),
-                  SizedBox(width: 12),
-                  // Invite button
-                  Material(
-                    color: Colors.transparent,
-                    child: InkWell(
-                      onTap: () => _showInviteDialog(context),
-                      borderRadius: BorderRadius.circular(6),
-                      child: Container(
-                        padding: EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                        decoration: BoxDecoration(
-                          color: Color(0xFFF2F2F7),
-                          borderRadius: BorderRadius.circular(6),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(CupertinoIcons.person_add, size: 13, color: Color(0xFF007AFF)),
-                            SizedBox(width: 4),
-                            Text(
-                              'Invite',
-                              style: TextStyle(
-                                fontFamily: 'SF Pro Text',
-                                fontSize: 12,
-                                fontWeight: FontWeight.w500,
-                                color: Color(0xFF007AFF),
-                              ),
-                            ),
-                          ],
-                        ),
+                ),
+                // Recommended text (only show when no search query)
+                if (_searchQuery.isEmpty)
+                  Padding(
+                    padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    child: Text(
+                      'Recommended:',
+                      style: TextStyle(
+                        fontFamily: 'SF Pro Display',
+                        fontSize: 18,
+                        fontWeight: FontWeight.w600,
+                        color: Color(0xFF111827),
+                        decoration: TextDecoration.none,
                       ),
                     ),
                   ),
-                ],
-              ),
-            ),
-            // Recommended label
-            if (_searchQuery.isEmpty)
-              Container(
-                width: double.infinity,
-                padding: EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-                decoration: BoxDecoration(
-                  color: Color(0xFFFAFAFA),
-                  border: Border(
-                    bottom: BorderSide(color: Color(0xFFE5E5E5), width: 0.5),
-                  ),
+
+                // Content area
+                Expanded(
+                  child: _buildSearchResults(),
                 ),
-                child: Text(
-                  'Recommended',
-                  style: TextStyle(
-                    fontFamily: 'SF Pro Text',
-                    fontSize: 11,
-                    fontWeight: FontWeight.w500,
-                    color: Color(0xFF8E8E93),
-                    letterSpacing: 0.1,
-                  ),
-                ),
-              ),
-            // Content
-            Expanded(
-              child: _buildSearchResults(),
+              ],
             ),
-          ],
+          ),
         ),
       ),
     );
@@ -426,10 +454,11 @@ class _AddConnectionsWidgetState extends State<AddConnectionsWidget> {
       );
     }
 
-    return StreamBuilder<UsersRecord>(
-      stream: UsersRecord.getDocument(currentUserReference!),
-      builder: (context, currentUserSnapshot) {
-        if (!currentUserSnapshot.hasData) {
+    return DesktopSafeUserPollBuilder(
+      userRef: currentUserReference!,
+      fetchOnce: fsGetUserOnce,
+      builder: (context, currentUser) {
+        if (currentUser == null) {
           return Container(
             color: Colors.white,
             child: Center(
@@ -438,17 +467,19 @@ class _AddConnectionsWidgetState extends State<AddConnectionsWidget> {
           );
         }
 
-        final currentUser = currentUserSnapshot.data!;
-
         // Show dummy profile cards if no search query
         if (_searchQuery.isEmpty) {
-          return _buildDummyProfileCards();
+          return _buildDummyProfileCards(currentUser);
         }
 
         // Fetch all users and filter client-side for real-time suggestions
-        return StreamBuilder<List<UsersRecord>>(
-          stream: queryUsersRecord(),
-          builder: (context, searchSnapshot) {
+        return _buildUserSearchGrid(currentUser);
+      },
+    );
+  }
+
+  Widget _buildUserSearchGrid(UsersRecord currentUser) {
+    Widget buildGrid(AsyncSnapshot<List<UsersRecord>> searchSnapshot) {
             // Check for errors first
             if (searchSnapshot.hasError) {
               print('Error searching users: ${searchSnapshot.error}');
@@ -510,29 +541,48 @@ class _AddConnectionsWidgetState extends State<AddConnectionsWidget> {
 
             final sortedUsers = usersWithMutuals.map((e) => e.key).toList();
 
-            return ListView.builder(
-              padding: EdgeInsets.zero,
-              itemCount: sortedUsers.length,
-              itemBuilder: (context, index) {
-                final user = sortedUsers[index];
-                final mutualCount = usersWithMutuals[index].value;
-                final isConnected =
-                    _isUserConnected(user.reference, currentUser);
-                final isSentRequest =
-                    _isValidSentRequest(user.reference, currentUser);
+            return Container(
+              color: Colors.white,
+              child: GridView.builder(
+                padding: EdgeInsets.all(16),
+                gridDelegate: SliverGridDelegateWithMaxCrossAxisExtent(
+                  maxCrossAxisExtent: 280,
+                  crossAxisSpacing: 16,
+                  mainAxisSpacing: 16,
+                  childAspectRatio: 0.70,
+                ),
+                itemCount: sortedUsers.length,
+                itemBuilder: (context, index) {
+                  final user = sortedUsers[index];
+                  final mutualCount = usersWithMutuals[index].value;
+                  final isConnected =
+                      _isUserConnected(user.reference, currentUser);
+                  final isSentRequest =
+                      _isValidSentRequest(user.reference, currentUser);
 
-                return _buildConnectionRow(
-                  user: user,
-                  currentUser: currentUser,
-                  mutualConnections: mutualCount,
-                  isConnected: isConnected,
-                  isSentRequest: isSentRequest,
-                );
-              },
+                  return _buildProfileCard(
+                    user: user,
+                    currentUser: currentUser,
+                    mutualConnections: mutualCount,
+                    isConnected: isConnected,
+                    isSentRequest: isSentRequest,
+                  );
+                },
+              ),
             );
-          },
-        );
-      },
+    }
+
+    if (useWindowsFirestoreRest) {
+      return RestPollBuilder<List<UsersRecord>>(
+        interval: const Duration(seconds: 30),
+        fetch: () => fsQueryUsers(limit: 200),
+        builder: (context, snapshot) => buildGrid(snapshot),
+      );
+    }
+
+    return StreamBuilder<List<UsersRecord>>(
+      stream: queryUsersRecord(),
+      builder: (context, snapshot) => buildGrid(snapshot),
     );
   }
 
@@ -915,8 +965,7 @@ class _AddConnectionsWidgetState extends State<AddConnectionsWidget> {
 
     try {
       // Bulletproof check - ensure they are actually connected
-      final currentUserDoc = await currentUserReference!.get();
-      final currentUserData = UsersRecord.fromSnapshot(currentUserDoc);
+      final currentUserData = await fsGetUserOnce(currentUserReference!);
 
       if (!currentUserData.friends.contains(user.reference)) {
         _showErrorMessage('You are not connected with ${user.displayName}');
@@ -924,16 +973,18 @@ class _AddConnectionsWidgetState extends State<AddConnectionsWidget> {
       }
 
       // Update current user's document (we have permission for our own document)
-      await currentUserReference!.update({
-        'friends': FieldValue.arrayRemove([user.reference]),
-      });
+      await fsArrayRemove(
+        currentUserReference!,
+        'friends',
+        [user.reference],
+      );
 
-      // Try to update other user's document (may fail due to permissions, but that's okay)
-      // The connection will be removed from their side when they next sync
       try {
-        await user.reference.update({
-          'friends': FieldValue.arrayRemove([currentUserReference]),
-        });
+        await fsArrayRemove(
+          user.reference,
+          'friends',
+          [currentUserReference!],
+        );
       } catch (e) {
         // If we can't update the other user's document, that's okay
         // The connection is still removed from our side
@@ -984,7 +1035,7 @@ class _AddConnectionsWidgetState extends State<AddConnectionsWidget> {
     );
   }
 
-  Widget _buildDummyProfileCards() {
+  Widget _buildDummyProfileCards(UsersRecord currentUser) {
     if (_isInitialLoading) {
       return Container(
         color: Colors.white,
@@ -1002,175 +1053,53 @@ class _AddConnectionsWidgetState extends State<AddConnectionsWidget> {
       );
     }
 
-    return StreamBuilder<UsersRecord>(
-      stream: UsersRecord.getDocument(currentUserReference!),
-      builder: (context, currentUserSnapshot) {
-        if (!currentUserSnapshot.hasData) {
-          return Container(
-            color: Colors.white,
-            child: Center(
-              child: CupertinoActivityIndicator(),
-            ),
-          );
-        }
+    final filteredUsers = _loadedUsers.where((user) {
+      return !_isUserConnected(user.reference, currentUser);
+    }).toList();
 
-        final currentUser = currentUserSnapshot.data!;
+    if (filteredUsers.isEmpty && !_isLoadingMore) {
+      return _buildEmptyState(
+        icon: CupertinoIcons.person_2,
+        title: 'No Recommendations',
+        subtitle: 'All available users are already connected',
+      );
+    }
 
-        // Filter out already connected users
-        final filteredUsers = _loadedUsers.where((user) {
-          return !_isUserConnected(user.reference, currentUser);
-        }).toList();
-
-        if (filteredUsers.isEmpty && !_isLoadingMore) {
-          return _buildEmptyState(
-            icon: CupertinoIcons.person_2,
-            title: 'No Recommendations',
-            subtitle: 'All available users are already connected',
-          );
-        }
-
-        return ListView.builder(
-          controller: _scrollController,
-          padding: EdgeInsets.zero,
-          itemCount: filteredUsers.length + (_isLoadingMore ? 1 : 0),
-          itemBuilder: (context, index) {
-            if (index == filteredUsers.length) {
-              return Padding(
-                padding: EdgeInsets.all(16),
-                child: Center(child: CupertinoActivityIndicator()),
-              );
-            }
-
-            final user = filteredUsers[index];
-            final mutualCount =
-                _calculateMutualConnections(currentUser, user);
-            final isConnected = _isUserConnected(user.reference, currentUser);
-            final isSentRequest =
-                _isValidSentRequest(user.reference, currentUser);
-
-            return _buildConnectionRow(
-              user: user,
-              currentUser: currentUser,
-              mutualConnections: mutualCount,
-              isConnected: isConnected,
-              isSentRequest: isSentRequest,
-            );
-          },
-        );
-      },
-    );
-  }
-
-  Widget _buildConnectionRow({
-    required UsersRecord user,
-    required UsersRecord currentUser,
-    required int mutualConnections,
-    required bool isConnected,
-    required bool isSentRequest,
-  }) {
-    final isLoading = _isOperationInProgress(user.reference.id);
-    final hasIncomingRequest = user.sentRequests.contains(currentUserReference);
-
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: () {
-          Navigator.push(context, CupertinoPageRoute(builder: (context) => UserSummaryWidget(userRef: user.reference)));
-        },
-        hoverColor: Color(0xFFF5F5F7),
-        child: Container(
-          padding: EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-          decoration: BoxDecoration(
-            border: Border(bottom: BorderSide(color: Color(0xFFF2F2F2), width: 0.5)),
-          ),
-          child: Row(
-            children: [
-              Container(
-                width: 36, height: 36,
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(18),
-                  child: user.photoUrl.isNotEmpty
-                      ? CachedNetworkImage(
-                          imageUrl: user.photoUrl, width: 36, height: 36, fit: BoxFit.cover,
-                          placeholder: (c, u) => Container(
-                            width: 36, height: 36,
-                            decoration: BoxDecoration(color: Color(0xFFF2F2F7), shape: BoxShape.circle),
-                            child: Icon(CupertinoIcons.person_fill, color: Color(0xFF8E8E93), size: 18),
-                          ),
-                          errorWidget: (c, u, e) => _buildInitialsAvatar(user),
-                        )
-                      : _buildInitialsAvatar(user),
-                ),
-              ),
-              SizedBox(width: 12),
-              Expanded(
-                flex: 3,
-                child: Text(
-                  user.displayName.isNotEmpty ? user.displayName : 'Unknown',
-                  style: TextStyle(fontFamily: 'SF Pro Text', color: Color(0xFF1D1D1F), fontSize: 13, fontWeight: FontWeight.w500),
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ),
-              SizedBox(width: 12),
-              Expanded(
-                flex: 4,
-                child: Text(
-                  user.bio.isNotEmpty ? user.bio : user.email,
-                  style: TextStyle(fontFamily: 'SF Pro Text', color: Color(0xFF8E8E93), fontSize: 12),
-                  maxLines: 1, overflow: TextOverflow.ellipsis,
-                ),
-              ),
-              SizedBox(width: 12),
-              if (mutualConnections > 0)
-                Padding(
-                  padding: EdgeInsets.only(right: 12),
-                  child: Text('$mutualConnections mutual', style: TextStyle(fontFamily: 'SF Pro Text', fontSize: 11, color: Color(0xFFAEAEB2))),
-                ),
-              if (isConnected)
-                Container(
-                  padding: EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                  decoration: BoxDecoration(color: Color(0xFFF2F2F7), borderRadius: BorderRadius.circular(5)),
-                  child: Text('Connected', style: TextStyle(fontFamily: 'SF Pro Text', fontSize: 11, fontWeight: FontWeight.w500, color: Color(0xFF8E8E93))),
-                )
-              else if (isSentRequest)
-                Container(
-                  padding: EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                  decoration: BoxDecoration(color: Color(0xFFF2F2F7), borderRadius: BorderRadius.circular(5)),
-                  child: Text('Pending', style: TextStyle(fontFamily: 'SF Pro Text', fontSize: 11, fontWeight: FontWeight.w500, color: Color(0xFFAEAEB2))),
-                )
-              else if (hasIncomingRequest)
-                Material(
-                  color: Colors.transparent,
-                  child: InkWell(
-                    onTap: isLoading ? null : () => _acceptConnectionRequest(user),
-                    borderRadius: BorderRadius.circular(5),
-                    child: Container(
-                      padding: EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                      decoration: BoxDecoration(color: Color(0xFF34C759), borderRadius: BorderRadius.circular(5)),
-                      child: isLoading
-                          ? SizedBox(width: 14, height: 14, child: CupertinoActivityIndicator(color: Colors.white))
-                          : Text('Accept', style: TextStyle(fontFamily: 'SF Pro Text', fontSize: 11, fontWeight: FontWeight.w500, color: Colors.white)),
-                    ),
-                  ),
-                )
-              else
-                Material(
-                  color: Colors.transparent,
-                  child: InkWell(
-                    onTap: isLoading ? null : () => _sendConnectionRequest(user),
-                    borderRadius: BorderRadius.circular(5),
-                    child: Container(
-                      padding: EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                      decoration: BoxDecoration(color: Color(0xFF007AFF), borderRadius: BorderRadius.circular(5)),
-                      child: isLoading
-                          ? SizedBox(width: 14, height: 14, child: CupertinoActivityIndicator(color: Colors.white))
-                          : Text('Connect', style: TextStyle(fontFamily: 'SF Pro Text', fontSize: 11, fontWeight: FontWeight.w500, color: Colors.white)),
-                    ),
-                  ),
-                ),
-            ],
-          ),
+    return Container(
+      color: Colors.white,
+      child: GridView.builder(
+        controller: _scrollController,
+        padding: EdgeInsets.all(16),
+        gridDelegate: SliverGridDelegateWithMaxCrossAxisExtent(
+          maxCrossAxisExtent: 280,
+          crossAxisSpacing: 16,
+          mainAxisSpacing: 16,
+          childAspectRatio: 0.70,
         ),
+        itemCount: filteredUsers.length + (_isLoadingMore ? 1 : 0),
+        itemBuilder: (context, index) {
+          if (index == filteredUsers.length) {
+            // Loading indicator at the end
+            return Center(
+              child: CupertinoActivityIndicator(),
+            );
+          }
+
+          final user = filteredUsers[index];
+          final mutualCount =
+              _calculateMutualConnections(currentUser, user);
+          final isConnected = _isUserConnected(user.reference, currentUser);
+          final isSentRequest =
+              _isValidSentRequest(user.reference, currentUser);
+
+          return _buildProfileCard(
+            user: user,
+            currentUser: currentUser,
+            mutualConnections: mutualCount,
+            isConnected: isConnected,
+            isSentRequest: isSentRequest,
+          );
+        },
       ),
     );
   }
@@ -1560,8 +1489,7 @@ class _AddConnectionsWidgetState extends State<AddConnectionsWidget> {
 
     try {
       // Bulletproof check - don't send if already connected or request already sent
-      final currentUserDoc = await currentUserReference!.get();
-      final currentUserData = UsersRecord.fromSnapshot(currentUserDoc);
+      final currentUserData = await fsGetUserOnce(currentUserReference!);
 
       if (currentUserData.friends.contains(user.reference)) {
         _showErrorMessage('You are already connected with ${user.displayName}');
@@ -1580,20 +1508,16 @@ class _AddConnectionsWidgetState extends State<AddConnectionsWidget> {
         return;
       }
 
-      // Use a batch write for better performance and atomicity
-      final batch = FirebaseFirestore.instance.batch();
-
-      // Update current user's sent requests
-      batch.update(currentUserReference!, {
-        'sent_requests': FieldValue.arrayUnion([user.reference]),
-      });
-
-      // Update target user's friend requests
-      batch.update(user.reference, {
-        'friend_requests': FieldValue.arrayUnion([currentUserReference]),
-      });
-
-      await batch.commit();
+      await fsArrayUnion(
+        currentUserReference!,
+        'sent_requests',
+        [user.reference],
+      );
+      await fsArrayUnion(
+        user.reference,
+        'friend_requests',
+        [currentUserReference!],
+      );
 
       if (mounted) {
         _showSuccessMessage('Connection request sent to ${user.displayName}');
@@ -1625,28 +1549,23 @@ class _AddConnectionsWidgetState extends State<AddConnectionsWidget> {
 
     try {
       // Bulletproof check - ensure request exists
-      final currentUserDoc = await currentUserReference!.get();
-      final currentUserData = UsersRecord.fromSnapshot(currentUserDoc);
+      final currentUserData = await fsGetUserOnce(currentUserReference!);
 
       if (!currentUserData.sentRequests.contains(user.reference)) {
         _showErrorMessage('No pending request to ${user.displayName}');
         return;
       }
 
-      // Use a batch write for better performance and atomicity
-      final batch = FirebaseFirestore.instance.batch();
-
-      // Update current user: remove from sent_requests
-      batch.update(currentUserReference!, {
-        'sent_requests': FieldValue.arrayRemove([user.reference]),
-      });
-
-      // Update target user: remove from friend_requests
-      batch.update(user.reference, {
-        'friend_requests': FieldValue.arrayRemove([currentUserReference]),
-      });
-
-      await batch.commit();
+      await fsArrayRemove(
+        currentUserReference!,
+        'sent_requests',
+        [user.reference],
+      );
+      await fsArrayRemove(
+        user.reference,
+        'friend_requests',
+        [currentUserReference!],
+      );
 
       if (mounted) {
         _showSuccessMessage('Connection request cancelled');
@@ -1677,8 +1596,7 @@ class _AddConnectionsWidgetState extends State<AddConnectionsWidget> {
 
     try {
       // Bulletproof check - ensure they sent us a request and we're not already connected
-      final currentUserDoc = await currentUserReference!.get();
-      final currentUserData = UsersRecord.fromSnapshot(currentUserDoc);
+      final currentUserData = await fsGetUserOnce(currentUserReference!);
 
       if (currentUserData.friends.contains(user.reference)) {
         _showErrorMessage('You are already connected with ${user.displayName}');
@@ -1690,24 +1608,23 @@ class _AddConnectionsWidgetState extends State<AddConnectionsWidget> {
         return;
       }
 
-      // Use a batch write for better performance and atomicity
-      final batch = FirebaseFirestore.instance.batch();
-
-      // Update current user: add to friends, remove from friend_requests
-      batch.update(currentUserReference!, {
-        'friends': FieldValue.arrayUnion([user.reference]),
-        'friend_requests': FieldValue.arrayRemove([user.reference]),
-        'sent_requests': FieldValue.arrayRemove(
-            [user.reference]), // Remove if we also sent them a request
-      });
-
-      // Update other user: add to friends, remove from sent_requests
-      batch.update(user.reference, {
-        'friends': FieldValue.arrayUnion([currentUserReference]),
-        'sent_requests': FieldValue.arrayRemove([currentUserReference]),
-      });
-
-      await batch.commit();
+      await fsArrayUnion(currentUserReference!, 'friends', [user.reference]);
+      await fsArrayRemove(
+        currentUserReference!,
+        'friend_requests',
+        [user.reference],
+      );
+      await fsArrayRemove(
+        currentUserReference!,
+        'sent_requests',
+        [user.reference],
+      );
+      await fsArrayUnion(user.reference, 'friends', [currentUserReference!]);
+      await fsArrayRemove(
+        user.reference,
+        'sent_requests',
+        [currentUserReference!],
+      );
 
       if (mounted) {
         _showSuccessMessage('Connection request accepted!');
@@ -1738,18 +1655,18 @@ class _AddConnectionsWidgetState extends State<AddConnectionsWidget> {
 
     try {
       // Bulletproof check - ensure request exists
-      final currentUserDoc = await currentUserReference!.get();
-      final currentUserData = UsersRecord.fromSnapshot(currentUserDoc);
+      final currentUserData = await fsGetUserOnce(currentUserReference!);
 
       if (!currentUserData.friendRequests.contains(user.reference)) {
         _showErrorMessage('No pending request from ${user.displayName}');
         return;
       }
 
-      // Only update current user's document (we have permission for this)
-      await currentUserReference!.update({
-        'friend_requests': FieldValue.arrayRemove([user.reference]),
-      });
+      await fsArrayRemove(
+        currentUserReference!,
+        'friend_requests',
+        [user.reference],
+      );
 
       if (mounted) {
         _showSuccessMessage('Connection request declined');

@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '/backend/backend.dart';
+import '/backend/firestore/firestore_desktop_adapter.dart';
 import '/flutter_flow/flutter_flow_util.dart';
+import '/pages/desktop_chat/rest_poll_builder.dart';
 import 'package:ff_theme/flutter_flow/flutter_flow_theme.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'group_action_tasks_model.dart';
@@ -16,10 +18,12 @@ class GroupActionTasksWidget extends StatefulWidget {
     super.key,
     required this.chatDoc,
     this.onClose,
+    this.embedded = false,
   });
 
   final ChatsRecord? chatDoc;
   final VoidCallback? onClose;
+  final bool embedded;
 
   static String routeName = 'GroupActionTasks';
   static String routePath = '/group-action-tasks';
@@ -52,8 +56,41 @@ class _GroupActionTasksWidgetState extends State<GroupActionTasksWidget> {
     super.dispose();
   }
 
+  Future<List<ActionItemsRecord>> _tasksMatchingTitle(ActionItemsRecord todo) async {
+    if (todo.chatRef == null) return [todo];
+    final all = await fsQueryActionItemsByChat(todo.chatRef!);
+    return all.where((t) => t.title == todo.title).toList();
+  }
+
+  Widget _buildTasksStream({required Widget Function(AsyncSnapshot<List<ActionItemsRecord>>) body}) {
+    if (widget.chatDoc == null) {
+      return const Center(child: Text('No group selected'));
+    }
+    if (useWindowsFirestoreRest) {
+      return RestPollBuilder<List<ActionItemsRecord>>(
+        interval: const Duration(seconds: 20),
+        fetch: () => fsQueryActionItemsByChat(widget.chatDoc!.reference, limit: 100),
+        builder: (context, snapshot) => body(snapshot),
+      );
+    }
+    return StreamBuilder<List<ActionItemsRecord>>(
+      stream: queryActionItemsRecord(
+        queryBuilder: (actionItemsRecord) => actionItemsRecord
+            .where('chat_ref', isEqualTo: widget.chatDoc!.reference)
+            .orderBy('created_time', descending: true)
+            .limit(100),
+      ),
+      builder: (context, snapshot) => body(snapshot),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
+    final panel = _buildTasksPanel();
+    if (widget.embedded) {
+      return panel;
+    }
+
     return Stack(
       children: [
         // Semi-transparent overlay
@@ -71,70 +108,70 @@ class _GroupActionTasksWidgetState extends State<GroupActionTasksWidget> {
         // 35% width panel on the right
         Align(
           alignment: Alignment.centerRight,
-          child: Container(
+          child: SizedBox(
             width: MediaQuery.of(context).size.width * 0.35,
             height: MediaQuery.of(context).size.height,
-            child: GestureDetector(
-              onTap: () {
-                FocusScope.of(context).unfocus();
-                FocusManager.instance.primaryFocus?.unfocus();
-              },
-              child: Scaffold(
-                key: scaffoldKey,
-                backgroundColor: const Color(0xFFF9FAFB),
-                appBar: AppBar(
-                  backgroundColor:
-                      FlutterFlowTheme.of(context).secondaryBackground,
-                  automaticallyImplyLeading: false,
-                  leading: IconButton(
-                    icon: Icon(
-                      widget.onClose != null ? Icons.close : Icons.arrow_back,
-                      color: FlutterFlowTheme.of(context).primaryText,
-                      size: 24,
-                    ),
-                    onPressed: () {
-                      if (widget.onClose != null) {
-                        widget.onClose!();
-                      } else {
-                        Navigator.pop(context);
-                      }
-                    },
+            child: panel,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildTasksPanel() {
+    return GestureDetector(
+      onTap: () {
+        FocusScope.of(context).unfocus();
+        FocusManager.instance.primaryFocus?.unfocus();
+      },
+      child: Scaffold(
+        key: scaffoldKey,
+        backgroundColor: const Color(0xFFF9FAFB),
+        appBar: widget.embedded
+            ? null
+            : AppBar(
+                backgroundColor:
+                    FlutterFlowTheme.of(context).secondaryBackground,
+                automaticallyImplyLeading: false,
+                leading: IconButton(
+                  icon: Icon(
+                    widget.onClose != null ? Icons.close : Icons.arrow_back,
+                    color: FlutterFlowTheme.of(context).primaryText,
+                    size: 24,
                   ),
-                  title: Text(
-                    'Action Tasks',
-                    style: FlutterFlowTheme.of(context).headlineMedium.override(
-                          font: GoogleFonts.inter(
-                            fontWeight: FontWeight.w600,
-                            fontStyle: FlutterFlowTheme.of(context)
-                                .headlineMedium
-                                .fontStyle,
-                          ),
-                          color: FlutterFlowTheme.of(context).primaryText,
-                          fontSize: 18.0,
-                          letterSpacing: 0.0,
-                          fontWeight: FontWeight.w600,
-                        ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  actions: const [],
-                  centerTitle: false,
-                  elevation: 0.0,
+                  onPressed: () {
+                    if (widget.onClose != null) {
+                      widget.onClose!();
+                    } else {
+                      Navigator.pop(context);
+                    }
+                  },
                 ),
-                body: SafeArea(
-                  top: true,
-                  child: widget.chatDoc == null
-                      ? const Center(child: Text('No group selected'))
-                      : StreamBuilder<List<ActionItemsRecord>>(
-                          stream: queryActionItemsRecord(
-                            queryBuilder: (actionItemsRecord) =>
-                                actionItemsRecord
-                                    .where('chat_ref',
-                                        isEqualTo: widget.chatDoc!.reference)
-                                    .orderBy('created_time', descending: true)
-                                    .limit(100),
-                          ),
-                          builder: (context, snapshot) {
+                title: Text(
+                  'Action Tasks',
+                  style: FlutterFlowTheme.of(context).headlineMedium.override(
+                        font: GoogleFonts.inter(
+                          fontWeight: FontWeight.w600,
+                          fontStyle: FlutterFlowTheme.of(context)
+                              .headlineMedium
+                              .fontStyle,
+                        ),
+                        color: FlutterFlowTheme.of(context).primaryText,
+                        fontSize: 18.0,
+                        letterSpacing: 0.0,
+                        fontWeight: FontWeight.w600,
+                      ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                actions: const [],
+                centerTitle: false,
+                elevation: 0.0,
+              ),
+        body: SafeArea(
+          top: !widget.embedded,
+          child: _buildTasksStream(
+            body: (snapshot) {
                             if (snapshot.connectionState ==
                                 ConnectionState.waiting) {
                               return const Center(
@@ -261,12 +298,8 @@ class _GroupActionTasksWidgetState extends State<GroupActionTasksWidget> {
                             );
                           },
                         ),
-                ),
-              ),
-            ),
-          ),
         ),
-      ],
+      ),
     );
   }
 
@@ -635,10 +668,7 @@ class _GroupActionTasksWidgetState extends State<GroupActionTasksWidget> {
           _completingTasks[taskId] = null; // use indeterminate bar
         });
 
-        await todo.reference.update({
-          'status': 'completed',
-          'completed_time': FieldValue.serverTimestamp(),
-        });
+        await fsMarkActionItemDone(todo.reference);
 
         if (mounted) {
           setState(() {
@@ -652,7 +682,7 @@ class _GroupActionTasksWidgetState extends State<GroupActionTasksWidget> {
         setState(() {
           _pendingStatusChange[taskId] = 'pending';
         });
-        await todo.reference.update({
+        await fsPatchDocument(todo.reference, {
           'status': 'pending',
           'completed_time': null,
         });
@@ -736,19 +766,7 @@ class _GroupActionTasksWidgetState extends State<GroupActionTasksWidget> {
 
     if (confirmed == true) {
       try {
-        // Delete ALL task documents with the same chat_ref and title
-        // This ensures the task is removed for all involved users
-        final allTasksSnapshot = await ActionItemsRecord.collection
-            .where('chat_ref', isEqualTo: todo.chatRef)
-            .where('title', isEqualTo: todo.title)
-            .get();
-
-        // Batch delete all related task documents
-        final batch = FirebaseFirestore.instance.batch();
-        for (var doc in allTasksSnapshot.docs) {
-          batch.delete(doc.reference);
-        }
-        await batch.commit();
+        await fsDeleteMatchingActionItems(todo);
 
         // Show success message
         if (mounted) {
@@ -785,7 +803,7 @@ class _GroupActionTasksWidgetState extends State<GroupActionTasksWidget> {
     if (widget.chatDoc?.members != null) {
       for (var memberRef in widget.chatDoc!.members) {
         try {
-          final member = await UsersRecord.getDocumentOnce(memberRef);
+          final member = await fsGetUserOnce(memberRef);
           groupMembers.add(member);
         } catch (e) {
           print('Error fetching member: $e');
@@ -1127,24 +1145,15 @@ class _GroupActionTasksWidgetState extends State<GroupActionTasksWidget> {
                       try {
                         // Update ALL task documents with the same chat_ref and original title
                         // This ensures changes sync across all users' home pages
-                        final allTasksSnapshot = await ActionItemsRecord
-                            .collection
-                            .where('chat_ref', isEqualTo: todo.chatRef)
-                            .where('title', isEqualTo: todo.title)
-                            .get();
-
-                        // Batch update all related task documents
-                        final batch = FirebaseFirestore.instance.batch();
-                        for (var doc in allTasksSnapshot.docs) {
-                          final taskRef = doc.reference;
-                          batch.update(taskRef, {
+                        final tasks = await _tasksMatchingTitle(todo);
+                        for (final task in tasks) {
+                          await fsPatchDocument(task.reference, {
                             'title': titleController.text.trim(),
                             'involved_people': selectedPeople.toList(),
                             'priority': selectedPriority,
                             'due_date': selectedDueDate,
                           });
                         }
-                        await batch.commit();
 
                         // Find newly added people and create task documents for them
                         final originalPeople = Set.from(todo.involvedPeople);
@@ -1163,20 +1172,23 @@ class _GroupActionTasksWidgetState extends State<GroupActionTasksWidget> {
                                 // don't create a duplicate
                                 if (todo.userRef != userRef) {
                                   // Check if a task already exists for this user with the same chat_ref and title
-                                  final existingTasks = await ActionItemsRecord
-                                      .collection
-                                      .where('user_ref', isEqualTo: userRef)
-                                      .where('chat_ref',
-                                          isEqualTo: todo.chatRef)
-                                      .where('title',
-                                          isEqualTo:
-                                              titleController.text.trim())
-                                      .get()
-                                      .then((snapshot) => snapshot.docs);
+                                  final chatTasks = todo.chatRef != null
+                                      ? await fsQueryActionItemsByChat(
+                                          todo.chatRef!,
+                                        )
+                                      : <ActionItemsRecord>[];
+                                  final existingTasks = chatTasks
+                                      .where(
+                                        (t) =>
+                                            t.userRef?.path == userRef.path &&
+                                            t.title ==
+                                                titleController.text.trim(),
+                                      )
+                                      .toList();
 
                                   // Only create a new task if one doesn't already exist
                                   if (existingTasks.isEmpty) {
-                                    await ActionItemsRecord.collection.add(
+                                    await fsCreateActionItem(
                                       createActionItemsRecordData(
                                         title: titleController.text.trim(),
                                         groupName: todo.groupName,
@@ -1258,7 +1270,7 @@ class _GroupActionTasksWidgetState extends State<GroupActionTasksWidget> {
     if (widget.chatDoc?.members != null) {
       for (var memberRef in widget.chatDoc!.members) {
         try {
-          final member = await UsersRecord.getDocumentOnce(memberRef);
+          final member = await fsGetUserOnce(memberRef);
           groupMembers.add(member);
         } catch (e) {
           print('Error fetching member: $e');
@@ -1283,8 +1295,7 @@ class _GroupActionTasksWidgetState extends State<GroupActionTasksWidget> {
       return;
     }
 
-    final currentUser =
-        await UsersRecord.getDocumentOnce(currentUserReference!);
+    final currentUser = await fsGetUserOnce(currentUserReference!);
     final workspaceRef =
         widget.chatDoc?.workspaceRef ?? currentUser.currentWorkspaceRef;
 
@@ -1673,8 +1684,6 @@ class _GroupActionTasksWidgetState extends State<GroupActionTasksWidget> {
                       final chatRef = widget.chatDoc?.reference;
 
                       // Create action item for each assigned person
-                      final batch = FirebaseFirestore.instance.batch();
-
                       for (String personName in selectedPeople) {
                         // Find the user reference for this person
                         UsersRecord? assignedUser;
@@ -1686,9 +1695,6 @@ class _GroupActionTasksWidgetState extends State<GroupActionTasksWidget> {
                         }
 
                         if (assignedUser != null) {
-                          final actionItemRef =
-                              ActionItemsRecord.collection.doc();
-
                           final actionItemData = createActionItemsRecordData(
                             title: titleController.text.trim(),
                             groupName: groupName,
@@ -1704,11 +1710,9 @@ class _GroupActionTasksWidgetState extends State<GroupActionTasksWidget> {
                             description: descriptionController.text.trim(),
                           );
 
-                          batch.set(actionItemRef, actionItemData);
+                          await fsCreateActionItem(actionItemData);
                         }
                       }
-
-                      await batch.commit();
 
                       if (mounted) {
                         Navigator.pop(context);

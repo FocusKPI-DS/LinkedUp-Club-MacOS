@@ -14,9 +14,15 @@ import 'dart:io' show Platform;
 import 'dart:math' show min;
 import '/flutter_flow/platform_utils/platform_util.dart';
 import '/backend/cloud_functions/cloud_functions.dart';
+import '/backend/firestore/firestore_desktop_adapter.dart';
 
 Future<bool> ensureFcmToken(DocumentReference userRef) async {
   try {
+    // FCM is not supported on Windows/Linux desktop builds.
+    if (!kIsWeb && (Platform.isWindows || Platform.isLinux)) {
+      return false;
+    }
+
     // Handle web platform (Chrome/Edge only)
     if (kIsWeb) {
       try {
@@ -74,20 +80,24 @@ Future<bool> ensureFcmToken(DocumentReference userRef) async {
         String deviceType = isChrome ? 'Chrome' : 'Edge';
 
         // Store token in Firestore (same logic as mobile platforms)
-        final fcmTokensRef = userRef.collection('fcm_tokens');
-        final existingTokenQuery = await fcmTokensRef
-            .where('fcm_token', isEqualTo: token)
-            .limit(1)
-            .get();
+        final existingTokenQuery = await fsQueryUserSubcollection(
+          userRef: userRef,
+          collectionId: 'fcm_tokens',
+          equalFilter: {'fcm_token': token},
+        );
 
-        if (existingTokenQuery.docs.isEmpty) {
-          await fcmTokensRef.add({
-            'fcm_token': token,
-            'device_type': deviceType,
-            'created_at': FieldValue.serverTimestamp(),
-          });
+        if (existingTokenQuery.isEmpty) {
+          await fsCreateSubcollectionDocument(
+            parentRef: userRef,
+            collectionId: 'fcm_tokens',
+            data: {
+              'fcm_token': token,
+              'device_type': deviceType,
+              'created_at': FieldValue.serverTimestamp(),
+            },
+          );
         } else {
-          await existingTokenQuery.docs.first.reference.update({
+          await fsPatchDocument(existingTokenQuery.first.reference, {
             'fcm_token': token,
             'device_type': deviceType,
           });
@@ -96,16 +106,23 @@ Future<bool> ensureFcmToken(DocumentReference userRef) async {
         // Listen for token refresh
         FirebaseMessaging.instance.onTokenRefresh.listen((newToken) async {
           try {
-            final allTokensQuery = await fcmTokensRef.get();
-            for (var doc in allTokensQuery.docs) {
-              await doc.reference.delete();
+            final allTokensQuery = await fsQueryUserSubcollection(
+              userRef: userRef,
+              collectionId: 'fcm_tokens',
+            );
+            for (final doc in allTokensQuery) {
+              await fsDeleteDocument(doc.reference);
             }
 
-            await fcmTokensRef.add({
-              'fcm_token': newToken,
-              'device_type': deviceType,
-              'created_at': FieldValue.serverTimestamp(),
-            });
+            await fsCreateSubcollectionDocument(
+              parentRef: userRef,
+              collectionId: 'fcm_tokens',
+              data: {
+                'fcm_token': newToken,
+                'device_type': deviceType,
+                'created_at': FieldValue.serverTimestamp(),
+              },
+            );
           } catch (e) {
             // Error during token refresh
           }
@@ -184,9 +201,6 @@ Future<bool> ensureFcmToken(DocumentReference userRef) async {
     
     print('🔍 Checking Firestore for existing token ($deviceType)...');
 
-    // Get fcm_tokens reference for use in token refresh listener
-    final fcmTokensRef = userRef.collection('fcm_tokens');
-
     // Use addFcmToken cloud function to ensure proper cleanup of tokens
     // from other users (this prevents receiving notifications for accounts
     // the user is no longer logged into)
@@ -212,22 +226,27 @@ Future<bool> ensureFcmToken(DocumentReference userRef) async {
       print('⚠️ Cloud function failed, using direct Firestore write: $e');
       
       // Check if fcm_tokens subcollection exists and has this token
-      final existingTokenQuery =
-          await fcmTokensRef.where('fcm_token', isEqualTo: token).limit(1).get();
+      final existingTokenQuery = await fsQueryUserSubcollection(
+        userRef: userRef,
+        collectionId: 'fcm_tokens',
+        equalFilter: {'fcm_token': token},
+      );
 
-      if (existingTokenQuery.docs.isEmpty) {
-        // Token doesn't exist, add it
+      if (existingTokenQuery.isEmpty) {
         print('📝 Token not found, adding new token to Firestore...');
-        await fcmTokensRef.add({
-          'fcm_token': token,
-          'device_type': deviceType,
-          'created_at': FieldValue.serverTimestamp(),
-        });
+        await fsCreateSubcollectionDocument(
+          parentRef: userRef,
+          collectionId: 'fcm_tokens',
+          data: {
+            'fcm_token': token,
+            'device_type': deviceType,
+            'created_at': FieldValue.serverTimestamp(),
+          },
+        );
         print('✅ New token saved successfully!');
       } else {
-        // Token exists, update it if needed
         print('📝 Token found, updating existing record...');
-        await existingTokenQuery.docs.first.reference.update({
+        await fsPatchDocument(existingTokenQuery.first.reference, {
           'fcm_token': token,
           'device_type': deviceType,
         });
@@ -247,8 +266,7 @@ Future<bool> ensureFcmToken(DocumentReference userRef) async {
     // Ensure notification preferences are set for existing users (migration)
     // If any notification preference field is missing (null), set it to true
     try {
-      final userDoc = await userRef.get();
-      final userData = userDoc.data() as Map<String, dynamic>?;
+      final userData = await fsFetchDocumentData(userRef);
       if (userData != null) {
         final updates = <String, dynamic>{};
         if (userData['notifications_enabled'] == null) {
@@ -261,7 +279,7 @@ Future<bool> ensureFcmToken(DocumentReference userRef) async {
           updates['connection_requests_enabled'] = true;
         }
         if (updates.isNotEmpty) {
-          await userRef.update(updates);
+          await fsPatchDocument(userRef, updates);
           print('✅ Set default notification preferences for user: $updates');
         }
       }
@@ -285,17 +303,23 @@ Future<bool> ensureFcmToken(DocumentReference userRef) async {
         } catch (e) {
           // Fallback to direct Firestore write
           // Remove ALL old tokens for this user (cleanup)
-          final allTokensQuery = await fcmTokensRef.get();
-          for (var doc in allTokensQuery.docs) {
-            await doc.reference.delete();
+          final allTokensQuery = await fsQueryUserSubcollection(
+            userRef: userRef,
+            collectionId: 'fcm_tokens',
+          );
+          for (final doc in allTokensQuery) {
+            await fsDeleteDocument(doc.reference);
           }
 
-          // Add new token
-          await fcmTokensRef.add({
-            'fcm_token': newToken,
-            'device_type': deviceType,
-            'created_at': FieldValue.serverTimestamp(),
-          });
+          await fsCreateSubcollectionDocument(
+            parentRef: userRef,
+            collectionId: 'fcm_tokens',
+            data: {
+              'fcm_token': newToken,
+              'device_type': deviceType,
+              'created_at': FieldValue.serverTimestamp(),
+            },
+          );
         }
 
         // Re-subscribe to topic after token refresh

@@ -1,5 +1,6 @@
 import '/auth/firebase_auth/auth_util.dart';
 import '/backend/backend.dart';
+import '/backend/firestore/firestore_desktop_adapter.dart';
 import '/flutter_flow/flutter_flow_util.dart';
 import '/flutter_flow/flutter_flow_widgets.dart';
 import '/custom_code/actions/index.dart' as actions;
@@ -9,6 +10,9 @@ import 'package:flutter/services.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'dart:math';
+import '/pages/desktop_chat/desktop_safe_user_builder.dart';
+import '/pages/desktop_chat/rest_poll_builder.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'workspace_management_model.dart';
 
 class WorkspaceManagementWidget extends StatefulWidget {
@@ -74,14 +78,14 @@ class _WorkspaceManagementWidgetState extends State<WorkspaceManagementWidget> {
         ),
         body: SafeArea(
           top: true,
-          child: StreamBuilder<UsersRecord>(
-            stream: UsersRecord.getDocument(currentUserReference!),
-            builder: (context, snapshot) {
-              if (!snapshot.hasData) {
+          child: DesktopSafeUserPollBuilder(
+            userRef: currentUserReference!,
+            fetchOnce: fsGetUserOnce,
+            builder: (context, currentUser) {
+              if (currentUser == null) {
                 return Center(child: CircularProgressIndicator());
               }
 
-              final currentUser = snapshot.data!;
               if (!currentUser.hasCurrentWorkspaceRef()) {
                 return Center(
                   child: Column(
@@ -102,56 +106,169 @@ class _WorkspaceManagementWidgetState extends State<WorkspaceManagementWidget> {
                 );
               }
 
-              return StreamBuilder<WorkspacesRecord>(
-                stream: WorkspacesRecord.getDocument(
-                    currentUser.currentWorkspaceRef!),
-                builder: (context, workspaceSnapshot) {
-                  if (!workspaceSnapshot.hasData) {
-                    return Center(child: CircularProgressIndicator());
-                  }
+              return _buildWorkspaceDetails(currentUser);
+            },
+          ),
+        ),
+      ),
+    );
+  }
 
-                  final workspace = workspaceSnapshot.data!;
+  Widget _buildWorkspaceDetails(UsersRecord currentUser) {
+    final workspaceRef = currentUser.currentWorkspaceRef!;
 
-                  return StreamBuilder<List<WorkspaceMembersRecord>>(
-                    stream: queryWorkspaceMembersRecord(
-                      queryBuilder: (workspaceMembersRecord) =>
-                          workspaceMembersRecord.where('workspace_ref',
-                              isEqualTo: currentUser.currentWorkspaceRef),
+    Widget buildContent(WorkspacesRecord workspace) {
+      return _buildWorkspaceMembersContent(currentUser, workspace);
+    }
+
+    if (useWindowsFirestoreRest) {
+      return FutureBuilder<WorkspacesRecord>(
+        future: fsGetWorkspaceOnce(workspaceRef),
+        builder: (context, workspaceSnapshot) {
+          if (!workspaceSnapshot.hasData) {
+            return Center(child: CircularProgressIndicator());
+          }
+          return buildContent(workspaceSnapshot.data!);
+        },
+      );
+    }
+
+    return StreamBuilder<WorkspacesRecord>(
+      stream: WorkspacesRecord.getDocument(workspaceRef),
+      builder: (context, workspaceSnapshot) {
+        if (!workspaceSnapshot.hasData) {
+          return Center(child: CircularProgressIndicator());
+        }
+        return buildContent(workspaceSnapshot.data!);
+      },
+    );
+  }
+
+  Widget _buildWorkspaceMembersContent(
+    UsersRecord currentUser,
+    WorkspacesRecord workspace,
+  ) {
+    Widget membersBody(AsyncSnapshot<List<WorkspaceMembersRecord>> snapshot) {
+      if (!snapshot.hasData) {
+        return Center(child: CircularProgressIndicator());
+      }
+
+      final members = List<WorkspaceMembersRecord>.from(snapshot.data!);
+
+      final currentUserMember = members.firstWhere(
+        (member) => member.userRef == currentUserReference,
+        orElse: () => WorkspaceMembersRecord.getDocumentFromData(
+          {'role': 'member'},
+          FirebaseFirestore.instance.collection('workspace_members').doc(),
+        ),
+      );
+      final currentUserRole = currentUserMember.role;
+
+      members.sort((a, b) {
+        if (a.joinedAt == null && b.joinedAt == null) return 0;
+        if (a.joinedAt == null) return 1;
+        if (b.joinedAt == null) return -1;
+        return b.joinedAt!.compareTo(a.joinedAt!);
+      });
+
+      return SingleChildScrollView(
+        padding: EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _buildWorkspaceInfoCard(workspace, members),
+            SizedBox(height: 24),
+            Text(
+              'Management Actions',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            SizedBox(height: 12),
+            Row(
+              children: [
+                Expanded(
+                  child: FFButtonWidget(
+                    onPressed: () {
+                      _showInviteUserDialog(context, workspace);
+                    },
+                    text: 'Invite User',
+                    icon: Icon(Icons.person_add, size: 20),
+                    options: FFButtonOptions(
+                      height: 50,
+                      color: Colors.green,
+                      textStyle: TextStyle(
+                        color: Colors.white,
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                      ),
+                      borderRadius: BorderRadius.circular(8),
                     ),
-                    builder: (context, membersSnapshot) {
-                      if (!membersSnapshot.hasData) {
-                        return Center(child: CircularProgressIndicator());
-                      }
+                  ),
+                ),
+                SizedBox(width: 12),
+                Expanded(
+                  child: FFButtonWidget(
+                    onPressed: () {
+                      _showInviteCodeDialog(context, workspace);
+                    },
+                    text: 'Generate Invite Code',
+                    icon: Icon(Icons.qr_code, size: 20),
+                    options: FFButtonOptions(
+                      height: 50,
+                      color: Colors.blue,
+                      textStyle: TextStyle(
+                        color: Colors.white,
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                      ),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            SizedBox(height: 24),
+            Text(
+              'Workspace Members',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            SizedBox(height: 12),
+            ...members
+                .map((member) =>
+                    _buildMemberCard(member, currentUser, currentUserRole))
+                .toList(),
+          ],
+        ),
+      );
+    }
 
-                      final members = membersSnapshot.data!;
+    if (useWindowsFirestoreRest) {
+      return RestPollBuilder<List<WorkspaceMembersRecord>>(
+        interval: const Duration(seconds: 30),
+        fetch: () => fsQueryWorkspaceMembers(currentUser.currentWorkspaceRef!),
+        builder: (context, snapshot) => membersBody(snapshot),
+      );
+    }
 
-                      // Find current user's role in this workspace
-                      final currentUserMember = members.firstWhere(
-                        (member) => member.userRef == currentUserReference,
-                        orElse: () =>
-                            WorkspaceMembersRecord.getDocumentFromData(
-                                {'role': 'member'},
-                                FirebaseFirestore.instance
-                                    .collection('workspace_members')
-                                    .doc()),
-                      );
-                      final currentUserRole = currentUserMember.role;
+    return StreamBuilder<List<WorkspaceMembersRecord>>(
+      stream: queryWorkspaceMembersRecord(
+        queryBuilder: (workspaceMembersRecord) => workspaceMembersRecord
+            .where('workspace_ref', isEqualTo: currentUser.currentWorkspaceRef),
+      ),
+      builder: (context, snapshot) => membersBody(snapshot),
+    );
+  }
 
-                      // Sort members by joined_at (most recent first)
-                      members.sort((a, b) {
-                        if (a.joinedAt == null && b.joinedAt == null) return 0;
-                        if (a.joinedAt == null) return 1;
-                        if (b.joinedAt == null) return -1;
-                        return b.joinedAt!.compareTo(a.joinedAt!);
-                      });
-
-                      return SingleChildScrollView(
-                        padding: EdgeInsets.all(16),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            // Workspace Info Card
-                            Container(
+  Widget _buildWorkspaceInfoCard(
+    WorkspacesRecord workspace,
+    List<WorkspaceMembersRecord> members,
+  ) {
+    return Container(
                               width: double.infinity,
                               padding: EdgeInsets.all(20),
                               decoration: BoxDecoration(
@@ -264,104 +381,19 @@ class _WorkspaceManagementWidgetState extends State<WorkspaceManagementWidget> {
                                   ),
                                 ],
                               ),
-                            ),
-
-                            SizedBox(height: 24),
-
-                            // Management Actions
-                            Text(
-                              'Management Actions',
-                              style: TextStyle(
-                                fontSize: 18,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                            SizedBox(height: 12),
-
-                            Row(
-                              children: [
-                                Expanded(
-                                  child: FFButtonWidget(
-                                    onPressed: () {
-                                      _showInviteUserDialog(context, workspace);
-                                    },
-                                    text: 'Invite User',
-                                    icon: Icon(Icons.person_add, size: 20),
-                                    options: FFButtonOptions(
-                                      height: 50,
-                                      color: Colors.green,
-                                      textStyle: TextStyle(
-                                        color: Colors.white,
-                                        fontSize: 16,
-                                        fontWeight: FontWeight.w600,
-                                      ),
-                                      borderRadius: BorderRadius.circular(8),
-                                    ),
-                                  ),
-                                ),
-                                SizedBox(width: 12),
-                                Expanded(
-                                  child: FFButtonWidget(
-                                    onPressed: () {
-                                      _showInviteCodeDialog(context, workspace);
-                                    },
-                                    text: 'Generate Invite Code',
-                                    icon: Icon(Icons.qr_code, size: 20),
-                                    options: FFButtonOptions(
-                                      height: 50,
-                                      color: Colors.blue,
-                                      textStyle: TextStyle(
-                                        color: Colors.white,
-                                        fontSize: 16,
-                                        fontWeight: FontWeight.w600,
-                                      ),
-                                      borderRadius: BorderRadius.circular(8),
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-
-                            SizedBox(height: 24),
-
-                            // Members List
-                            Text(
-                              'Workspace Members',
-                              style: TextStyle(
-                                fontSize: 18,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                            SizedBox(height: 12),
-
-                            ...members
-                                .map((member) => _buildMemberCard(
-                                    member, currentUser, currentUserRole))
-                                .toList(),
-                          ],
-                        ),
-                      );
-                    },
-                  );
-                },
-              );
-            },
-          ),
-        ),
-      ),
     );
   }
 
   Widget _buildMemberCard(WorkspaceMembersRecord member,
       UsersRecord currentUser, String currentUserRole) {
-    return StreamBuilder<UsersRecord>(
-      stream: UsersRecord.getDocument(member.userRef!),
-      builder: (context, userSnapshot) {
-        if (!userSnapshot.hasData) {
+    return DesktopSafeUserPollBuilder(
+      userRef: member.userRef!,
+      fetchOnce: fsGetUserOnce,
+      builder: (context, user) {
+        if (user == null) {
           return SizedBox.shrink();
         }
 
-        final user = userSnapshot.data!;
         final isCurrentUser = user.reference == currentUserReference;
         final isOwner = member.role == 'owner';
         final isModerator = member.role == 'moderator';

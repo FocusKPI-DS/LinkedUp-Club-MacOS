@@ -8,6 +8,8 @@ import '/flutter_flow/flutter_flow_util.dart';
 import '/custom_code/widgets/summerai_todos.dart';
 import '/custom_code/widgets/todays_calendar_events.dart';
 import '/custom_code/widgets/task_stats.dart';
+import '/pages/desktop_chat/desktop_safe_user_builder.dart';
+import '/backend/firestore/firestore_desktop_adapter.dart';
 // import '/custom_code/widgets/productivity_trend_chart.dart';
 import 'dart:async';
 import 'dart:io' show Platform;
@@ -34,6 +36,9 @@ import 'package:adaptive_platform_ui/adaptive_platform_ui.dart';
 import 'package:liquid_glass_renderer/liquid_glass_renderer.dart';
 import 'package:share_plus/share_plus.dart';
 
+/// Staged load phases for Windows (avoids concurrent Firestore + shader crash).
+enum _WindowsHomeLoadPhase { shell, stats, calendar, full }
+
 /// Beautiful Home Page with Hero Section, Quick Actions, and Activity Feed
 class HomeWidget extends StatefulWidget {
   const HomeWidget({
@@ -54,10 +59,109 @@ class _HomeWidgetState extends State<HomeWidget> with TickerProviderStateMixin {
 
   final animationsMap = <String, AnimationInfo>{};
 
+  _WindowsHomeLoadPhase _windowsHomePhase = _WindowsHomeLoadPhase.shell;
+
+  String? _actionItemAnnouncement;
+  Timer? _actionItemAnnouncementTimer;
+  final GlobalKey _homeStackKey = GlobalKey();
+  final GlobalKey _headerGreetingRowKey = GlobalKey();
+
+  double _announcementTop(bool isMobile) {
+    const bannerHeight = 38.0;
+    final rowBox =
+        _headerGreetingRowKey.currentContext?.findRenderObject() as RenderBox?;
+    final stackBox =
+        _homeStackKey.currentContext?.findRenderObject() as RenderBox?;
+    if (rowBox != null &&
+        stackBox != null &&
+        rowBox.hasSize &&
+        stackBox.hasSize) {
+      final rowTop =
+          rowBox.localToGlobal(Offset.zero, ancestor: stackBox).dy;
+      return rowTop + (rowBox.size.height - bannerHeight) / 2;
+    }
+    final pagePaddingTop = isMobile ? 24.0 : 40.0;
+    final headerTopSpacing = isMobile ? 20.0 : 32.0;
+    const rowHeight = 38.0;
+    return pagePaddingTop + headerTopSpacing + (rowHeight - bannerHeight) / 2;
+  }
+
+  void _showActionItemAnnouncement(String message) {
+    _actionItemAnnouncementTimer?.cancel();
+    setState(() => _actionItemAnnouncement = message);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) setState(() {});
+    });
+    _actionItemAnnouncementTimer = Timer(const Duration(seconds: 3), () {
+      if (mounted) {
+        setState(() => _actionItemAnnouncement = null);
+      }
+    });
+  }
+
+  Widget _buildActionItemAnnouncementBanner(String message) {
+    return Center(
+      key: ValueKey(message),
+      child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+          decoration: BoxDecoration(
+            color: const Color(0xFFF8FAFC),
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: const Color(0xFFE2E8F0)),
+            boxShadow: [
+              BoxShadow(
+                color: const Color(0xFF0F172A).withOpacity(0.04),
+                blurRadius: 8,
+                offset: const Offset(0, 2),
+              ),
+            ],
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                Icons.check_circle_outline,
+                size: 16,
+                color: const Color(0xFF64748B),
+              ),
+              const SizedBox(width: 8),
+              Text(
+                message,
+                style: const TextStyle(
+                  fontFamily: 'Inter',
+                  fontSize: 13,
+                  fontWeight: FontWeight.w500,
+                  color: Color(0xFF475569),
+                  letterSpacing: -0.1,
+                ),
+              ),
+            ],
+          ),
+        ),
+    );
+  }
+
   @override
   void initState() {
     super.initState();
     _model = createModel(context, () => HomeModel());
+
+    if (!kIsWeb && Platform.isWindows) {
+      _windowsHomePhase = _WindowsHomeLoadPhase.shell;
+      SchedulerBinding.instance.addPostFrameCallback((_) async {
+        for (final phase in [
+          _WindowsHomeLoadPhase.stats,
+          _WindowsHomeLoadPhase.calendar,
+          _WindowsHomeLoadPhase.full,
+        ]) {
+          await Future.delayed(const Duration(milliseconds: 600));
+          if (!mounted) return;
+          setState(() => _windowsHomePhase = phase);
+        }
+      });
+    } else {
+      _windowsHomePhase = _WindowsHomeLoadPhase.full;
+    }
 
     // On page load action.
     SchedulerBinding.instance.addPostFrameCallback((_) async {
@@ -73,7 +177,7 @@ class _HomeWidgetState extends State<HomeWidget> with TickerProviderStateMixin {
           );
         }(),
       );
-      if (loggedIn) {
+      if (loggedIn && !kIsWeb && !Platform.isWindows && !Platform.isLinux) {
         unawaited(
           () async {
             _model.isSuccess = await actions.ensureFcmToken(
@@ -82,11 +186,13 @@ class _HomeWidgetState extends State<HomeWidget> with TickerProviderStateMixin {
           }(),
         );
       }
-      unawaited(
-        () async {
-          await actions.updateAppBadge();
-        }(),
-      );
+      if (!kIsWeb && !Platform.isWindows && !Platform.isLinux) {
+        unawaited(
+          () async {
+            await actions.updateAppBadge();
+          }(),
+        );
+      }
       await action_blocks.homeCheck(context);
       if (!(await getPermissionStatus(locationPermission))) {
         await requestPermission(locationPermission);
@@ -156,8 +262,55 @@ class _HomeWidgetState extends State<HomeWidget> with TickerProviderStateMixin {
 
   @override
   void dispose() {
+    _actionItemAnnouncementTimer?.cancel();
     _model.dispose();
     super.dispose();
+  }
+
+  bool get _isWindowsDesktop => !kIsWeb && Platform.isWindows;
+
+  /// Header actions: liquid_glass shaders crash on Windows desktop.
+  Widget _buildHeaderActionButton({
+    required bool isMobile,
+    required VoidCallback onPressed,
+    required IconData icon,
+  }) {
+    if (_isWindowsDesktop) {
+      return Material(
+        color: Colors.white,
+        shape: const CircleBorder(),
+        elevation: 1,
+        shadowColor: const Color(0xFF0F172A).withOpacity(0.08),
+        child: InkWell(
+          customBorder: const CircleBorder(),
+          onTap: onPressed,
+          child: Padding(
+            padding: EdgeInsets.all(isMobile ? 9 : 10),
+            child: Icon(
+              icon,
+              size: isMobile ? 16 : 17,
+              color: const Color(0xFF007AFF),
+            ),
+          ),
+        ),
+      );
+    }
+
+    return LiquidStretch(
+      stretch: 0.5,
+      interactionScale: 1.05,
+      child: GlassGlow(
+        glowColor: Colors.white24,
+        glowRadius: 1.0,
+        child: AdaptiveFloatingActionButton(
+          mini: true,
+          backgroundColor: Colors.white,
+          foregroundColor: const Color(0xFF007AFF),
+          onPressed: onPressed,
+          child: Icon(icon, size: isMobile ? 16 : 17),
+        ),
+      ),
+    );
   }
 
   // Helper method to detect if we're on mobile (iOS or mobile web)
@@ -191,6 +344,7 @@ class _HomeWidgetState extends State<HomeWidget> with TickerProviderStateMixin {
           body: SafeArea(
             top: true,
             child: Stack(
+              key: _homeStackKey,
               clipBehavior: Clip.none,
               children: [
                 SingleChildScrollView(
@@ -205,7 +359,6 @@ class _HomeWidgetState extends State<HomeWidget> with TickerProviderStateMixin {
                       mainAxisSize: MainAxisSize.min,
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        // Header Section
                         _buildHeaderSection(context, isMobile),
 
                         SizedBox(height: isMobile ? 24.0 : 40.0),
@@ -224,6 +377,20 @@ class _HomeWidgetState extends State<HomeWidget> with TickerProviderStateMixin {
                     ),
                   ),
                 ),
+                if (_actionItemAnnouncement != null)
+                  Positioned(
+                    top: _announcementTop(isMobile),
+                    left: isMobile ? 20.0 : 40.0,
+                    right: isMobile ? 20.0 : 40.0,
+                    child: IgnorePointer(
+                      child: AnimatedSwitcher(
+                        duration: const Duration(milliseconds: 200),
+                        child: _buildActionItemAnnouncementBanner(
+                          _actionItemAnnouncement!,
+                        ),
+                      ),
+                    ),
+                  ),
               ],
             ),
           ),
@@ -260,44 +427,55 @@ class _HomeWidgetState extends State<HomeWidget> with TickerProviderStateMixin {
 
   // Desktop two-column layout (original)
   Widget _buildDesktopLayout(BuildContext context) {
+    if (_isWindowsDesktop && _windowsHomePhase == _WindowsHomeLoadPhase.shell) {
+      return const SizedBox(
+        height: 120,
+        child: Center(
+          child: SizedBox(
+            width: 24,
+            height: 24,
+            child: CircularProgressIndicator(strokeWidth: 2),
+          ),
+        ),
+      );
+    }
+
+    final showCalendar = !_isWindowsDesktop ||
+        _windowsHomePhase.index >= _WindowsHomeLoadPhase.calendar.index;
+    final showSummerAi = !_isWindowsDesktop ||
+        _windowsHomePhase.index >= _WindowsHomeLoadPhase.full.index;
+    final showStats = !_isWindowsDesktop ||
+        _windowsHomePhase.index >= _WindowsHomeLoadPhase.stats.index;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        // Two-column section
         IntrinsicHeight(
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              // Left Column
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    // Today's Schedule Card
-                    _buildTodaysCalendarSection(context),
-
-                    const SizedBox(height: 28),
-
-                    // Task Stats Section
-                    const TaskStats(),
+                    if (showCalendar) ...[
+                      _buildTodaysCalendarSection(context),
+                      const SizedBox(height: 28),
+                    ],
+                    if (showStats) const TaskStats(),
                   ],
                 ),
               ),
-
               const SizedBox(width: 28),
-
-              // Right Column - matches left column height
               Expanded(
-                child: _buildSummerAITasksSection(context),
+                child: showSummerAi
+                    ? _buildSummerAITasksSection(context)
+                    : const SizedBox(height: 200),
               ),
             ],
           ),
         ),
-
         const SizedBox(height: 28),
-
-        // Productivity Trend Chart - Full Width
-        // const ProductivityTrendChart(),
       ],
     );
   }
@@ -309,14 +487,14 @@ class _HomeWidgetState extends State<HomeWidget> with TickerProviderStateMixin {
         // Add top spacing
         SizedBox(height: isMobile ? 20.0 : 32.0),
         if (currentUserReference != null)
-          StreamBuilder<UsersRecord>(
-            stream: UsersRecord.getDocument(currentUserReference!),
-            builder: (context, snapshot) {
-              if (!snapshot.hasData) {
+          DesktopSafeUserBuilder(
+            userRef: currentUserReference!,
+            fetchOnce: fsGetUserOnce,
+            builder: (context, user) {
+              if (user == null) {
                 return SizedBox(height: isMobile ? 10 : 20);
               }
 
-              final user = snapshot.data!;
               final userName = user.displayName.isNotEmpty
                   ? user.displayName
                   : user.email.split('@')[0];
@@ -336,65 +514,42 @@ class _HomeWidgetState extends State<HomeWidget> with TickerProviderStateMixin {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   // First line: Greeting + Action buttons
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    crossAxisAlignment: CrossAxisAlignment.center,
-                    children: [
-                      Expanded(
-                        child: Text(
-                          greeting,
-                          style: TextStyle(
-                            fontFamily: '.SF Pro Display',
-                            color: Color(0xFF1E293B),
-                            fontSize: isMobile ? 30 : 32,
-                            fontWeight: FontWeight.w800,
-                            letterSpacing: isMobile ? -0.4 : -0.5,
+                  KeyedSubtree(
+                    key: _headerGreetingRowKey,
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      children: [
+                        Expanded(
+                          child: Text(
+                            greeting,
+                            style: TextStyle(
+                              fontFamily: '.SF Pro Display',
+                              color: Color(0xFF1E293B),
+                              fontSize: isMobile ? 30 : 32,
+                              fontWeight: FontWeight.w800,
+                              letterSpacing: isMobile ? -0.4 : -0.5,
+                            ),
                           ),
                         ),
-                      ),
-                      Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          LiquidStretch(
-                            stretch: 0.5,
-                            interactionScale: 1.05,
-                            child: GlassGlow(
-                              glowColor: Colors.white24,
-                              glowRadius: 1.0,
-                              child: AdaptiveFloatingActionButton(
-                                mini: true,
-                                backgroundColor: Colors.white,
-                                foregroundColor: Color(0xFF007AFF),
-                                onPressed: () => _showEmailInviteDialog(),
-                                child: Icon(
-                                  CupertinoIcons.mail_solid,
-                                  size: isMobile ? 16 : 17,
-                                ),
-                              ),
+                        Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            _buildHeaderActionButton(
+                              isMobile: isMobile,
+                              onPressed: () => _showEmailInviteDialog(),
+                              icon: CupertinoIcons.mail_solid,
                             ),
-                          ),
-                          SizedBox(width: isMobile ? 8.0 : 12.0),
-                          LiquidStretch(
-                            stretch: 0.5,
-                            interactionScale: 1.05,
-                            child: GlassGlow(
-                              glowColor: Colors.white24,
-                              glowRadius: 1.0,
-                              child: AdaptiveFloatingActionButton(
-                                mini: true,
-                                backgroundColor: Colors.white,
-                                foregroundColor: Color(0xFF007AFF),
-                                onPressed: () => _showInviteDialog(context),
-                                child: Icon(
-                                  CupertinoIcons.person_add_solid,
-                                  size: isMobile ? 16 : 17,
-                                ),
-                              ),
+                            SizedBox(width: isMobile ? 8.0 : 12.0),
+                            _buildHeaderActionButton(
+                              isMobile: isMobile,
+                              onPressed: () => _showInviteDialog(context),
+                              icon: CupertinoIcons.person_add_solid,
                             ),
-                          ),
-                        ],
-                      ),
-                    ],
+                          ],
+                        ),
+                      ],
+                    ),
                   ),
                   SizedBox(height: isMobile ? 4 : 6),
                   // Second line: User's name
@@ -653,7 +808,10 @@ class _HomeWidgetState extends State<HomeWidget> with TickerProviderStateMixin {
           ),
         ],
       ),
-      child: SummerAITodos(isMobile: isMobile),
+      child: SummerAITodos(
+        isMobile: isMobile,
+        onShowAnnouncement: _showActionItemAnnouncement,
+      ),
     );
   }
 }

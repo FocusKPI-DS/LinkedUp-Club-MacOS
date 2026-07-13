@@ -1,7 +1,9 @@
 import '/auth/firebase_auth/auth_util.dart';
+import '/utils/debug_log.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 import '/backend/backend.dart';
+import '/backend/firestore/firestore_desktop_adapter.dart';
 import '/flutter_flow/flutter_flow_util.dart';
 import '/flutter_flow/flutter_flow_expanded_image_view.dart';
 import '/pages/mobile_chat/mobile_chat_widget.dart';
@@ -18,6 +20,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:adaptive_platform_ui/adaptive_platform_ui.dart';
 import 'dart:ui';
+import '/pages/desktop_chat/desktop_safe_user_builder.dart';
 import 'user_summary_model.dart';
 export 'user_summary_model.dart';
 
@@ -89,7 +92,7 @@ class _UserSummaryWidgetState extends State<UserSummaryWidget> {
       }
     } catch (e) {
       // Silent fail - not critical
-      print('Email sync check: $e');
+      debugLog('Email sync check: $e');
     }
   }
 
@@ -297,8 +300,7 @@ class _UserSummaryWidgetState extends State<UserSummaryWidget> {
 
     try {
       // Bulletproof check - don't send if already connected or request already sent
-      final currentUserDoc = await currentUserReference!.get();
-      final currentUserData = UsersRecord.fromSnapshot(currentUserDoc);
+      final currentUserData = await fsGetUserOnce(currentUserReference!);
 
       if (currentUserData.friends.contains(user.reference)) {
         _showErrorMessage('You are already connected with ${user.displayName}');
@@ -318,26 +320,23 @@ class _UserSummaryWidgetState extends State<UserSummaryWidget> {
         return;
       }
 
-      // Use a batch write for better performance and atomicity
-      final batch = FirebaseFirestore.instance.batch();
+      await fsArrayUnion(
+        currentUserReference!,
+        'sent_requests',
+        [user.reference],
+      );
 
-      // Update current user's sent requests
-      batch.update(currentUserReference!, {
-        'sent_requests': FieldValue.arrayUnion([user.reference]),
-      });
-
-      // Update target user's friend requests
-      batch.update(user.reference, {
-        'friend_requests': FieldValue.arrayUnion([currentUserReference]),
-      });
-
-      await batch.commit();
+      await fsArrayUnion(
+        user.reference,
+        'friend_requests',
+        [currentUserReference!],
+      );
 
       if (mounted) {
         _showSuccessMessage('Connection request sent to ${user.displayName}');
       }
     } catch (e) {
-      print('Error sending connection request: $e');
+      debugLog('Error sending connection request: $e');
       if (mounted) {
         // Check if it's a permission error and provide specific guidance
         if (e.toString().contains('permission-denied')) {
@@ -365,34 +364,30 @@ class _UserSummaryWidgetState extends State<UserSummaryWidget> {
 
     try {
       // Bulletproof check - ensure request exists
-      final currentUserDoc = await currentUserReference!.get();
-      final currentUserData = UsersRecord.fromSnapshot(currentUserDoc);
+      final currentUserData = await fsGetUserOnce(currentUserReference!);
 
       if (!currentUserData.sentRequests.contains(user.reference)) {
         _showErrorMessage('No pending request to ${user.displayName}');
         return;
       }
 
-      // Use a batch write for better performance and atomicity
-      final batch = FirebaseFirestore.instance.batch();
+      await fsArrayRemove(
+        currentUserReference!,
+        'sent_requests',
+        [user.reference],
+      );
 
-      // Update current user: remove from sent_requests
-      batch.update(currentUserReference!, {
-        'sent_requests': FieldValue.arrayRemove([user.reference]),
-      });
-
-      // Update target user: remove from friend_requests
-      batch.update(user.reference, {
-        'friend_requests': FieldValue.arrayRemove([currentUserReference]),
-      });
-
-      await batch.commit();
+      await fsArrayRemove(
+        user.reference,
+        'friend_requests',
+        [currentUserReference!],
+      );
 
       if (mounted) {
         _showSuccessMessage('Connection request cancelled');
       }
     } catch (e) {
-      print('Error cancelling connection request: $e');
+      debugLog('Error cancelling connection request: $e');
       if (mounted) {
         if (e.toString().contains('permission-denied')) {
           _showErrorMessage(
@@ -419,8 +414,7 @@ class _UserSummaryWidgetState extends State<UserSummaryWidget> {
 
     try {
       // Bulletproof check - ensure they sent us a request and we're not already connected
-      final currentUserDoc = await currentUserReference!.get();
-      final currentUserData = UsersRecord.fromSnapshot(currentUserDoc);
+      final currentUserData = await fsGetUserOnce(currentUserReference!);
 
       if (currentUserData.friends.contains(user.reference)) {
         _showErrorMessage('You are already connected with ${user.displayName}');
@@ -432,31 +426,38 @@ class _UserSummaryWidgetState extends State<UserSummaryWidget> {
         return;
       }
 
-      // Use a batch write for better performance and atomicity
-      final batch = FirebaseFirestore.instance.batch();
+      await fsArrayUnion(
+        currentUserReference!,
+        'friends',
+        [user.reference],
+      );
+      await fsArrayRemove(
+        currentUserReference!,
+        'friend_requests',
+        [user.reference],
+      );
+      await fsArrayRemove(
+        currentUserReference!,
+        'sent_requests',
+        [user.reference],
+      );
 
-      // Update current user: add to friends, remove from friend_requests
-      batch.update(currentUserReference!, {
-        'friends': FieldValue.arrayUnion([user.reference]),
-        'friend_requests': FieldValue.arrayRemove([user.reference]),
-        'sent_requests': FieldValue.arrayRemove([
-          user.reference,
-        ]), // Remove if we also sent them a request
-      });
-
-      // Update other user: add to friends, remove from sent_requests
-      batch.update(user.reference, {
-        'friends': FieldValue.arrayUnion([currentUserReference]),
-        'sent_requests': FieldValue.arrayRemove([currentUserReference]),
-      });
-
-      await batch.commit();
+      await fsArrayUnion(
+        user.reference,
+        'friends',
+        [currentUserReference!],
+      );
+      await fsArrayRemove(
+        user.reference,
+        'sent_requests',
+        [currentUserReference!],
+      );
 
       if (mounted) {
         _showSuccessMessage('Connection request accepted!');
       }
     } catch (e) {
-      print('Error accepting connection request: $e');
+      debugLog('Error accepting connection request: $e');
       if (mounted) {
         if (e.toString().contains('permission-denied')) {
           _showErrorMessage(
@@ -483,24 +484,24 @@ class _UserSummaryWidgetState extends State<UserSummaryWidget> {
 
     try {
       // Bulletproof check - ensure request exists
-      final currentUserDoc = await currentUserReference!.get();
-      final currentUserData = UsersRecord.fromSnapshot(currentUserDoc);
+      final currentUserData = await fsGetUserOnce(currentUserReference!);
 
       if (!currentUserData.friendRequests.contains(user.reference)) {
         _showErrorMessage('No pending request from ${user.displayName}');
         return;
       }
 
-      // Only update current user's document (we have permission for this)
-      await currentUserReference!.update({
-        'friend_requests': FieldValue.arrayRemove([user.reference]),
-      });
+      await fsArrayRemove(
+        currentUserReference!,
+        'friend_requests',
+        [user.reference],
+      );
 
       if (mounted) {
         _showSuccessMessage('Connection request declined');
       }
     } catch (e) {
-      print('Error declining connection request: $e');
+      debugLog('Error declining connection request: $e');
       if (mounted) {
         _showErrorMessage(
           'Failed to decline connection request. Please check your internet connection and try again.',
@@ -1187,29 +1188,29 @@ class _UserSummaryWidgetState extends State<UserSummaryWidget> {
 
     try {
       // Bulletproof check - ensure they are actually connected
-      final currentUserDoc = await currentUserReference!.get();
-      final currentUserData = UsersRecord.fromSnapshot(currentUserDoc);
+      final currentUserData = await fsGetUserOnce(currentUserReference!);
 
       if (!currentUserData.friends.contains(user.reference)) {
         _showErrorMessage('You are not connected with ${user.displayName}');
         return;
       }
 
-      // Update current user's document (we have permission for our own document)
-      await currentUserReference!.update({
-        'friends': FieldValue.arrayRemove([user.reference]),
-      });
+      await fsArrayRemove(
+        currentUserReference!,
+        'friends',
+        [user.reference],
+      );
 
-      // Try to update other user's document (may fail due to permissions, but that's okay)
-      // The connection will be removed from their side when they next sync
       try {
-        await user.reference.update({
-          'friends': FieldValue.arrayRemove([currentUserReference]),
-        });
+        await fsArrayRemove(
+          user.reference,
+          'friends',
+          [currentUserReference!],
+        );
       } catch (e) {
         // If we can't update the other user's document, that's okay
         // The connection is still removed from our side
-        print('Note: Could not update other user\'s friends list: $e');
+        debugLog('Note: Could not update other user\'s friends list: $e');
       }
 
       if (mounted) {
@@ -1222,7 +1223,7 @@ class _UserSummaryWidgetState extends State<UserSummaryWidget> {
         });
       }
     } catch (e) {
-      print('Error removing connection: $e');
+      debugLog('Error removing connection: $e');
       if (mounted) {
         if (e.toString().contains('permission-denied')) {
           _showErrorMessage(
@@ -1279,28 +1280,30 @@ class _UserSummaryWidgetState extends State<UserSummaryWidget> {
 
     try {
       // Step 1: Remove connection if they are connected (this should have permissions)
-      final currentUserDoc = await currentUserReference!.get();
-      final currentUserData = UsersRecord.fromSnapshot(currentUserDoc);
+      final currentUserData = await fsGetUserOnce(currentUserReference!);
 
       if (currentUserData.friends.contains(user.reference)) {
         try {
           // Remove connection first
-          await currentUserReference!.update({
-            'friends': FieldValue.arrayRemove([user.reference]),
-          });
+          await fsArrayRemove(
+            currentUserReference!,
+            'friends',
+            [user.reference],
+          );
           connectionRemoved = true;
 
-          // Try to update other user's document (may fail due to permissions, but that's okay)
           try {
-            await user.reference.update({
-              'friends': FieldValue.arrayRemove([currentUserReference]),
-            });
+            await fsArrayRemove(
+              user.reference,
+              'friends',
+              [currentUserReference!],
+            );
           } catch (e) {
-            print('Note: Could not update other user\'s friends list: $e');
+            debugLog('Note: Could not update other user\'s friends list: $e');
             // Continue anyway
           }
         } catch (e) {
-          print('Error removing connection during block: $e');
+          debugLog('Error removing connection during block: $e');
           // Continue with other operations
         }
       }
@@ -1308,45 +1311,47 @@ class _UserSummaryWidgetState extends State<UserSummaryWidget> {
       // Step 2: Remove any pending requests (this should have permissions)
       try {
         if (currentUserData.sentRequests.contains(user.reference)) {
-          await currentUserReference!.update({
-            'sent_requests': FieldValue.arrayRemove([user.reference]),
-          });
+          await fsArrayRemove(
+            currentUserReference!,
+            'sent_requests',
+            [user.reference],
+          );
           try {
-            await user.reference.update({
-              'friend_requests': FieldValue.arrayRemove([currentUserReference]),
-            });
+            await fsArrayRemove(
+              user.reference,
+              'friend_requests',
+              [currentUserReference!],
+            );
           } catch (e) {
-            print('Note: Could not update other user\'s friend requests: $e');
+            debugLog('Note: Could not update other user\'s friend requests: $e');
           }
         }
 
         if (currentUserData.friendRequests.contains(user.reference)) {
-          await currentUserReference!.update({
-            'friend_requests': FieldValue.arrayRemove([user.reference]),
-          });
+          await fsArrayRemove(
+            currentUserReference!,
+            'friend_requests',
+            [user.reference],
+          );
         }
         requestsCleared = true;
       } catch (e) {
-        print('Error clearing requests during block: $e');
+        debugLog('Error clearing requests during block: $e');
         // Continue anyway
       }
 
       // Step 3: Try to create blocked user record (this might fail due to permissions)
       try {
         // Check if user is already blocked first
-        final existingBlock = await BlockedUsersRecord.collection
-            .where('blocker_user', isEqualTo: currentUserReference)
-            .where('blocked_user', isEqualTo: user.reference)
-            .get();
+        final alreadyBlocked = await fsIsUserBlocked(
+          blockerRef: currentUserReference!,
+          blockedRef: user.reference,
+        );
 
-        if (existingBlock.docs.isEmpty) {
-          // Only try to create if it doesn't exist
-          await BlockedUsersRecord.collection.add(
-            createBlockedUsersRecordData(
-              blockerUser: currentUserReference,
-              blockedUser: user.reference,
-              createdAt: getCurrentTimestamp,
-            ),
+        if (!alreadyBlocked) {
+          await fsBlockUser(
+            blockerUser: currentUserReference!,
+            blockedUser: user.reference,
           );
           blockRecordCreated = true;
         } else {
@@ -1354,7 +1359,7 @@ class _UserSummaryWidgetState extends State<UserSummaryWidget> {
           blockRecordCreated = true;
         }
       } catch (e) {
-        print('Error creating block record (permission issue expected): $e');
+        debugLog('Error creating block record (permission issue expected): $e');
         // This is expected to fail due to permissions, but we continue
         // The connection removal and request clearing still happened
         blockRecordCreated = false;
@@ -1386,7 +1391,7 @@ class _UserSummaryWidgetState extends State<UserSummaryWidget> {
         }
       }
     } catch (e) {
-      print('Unexpected error during block operation: $e');
+      debugLog('Unexpected error during block operation: $e');
       if (mounted) {
         // Only show error if nothing useful happened
         if (!connectionRemoved && !requestsCleared && !blockRecordCreated) {
@@ -1412,7 +1417,7 @@ class _UserSummaryWidgetState extends State<UserSummaryWidget> {
 
   void _selectChatInDesktop(ChatsRecord chat, {int retryCount = 0}) {
     if (retryCount > 20) {
-      print('Failed to select chat after 20 retries');
+      debugLog('Failed to select chat after 20 retries');
       return;
     }
 
@@ -1437,7 +1442,7 @@ class _UserSummaryWidgetState extends State<UserSummaryWidget> {
           });
           return;
         }
-        print('ChatController not found after 10 retries: $e');
+        debugLog('ChatController not found after 10 retries: $e');
         return;
       }
 
@@ -1450,7 +1455,7 @@ class _UserSummaryWidgetState extends State<UserSummaryWidget> {
         );
         // Use the chat from the list to ensure consistency with what's displayed
         chatToSelect = chatInList;
-        print('Found chat in controller list, using that instance');
+        debugLog('Found chat in controller list, using that instance');
       } catch (e) {
         // Chat not in list yet - might be a new chat that hasn't loaded
         if (retryCount < 5) {
@@ -1460,12 +1465,12 @@ class _UserSummaryWidgetState extends State<UserSummaryWidget> {
           return;
         }
         // After 5 retries, use the chat we have
-        print('Chat not in list after 5 retries, using provided chat instance');
+        debugLog('Chat not in list after 5 retries, using provided chat instance');
       }
 
       // Select the chat - this matches exactly what happens when clicking from the list
       chatController.selectChat(chatToSelect);
-      print('Successfully selected chat: ${chatToSelect.reference.id}');
+      debugLog('Successfully selected chat: ${chatToSelect.reference.id}');
 
       // Verify selection worked and wait a bit for UI to update
       Future.delayed(Duration(milliseconds: 100), () {
@@ -1480,7 +1485,7 @@ class _UserSummaryWidgetState extends State<UserSummaryWidget> {
         }
       });
     } catch (e) {
-      print('Error selecting chat (retry $retryCount): $e');
+      debugLog('Error selecting chat (retry $retryCount): $e');
       // Controller might not be initialized yet, try again after a delay
       Future.delayed(Duration(milliseconds: 400 * (retryCount + 1)), () {
         _selectChatInDesktop(chat, retryCount: retryCount + 1);
@@ -1664,9 +1669,15 @@ class _UserSummaryWidgetState extends State<UserSummaryWidget> {
           // Update user document
           try {
             if (isCoverPhoto) {
-              await user.reference.update({'cover_photo_url': downloadUrl});
+              await fsPatchDocument(
+                user.reference,
+                {'cover_photo_url': downloadUrl},
+              );
             } else {
-              await user.reference.update({'photo_url': downloadUrl});
+              await fsPatchDocument(
+                user.reference,
+                {'photo_url': downloadUrl},
+              );
             }
           } catch (e) {
             // Close loading dialog first
@@ -1693,7 +1704,7 @@ class _UserSummaryWidgetState extends State<UserSummaryWidget> {
                 navigator.pop(); // Close loading dialog using stored navigator
               }
             } catch (e) {
-              print('Error closing dialog: $e');
+              debugLog('Error closing dialog: $e');
             }
 
             await _showAdaptiveDialog(
@@ -1782,7 +1793,7 @@ class _UserSummaryWidgetState extends State<UserSummaryWidget> {
 
       return downloadUrl;
     } catch (e) {
-      print('Firebase Storage upload error: $e');
+      debugLog('Firebase Storage upload error: $e');
       if (e is FirebaseException) {
         throw Exception('Firebase Storage error: ${e.code} - ${e.message}');
       }
@@ -1869,9 +1880,9 @@ class _UserSummaryWidgetState extends State<UserSummaryWidget> {
         try {
           // Update user document to remove photo URL
           if (isCoverPhoto) {
-            await user.reference.update({'cover_photo_url': ''});
+            await fsPatchDocument(user.reference, {'cover_photo_url': ''});
           } else {
-            await user.reference.update({'photo_url': ''});
+            await fsPatchDocument(user.reference, {'photo_url': ''});
           }
 
           // Close loading dialog and show success message
@@ -1881,7 +1892,7 @@ class _UserSummaryWidgetState extends State<UserSummaryWidget> {
                 navigator.pop(); // Close loading dialog using stored navigator
               }
             } catch (e) {
-              print('Error closing dialog: $e');
+              debugLog('Error closing dialog: $e');
             }
 
             await _showAdaptiveDialog(
@@ -1934,12 +1945,12 @@ class _UserSummaryWidgetState extends State<UserSummaryWidget> {
 
       // Save all fields that are displayed and editable in the user summary page
       // These fields directly correspond to what users set during onboarding
-      await user.reference.update({
+      await fsPatchDocument(user.reference, {
         'display_name': _model.displayNameController?.text ?? user.displayName,
         'location': _model.locationController?.text ?? user.location,
         'bio': _model.bioController?.text ?? user.bio,
         'website': _model.websiteController?.text ?? '',
-        'interests': interests, // Saved as array, matching onboarding format
+        'interests': interests,
       });
 
       // Exit edit mode
@@ -1978,17 +1989,17 @@ class _UserSummaryWidgetState extends State<UserSummaryWidget> {
       );
     }
 
-    return StreamBuilder<UsersRecord>(
-      stream: UsersRecord.getDocument(widget.userRef!),
-      builder: (context, userSnapshot) {
-        if (!userSnapshot.hasData) {
+    return DesktopSafeUserPollBuilder(
+      userRef: widget.userRef!,
+      fetchOnce: fsGetUserOnce,
+      builder: (context, profileUser) {
+        if (profileUser == null) {
           return CupertinoPageScaffold(
             navigationBar: CupertinoNavigationBar(middle: Text('User Profile')),
             child: Center(child: CupertinoActivityIndicator()),
           );
         }
 
-        final profileUser = userSnapshot.data!;
         final isOwnProfile = currentUserReference == profileUser.reference;
 
         // Initialize controllers with user data
@@ -2011,12 +2022,10 @@ class _UserSummaryWidgetState extends State<UserSummaryWidget> {
           }
         }
 
-        return StreamBuilder<UsersRecord>(
-          stream: currentUserReference != null
-              ? UsersRecord.getDocument(currentUserReference!)
-              : null,
-          builder: (context, currentUserSnapshot) {
-            final currentUser = currentUserSnapshot.data;
+        return DesktopSafeUserPollBuilder(
+          userRef: currentUserReference!,
+          fetchOnce: fsGetUserOnce,
+          builder: (context, currentUser) {
             final isConnected =
                 currentUser != null &&
                 _isUserConnected(profileUser.reference, currentUser);
@@ -2033,7 +2042,8 @@ class _UserSummaryWidgetState extends State<UserSummaryWidget> {
                 currentUser != null &&
                 _isOperationInProgress(profileUser.reference.id);
 
-            final isDesktop = kIsWeb || (!kIsWeb && Platform.isMacOS);
+            final isDesktop =
+                kIsWeb || (!kIsWeb && (Platform.isMacOS || Platform.isWindows));
             final isInSettings = widget.isEditable && isDesktop;
 
             return CupertinoPageScaffold(

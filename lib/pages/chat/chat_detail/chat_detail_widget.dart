@@ -1,5 +1,8 @@
 import '/auth/firebase_auth/auth_util.dart';
 import '/backend/backend.dart';
+import '/backend/firestore/firestore_desktop_adapter.dart';
+import '/pages/desktop_chat/desktop_safe_user_builder.dart';
+import '/pages/desktop_chat/rest_poll_builder.dart';
 import '/flutter_flow/flutter_flow_icon_button.dart';
 import '/flutter_flow/flutter_flow_util.dart';
 import '/flutter_flow/flutter_flow_widgets.dart';
@@ -49,7 +52,7 @@ class _ChatDetailWidgetState extends State<ChatDetailWidget> {
 
   // Blocked users state (UID based)
   Set<String> _blockedUserIds = {};
-  StreamSubscription? _blockedUsersSubscription;
+  Timer? _blockedUsersPollTimer;
 
   // Key to access ChatThreadComponent state
   final GlobalKey<ChatThreadComponentWidgetState> _chatThreadKey =
@@ -113,14 +116,11 @@ class _ChatDetailWidgetState extends State<ChatDetailWidget> {
         );
       } else {
         if (!widget!.chatDoc!.lastMessageSeen.contains(currentUserReference)) {
-          await widget!.chatDoc!.reference.update({
-            ...mapToFirestore(
-              {
-                'last_message_seen':
-                    FieldValue.arrayUnion([currentUserReference]),
-              },
-            ),
-          });
+          await fsArrayUnion(
+            widget!.chatDoc!.reference,
+            'last_message_seen',
+            [currentUserReference],
+          );
         }
       }
 
@@ -139,21 +139,26 @@ class _ChatDetailWidgetState extends State<ChatDetailWidget> {
       // Listen to blocked users for real-time UI updates
       print(
           'Debug: Initializing blocked user listener in ChatDetail. CurrentUserRef: $currentUserReference');
-      _blockedUsersSubscription = BlockedUsersRecord.collection
-          .where('blocker_user', isEqualTo: currentUserReference)
-          .snapshots()
-          .listen((snapshot) {
-        setState(() {
-          _blockedUserIds = snapshot.docs
-              .map(
-                  (doc) => BlockedUsersRecord.fromSnapshot(doc).blockedUser?.id)
-              .whereType<String>()
-              .toSet();
-          print('Debug: ChatDetail updated blocked IDs to: $_blockedUserIds');
-        });
-      }, onError: (e) {
-        print('Debug: Error in ChatDetail blocked user listener: $e');
-      });
+      Future<void> refreshBlocked() async {
+        try {
+          final records =
+              await fsQueryBlockedUsers(currentUserReference!);
+          if (!mounted) return;
+          setState(() {
+            _blockedUserIds = records
+                .map((r) => r.blockedUser?.id)
+                .whereType<String>()
+                .toSet();
+          });
+        } catch (e) {
+          print('Debug: Error polling blocked users in ChatDetail: $e');
+        }
+      }
+
+      refreshBlocked();
+      _blockedUsersPollTimer?.cancel();
+      _blockedUsersPollTimer =
+          Timer.periodic(const Duration(seconds: 30), (_) => refreshBlocked());
     });
   }
 
@@ -165,7 +170,7 @@ class _ChatDetailWidgetState extends State<ChatDetailWidget> {
     }();
 
     _model.dispose();
-    _blockedUsersSubscription?.cancel();
+    _blockedUsersPollTimer?.cancel();
 
     super.dispose();
   }
@@ -173,9 +178,27 @@ class _ChatDetailWidgetState extends State<ChatDetailWidget> {
   @override
   Widget build(BuildContext context) {
     return Builder(
-      builder: (context) => StreamBuilder<ChatsRecord>(
-        stream: ChatsRecord.getDocument(widget!.chatDoc!.reference),
-        builder: (context, snapshot) {
+      builder: (context) {
+        if (useWindowsFirestoreRest) {
+          return RestPollBuilder<ChatsRecord>(
+            interval: const Duration(seconds: 30),
+            fetch: () => fsGetChatOnce(widget!.chatDoc!.reference),
+            builder: (context, snapshot) =>
+                _buildChatDetail(context, snapshot),
+          );
+        }
+        return StreamBuilder<ChatsRecord>(
+          stream: ChatsRecord.getDocument(widget!.chatDoc!.reference),
+          builder: (context, snapshot) => _buildChatDetail(context, snapshot),
+        );
+      },
+    );
+  }
+
+  Widget _buildChatDetail(
+    BuildContext context,
+    AsyncSnapshot<ChatsRecord> snapshot,
+  ) {
           // Customize what your widget looks like when it's loading.
           if (!snapshot.hasData) {
             return Scaffold(
@@ -342,20 +365,19 @@ class _ChatDetailWidgetState extends State<ChatDetailWidget> {
                                             builder: (context) {
                                               if (widget!.chatDoc?.isGroup ==
                                                   false) {
-                                                return StreamBuilder<
-                                                    UsersRecord>(
-                                                  stream: UsersRecord
-                                                      .getDocument(widget!
-                                                          .chatDoc!.members
-                                                          .where((e) =>
-                                                              e.id !=
-                                                              currentUserReference
-                                                                  ?.id)
-                                                          .toList()
-                                                          .firstOrNull!),
-                                                  builder: (context, snapshot) {
-                                                    // Customize what your widget looks like when it's loading.
-                                                    if (!snapshot.hasData) {
+                                                return DesktopSafeUserPollBuilder(
+                                                  userRef: widget!
+                                                      .chatDoc!.members
+                                                      .where((e) =>
+                                                          e.id !=
+                                                          currentUserReference
+                                                              ?.id)
+                                                      .toList()
+                                                      .firstOrNull!,
+                                                  fetchOnce: DesktopSafeUserBuilder
+                                                      .defaultFetchUser,
+                                                  builder: (context, bigUsersRecord) {
+                                                    if (bigUsersRecord == null) {
                                                       return Center(
                                                         child: SizedBox(
                                                           width: 50.0,
@@ -373,9 +395,6 @@ class _ChatDetailWidgetState extends State<ChatDetailWidget> {
                                                         ),
                                                       );
                                                     }
-
-                                                    final bigUsersRecord =
-                                                        snapshot.data!;
 
                                                     return Row(
                                                       mainAxisSize:
@@ -644,15 +663,10 @@ class _ChatDetailWidgetState extends State<ChatDetailWidget> {
                                                                               'Debug: Blocking user ${bigUsersRecord.reference.id} from ${currentUserReference?.id}');
                                                                           try {
                                                                             // Create blocked user record
-                                                                            final ref =
-                                                                                await BlockedUsersRecord.collection.add({
-                                                                              ...createBlockedUsersRecordData(
-                                                                                blockerUser: currentUserReference,
-                                                                                blockedUser: bigUsersRecord.reference,
-                                                                                createdAt: getCurrentTimestamp,
-                                                                              ),
-                                                                            });
-                                                                            print('Debug: Block record created at ${ref.path}');
+                                                                            await fsBlockUser(
+                                                                              blockerUser: currentUserReference!,
+                                                                              blockedUser: bigUsersRecord.reference,
+                                                                            );
 
                                                                             // Show success message
                                                                             ScaffoldMessenger.of(context).showSnackBar(
@@ -693,15 +707,10 @@ class _ChatDetailWidgetState extends State<ChatDetailWidget> {
                                                                           print(
                                                                               'Debug: Unblocking user ${bigUsersRecord.reference.id}');
                                                                           try {
-                                                                            final blockedDocs =
-                                                                                await BlockedUsersRecord.collection.where('blocker_user', isEqualTo: currentUserReference).where('blocked_user', isEqualTo: bigUsersRecord.reference).get();
-
-                                                                            print('Debug: Found ${blockedDocs.docs.length} records to delete');
-                                                                            for (var doc
-                                                                                in blockedDocs.docs) {
-                                                                              await doc.reference.delete();
-                                                                              print('Debug: Deleted ${doc.reference.path}');
-                                                                            }
+                                                                            await fsUnblockUser(
+                                                                              blockerUser: currentUserReference!,
+                                                                              blockedUser: bigUsersRecord.reference,
+                                                                            );
 
                                                                             ScaffoldMessenger.of(context).showSnackBar(
                                                                               SnackBar(content: Text('User has been unblocked')),
@@ -1328,8 +1337,5 @@ class _ChatDetailWidgetState extends State<ChatDetailWidget> {
               ),
             ),
           );
-        },
-      ),
-    );
   }
 }

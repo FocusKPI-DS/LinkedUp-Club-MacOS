@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import '/utils/debug_log.dart';
 import 'package:flutter/material.dart';
 import 'package:from_css_color/from_css_color.dart';
 
@@ -103,7 +104,7 @@ String? serializeParam(
     }
     return data;
   } catch (e) {
-    print('Error serializing parameter: $e');
+    debugLog('Error serializing parameter: $e');
     return null;
   }
 }
@@ -262,7 +263,7 @@ dynamic deserializeParam<T>(
         return null;
     }
   } catch (e) {
-    print('Error deserializing parameter: $e');
+    debugLog('Error deserializing parameter: $e');
     return null;
   }
 }

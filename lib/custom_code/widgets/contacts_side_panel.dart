@@ -1,9 +1,12 @@
 import '/auth/firebase_auth/auth_util.dart';
 import '/backend/backend.dart';
+import '/backend/firestore/firestore_desktop_adapter.dart';
 import '/flutter_flow/flutter_flow_util.dart';
 import '/pages/desktop_chat/chat_controller.dart';
+import '/pages/desktop_chat/rest_poll_builder.dart';
 import '/utils/chat_helpers.dart';
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
@@ -116,189 +119,216 @@ class _ContactsSidePanelState extends State<ContactsSidePanel> {
   }
 
   Widget _buildContactsList() {
+    final workspaceRef = currentUserDocument?.currentWorkspaceRef;
+    if (workspaceRef == null) {
+      return Center(child: CircularProgressIndicator(color: Colors.white));
+    }
+
+    if (useWindowsFirestoreRest) {
+      return RestPollBuilder<List<WorkspaceMembersRecord>>(
+        interval: const Duration(seconds: 15),
+        fetch: () => fsQueryWorkspaceMembers(workspaceRef),
+        builder: (context, snapshot) {
+          if (!snapshot.hasData) {
+            return Center(
+              child: CircularProgressIndicator(color: Colors.white),
+            );
+          }
+          return _buildMembersList(snapshot.data ?? []);
+        },
+      );
+    }
+
     return StreamBuilder<List<WorkspaceMembersRecord>>(
       stream: queryWorkspaceMembersRecord(
         queryBuilder: (workspaceMembersRecord) => workspaceMembersRecord.where(
-            'workspace_ref',
-            isEqualTo: currentUserDocument?.currentWorkspaceRef),
+            'workspace_ref', isEqualTo: workspaceRef),
       ),
       builder: (context, membersSnapshot) {
         if (!membersSnapshot.hasData) {
           return Center(
-            child: CircularProgressIndicator(
-              color: Colors.white,
-            ),
+            child: CircularProgressIndicator(color: Colors.white),
+          );
+        }
+        return _buildMembersList(membersSnapshot.data ?? []);
+      },
+    );
+  }
+
+  Widget _buildMembersList(List<WorkspaceMembersRecord> members) {
+    return ListView.builder(
+      padding: EdgeInsets.zero,
+      itemCount: members.length,
+      itemBuilder: (context, index) {
+        final member = members[index];
+        final userRef = member.userRef ??
+            FirebaseFirestore.instance.collection('users').doc('placeholder');
+
+        if (useWindowsFirestoreRest) {
+          return FutureBuilder<UsersRecord?>(
+            future: fsTryGetUserOnce(userRef),
+            builder: (context, userSnapshot) {
+              if (!userSnapshot.hasData || userSnapshot.data == null) {
+                return SizedBox.shrink();
+              }
+              return _buildContactTile(userSnapshot.data!, member);
+            },
           );
         }
 
-        final members = membersSnapshot.data ?? [];
-
-        return ListView.builder(
-          padding: EdgeInsets.zero,
-          itemCount: members.length,
-          itemBuilder: (context, index) {
-            final member = members[index];
-
-            return StreamBuilder<UsersRecord>(
-              stream: UsersRecord.getDocument(member.userRef ??
-                  FirebaseFirestore.instance
-                      .collection('users')
-                      .doc('placeholder')),
-              builder: (context, userSnapshot) {
-                if (!userSnapshot.hasData) {
-                  return SizedBox.shrink();
-                }
-
-                final user = userSnapshot.data!;
-                final isCurrentUser = user.reference == currentUserReference;
-
-                if (isCurrentUser) {
-                  return SizedBox.shrink();
-                }
-
-                return InkWell(
-                  onTap: () async {
-                    await _startNewChatWithUser(user);
-                  },
-                  child: Container(
-                    width: double.infinity,
-                    padding: EdgeInsetsDirectional.fromSTEB(16, 12, 16, 12),
-                    decoration: BoxDecoration(
-                      color: Colors.transparent,
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border(
-                        bottom: BorderSide(
-                          color: Color(0xFF374151),
-                          width: 1,
-                        ),
-                      ),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.max,
-                      children: [
-                        // Avatar
-                        Container(
-                          width: 40,
-                          height: 40,
-                          decoration: BoxDecoration(
-                            color: Color(0xFF3B82F6),
-                            shape: BoxShape.circle,
-                          ),
-                          child: ClipRRect(
-                            borderRadius: BorderRadius.circular(20),
-                            child: CachedNetworkImage(
-                              imageUrl: user.photoUrl,
-                              width: 40,
-                              height: 40,
-                              fit: BoxFit.cover,
-                              placeholder: (context, url) => Container(
-                                width: 40,
-                                height: 40,
-                                decoration: BoxDecoration(
-                                  color: Colors.white,
-                                  shape: BoxShape.circle,
-                                ),
-                                child: Icon(
-                                  Icons.person,
-                                  color: Color(0xFF6B7280),
-                                  size: 18,
-                                ),
-                              ),
-                              errorWidget: (context, url, error) => Container(
-                                width: 40,
-                                height: 40,
-                                decoration: BoxDecoration(
-                                  color: Colors.white,
-                                  shape: BoxShape.circle,
-                                ),
-                                child: Icon(
-                                  Icons.person,
-                                  color: Color(0xFF6B7280),
-                                  size: 18,
-                                ),
-                              ),
-                            ),
-                          ),
-                        ),
-                        SizedBox(width: 12),
-                        // User Info
-                        Expanded(
-                          child: Column(
-                            mainAxisSize: MainAxisSize.min,
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Row(
-                                children: [
-                                  Expanded(
-                                    child: Text(
-                                      user.displayName,
-                                      style: TextStyle(
-                                        fontFamily: 'Inter',
-                                        color: Colors.white,
-                                        fontSize: 14,
-                                        fontWeight: FontWeight.w500,
-                                      ),
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                    ),
-                                  ),
-                                  Container(
-                                    padding: EdgeInsets.symmetric(
-                                        horizontal: 6, vertical: 2),
-                                    decoration: BoxDecoration(
-                                      color: _getRoleColor(member.role),
-                                      borderRadius: BorderRadius.circular(8),
-                                    ),
-                                    child: Text(
-                                      member.role.toUpperCase(),
-                                      style: TextStyle(
-                                        color: Colors.white,
-                                        fontSize: 8,
-                                        fontWeight: FontWeight.w600,
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                              SizedBox(height: 2),
-                              Text(
-                                user.email,
-                                style: TextStyle(
-                                  fontFamily: 'Inter',
-                                  color: Color(0xFF9CA3AF),
-                                  fontSize: 12,
-                                ),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                              SizedBox(height: 2),
-                              Text(
-                                'Tap to start messaging',
-                                style: TextStyle(
-                                  fontFamily: 'Inter',
-                                  color: Color(0xFF3B82F6),
-                                  fontSize: 11,
-                                  fontWeight: FontWeight.w500,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        // Chat icon
-                        Icon(
-                          Icons.chat_bubble_outline,
-                          color: Color(0xFF3B82F6),
-                          size: 18,
-                        ),
-                      ],
-                    ),
-                  ),
-                );
-              },
-            );
+        return StreamBuilder<UsersRecord>(
+          stream: UsersRecord.getDocument(userRef),
+          builder: (context, userSnapshot) {
+            if (!userSnapshot.hasData) {
+              return SizedBox.shrink();
+            }
+            return _buildContactTile(userSnapshot.data!, member);
           },
         );
       },
+    );
+  }
+
+  Widget _buildContactTile(UsersRecord user, WorkspaceMembersRecord member) {
+    final isCurrentUser = user.reference == currentUserReference;
+    if (isCurrentUser) {
+      return SizedBox.shrink();
+    }
+
+    return InkWell(
+      onTap: () async {
+        await _startNewChatWithUser(user);
+      },
+      child: Container(
+        width: double.infinity,
+        padding: EdgeInsetsDirectional.fromSTEB(16, 12, 16, 12),
+        decoration: BoxDecoration(
+          color: Colors.transparent,
+          borderRadius: BorderRadius.circular(8),
+          border: Border(
+            bottom: BorderSide(
+              color: Color(0xFF374151),
+              width: 1,
+            ),
+          ),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.max,
+          children: [
+            Container(
+              width: 40,
+              height: 40,
+              decoration: BoxDecoration(
+                color: Color(0xFF3B82F6),
+                shape: BoxShape.circle,
+              ),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(20),
+                child: CachedNetworkImage(
+                  imageUrl: user.photoUrl,
+                  width: 40,
+                  height: 40,
+                  fit: BoxFit.cover,
+                  placeholder: (context, url) => Container(
+                    width: 40,
+                    height: 40,
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      shape: BoxShape.circle,
+                    ),
+                    child: Icon(
+                      Icons.person,
+                      color: Color(0xFF6B7280),
+                      size: 18,
+                    ),
+                  ),
+                  errorWidget: (context, url, error) => Container(
+                    width: 40,
+                    height: 40,
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      shape: BoxShape.circle,
+                    ),
+                    child: Icon(
+                      Icons.person,
+                      color: Color(0xFF6B7280),
+                      size: 18,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+            SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          user.displayName,
+                          style: TextStyle(
+                            fontFamily: 'Inter',
+                            color: Colors.white,
+                            fontSize: 14,
+                            fontWeight: FontWeight.w500,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      Container(
+                        padding:
+                            EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: _getRoleColor(member.role),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Text(
+                          member.role.toUpperCase(),
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 8,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  SizedBox(height: 2),
+                  Text(
+                    user.email,
+                    style: TextStyle(
+                      fontFamily: 'Inter',
+                      color: Color(0xFF9CA3AF),
+                      fontSize: 12,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  SizedBox(height: 2),
+                  Text(
+                    'Tap to start messaging',
+                    style: TextStyle(
+                      fontFamily: 'Inter',
+                      color: Color(0xFF3B82F6),
+                      fontSize: 11,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Icon(
+              Icons.chat_bubble_outline,
+              color: Color(0xFF3B82F6),
+              size: 18,
+            ),
+          ],
+        ),
+      ),
     );
   }
 

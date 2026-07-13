@@ -1,4 +1,5 @@
 import '/backend/backend.dart';
+import '/backend/firestore/firestore_desktop_adapter.dart';
 import '/flutter_flow/flutter_flow_util.dart';
 import '/auth/firebase_auth/auth_util.dart';
 import 'package:flutter/material.dart';
@@ -157,16 +158,7 @@ class _MobileGroupTasksWidgetState extends State<MobileGroupTasksWidget> {
 
     if (confirmed == true) {
       try {
-        final allTasksSnapshot = await ActionItemsRecord.collection
-            .where('chat_ref', isEqualTo: todo.chatRef)
-            .where('title', isEqualTo: todo.title)
-            .get();
-
-        final batch = FirebaseFirestore.instance.batch();
-        for (var doc in allTasksSnapshot.docs) {
-          batch.delete(doc.reference);
-        }
-        await batch.commit();
+        await fsDeleteMatchingActionItems(todo);
 
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(

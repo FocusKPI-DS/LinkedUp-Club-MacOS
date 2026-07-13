@@ -1,17 +1,24 @@
 import 'package:flutter/cupertino.dart';
+import '/utils/debug_log.dart';
 import 'package:flutter/material.dart' as material;
 import 'package:flutter/foundation.dart';
 import 'package:intl/intl.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import '/backend/backend.dart';
+import '/backend/firestore/firestore_desktop_adapter.dart';
 import '/auth/firebase_auth/auth_util.dart';
+import '/pages/desktop_chat/rest_poll_builder.dart';
 import 'dart:async';
 import 'dart:ui';
 
 class SummerAITodos extends StatefulWidget {
-  const SummerAITodos({super.key, this.isMobile = false});
+  const SummerAITodos({
+    super.key,
+    this.isMobile = false,
+    this.onShowAnnouncement,
+  });
 
   final bool isMobile;
+  final void Function(String message)? onShowAnnouncement;
 
   @override
   State<SummerAITodos> createState() => _SummerAITodosState();
@@ -29,6 +36,7 @@ class _SummerAITodosState extends State<SummerAITodos> {
   // Cache of user's group chat IDs for filtering
   Set<String>? _userGroupChatIds;
   StreamSubscription? _chatsSubscription;
+  Timer? _groupsPollTimer;
 
   // Filter state
   String? _selectedPriority; // null, 'high', 'moderate', 'low'
@@ -45,13 +53,72 @@ class _SummerAITodosState extends State<SummerAITodos> {
   @override
   void dispose() {
     _chatsSubscription?.cancel();
+    _groupsPollTimer?.cancel();
     super.dispose();
+  }
+
+  Future<void> _refreshUserGroups() async {
+    if (currentUserReference == null) return;
+    try {
+      final chats = await fsQueryMemberChats(currentUserReference!);
+      final groupIds = chats
+          .where((c) => c.isGroup)
+          .map((c) => c.reference.id)
+          .toSet();
+      if (mounted) {
+        setState(() {
+          _userGroupChatIds = groupIds;
+        });
+        debugLog(
+            '🔍 Loaded ${groupIds.length} groups for user. Group IDs: ${groupIds.toList()}');
+      }
+    } catch (error) {
+      debugLog('❌ Error loading user groups: $error');
+    }
+  }
+
+  List<ActionItemsRecord> _mergeTodosWithCache(
+    List<ActionItemsRecord> serverTodos,
+    List<ActionItemsRecord>? cached,
+  ) {
+    if (cached == null || cached.isEmpty) {
+      return serverTodos;
+    }
+    final serverPaths = serverTodos.map((t) => t.reference.path).toSet();
+    final localOnly = cached
+        .where((t) => !serverPaths.contains(t.reference.path))
+        .toList();
+    final merged = [...localOnly, ...serverTodos];
+    merged.sort((a, b) {
+      final aTime = a.createdTime ?? DateTime.fromMillisecondsSinceEpoch(0);
+      final bTime = b.createdTime ?? DateTime.fromMillisecondsSinceEpoch(0);
+      return bTime.compareTo(aTime);
+    });
+    return merged;
+  }
+
+  void _prependCachedTodo(ActionItemsRecord todo) {
+    setState(() {
+      final existing = _cachedTodos ?? [];
+      if (existing.any((t) => t.reference.path == todo.reference.path)) {
+        return;
+      }
+      _cachedTodos = [todo, ...existing];
+    });
   }
 
   void _loadUserGroups() {
     if (currentUserReference == null) return;
 
-    // Load user's group chats to verify membership
+    if (useWindowsFirestoreRest) {
+      _refreshUserGroups();
+      _groupsPollTimer = Timer.periodic(
+        const Duration(seconds: 30),
+        (_) => _refreshUserGroups(),
+      );
+      return;
+    }
+
     _chatsSubscription = queryChatsRecord(
       queryBuilder: (chatsRecord) => chatsRecord
           .where('members', arrayContains: currentUserReference)
@@ -59,11 +126,11 @@ class _SummerAITodosState extends State<SummerAITodos> {
     ).listen((chats) {
       setState(() {
         _userGroupChatIds = chats.map((c) => c.reference.id).toSet();
-        print(
+        debugLog(
             '🔍 Loaded ${chats.length} groups for user. Group IDs: ${_userGroupChatIds?.toList()}');
       });
     }, onError: (error) {
-      print('❌ Error loading user groups: $error');
+      debugLog('❌ Error loading user groups: $error');
     });
   }
 
@@ -79,12 +146,7 @@ class _SummerAITodosState extends State<SummerAITodos> {
 
     // Query ALL tasks (we'll filter client-side to ensure user is involved)
     // This is necessary because involved_people might have name variations
-    return StreamBuilder<List<ActionItemsRecord>>(
-      stream: queryActionItemsRecord(
-        queryBuilder: (actionItemsRecord) => actionItemsRecord
-            .orderBy('created_time', descending: true)
-            .limit(200), // Get more tasks to filter from
-      ),
+    return _buildActionItemsStream(
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting &&
             _cachedTodos == null) {
@@ -93,23 +155,30 @@ class _SummerAITodosState extends State<SummerAITodos> {
 
         // Handle errors gracefully - return empty state to not block the app
         if (snapshot.hasError) {
-          print('Error loading action items: ${snapshot.error}');
+          debugLog('Error loading action items: ${snapshot.error}');
           return _buildEmptyState(context, filter: _selectedFilter);
         }
 
         // Use cached data if available during loading, otherwise use fresh data
         List<ActionItemsRecord> allTodos;
         try {
-          if (snapshot.hasData && snapshot.data!.isNotEmpty) {
-            _cachedTodos = snapshot.data!;
-            allTodos = snapshot.data!;
+          if (snapshot.hasData) {
+            final serverTodos = snapshot.data!;
+            if (serverTodos.isNotEmpty) {
+              allTodos = _mergeTodosWithCache(serverTodos, _cachedTodos);
+              _cachedTodos = allTodos;
+            } else if (_cachedTodos != null && _cachedTodos!.isNotEmpty) {
+              allTodos = _cachedTodos!;
+            } else {
+              return _buildEmptyState(context, filter: _selectedFilter);
+            }
           } else if (_cachedTodos != null && _cachedTodos!.isNotEmpty) {
             allTodos = _cachedTodos!;
           } else {
             return _buildEmptyState(context, filter: _selectedFilter);
           }
         } catch (e) {
-          print('Error processing action items: $e');
+          debugLog('Error processing action items: $e');
           return _buildEmptyState(context, filter: _selectedFilter);
         }
 
@@ -594,8 +663,7 @@ class _SummerAITodosState extends State<SummerAITodos> {
       return;
     }
 
-    final currentUser =
-        await UsersRecord.getDocumentOnce(currentUserReference!);
+    final currentUser = await fsGetUserOnce(currentUserReference!);
 
     // Note: Group assignment removed for iOS-native dialog simplicity
 
@@ -605,9 +673,10 @@ class _SummerAITodosState extends State<SummerAITodos> {
     // Track selected due date (nullable)
     DateTime? selectedDueDate;
 
-    return showCupertinoDialog(
+    final parentContext = context;
+    final createdItem = await showCupertinoDialog<ActionItemsRecord?>(
       context: context,
-      builder: (context) {
+      builder: (dialogContext) {
         return StatefulBuilder(
           builder: (context, setDialogState) {
             return CupertinoAlertDialog(
@@ -811,15 +880,13 @@ class _SummerAITodosState extends State<SummerAITodos> {
                     try {
                       final now = DateTime.now();
 
-                      // Automatically assign to current user
-                      final actionItemRef = ActionItemsRecord.collection.doc();
-
                       final actionItemData = createActionItemsRecordData(
                         title: titleController.text.trim(),
                         groupName: '',
                         priority: selectedPriority,
                         status: 'pending',
                         userRef: currentUser.reference,
+                        workspaceRef: currentUser.currentWorkspaceRef,
                         chatRef: null,
                         involvedPeople: [currentUser.displayName],
                         createdTime: now,
@@ -828,36 +895,26 @@ class _SummerAITodosState extends State<SummerAITodos> {
                         description: descriptionController.text.trim(),
                       );
 
-                      await actionItemRef.set(actionItemData);
+                      final ref = await fsCreateActionItem(actionItemData);
+                      final newItem = ActionItemsRecord.getDocumentFromData(
+                        actionItemData,
+                        ref,
+                      );
 
-                      if (mounted) {
-                        Navigator.pop(context);
-                        showCupertinoDialog(
-                          context: context,
-                          builder: (context) => CupertinoAlertDialog(
-                            title: const Text('Success'),
-                            content:
-                                const Text('Action item created successfully!'),
-                            actions: [
-                              CupertinoDialogAction(
-                                child: const Text('OK'),
-                                onPressed: () => Navigator.pop(context),
-                              ),
-                            ],
-                          ),
-                        );
+                      if (dialogContext.mounted) {
+                        Navigator.pop(dialogContext, newItem);
                       }
                     } catch (e) {
-                      if (mounted) {
+                      if (dialogContext.mounted) {
                         showCupertinoDialog(
-                          context: context,
-                          builder: (context) => CupertinoAlertDialog(
+                          context: dialogContext,
+                          builder: (errorContext) => CupertinoAlertDialog(
                             title: const Text('Error'),
                             content: Text('Error creating action item: $e'),
                             actions: [
                               CupertinoDialogAction(
                                 child: const Text('OK'),
-                                onPressed: () => Navigator.pop(context),
+                                onPressed: () => Navigator.pop(errorContext),
                               ),
                             ],
                           ),
@@ -872,6 +929,34 @@ class _SummerAITodosState extends State<SummerAITodos> {
           },
         );
       },
+    );
+
+    if (createdItem != null && parentContext.mounted) {
+      _prependCachedTodo(createdItem);
+      widget.onShowAnnouncement?.call('Action item added');
+    }
+  }
+
+  Widget _buildActionItemsStream({
+    required Widget Function(
+      BuildContext context,
+      AsyncSnapshot<List<ActionItemsRecord>> snapshot,
+    ) builder,
+  }) {
+    if (useWindowsFirestoreRest) {
+      return RestPollBuilder<List<ActionItemsRecord>>(
+        interval: const Duration(seconds: 20),
+        fetch: () => fsQueryRecentActionItems(limit: 200),
+        builder: builder,
+      );
+    }
+    return StreamBuilder<List<ActionItemsRecord>>(
+      stream: queryActionItemsRecord(
+        queryBuilder: (actionItemsRecord) => actionItemsRecord
+            .orderBy('created_time', descending: true)
+            .limit(200),
+      ),
+      builder: builder,
     );
   }
 
@@ -940,10 +1025,7 @@ class _SummerAITodosState extends State<SummerAITodos> {
         }
 
         // Update task in Firebase
-        await todo.reference.update({
-          'status': 'completed',
-          'completed_time': FieldValue.serverTimestamp(),
-        });
+        await fsMarkActionItemDone(todo.reference);
 
         // Wait a bit before hiding the task
         await Future.delayed(const Duration(milliseconds: 200));
@@ -957,10 +1039,8 @@ class _SummerAITodosState extends State<SummerAITodos> {
         }
       } else {
         // Uncheck - change status back to pending
-        await todo.reference.update({
-          'status': 'pending',
-          'completed_time': null,
-        });
+        await fsPatchDocument(todo.reference, {'status': 'pending'});
+        await fsDeleteDocumentField(todo.reference, 'completed_time');
 
         if (mounted) {
           setState(() {
@@ -969,13 +1049,245 @@ class _SummerAITodosState extends State<SummerAITodos> {
         }
       }
     } catch (e) {
-      print('Error updating task: $e');
+      debugLog('Error updating task: $e');
       if (mounted && isCompleting) {
         setState(() {
           _completingTasks.remove(taskId);
         });
       }
     }
+  }
+
+  Widget _buildTaskIconButton({
+    required IconData icon,
+    required Color color,
+    required Color backgroundColor,
+    required VoidCallback onTap,
+  }) {
+    return material.Material(
+      color: backgroundColor,
+      borderRadius: BorderRadius.circular(6),
+      child: material.InkWell(
+        mouseCursor: material.MaterialStateMouseCursor.clickable,
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(6),
+        child: Padding(
+          padding: const EdgeInsets.all(6),
+          child: Icon(icon, size: 14, color: color),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _handleDeleteTask(ActionItemsRecord todo) async {
+    final confirmed = await material.showDialog<bool>(
+      context: context,
+      builder: (context) => material.AlertDialog(
+        backgroundColor: Colors.white,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Text(
+          'Delete Task',
+          style: TextStyle(
+            fontFamily: '.SF Pro Display',
+            fontSize: 20,
+            fontWeight: FontWeight.w700,
+            color: Color(0xFF1F2937),
+          ),
+        ),
+        content: Text(
+          'Are you sure you want to delete "${todo.title}"? This action cannot be undone.',
+          style: const TextStyle(
+            fontFamily: '.SF Pro Display',
+            fontSize: 14,
+            color: Color(0xFF64748B),
+          ),
+        ),
+        actions: [
+          material.TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          material.ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: material.ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFFDC2626),
+              foregroundColor: Colors.white,
+            ),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true) return;
+
+    try {
+      await fsDeleteMatchingActionItems(todo);
+      final titleKey = todo.title.toLowerCase().trim();
+      final chatPath = todo.chatRef?.path;
+      setState(() {
+        _cachedTodos?.removeWhere(
+          (t) =>
+              t.title.toLowerCase().trim() == titleKey &&
+              (chatPath == null || t.chatRef?.path == chatPath),
+        );
+      });
+      if (mounted) {
+        widget.onShowAnnouncement?.call('Action item deleted');
+      }
+    } catch (e) {
+      if (mounted) {
+        material.ScaffoldMessenger.of(context).showSnackBar(
+          material.SnackBar(
+            content: Text('Error deleting task: $e'),
+            backgroundColor: material.Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _showEditDialog(ActionItemsRecord todo) async {
+    final titleController = material.TextEditingController(text: todo.title);
+    final validPriorities = ['low', 'medium', 'high', 'urgent'];
+    final priorityValue =
+        todo.priority.isNotEmpty ? todo.priority.toLowerCase() : 'low';
+    String selectedPriority =
+        validPriorities.contains(priorityValue) ? priorityValue : 'low';
+    DateTime? selectedDueDate = todo.dueDate;
+
+    await material.showDialog(
+      context: context,
+      builder: (context) {
+        return material.StatefulBuilder(
+          builder: (context, setDialogState) {
+            return material.AlertDialog(
+              backgroundColor: Colors.white,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+              ),
+              title: const Text('Edit Task'),
+              content: SizedBox(
+                width: double.maxFinite,
+                child: SingleChildScrollView(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      material.TextField(
+                        controller: titleController,
+                        autofocus: true,
+                        maxLines: 3,
+                        decoration: const material.InputDecoration(
+                          hintText: 'Enter task title',
+                          border: material.OutlineInputBorder(),
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      material.DropdownButtonFormField<String>(
+                        value: selectedPriority,
+                        decoration: const material.InputDecoration(
+                          labelText: 'Priority',
+                          border: material.OutlineInputBorder(),
+                        ),
+                        items: validPriorities
+                            .map(
+                              (p) => material.DropdownMenuItem(
+                                value: p,
+                                child: Text(
+                                  p[0].toUpperCase() + p.substring(1),
+                                ),
+                              ),
+                            )
+                            .toList(),
+                        onChanged: (value) {
+                          if (value != null) {
+                            setDialogState(() => selectedPriority = value);
+                          }
+                        },
+                      ),
+                      const SizedBox(height: 16),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: material.OutlinedButton.icon(
+                              onPressed: () async {
+                                final picked = await material.showDatePicker(
+                                  context: context,
+                                  initialDate:
+                                      selectedDueDate ?? DateTime.now(),
+                                  firstDate: DateTime(2020),
+                                  lastDate: DateTime(2100),
+                                );
+                                if (picked != null) {
+                                  setDialogState(
+                                      () => selectedDueDate = picked);
+                                }
+                              },
+                              icon: material.Icon(
+                                material.Icons.calendar_today_outlined,
+                              ),
+                              label: Text(
+                                selectedDueDate != null
+                                    ? DateFormat('MMM dd, yyyy')
+                                        .format(selectedDueDate!)
+                                    : 'Set due date',
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          material.OutlinedButton(
+                            onPressed: selectedDueDate == null
+                                ? null
+                                : () => setDialogState(
+                                      () => selectedDueDate = null,
+                                    ),
+                            child: const Text('Clear'),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              actions: [
+                material.TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text('Cancel'),
+                ),
+                material.ElevatedButton(
+                  onPressed: () async {
+                    final title = titleController.text.trim();
+                    if (title.isEmpty) return;
+
+                    try {
+                      await fsPatchDocument(todo.reference, {
+                        'title': title,
+                        'priority': selectedPriority,
+                        'due_date': selectedDueDate,
+                      });
+                      if (context.mounted) Navigator.pop(context);
+                    } catch (e) {
+                      if (context.mounted) {
+                        material.ScaffoldMessenger.of(context).showSnackBar(
+                          material.SnackBar(
+                            content: Text('Error updating task: $e'),
+                            backgroundColor: material.Colors.red,
+                          ),
+                        );
+                      }
+                    }
+                  },
+                  child: const Text('Save'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+
+    titleController.dispose();
   }
 
   Widget _buildTodoRow(
@@ -1059,26 +1371,33 @@ class _SummerAITodosState extends State<SummerAITodos> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        // Task title
-                        Text(
-                          todo.title,
-                          style: TextStyle(
-                            fontFamily: '.SF Pro Display',
-                            fontSize: 16,
-                            fontWeight: FontWeight.w600,
-                            color: const Color(0xFF1E293B),
-                            decoration: todo.status == 'completed'
-                                ? TextDecoration.lineThrough
-                                : TextDecoration.none,
-                            decorationColor: const Color(0xFF94A3B8),
-                            letterSpacing: -0.3,
-                            height: 1.3,
-                          ),
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Expanded(
+                              child: Text(
+                                todo.title,
+                                style: TextStyle(
+                                  fontFamily: '.SF Pro Display',
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w600,
+                                  color: const Color(0xFF1E293B),
+                                  decoration: todo.status == 'completed'
+                                      ? TextDecoration.lineThrough
+                                      : TextDecoration.none,
+                                  decorationColor: const Color(0xFF94A3B8),
+                                  letterSpacing: -0.3,
+                                  height: 1.3,
+                                ),
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            _buildPeopleAvatars(todo),
+                          ],
                         ),
                         const SizedBox(height: 12),
-                        // Metadata row with better spacing - use Expanded to prevent overflow
                         Row(
                           crossAxisAlignment: CrossAxisAlignment.center,
                           children: [
@@ -1089,15 +1408,27 @@ class _SummerAITodosState extends State<SummerAITodos> {
                                 crossAxisAlignment: WrapCrossAlignment.center,
                                 children: [
                                   _buildPriorityBadge(todo.priority),
-                                  if (todo.groupName.isNotEmpty || todo.chatRef != null)
+                                  if (todo.groupName.isNotEmpty ||
+                                      todo.chatRef != null)
                                     _buildGroupChip(todo),
                                   _buildDueDateChip(todo),
                                 ],
                               ),
                             ),
                             const SizedBox(width: 8),
-                            // Overlapping people avatars - constrained width
-                            _buildPeopleAvatars(todo),
+                            _buildTaskIconButton(
+                              icon: CupertinoIcons.pencil,
+                              color: const Color(0xFF3B82F6),
+                              backgroundColor: const Color(0xFFEFF6FF),
+                              onTap: () => _showEditDialog(todo),
+                            ),
+                            const SizedBox(width: 6),
+                            _buildTaskIconButton(
+                              icon: CupertinoIcons.trash,
+                              color: const Color(0xFFDC2626),
+                              backgroundColor: const Color(0xFFFEE2E2),
+                              onTap: () => _handleDeleteTask(todo),
+                            ),
                           ],
                         ),
                       ],
@@ -1150,81 +1481,64 @@ class _SummerAITodosState extends State<SummerAITodos> {
   }
 
   Widget _buildGroupChip(ActionItemsRecord todo) {
-    return Builder(
-      builder: (context) {
-        if (todo.groupName.isNotEmpty || todo.chatRef == null) {
-          if (todo.groupName.isEmpty) {
-            return const SizedBox.shrink();
-          }
-          return Container(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-            decoration: BoxDecoration(
-              color: const Color(0xFFF1F5F9),
-              borderRadius: BorderRadius.circular(6),
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(
-                  CupertinoIcons.group_solid,
-                  size: 11,
-                  color: const Color(0xFF64748B),
-                ),
-                const SizedBox(width: 4),
-                Text(
-                  todo.groupName,
-                  style: const TextStyle(
-                    fontFamily: '.SF Pro Text',
-                    fontSize: 12,
-                    fontWeight: FontWeight.w500,
-                    color: Color(0xFF64748B),
-                    letterSpacing: -0.1,
-                  ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ],
-            ),
-          );
-        }
-        return StreamBuilder<ChatsRecord>(
-          stream: ChatsRecord.getDocument(todo.chatRef!),
-          builder: (context, chatSnap) {
-            final name = chatSnap.data?.title ?? '';
-            if (name.isEmpty) return const SizedBox.shrink();
-            return Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-              decoration: BoxDecoration(
-                color: const Color(0xFFF1F5F9),
-                borderRadius: BorderRadius.circular(6),
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(
-                    CupertinoIcons.group_solid,
-                    size: 11,
-                    color: const Color(0xFF64748B),
-                  ),
-                  const SizedBox(width: 4),
-                  Text(
-                    name,
-                    style: const TextStyle(
-                      fontFamily: '.SF Pro Text',
-                      fontSize: 12,
-                      fontWeight: FontWeight.w500,
-                      color: Color(0xFF64748B),
-                      letterSpacing: -0.1,
-                    ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ],
-              ),
-            );
-          },
-        );
+    if (todo.groupName.isNotEmpty || todo.chatRef == null) {
+      if (todo.groupName.isEmpty) {
+        return const SizedBox.shrink();
+      }
+      return _buildGroupChipContent(todo.groupName);
+    }
+
+    if (useWindowsFirestoreRest) {
+      return FutureBuilder<ChatsRecord>(
+        future: fsGetChatOnce(todo.chatRef!),
+        builder: (context, chatSnap) {
+          final name = chatSnap.data?.title ?? '';
+          if (name.isEmpty) return const SizedBox.shrink();
+          return _buildGroupChipContent(name);
+        },
+      );
+    }
+
+    return StreamBuilder<ChatsRecord>(
+      stream: ChatsRecord.getDocument(todo.chatRef!),
+      builder: (context, chatSnap) {
+        final name = chatSnap.data?.title ?? '';
+        if (name.isEmpty) return const SizedBox.shrink();
+        return _buildGroupChipContent(name);
       },
+    );
+  }
+
+  Widget _buildGroupChipContent(String name) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF1F5F9),
+        borderRadius: BorderRadius.circular(6),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            CupertinoIcons.group_solid,
+            size: 11,
+            color: const Color(0xFF64748B),
+          ),
+          const SizedBox(width: 4),
+          Text(
+            name,
+            style: const TextStyle(
+              fontFamily: '.SF Pro Text',
+              fontSize: 12,
+              fontWeight: FontWeight.w500,
+              color: Color(0xFF64748B),
+              letterSpacing: -0.1,
+            ),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ],
+      ),
     );
   }
 

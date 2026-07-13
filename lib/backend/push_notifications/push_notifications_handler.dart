@@ -302,22 +302,32 @@ class _PushNotificationsHandlerState extends State<PushNotificationsHandler> {
       return;
     }
 
-    print('🔍 PushNotificationsHandler: Setting up listeners...');
-    final notification = await FirebaseMessaging.instance.getInitialMessage();
-    if (notification != null) {
-      print('🔍 PushNotificationsHandler: Found initial message');
-      await _handlePushNotification(notification);
+    // firebase_messaging has no Windows/Linux desktop plugin — avoid native crash.
+    if (Platform.isWindows || Platform.isLinux) {
+      return;
     }
-    print('🔍 PushNotificationsHandler: Registering onMessageOpenedApp...');
-    FirebaseMessaging.onMessageOpenedApp.listen((message) {
-      print('🔍 PushNotificationsHandler: onMessageOpenedApp triggered');
-      print('   Message ID: ${message.messageId}');
-      print('   Data: ${message.data}');
-      print('   initialPageName: ${message.data['initialPageName']}');
-      print('   parameterData: ${message.data['parameterData']}');
-      _handlePushNotification(message);
-    });
-    print('✅ PushNotificationsHandler: Listeners registered');
+
+    try {
+      print('🔍 PushNotificationsHandler: Setting up listeners...');
+      final notification = await FirebaseMessaging.instance.getInitialMessage();
+      if (notification != null) {
+        print('🔍 PushNotificationsHandler: Found initial message');
+        await _handlePushNotification(notification);
+      }
+      print('🔍 PushNotificationsHandler: Registering onMessageOpenedApp...');
+      FirebaseMessaging.onMessageOpenedApp.listen((message) {
+        print('🔍 PushNotificationsHandler: onMessageOpenedApp triggered');
+        print('   Message ID: ${message.messageId}');
+        print('   Data: ${message.data}');
+        print('   initialPageName: ${message.data['initialPageName']}');
+        print('   parameterData: ${message.data['parameterData']}');
+        _handlePushNotification(message);
+      });
+      print('✅ PushNotificationsHandler: Listeners registered');
+    } catch (e, st) {
+      print('⚠️ PushNotificationsHandler setup failed (non-fatal): $e');
+      print(st);
+    }
   }
 
   Future _handlePushNotification(RemoteMessage message) async {

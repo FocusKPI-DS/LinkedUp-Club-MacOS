@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:get/get.dart';
-import 'package:liquid_glass_renderer/liquid_glass_renderer.dart';
 import '/pages/desktop_chat/chat_controller.dart';
 
 class ChatFilterButtons extends StatelessWidget {

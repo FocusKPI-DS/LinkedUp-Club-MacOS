@@ -1,15 +1,19 @@
 import 'package:translator/translator.dart';
+import '/utils/debug_log.dart';
 import 'wechat_voice_bubble.dart';
 import 'dart:convert';
+import 'dart:async';
 import '/pages/chat/forwarded_history_viewer/forwarded_history_viewer_widget.dart';
 import '/auth/firebase_auth/auth_util.dart';
 import '/backend/backend.dart';
+import '/backend/firestore/firestore_desktop_adapter.dart';
 import '/backend/schema/enums/enums.dart';
 import '/pages/user_summary/user_summary_widget.dart';
 import '/flutter_flow/flutter_flow_audio_player.dart';
 import '/flutter_flow/flutter_flow_expanded_image_view.dart';
 import '/custom_code/widgets/video_message_widget.dart';
 import '/flutter_flow/flutter_flow_util.dart';
+import '/utils/chat_message_font.dart';
 // import '/flutter_flow/flutter_flow_widgets.dart';
 import '/pages/chat/chat_component/p_d_f_view/p_d_f_view_widget.dart';
 import '/pages/chat/chat_component/report_component/report_component_widget.dart';
@@ -28,7 +32,6 @@ import 'package:url_launcher/url_launcher.dart';
 import '/utils/qurio_url_launcher.dart';
 import 'package:aligned_dialog/aligned_dialog.dart';
 import 'package:http/http.dart' as http;
-import '/utils/markdown_to_quill_delta.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:emoji_picker_flutter/emoji_picker_flutter.dart';
 import 'package:flutter/cupertino.dart';
@@ -39,7 +42,7 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 // import 'package:flutter_spinkit/flutter_spinkit.dart';
-import 'package:google_fonts/google_fonts.dart';
+import 'package:google_fonts/google_fonts.dart' hide Config;
 import 'package:page_transition/page_transition.dart';
 // import 'package:provider/provider.dart';
 import 'chat_thread_model.dart';
@@ -62,8 +65,10 @@ class ChatThreadWidget extends StatefulWidget {
     this.isGroup = false,
     this.mentionableUsers = const [],
     this.isConsecutive = false,
+    this.isFollowedByConsecutive = false,
     this.showTimestamp = true,
     this.onMessageAction,
+    this.onMessagesMutated,
     this.activeSelectionId,
     this.isSelectionMode = false,
     this.selectedMessages,
@@ -86,8 +91,11 @@ class ChatThreadWidget extends StatefulWidget {
   final List<UsersRecord> mentionableUsers;
   final bool
       isConsecutive; // Whether this message is part of a streak by the exact same sender
+  final bool
+      isFollowedByConsecutive; // Whether the next (newer) message is from the same sender
   final bool showTimestamp; // Whether to show the in-bubble timestamp
   final Function(String, MessagesRecord)? onMessageAction;
+  final VoidCallback? onMessagesMutated;
   final ValueNotifier<String?>? activeSelectionId;
   final bool isSelectionMode;
   final Set<MessagesRecord>? selectedMessages;
@@ -98,16 +106,40 @@ class ChatThreadWidget extends StatefulWidget {
 }
 
 class _ChatThreadWidgetState extends State<ChatThreadWidget> {
+  static const double _groupedMessageSpacing = 2.0;
+  static const double _separateMessageSpacing = 14.0;
+  static const double _menuItemSize = 52.0;
+  static const double _menuHorizontalPadding = 8.0;
+  static const double _menuVerticalPadding = 8.0;
+  static const Duration _hoverMenuOpenDelay = Duration(milliseconds: 200);
+  static const Duration _hoverMenuCloseDelay = Duration(milliseconds: 250);
+
+  EdgeInsets get _messageRowPadding => EdgeInsets.fromLTRB(
+        8.0,
+        widget.isConsecutive ? 2.0 : 8.0,
+        8.0,
+        widget.isFollowedByConsecutive ? 2.0 : 8.0,
+      );
+
   late ChatThreadModel _model;
   final GlobalKey _menuIconKey = GlobalKey();
+  final GlobalKey _messageTextAnchorKey = GlobalKey();
+  final GlobalKey _bubbleKey = GlobalKey();
+  final GlobalKey _actionBarMeasureKey = GlobalKey();
+  OverlayEntry? _actionBarOverlayEntry;
+  Offset? _actionBarOverlayPosition;
+  bool _pointerOverActionBar = false;
   String? _selectedReaction;
   final Set<String> _locallyRemovedReactions = <String>{};
-  bool _isHoveredForMenu = false;
   bool _isMenuOpen = false;
+  bool _showHoverActionBar = false;
+  Timer? _hoverOpenTimer;
+  Timer? _hoverCloseTimer;
 
   // Static overlay entry to ensure only one grid menu is open across all message widgets
   static OverlayEntry? _activeGridOverlay;
   static _ChatThreadWidgetState? _activeMenuOwner;
+  static _ChatThreadWidgetState? _activeInlineMenuOwner;
   bool _isSummarySectionExpanded = false;
   // Cache for file info results to prevent unnecessary rebuilds
   Map<String, dynamic>? _cachedFileInfo;
@@ -147,7 +179,7 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
         _isTranslating = false;
       });
     } catch (e) {
-      print('Translation error: $e');
+      debugLog('Translation error: $e');
       setState(() => _isTranslating = false);
     }
   }
@@ -208,6 +240,17 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
 
   @override
   void dispose() {
+    _hoverOpenTimer?.cancel();
+    _hoverCloseTimer?.cancel();
+    if (_activeInlineMenuOwner == this) {
+      _activeInlineMenuOwner = null;
+    }
+    if (_activeMenuOwner == this) {
+      _activeGridOverlay?.remove();
+      _activeGridOverlay = null;
+      _activeMenuOwner = null;
+    }
+    _removeActionBarOverlay();
     _chatThreadComponentState?.translateNotifier
         .removeListener(_onTranslateTriggered);
     _model.maybeDispose();
@@ -498,32 +541,12 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
       raw = Uri.decodeComponent(raw);
 
       // Strip leading timestamp prefix: "1775578299259_filename.ext" → "filename.ext"
-      // Pattern: one or more digits (10+) followed by underscore(s) at the start
+      // Pattern: one or more digits followed by underscore(s) at the start
       final stripped = raw.replaceFirst(RegExp(r'^\d{10,}_'), '');
-      if (stripped.isNotEmpty && stripped != raw) {
-        // Successfully stripped timestamp prefix
+      if (stripped.isNotEmpty && stripped.contains('.')) {
         return stripped;
       }
-
-      // Check if the raw name is just a pure timestamp number (no underscore, no extension)
-      // e.g. "1781023277205000" — this means the file was uploaded without preserving its name
-      if (RegExp(r'^\d{10,}$').hasMatch(raw)) {
-        // Pure timestamp — return a friendly fallback instead of the raw number
-        return 'file';
-      }
-
-      // Check if it's a timestamp with extension but no underscore: "1781023277205000.msi"
-      final timestampWithExt = RegExp(r'^(\d{10,})\.(\w+)$').firstMatch(raw);
-      if (timestampWithExt != null) {
-        final ext = timestampWithExt.group(2)!;
-        return 'file.$ext';
-      }
-
-      // If raw has a dot (extension), return it as-is
-      if (raw.contains('.')) {
-        return raw;
-      }
-
+      // If stripping removed everything or there's no extension, return raw
       return raw.isNotEmpty ? raw : 'file';
     } catch (e) {
       return 'file';
@@ -746,10 +769,8 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
   }
 
   Future<void> _copyContentIfAny() async {
-    final rawText = widget.message?.content.trim();
-    if (rawText == null || rawText.isEmpty) return;
-    // Strip mention markup so clipboard gets @DisplayName, not raw <@uid|DisplayName>
-    final text = stripMarkdownFormatting(rawText);
+    final text = widget.message?.content.trim();
+    if (text == null || text.isEmpty) return;
     await Clipboard.setData(ClipboardData(text: text));
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
@@ -778,8 +799,7 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
     final path = _normalizeActionItemPath(actionItemRefPath);
     try {
       final ref = FirebaseFirestore.instance.doc(path);
-      final snap = await ref.get();
-      if (!snap.exists) {
+      if (!await fsDocumentExists(ref)) {
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -796,10 +816,7 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
         );
         return;
       }
-      await ref.update({
-        'status': 'completed',
-        'completed_time': FieldValue.serverTimestamp(),
-      });
+      await fsMarkActionItemDone(ref);
     } on FirebaseException catch (e) {
       if (!mounted) return;
       final isNotFound = e.code == 'not-found';
@@ -830,8 +847,7 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
     final path = _normalizeActionItemPath(actionItemRefPath);
     try {
       final ref = FirebaseFirestore.instance.doc(path);
-      final snap = await ref.get();
-      if (!snap.exists) {
+      if (!await fsDocumentExists(ref)) {
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -847,7 +863,7 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
         );
         return;
       }
-      await ref.update({'last_reminder_at': FieldValue.delete()});
+      await fsDeleteDocumentField(ref, 'last_reminder_at');
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -978,47 +994,13 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
 
     if (confirmed == true) {
       try {
-        // Delete the message
-        await widget.message!.reference.delete();
+        if (widget.message == null || widget.chatRef == null) return;
+        await fsUnsendMessage(
+          message: widget.message!,
+          chatRef: widget.chatRef!,
+        );
 
-        // Update chat's last message if this was the last message
-        final chatDoc = await widget.chatRef!.get();
-        if (chatDoc.exists) {
-          final chatData = chatDoc.data() as Map<String, dynamic>;
-          final lastMessageSent =
-              chatData['last_message_sent'] as DocumentReference?;
-
-          // If this was the last message, update chat
-          if (lastMessageSent == currentUserReference) {
-            // Get the previous message
-            final previousMessages = await widget.chatRef!
-                .collection('messages')
-                .orderBy('created_at', descending: true)
-                .limit(1)
-                .get();
-
-            if (previousMessages.docs.isNotEmpty) {
-              final previousMessage = previousMessages.docs.first;
-              final previousData = previousMessage.data();
-
-              // Update chat with previous message info
-              await widget.chatRef!.update({
-                'last_message': previousData['content'] ?? '',
-                'last_message_at': previousData['created_at'],
-                'last_message_sent': previousData['sender_ref'],
-                'last_message_type': previousData['message_type'],
-              });
-            } else {
-              // No previous messages, reset chat
-              await widget.chatRef!.update({
-                'last_message': '',
-                'last_message_at': getCurrentTimestamp,
-                'last_message_sent': currentUserReference,
-                'last_message_type': MessageType.text,
-              });
-            }
-          }
-        }
+        widget.onMessagesMutated?.call();
 
         // Show success message
         if (mounted) {
@@ -1080,7 +1062,11 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
   Future<void> _pinMessage() async {
     if (widget.message == null) return;
     try {
-      await widget.message!.reference.update({'is_pinned': true});
+      await fsPatchDocument(
+        widget.message!.reference,
+        {'is_pinned': true},
+      );
+      widget.onMessagesMutated?.call();
       if (mounted) {
         _showSuccessPopup('Message Pinned');
       }
@@ -1097,7 +1083,11 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
   Future<void> _unpinMessage() async {
     if (widget.message == null) return;
     try {
-      await widget.message!.reference.update({'is_pinned': false});
+      await fsPatchDocument(
+        widget.message!.reference,
+        {'is_pinned': false},
+      );
+      widget.onMessagesMutated?.call();
       if (mounted) {
         _showSuccessPopup('Message Unpinned');
       }
@@ -1111,13 +1101,165 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
     }
   }
 
-  // Unified grid-style message action menu — matches iOS design on all platforms
+  static const double _actionBarGapAboveText = 10.0;
+  static const double _fallbackActionBarHeight = 58.0;
+
+  Widget _messageTextAnchor({required Widget child}) {
+    return KeyedSubtree(
+      key: _messageTextAnchorKey,
+      child: child,
+    );
+  }
+
+  Offset? _computeActionBarOverlayPosition() {
+    final bubbleBox =
+        _bubbleKey.currentContext?.findRenderObject() as RenderBox?;
+    final anchorBox =
+        _messageTextAnchorKey.currentContext?.findRenderObject() as RenderBox?;
+
+    var menuWidth = 230.0;
+    var menuHeight = _fallbackActionBarHeight;
+    final menuBox =
+        _actionBarMeasureKey.currentContext?.findRenderObject() as RenderBox?;
+    if (menuBox != null && menuBox.hasSize) {
+      menuWidth = menuBox.size.width;
+      menuHeight = menuBox.size.height;
+    }
+
+    if (bubbleBox == null || !bubbleBox.hasSize) return null;
+
+    final bubbleTopLeft = bubbleBox.localToGlobal(Offset.zero);
+    final bubbleSize = bubbleBox.size;
+
+    double top;
+    if (anchorBox != null && anchorBox.hasSize) {
+      final anchorTop = anchorBox.localToGlobal(Offset.zero).dy;
+      top = anchorTop - _actionBarGapAboveText - menuHeight;
+    } else {
+      top = bubbleTopLeft.dy - _actionBarGapAboveText - menuHeight;
+    }
+
+    // Align menu with bubble edge; for received messages that are narrower than
+    // the menu, left-justify so the toolbar doesn't extend into the sidebar.
+    final isSentByMe = widget.message?.senderRef == currentUserReference;
+    final double left;
+    if (!isSentByMe && menuWidth > bubbleSize.width) {
+      left = bubbleTopLeft.dx;
+    } else {
+      left = bubbleTopLeft.dx + bubbleSize.width - menuWidth;
+    }
+    return Offset(left, top);
+  }
+
+  void _recomputeActionBarOverlayPosition() {
+    if (!_showHoverActionBar || !mounted) return;
+    final position = _computeActionBarOverlayPosition();
+    if (position == null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted && _showHoverActionBar) {
+          _recomputeActionBarOverlayPosition();
+        }
+      });
+      return;
+    }
+    if (_actionBarOverlayPosition != position) {
+      _actionBarOverlayPosition = position;
+      _actionBarOverlayEntry?.markNeedsBuild();
+    }
+  }
+
+  void _removeActionBarOverlay() {
+    _actionBarOverlayEntry?.remove();
+    _actionBarOverlayEntry = null;
+    _actionBarOverlayPosition = null;
+    _pointerOverActionBar = false;
+  }
+
+  void _insertActionBarOverlay() {
+    _removeActionBarOverlay();
+    if (!mounted) return;
+
+    final overlay = Overlay.of(context, rootOverlay: true);
+    late OverlayEntry entry;
+    entry = OverlayEntry(
+      builder: (overlayContext) {
+        final menu = _buildSlackStyleActionBar();
+        final position =
+            _actionBarOverlayPosition ?? _computeActionBarOverlayPosition();
+
+        if (position == null) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (mounted && _showHoverActionBar) {
+              _recomputeActionBarOverlayPosition();
+            }
+          });
+          return Offstage(child: menu);
+        }
+
+        // Return Positioned directly — Overlay is already a Stack; wrapping in
+        // another Stack with only Positioned children collapses to zero size.
+        return Positioned(
+          left: position.dx,
+          top: position.dy,
+          child: MouseRegion(
+            onEnter: (_) {
+              _pointerOverActionBar = true;
+              _hoverCloseTimer?.cancel();
+            },
+            onExit: (_) {
+              _pointerOverActionBar = false;
+              _scheduleHoverMenuClose();
+            },
+            child: menu,
+          ),
+        );
+      },
+    );
+
+    _actionBarOverlayEntry = entry;
+    overlay.insert(entry);
+  }
+
+  Widget _buildSlackStyleActionBar() {
+    final isPinned = widget.message?.isPinned == true;
+
+    return KeyedSubtree(
+      key: _actionBarMeasureKey,
+      child: _MessageMenuActionBar(
+      menuIconKey: _menuIconKey,
+      isPinned: isPinned,
+      onReact: () {
+        _closeHoverActionBar();
+        _handleMenuAction(_MsgAction.react);
+      },
+      onReply: () {
+        _closeHoverActionBar();
+        _handleMenuAction(_MsgAction.reply);
+      },
+      onForward: () {
+        _closeHoverActionBar();
+        _handleMenuAction(_MsgAction.forward);
+      },
+      onPin: () {
+        _closeHoverActionBar();
+        _handleMenuAction(isPinned ? _MsgAction.unpin : _MsgAction.pin);
+      },
+      onMore: () {
+        _hoverCloseTimer?.cancel();
+        _showGridMenu();
+      },
+      ),
+    );
+  }
+
   Widget _messageMenuButton() {
     final isIOS = !kIsWeb && Platform.isIOS;
     return GestureDetector(
       onTap: () => _showGridMenu(),
-      child: MouseRegion(
-        cursor: SystemMouseCursors.click,
+      child: InkWell(
+        onTap: () => _showGridMenu(),
+        mouseCursor: MaterialStateMouseCursor.clickable,
+        borderRadius: BorderRadius.circular(8),
         child: KeyedSubtree(
           key: _menuIconKey,
           child: Container(
@@ -1155,7 +1297,229 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
     );
   }
 
+  ({List<Map<String, dynamic>> primary, List<Map<String, dynamic>> secondary})
+      _menuItemRows() {
+    final isOwnMessage = widget.message?.senderRef == currentUserReference;
+    final hasMedia = (widget.message?.image != null &&
+            widget.message!.image.isNotEmpty) ||
+        (widget.message?.images != null &&
+            widget.message!.images.isNotEmpty) ||
+        (widget.message?.video != null && widget.message!.video!.isNotEmpty);
+
+    final primary = <Map<String, dynamic>>[
+      {
+        'label': 'React',
+        'icon': CupertinoIcons.smiley,
+        'action': _MsgAction.react
+      },
+      {
+        'label': 'Reply',
+        'icon': CupertinoIcons.arrow_turn_up_left,
+        'action': _MsgAction.reply
+      },
+      {
+        'label': 'Forward',
+        'icon': CupertinoIcons.arrow_turn_up_right,
+        'action': _MsgAction.forward
+      },
+      {
+        'label': 'Copy',
+        'icon': CupertinoIcons.doc_on_doc,
+        'action': _MsgAction.copy
+      },
+      {
+        'label': 'Select',
+        'icon': CupertinoIcons.checkmark_circle,
+        'action': _MsgAction.select
+      },
+      if (!isOwnMessage)
+        {
+          'label': 'Translate',
+          'icon': CupertinoIcons.book,
+          'action': _MsgAction.translate
+        },
+      {
+        'label': widget.message?.isPinned == true ? 'Unpin' : 'Pin',
+        'icon': CupertinoIcons.pin,
+        'action': widget.message?.isPinned == true
+            ? _MsgAction.unpin
+            : _MsgAction.pin
+      },
+      if (hasMedia)
+        {
+          'label': 'Save',
+          'icon': CupertinoIcons.arrow_down_circle,
+          'action': _MsgAction.save
+        },
+    ];
+
+    final secondary = <Map<String, dynamic>>[
+      if (isOwnMessage)
+        {
+          'label': 'Edit',
+          'icon': CupertinoIcons.pencil,
+          'action': _MsgAction.edit
+        },
+      if (isOwnMessage)
+        {
+          'label': 'Unsend',
+          'icon': CupertinoIcons.arrow_counterclockwise,
+          'action': _MsgAction.unsend
+        },
+      if (!isOwnMessage)
+        {
+          'label': 'Report',
+          'icon': CupertinoIcons.exclamationmark_triangle,
+          'action': _MsgAction.report
+        },
+    ];
+
+    return (primary: primary, secondary: secondary);
+  }
+
+  Size _gridMenuDimensions() {
+    final rows = _menuItemRows();
+    final widestRow = rows.primary.length > rows.secondary.length
+        ? rows.primary.length
+        : rows.secondary.length;
+    final menuWidth = (_menuItemSize * widestRow) +
+        (_menuHorizontalPadding * 2) +
+        2.0;
+    const dividerHeight = 9.0;
+    final menuHeight = (_menuItemSize * 2) +
+        (_menuVerticalPadding * 2) +
+        dividerHeight;
+    return Size(menuWidth, menuHeight);
+  }
+
+  Widget _buildGridMenuRow(
+    List<Map<String, dynamic>> items, {
+    required ValueChanged<_MsgAction> onAction,
+  }) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: items.map((item) {
+        final String label = item['label'] as String;
+        final IconData icon = item['icon'] as IconData;
+        final _MsgAction action = item['action'] as _MsgAction;
+        final isDestructive =
+            action == _MsgAction.report || action == _MsgAction.unsend;
+
+        return _MessageMenuGridItem(
+          label: label,
+          icon: icon,
+          isDestructive: isDestructive,
+          itemSize: _menuItemSize,
+          onTap: () => onAction(action),
+        );
+      }).toList(),
+    );
+  }
+
+  Widget _buildGridMenuPanel({required ValueChanged<_MsgAction> onAction}) {
+    final rows = _menuItemRows();
+    final menuSize = _gridMenuDimensions();
+
+    return Material(
+      color: Colors.transparent,
+      elevation: 6,
+      borderRadius: BorderRadius.circular(12),
+      child: Container(
+        width: menuSize.width,
+        padding: const EdgeInsets.symmetric(
+          horizontal: _menuHorizontalPadding,
+          vertical: _menuVerticalPadding,
+        ),
+        decoration: BoxDecoration(
+          color: Colors.white.withOpacity(0.97),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: Colors.black.withOpacity(0.06),
+            width: 0.5,
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.12),
+              blurRadius: 20,
+              offset: const Offset(0, 6),
+            ),
+          ],
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _buildGridMenuRow(rows.primary, onAction: onAction),
+            Container(
+              height: 1,
+              margin: const EdgeInsets.symmetric(vertical: 4),
+              color: Colors.black.withOpacity(0.08),
+            ),
+            _buildGridMenuRow(rows.secondary, onAction: onAction),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _closeHoverActionBar({bool updateState = true}) {
+    _hoverOpenTimer?.cancel();
+    if (!_isMenuOpen) {
+      _hoverCloseTimer?.cancel();
+    }
+    if (_activeInlineMenuOwner == this) {
+      _activeInlineMenuOwner = null;
+    }
+    if (_activeMenuOwner == this && _activeGridOverlay != null) {
+      _activeGridOverlay!.remove();
+      _activeGridOverlay = null;
+      _activeMenuOwner = null;
+      _isMenuOpen = false;
+    }
+    _removeActionBarOverlay();
+    if (!_showHoverActionBar) {
+      if (updateState && mounted) setState(() {});
+      return;
+    }
+    _showHoverActionBar = false;
+    if (updateState && mounted) {
+      setState(() {});
+    }
+  }
+
+  void _scheduleHoverMenuOpen() {
+    if (widget.isSelectionMode) return;
+    _hoverCloseTimer?.cancel();
+    if (_showHoverActionBar && _activeInlineMenuOwner == this) return;
+
+    _hoverOpenTimer?.cancel();
+    _hoverOpenTimer = Timer(_hoverMenuOpenDelay, () {
+      if (!mounted || widget.isSelectionMode) return;
+      if (_activeInlineMenuOwner != null &&
+          _activeInlineMenuOwner != this) {
+        _activeInlineMenuOwner!._closeHoverActionBar();
+      }
+      _activeInlineMenuOwner = this;
+      _pointerOverActionBar = false;
+      setState(() => _showHoverActionBar = true);
+      _insertActionBarOverlay();
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _recomputeActionBarOverlayPosition();
+      });
+    });
+  }
+
+  void _scheduleHoverMenuClose() {
+    if (_isMenuOpen || _pointerOverActionBar) return;
+    _hoverCloseTimer?.cancel();
+    _hoverCloseTimer = Timer(_hoverMenuCloseDelay, () {
+      if (!mounted || _isMenuOpen) return;
+      _closeHoverActionBar();
+    });
+  }
+
   void _showGridMenuAtPosition(Offset globalPosition) {
+    _closeHoverActionBar();
     _showGridMenu(position: globalPosition);
   }
 
@@ -1168,63 +1532,46 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
       _activeGridOverlay = null;
       _activeMenuOwner = null;
     }
+    if (_activeInlineMenuOwner != null && _activeInlineMenuOwner != this) {
+      _activeInlineMenuOwner!._closeHoverActionBar();
+    }
+    _hoverOpenTimer?.cancel();
+    if (!_showHoverActionBar) {
+      _hoverCloseTimer?.cancel();
+    }
 
     if (!kIsWeb && Platform.isIOS) {
       HapticFeedback.mediumImpact();
     }
     setState(() => _isMenuOpen = true);
 
-    final isOwnMessage = widget.message?.senderRef == currentUserReference;
-    final hasMedia = (widget.message?.image != null && widget.message!.image.isNotEmpty) ||
-        (widget.message?.images != null && widget.message!.images.isNotEmpty) ||
-        (widget.message?.video != null && widget.message!.video!.isNotEmpty);
-
-    final menuItems = <Map<String, dynamic>>[
-      {'label': 'Copy', 'icon': CupertinoIcons.doc_on_doc, 'action': _MsgAction.copy},
-      {'label': 'Select', 'icon': CupertinoIcons.checkmark_circle, 'action': _MsgAction.select},
-      {'label': 'React', 'icon': CupertinoIcons.smiley, 'action': _MsgAction.react},
-      {'label': 'Reply', 'icon': CupertinoIcons.arrow_turn_up_left, 'action': _MsgAction.reply},
-      {'label': 'Translate', 'icon': CupertinoIcons.book, 'action': _MsgAction.translate},
-      {'label': 'Forward', 'icon': CupertinoIcons.arrow_turn_up_right, 'action': _MsgAction.forward},
-      if (isOwnMessage) {'label': 'Edit', 'icon': CupertinoIcons.pencil, 'action': _MsgAction.edit},
-      if (isOwnMessage) {'label': 'Unsend', 'icon': CupertinoIcons.arrow_counterclockwise, 'action': _MsgAction.unsend},
-      if (hasMedia) {'label': 'Save', 'icon': CupertinoIcons.arrow_down_circle, 'action': _MsgAction.save},
-      {'label': widget.message?.isPinned == true ? 'Unpin' : 'Pin', 'icon': CupertinoIcons.pin, 'action': widget.message?.isPinned == true ? _MsgAction.unpin : _MsgAction.pin},
-      {'label': 'Report', 'icon': CupertinoIcons.exclamationmark_triangle, 'action': _MsgAction.report},
-    ];
-
-    // Grid layout constants
-    const int itemsPerRow = 5;
-    const double itemSize = 52.0;
-    const double horizontalPadding = 8.0;
-    const double verticalPadding = 8.0;
-    final int actualItemsInWidestRow = menuItems.length < itemsPerRow ? menuItems.length : itemsPerRow;
-    final double menuWidth = (itemSize * actualItemsInWidestRow) + (horizontalPadding * 2) + 2.0;
+    final menuSize = _gridMenuDimensions();
 
     // Get position — use provided position (right-click) or fall back to menu icon
     final screenSize = MediaQuery.of(context).size;
-    final int rowCount = (menuItems.length / itemsPerRow).ceil();
-    final double menuHeight = (itemSize * rowCount) + (verticalPadding * 2) + (rowCount > 1 ? (rowCount - 1) * 4 : 0);
 
     double left;
     double top;
     if (position != null) {
       // Right-click: center menu horizontally on click, above click point
-      left = position.dx - menuWidth / 2;
-      top = position.dy - menuHeight - 8;
+      left = position.dx - menuSize.width / 2;
+      top = position.dy - menuSize.height - 8;
     } else {
       // Icon button: position relative to icon
-      final RenderBox? iconBox = _menuIconKey.currentContext?.findRenderObject() as RenderBox?;
+      final RenderBox? iconBox =
+          _menuIconKey.currentContext?.findRenderObject() as RenderBox?;
       if (iconBox == null) {
         setState(() => _isMenuOpen = false);
         return;
       }
       final iconPosition = iconBox.localToGlobal(Offset.zero);
-      left = iconPosition.dx - menuWidth + iconBox.size.width;
-      top = iconPosition.dy - menuHeight - 8;
+      left = iconPosition.dx - menuSize.width + iconBox.size.width;
+      top = iconPosition.dy - menuSize.height - 8;
     }
     if (left < 10) left = 10;
-    if (left + menuWidth > screenSize.width - 10) left = screenSize.width - menuWidth - 10;
+    if (left + menuSize.width > screenSize.width - 10) {
+      left = screenSize.width - menuSize.width - 10;
+    }
     if (top < 10) top = (position?.dy ?? 100) + 8;
 
     final overlay = Overlay.of(context);
@@ -1240,7 +1587,15 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
                 entry.remove();
                 _activeGridOverlay = null;
                 _activeMenuOwner = null;
-                if (mounted) setState(() => _isMenuOpen = false);
+                if (mounted) {
+                  setState(() {
+                    _isMenuOpen = false;
+                    _showHoverActionBar = false;
+                  });
+                }
+                if (_activeInlineMenuOwner == this) {
+                  _activeInlineMenuOwner = null;
+                }
               },
             ),
           ),
@@ -1248,83 +1603,24 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
           Positioned(
             left: left,
             top: top,
-            child: Material(
-              color: Colors.transparent,
-              elevation: 6,
-              borderRadius: BorderRadius.circular(12),
-              child: Container(
-                width: menuWidth,
-                padding: EdgeInsets.symmetric(horizontal: horizontalPadding, vertical: verticalPadding),
-                decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.97),
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(
-                    color: Colors.black.withOpacity(0.06),
-                    width: 0.5,
-                  ),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withOpacity(0.12),
-                      blurRadius: 20,
-                      offset: Offset(0, 6),
-                    ),
-                  ],
-                ),
-                child: Wrap(
-                  spacing: 0,
-                  runSpacing: 4,
-                  alignment: WrapAlignment.start,
-                  children: menuItems.map((item) {
-                    final String label = item['label'] as String;
-                    final IconData icon = item['icon'] as IconData;
-                    final _MsgAction action = item['action'] as _MsgAction;
-                    final isDestructive = action == _MsgAction.report || action == _MsgAction.unsend;
-
-                    return GestureDetector(
-                      behavior: HitTestBehavior.opaque,
-                      onTap: () {
-                        entry.remove();
-                        _activeGridOverlay = null;
-                        _activeMenuOwner = null;
-                        if (mounted) setState(() => _isMenuOpen = false);
-                        WidgetsBinding.instance.addPostFrameCallback((_) {
-                          if (mounted) _handleMenuAction(action);
-                        });
-                      },
-                      child: SizedBox(
-                        width: itemSize,
-                        height: itemSize,
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(
-                              icon,
-                              size: 18,
-                              color: isDestructive ? const Color(0xFFFF3B30) : const Color(0xFF1C1C1E),
-                            ),
-                            const SizedBox(height: 3),
-                            Text(
-                              label,
-                              textAlign: TextAlign.center,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(
-                                fontFamily: 'SF Pro Text',
-                                fontSize: 9.5,
-                                color: isDestructive
-                                    ? const Color(0xFFFF3B30)
-                                    : const Color(0xFF1C1C1E).withOpacity(0.8),
-                                fontWeight: FontWeight.w400,
-                                letterSpacing: -0.2,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    );
-                  }).toList(),
-                ),
-              ),
+            child: _buildGridMenuPanel(
+              onAction: (action) {
+                entry.remove();
+                _activeGridOverlay = null;
+                _activeMenuOwner = null;
+                if (_activeInlineMenuOwner == this) {
+                  _activeInlineMenuOwner = null;
+                }
+                if (mounted) {
+                  setState(() {
+                    _isMenuOpen = false;
+                    _showHoverActionBar = false;
+                  });
+                }
+                WidgetsBinding.instance.addPostFrameCallback((_) {
+                  if (mounted) _handleMenuAction(action);
+                });
+              },
             ),
           ),
         ],
@@ -1554,9 +1850,19 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
           _locallyRemovedReactions.remove(emoji);
         });
       }
-      await msgRef.update({
-        'reactions_by_user.$userId': FieldValue.arrayUnion([emoji])
-      });
+      if (useWindowsFirestoreRest) {
+        final current = Map<String, List<String>>.from(
+          widget.message?.reactionsByUser ?? const {},
+        );
+        final list = List<String>.from(current[userId] ?? []);
+        if (!list.contains(emoji)) list.add(emoji);
+        current[userId] = list;
+        await fsPatchMessageReactions(msgRef, current);
+      } else {
+        await msgRef.update({
+          'reactions_by_user.$userId': FieldValue.arrayUnion([emoji])
+        });
+      }
     } catch (_) {
       // no-op: best effort
     }
@@ -1587,31 +1893,37 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
         ],
       );
     } else {
-      // macOS: Use hover detection with dropdown + right-click to open grid menu
+      // Desktop: Slack-style compact action bar on hover; right-click opens full grid
       return GestureDetector(
         onSecondaryTapDown: (details) {
-          // Right-click triggers the grid menu positioned near the click
+          _closeHoverActionBar();
           _showGridMenuAtPosition(details.globalPosition);
         },
         child: MouseRegion(
-          onEnter: (_) => setState(() => _isHoveredForMenu = true),
-          onExit: (_) => setState(() => _isHoveredForMenu = false),
+          onEnter: (_) {
+            if (widget.isSelectionMode) return;
+            _scheduleHoverMenuOpen();
+          },
+          onExit: (_) {
+            _hoverOpenTimer?.cancel();
+            _scheduleHoverMenuClose();
+          },
           child: Column(
             crossAxisAlignment:
                 isSentByMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
             mainAxisSize: MainAxisSize.min,
             children: [
-              Stack(
-                clipBehavior: Clip.none,
-                children: [
-                  bubble,
-                  if (_isHoveredForMenu || _isMenuOpen)
-                    Positioned(
-                      top: 4,
-                      right: 4,
-                      child: _messageMenuButton(),
-                    ),
-                ],
+              SizedBox(
+                width: double.infinity,
+                child: Align(
+                  alignment: isSentByMe
+                      ? Alignment.centerRight
+                      : Alignment.centerLeft,
+                  child: KeyedSubtree(
+                    key: _bubbleKey,
+                    child: bubble,
+                  ),
+                ),
               ),
               if (reactionsBadge != null)
                 Padding(
@@ -1741,9 +2053,23 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
         });
       }
       // Persist
-      await msgRef.update({
-        'reactions_by_user.$userId': FieldValue.arrayRemove([emoji])
-      });
+      if (useWindowsFirestoreRest) {
+        final current = Map<String, List<String>>.from(
+          widget.message?.reactionsByUser ?? const {},
+        );
+        final list = List<String>.from(current[userId] ?? []);
+        list.remove(emoji);
+        if (list.isEmpty) {
+          current.remove(userId);
+        } else {
+          current[userId] = list;
+        }
+        await fsPatchMessageReactions(msgRef, current);
+      } else {
+        await msgRef.update({
+          'reactions_by_user.$userId': FieldValue.arrayRemove([emoji])
+        });
+      }
     } catch (_) {
       // no-op
     }
@@ -1753,12 +2079,8 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
     if (userIds.isEmpty) return '';
     try {
       final futures = userIds.map((uid) async {
-        final snap = await UsersRecord.collection
-            .where('uid', isEqualTo: uid)
-            .limit(1)
-            .get();
-        if (snap.docs.isEmpty) return uid;
-        final user = UsersRecord.fromSnapshot(snap.docs.first);
+        final user = await fsTryGetUserOnce(UsersRecord.collection.doc(uid));
+        if (user == null) return uid;
         return user.displayName.isNotEmpty ? user.displayName : uid;
       });
       final names = await Future.wait(futures);
@@ -2637,13 +2959,13 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
             mainAxisSize: MainAxisSize.min,
             children: [
               Row(
-                children: const [
+                children: [
                   Icon(Icons.history, size: 16.0, color: Colors.black87),
                   SizedBox(width: 6.0),
                   Text(
                     'Chat History',
                     style: TextStyle(
-                      fontFamily: 'SF Pro Text',
+                      fontFamily: chatMessageFontFamily,
                       fontSize: 15.0,
                       fontWeight: FontWeight.w600,
                       color: Colors.black87,
@@ -2670,7 +2992,7 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
                 final hasAudio = audio != null && audio.isNotEmpty;
                 final hasAttachment = attachment != null && attachment.isNotEmpty;
 
-                String displayContent = stripMarkdownFormatting(content);
+                String displayContent = content;
                 if (displayContent.isEmpty) {
                   if (hasImage || messageType == 'image') {
                     displayContent = '[Image]';
@@ -2691,8 +3013,8 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
                     '$senderName: $displayContent',
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      fontFamily: 'SF Pro Text',
+                    style: TextStyle(
+                      fontFamily: chatMessageFontFamily,
                       fontSize: 13.0,
                       color: Color(0xFF666666),
                     ),
@@ -2700,10 +3022,10 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
                 );
               }).toList(),
               if (historyList.length > 3)
-                const Text(
+                Text(
                   '...',
                   style: TextStyle(
-                    fontFamily: 'SF Pro Text',
+                    fontFamily: chatMessageFontFamily,
                     fontSize: 13.0,
                     color: Color(0xFF666666),
                   ),
@@ -2713,7 +3035,7 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
         ),
       );
     } catch (e) {
-      print('Error parsing forwarded history: $e');
+      debugLog('Error parsing forwarded history: $e');
       return const Text('Error loading history');
     }
   }
@@ -2866,8 +3188,8 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
                 child: Center(
                   child: Text(
                     dateTimeFormat('MMM d, h:mm a', widget.message!.createdAt!),
-                    style: const TextStyle(
-                      fontFamily: 'SF Pro Text',
+                    style: TextStyle(
+                      fontFamily: chatMessageFontFamily,
                       color: Color(0xFF8E8E93),
                       fontSize: 12.0,
                       fontWeight: FontWeight.w500,
@@ -2900,7 +3222,7 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
                             ? const Color(0xFF007AFF).withOpacity(0.05)
                             : Colors.transparent,
                         child: Padding(
-                          padding: const EdgeInsets.all(8.0),
+                          padding: _messageRowPadding,
                           child: Row(
                             mainAxisSize: MainAxisSize.min,
                             mainAxisAlignment: MainAxisAlignment.end,
@@ -2994,13 +3316,16 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
                                                                       8.0,
                                                                   vertical:
                                                                       4.0),
-                                                          child: Text(
-                                                            content,
-                                                            style:
-                                                                const TextStyle(
-                                                              fontSize:
-                                                                  48.0, // Larger size for emojis
-                                                              height: 1.2,
+                                                          child:
+                                                              _messageTextAnchor(
+                                                            child: Text(
+                                                              content,
+                                                              style:
+                                                                  const TextStyle(
+                                                                fontSize:
+                                                                    48.0, // Larger size for emojis
+                                                                height: 1.2,
+                                                              ),
                                                             ),
                                                           ),
                                                         ),
@@ -3147,8 +3472,8 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
                                                                             children: [
                                                                               Text(
                                                                                 widget.message?.replyToSender ?? 'Unknown',
-                                                                                style: const TextStyle(
-                                                                                  fontFamily: 'SF Pro Text',
+                                                                                style: TextStyle(
+                                                                                  fontFamily: chatMessageFontFamily,
                                                                                   color: Color(0xFF007AFF),
                                                                                   fontSize: 13.0,
                                                                                   fontWeight: FontWeight.w600,
@@ -3156,9 +3481,9 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
                                                                               ),
                                                                               const SizedBox(height: 2.0),
                                                                               Text(
-                                                                                stripMarkdownFormatting(widget.message?.replyToContent ?? ''),
-                                                                                style: const TextStyle(
-                                                                                  fontFamily: 'SF Pro Text',
+                                                                                widget.message?.replyToContent ?? '',
+                                                                                style: TextStyle(
+                                                                                  fontFamily: chatMessageFontFamily,
                                                                                   color: Color(0xFF667781),
                                                                                   fontSize: 13.0,
                                                                                 ),
@@ -3176,7 +3501,8 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
                                                               if (widget.message?.forwardedHistory != null && widget.message!.forwardedHistory!.isNotEmpty)
                                                                 _buildChatHistoryPreview(widget.message!.forwardedHistory!)
                                                               else if (widget.message?.content != null && widget.message?.content != '')
-                                                                Container(
+                                                                _messageTextAnchor(
+                                                                  child: Container(
                                                                     constraints:
                                                                         BoxConstraints(
                                                                       maxWidth: hasMedia
@@ -3243,7 +3569,7 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
                                                                             textScaler: TextScaler.noScaling,
                                                                             // iOS native text styling
                                                                             p: TextStyle(
-                                                                              fontFamily: 'SF Pro Text',
+                                                                              fontFamily: chatMessageFontFamily,
                                                                               color: const Color(0xFF000000),
                                                                               fontSize: FFAppState().chatFontSize,
                                                                               letterSpacing: -0.4,
@@ -3251,43 +3577,43 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
                                                                               height: 1.3,
                                                                             ),
                                                                             h1: TextStyle(
-                                                                              fontFamily: 'SF Pro Text',
+                                                                              fontFamily: chatMessageFontFamily,
                                                                               color: const Color(0xFF000000),
                                                                               fontSize: FFAppState().chatFontSize,
                                                                               fontWeight: FontWeight.w700,
                                                                             ),
                                                                             h2: TextStyle(
-                                                                              fontFamily: 'SF Pro Text',
+                                                                              fontFamily: chatMessageFontFamily,
                                                                               color: const Color(0xFF000000),
                                                                               fontSize: FFAppState().chatFontSize,
                                                                               fontWeight: FontWeight.w700,
                                                                             ),
                                                                             h3: TextStyle(
-                                                                              fontFamily: 'SF Pro Text',
+                                                                              fontFamily: chatMessageFontFamily,
                                                                               color: const Color(0xFF000000),
                                                                               fontSize: FFAppState().chatFontSize,
                                                                               fontWeight: FontWeight.w600,
                                                                             ),
                                                                             h4: TextStyle(
-                                                                              fontFamily: 'SF Pro Text',
+                                                                              fontFamily: chatMessageFontFamily,
                                                                               color: const Color(0xFF000000),
                                                                               fontSize: FFAppState().chatFontSize,
                                                                               fontWeight: FontWeight.w600,
                                                                             ),
                                                                             h5: TextStyle(
-                                                                              fontFamily: 'SF Pro Text',
+                                                                              fontFamily: chatMessageFontFamily,
                                                                               color: const Color(0xFF000000),
                                                                               fontSize: FFAppState().chatFontSize,
                                                                               fontWeight: FontWeight.w600,
                                                                             ),
                                                                             h6: TextStyle(
-                                                                              fontFamily: 'SF Pro Text',
+                                                                              fontFamily: chatMessageFontFamily,
                                                                               color: const Color(0xFF000000),
                                                                               fontSize: FFAppState().chatFontSize,
                                                                               fontWeight: FontWeight.w500,
                                                                             ),
                                                                             a: TextStyle(
-                                                                              fontFamily: 'SF Pro Text',
+                                                                              fontFamily: chatMessageFontFamily,
                                                                               color: const Color(0xFF007AFF),
                                                                               fontSize: FFAppState().chatFontSize,
                                                                               letterSpacing: -0.4,
@@ -3302,13 +3628,13 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
                                                                             ),
                                                                             listBullet:
                                                                                 TextStyle(
-                                                                              fontFamily: 'SF Pro Text',
+                                                                              fontFamily: chatMessageFontFamily,
                                                                               color: const Color(0xFF000000),
                                                                               fontSize: FFAppState().chatFontSize,
                                                                             ),
                                                                             blockquote:
                                                                                 TextStyle(
-                                                                              fontFamily: 'SF Pro Text',
+                                                                              fontFamily: chatMessageFontFamily,
                                                                               color: const Color(0xFF667781),
                                                                               fontSize: FFAppState().chatFontSize,
                                                                             ),
@@ -3319,13 +3645,13 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
                                                                             ),
                                                                             strong:
                                                                                 TextStyle(
-                                                                              fontFamily: 'SF Pro Text',
+                                                                              fontFamily: chatMessageFontFamily,
                                                                               color: const Color(0xFF000000),
                                                                               fontSize: FFAppState().chatFontSize,
                                                                               fontWeight: FontWeight.w600,
                                                                             ),
                                                                             em: TextStyle(
-                                                                              fontFamily: 'SF Pro Text',
+                                                                              fontFamily: chatMessageFontFamily,
                                                                               color: const Color(0xFF000000),
                                                                               fontSize: FFAppState().chatFontSize,
                                                                               fontStyle: FontStyle.italic,
@@ -3333,14 +3659,14 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
                                                                             ),
                                                                             tableBody:
                                                                                 TextStyle(
-                                                                              fontFamily: 'SF Pro Text',
+                                                                              fontFamily: chatMessageFontFamily,
                                                                               color: const Color(0xFF000000),
                                                                               fontSize: FFAppState().chatFontSize - 1.0,
                                                                               fontWeight: FontWeight.w400,
                                                                             ),
                                                                             tableHead:
                                                                                 TextStyle(
-                                                                              fontFamily: 'SF Pro Text',
+                                                                              fontFamily: chatMessageFontFamily,
                                                                               color: const Color(0xFF000000),
                                                                               fontSize: FFAppState().chatFontSize - 1.0,
                                                                               fontWeight: FontWeight.w600,
@@ -3379,6 +3705,7 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
                                                                           ),
                                                                       ],
                                                                     )),
+                                                                ),
                                                               // Via Qurio AI badge
                                                               if (widget.message?.sentVia == 'qurio_ai')
                                                                 Padding(
@@ -3391,7 +3718,7 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
                                                                       Text(
                                                                         'via Qurio AI',
                                                                         style: TextStyle(
-                                                                          fontFamily: 'SF Pro Text',
+                                                                          fontFamily: chatMessageFontFamily,
                                                                           color: Color(0xFF0077B5),
                                                                           fontSize: 11.0,
                                                                           fontWeight: FontWeight.w500,
@@ -3422,7 +3749,7 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
                                                                         style:
                                                                             TextStyle(
                                                                           fontFamily:
-                                                                              'SF Pro Text',
+                                                                              chatMessageFontFamily,
                                                                           color:
                                                                               const Color(0xFF8E8E93),
                                                                           fontSize:
@@ -3438,9 +3765,9 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
                                                                         Text(
                                                                           ' • ',
                                                                           style:
-                                                                              const TextStyle(
+                                                                              TextStyle(
                                                                             fontFamily:
-                                                                                'SF Pro Text',
+                                                                                chatMessageFontFamily,
                                                                             color:
                                                                                 Color(0xFF8E8E93),
                                                                             fontSize:
@@ -3452,9 +3779,9 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
                                                                               'MMM d, h:mm a',
                                                                               widget.message!.editedAt!),
                                                                           style:
-                                                                              const TextStyle(
+                                                                              TextStyle(
                                                                             fontFamily:
-                                                                                'SF Pro Text',
+                                                                                chatMessageFontFamily,
                                                                             color:
                                                                                 Color(0xFF8E8E93),
                                                                             fontSize:
@@ -3696,129 +4023,127 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
                                                                               ?.images)!
                                                                           .isNotEmpty) ==
                                                                   true)
-                                                                Builder(
-                                                                  builder: (context) {
-                                                                    final allImages =
-                                                                        widget.message?.images.toList() ?? [];
-                                                                    final count = allImages.length;
-                                                                    const double tileSize = 90.0;
-                                                                    const double gap = 2.0;
-
-                                                                    // Determine grid columns
-                                                                    final cols = (count == 1) ? 1 : (count == 2 || count == 4) ? 2 : 3;
-                                                                    final displayImages = count > 9 ? allImages.sublist(0, 9) : allImages;
-                                                                    final displayCount = displayImages.length;
-                                                                    final rows = (displayCount / cols).ceil();
-                                                                    final showOverlay = count > 9;
-
-                                                                    Widget buildTile(String imageUrl, int index) {
-                                                                      return GestureDetector(
-                                                                        onLongPressStart: (details) {
-                                                                          if (widget.isSelectionMode) return;
-                                                                          widget.onMessageLongPress?.call(
-                                                                            widget.message!,
-                                                                            details.globalPosition,
-                                                                            null,
-                                                                          );
-                                                                        },
-                                                                        onTap: () async {
-                                                                          await Navigator.push(
-                                                                            context,
-                                                                            PageTransition(
-                                                                              type: PageTransitionType.fade,
-                                                                              child: FlutterFlowExpandedImageView(
-                                                                                image: CachedNetworkImage(
-                                                                                  fadeInDuration: const Duration(milliseconds: 300),
-                                                                                  fadeOutDuration: const Duration(milliseconds: 300),
-                                                                                  imageUrl: imageUrl,
-                                                                                  fit: BoxFit.contain,
-                                                                                ),
-                                                                                allowRotation: false,
-                                                                                tag: '${imageUrl}_${widget.message?.reference.id ?? ''}_$index',
-                                                                                useHeroAnimation: true,
-                                                                                imageUrl: imageUrl,
-                                                                              ),
-                                                                            ),
-                                                                          );
-                                                                        },
-                                                                        child: Hero(
-                                                                          tag: '${imageUrl}_${widget.message?.reference.id ?? ''}_$index',
-                                                                          transitionOnUserGestures: true,
-                                                                          child: ClipRRect(
-                                                                            borderRadius: BorderRadius.circular(4.0),
-                                                                            child: CachedNetworkImage(
-                                                                              fadeInDuration: const Duration(milliseconds: 300),
-                                                                              fadeOutDuration: const Duration(milliseconds: 300),
-                                                                              imageUrl: imageUrl,
-                                                                              width: count == 1 ? double.infinity : tileSize,
-                                                                              height: count == 1 ? 200.0 : tileSize,
-                                                                              fit: BoxFit.cover,
-                                                                              errorWidget: (context, error, stackTrace) => Image.asset(
-                                                                                'assets/images/error_image.png',
-                                                                                width: tileSize,
-                                                                                height: tileSize,
-                                                                                fit: BoxFit.cover,
-                                                                              ),
-                                                                            ),
-                                                                          ),
-                                                                        ),
-                                                                      );
-                                                                    }
-
-                                                                    if (count == 1) {
-                                                                      return buildTile(allImages[0], 0);
-                                                                    }
-
-                                                                    return Column(
-                                                                      mainAxisSize: MainAxisSize.min,
-                                                                      crossAxisAlignment: CrossAxisAlignment.start,
-                                                                      children: List.generate(rows, (row) {
-                                                                        return Padding(
-                                                                          padding: EdgeInsets.only(top: row > 0 ? gap : 0),
-                                                                          child: Row(
-                                                                            mainAxisSize: MainAxisSize.min,
-                                                                            children: List.generate(cols, (col) {
-                                                                              final idx = row * cols + col;
-                                                                              if (idx >= displayCount) {
-                                                                                return const SizedBox.shrink();
-                                                                              }
-                                                                              final isLast = showOverlay && idx == displayCount - 1;
-                                                                              return Padding(
-                                                                                padding: EdgeInsets.only(left: col > 0 ? gap : 0),
-                                                                                child: SizedBox(
-                                                                                  width: tileSize,
-                                                                                  height: tileSize,
-                                                                                  child: isLast
-                                                                                      ? Stack(
-                                                                                          fit: StackFit.expand,
-                                                                                          children: [
-                                                                                            buildTile(displayImages[idx], idx),
-                                                                                            IgnorePointer(
-                                                                                              child: Container(
-                                                                                                color: Colors.black.withOpacity(0.55),
-                                                                                                alignment: Alignment.center,
-                                                                                                child: Text(
-                                                                                                  '+${count - displayCount}',
-                                                                                                  style: const TextStyle(
-                                                                                                    color: Colors.white,
-                                                                                                    fontSize: 20,
-                                                                                                    fontWeight: FontWeight.w600,
-                                                                                                    fontFamily: 'SF Pro Text',
-                                                                                                  ),
-                                                                                                ),
+                                                                Material(
+                                                                  color: Colors
+                                                                      .transparent,
+                                                                  elevation:
+                                                                      0.0,
+                                                                  shape:
+                                                                      RoundedRectangleBorder(
+                                                                    borderRadius:
+                                                                        BorderRadius.circular(
+                                                                            8.0),
+                                                                  ),
+                                                                  child:
+                                                                      Container(
+                                                                    width:
+                                                                        200.0,
+                                                                    decoration:
+                                                                        BoxDecoration(
+                                                                      color: Colors
+                                                                          .transparent,
+                                                                      borderRadius:
+                                                                          BorderRadius.circular(
+                                                                              8.0),
+                                                                    ),
+                                                                    child:
+                                                                        Builder(
+                                                                      builder:
+                                                                          (context) {
+                                                                        final multipleImages =
+                                                                            widget.message?.images.toList() ??
+                                                                                [];
+                                                                        return Column(
+                                                                          mainAxisSize:
+                                                                              MainAxisSize.min,
+                                                                          children: List
+                                                                              .generate(
+                                                                            multipleImages.length,
+                                                                            (multipleImagesIndex) {
+                                                                              final multipleImagesItem = multipleImages[multipleImagesIndex];
+                                                                              return Stack(
+                                                                                clipBehavior: Clip.none,
+                                                                                children: [
+                                                                                  // Image container
+                                                                                  GestureDetector(
+                                                                                    onLongPressStart: (details) {
+                                                                                      if (widget.isSelectionMode) return;
+                                                                                      widget.onMessageLongPress?.call(
+                                                                                        widget.message!,
+                                                                                        details.globalPosition,
+                                                                                        null,
+                                                                                      );
+                                                                                    },
+                                                                                    onTap: () async {
+                                                                                      await Navigator.push(
+                                                                                        context,
+                                                                                        PageTransition(
+                                                                                          type: PageTransitionType.fade,
+                                                                                          child: FlutterFlowExpandedImageView(
+                                                                                            image: CachedNetworkImage(
+                                                                                              fadeInDuration: const Duration(milliseconds: 300),
+                                                                                              fadeOutDuration: const Duration(milliseconds: 300),
+                                                                                              imageUrl: valueOrDefault<String>(
+                                                                                                multipleImagesItem,
+                                                                                                'https://firebasestorage.googleapis.com/v0/b/linkedup-c3e29.firebasestorage.app/o/asset%2Fdefault-user.png?alt=media&token=35d4da12-13b0-4f43-8b8e-375e6e126683',
+                                                                                              ),
+                                                                                              fit: BoxFit.contain,
+                                                                                              errorWidget: (context, error, stackTrace) => Image.asset(
+                                                                                                'assets/images/error_image.png',
+                                                                                                fit: BoxFit.contain,
                                                                                               ),
                                                                                             ),
-                                                                                          ],
-                                                                                        )
-                                                                                      : buildTile(displayImages[idx], idx),
-                                                                                ),
+                                                                                            allowRotation: false,
+                                                                                            tag: '${valueOrDefault<String>(
+                                                                                              multipleImagesItem,
+                                                                                              'https://firebasestorage.googleapis.com/v0/b/linkedup-c3e29.firebasestorage.app/o/asset%2Fdefault-user.png?alt=media&token=35d4da12-13b0-4f43-8b8e-375e6e126683$multipleImagesIndex',
+                                                                                            )}_${widget.message?.reference.id ?? ''}',
+                                                                                            useHeroAnimation: true,
+                                                                                            imageUrl: valueOrDefault<String>(
+                                                                                              multipleImagesItem,
+                                                                                              '',
+                                                                                            ),
+                                                                                          ),
+                                                                                        ),
+                                                                                      );
+                                                                                    },
+                                                                                    child: Hero(
+                                                                                      tag: '${valueOrDefault<String>(
+                                                                                        multipleImagesItem,
+                                                                                        'https://firebasestorage.googleapis.com/v0/b/linkedup-c3e29.firebasestorage.app/o/asset%2Fdefault-user.png?alt=media&token=35d4da12-13b0-4f43-8b8e-375e6e126683$multipleImagesIndex',
+                                                                                      )}_${widget.message?.reference.id ?? ''}',
+                                                                                      transitionOnUserGestures: true,
+                                                                                      child: ClipRRect(
+                                                                                        borderRadius: BorderRadius.circular(8.0),
+                                                                                        child: CachedNetworkImage(
+                                                                                          fadeInDuration: const Duration(milliseconds: 300),
+                                                                                          fadeOutDuration: const Duration(milliseconds: 300),
+                                                                                          imageUrl: valueOrDefault<String>(
+                                                                                            multipleImagesItem,
+                                                                                            'https://firebasestorage.googleapis.com/v0/b/linkedup-c3e29.firebasestorage.app/o/asset%2Fdefault-user.png?alt=media&token=35d4da12-13b0-4f43-8b8e-375e6e126683',
+                                                                                          ),
+                                                                                          width: double.infinity,
+                                                                                          height: 150.0,
+                                                                                          fit: BoxFit.cover,
+                                                                                          errorWidget: (context, error, stackTrace) => Image.asset(
+                                                                                            'assets/images/error_image.png',
+                                                                                            width: double.infinity,
+                                                                                            height: 150.0,
+                                                                                            fit: BoxFit.cover,
+                                                                                          ),
+                                                                                        ),
+                                                                                      ),
+                                                                                    ),
+                                                                                  ),
+                                                                                ],
                                                                               );
-                                                                            }),
-                                                                          ),
+                                                                            },
+                                                                          ).divide(
+                                                                              const SizedBox(height: 8.0)),
                                                                         );
-                                                                      }),
-                                                                    );
-                                                                  },
+                                                                      },
+                                                                    ),
+                                                                  ),
                                                                 ),
                                                               if (widget.message
                                                                           ?.audio !=
@@ -3950,8 +4275,7 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
                             ? const Color(0xFF007AFF).withOpacity(0.05)
                             : Colors.transparent,
                         child: Padding(
-                          padding: EdgeInsets.fromLTRB(
-                              8.0, widget.isConsecutive ? 2.0 : 8.0, 8.0, 8.0),
+                          padding: _messageRowPadding,
                           child: Row(
                             mainAxisSize: MainAxisSize.min,
                             mainAxisAlignment: MainAxisAlignment.start,
@@ -4082,13 +4406,16 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
                                                                       8.0,
                                                                   vertical:
                                                                       4.0),
-                                                          child: Text(
-                                                            content,
-                                                            style:
-                                                                const TextStyle(
-                                                              fontSize:
-                                                                  48.0, // Larger size for emojis
-                                                              height: 1.2,
+                                                          child:
+                                                              _messageTextAnchor(
+                                                            child: Text(
+                                                              content,
+                                                              style:
+                                                                  const TextStyle(
+                                                                fontSize:
+                                                                    48.0, // Larger size for emojis
+                                                                height: 1.2,
+                                                              ),
                                                             ),
                                                           ),
                                                         ),
@@ -4235,8 +4562,8 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
                                                                             children: [
                                                                               Text(
                                                                                 widget.message?.replyToSender ?? 'Unknown',
-                                                                                style: const TextStyle(
-                                                                                  fontFamily: 'SF Pro Text',
+                                                                                style: TextStyle(
+                                                                                  fontFamily: chatMessageFontFamily,
                                                                                   color: Color(0xFF007AFF),
                                                                                   fontSize: 13.0,
                                                                                   fontWeight: FontWeight.w600,
@@ -4244,9 +4571,9 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
                                                                               ),
                                                                               const SizedBox(height: 2.0),
                                                                               Text(
-                                                                                stripMarkdownFormatting(widget.message?.replyToContent ?? ''),
-                                                                                style: const TextStyle(
-                                                                                  fontFamily: 'SF Pro Text',
+                                                                                widget.message?.replyToContent ?? '',
+                                                                                style: TextStyle(
+                                                                                  fontFamily: chatMessageFontFamily,
                                                                                   color: Color(0xFF667781),
                                                                                   fontSize: 13.0,
                                                                                 ),
@@ -4264,7 +4591,8 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
                                                               if (widget.message?.forwardedHistory != null && widget.message!.forwardedHistory!.isNotEmpty)
                                                                 _buildChatHistoryPreview(widget.message!.forwardedHistory!)
                                                               else if (widget.message?.content != null && widget.message?.content != '')
-                                                                Container(
+                                                                _messageTextAnchor(
+                                                                  child: Container(
                                                                     constraints:
                                                                         BoxConstraints(
                                                                       maxWidth: hasMedia
@@ -4331,7 +4659,7 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
                                                                             textScaler: TextScaler.noScaling,
                                                                             // iMessage received bubble: dark text on gray
                                                                             p: TextStyle(
-                                                                              fontFamily: 'SF Pro Text',
+                                                                              fontFamily: chatMessageFontFamily,
                                                                               color: const Color(0xFF000000),
                                                                               fontSize: FFAppState().chatFontSize,
                                                                               letterSpacing: -0.4,
@@ -4339,43 +4667,43 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
                                                                               height: 1.3,
                                                                             ),
                                                                             h1: TextStyle(
-                                                                              fontFamily: 'SF Pro Text',
+                                                                              fontFamily: chatMessageFontFamily,
                                                                               color: const Color(0xFF000000),
                                                                               fontSize: FFAppState().chatFontSize,
                                                                               fontWeight: FontWeight.w700,
                                                                             ),
                                                                             h2: TextStyle(
-                                                                              fontFamily: 'SF Pro Text',
+                                                                              fontFamily: chatMessageFontFamily,
                                                                               color: const Color(0xFF000000),
                                                                               fontSize: FFAppState().chatFontSize,
                                                                               fontWeight: FontWeight.w700,
                                                                             ),
                                                                             h3: TextStyle(
-                                                                              fontFamily: 'SF Pro Text',
+                                                                              fontFamily: chatMessageFontFamily,
                                                                               color: const Color(0xFF000000),
                                                                               fontSize: FFAppState().chatFontSize,
                                                                               fontWeight: FontWeight.w600,
                                                                             ),
                                                                             h4: TextStyle(
-                                                                              fontFamily: 'SF Pro Text',
+                                                                              fontFamily: chatMessageFontFamily,
                                                                               color: const Color(0xFF000000),
                                                                               fontSize: FFAppState().chatFontSize,
                                                                               fontWeight: FontWeight.w600,
                                                                             ),
                                                                             h5: TextStyle(
-                                                                              fontFamily: 'SF Pro Text',
+                                                                              fontFamily: chatMessageFontFamily,
                                                                               color: const Color(0xFF000000),
                                                                               fontSize: FFAppState().chatFontSize,
                                                                               fontWeight: FontWeight.w600,
                                                                             ),
                                                                             h6: TextStyle(
-                                                                              fontFamily: 'SF Pro Text',
+                                                                              fontFamily: chatMessageFontFamily,
                                                                               color: const Color(0xFF000000),
                                                                               fontSize: FFAppState().chatFontSize,
                                                                               fontWeight: FontWeight.w500,
                                                                             ),
                                                                             a: TextStyle(
-                                                                              fontFamily: 'SF Pro Text',
+                                                                              fontFamily: chatMessageFontFamily,
                                                                               color: const Color(0xFF007AFF),
                                                                               fontSize: FFAppState().chatFontSize,
                                                                               letterSpacing: -0.4,
@@ -4390,13 +4718,13 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
                                                                             ),
                                                                             listBullet:
                                                                                 TextStyle(
-                                                                              fontFamily: 'SF Pro Text',
+                                                                              fontFamily: chatMessageFontFamily,
                                                                               color: const Color(0xFF000000),
                                                                               fontSize: FFAppState().chatFontSize,
                                                                             ),
                                                                             blockquote:
                                                                                 TextStyle(
-                                                                              fontFamily: 'SF Pro Text',
+                                                                              fontFamily: chatMessageFontFamily,
                                                                               color: const Color(0xFF667781),
                                                                               fontSize: FFAppState().chatFontSize,
                                                                             ),
@@ -4407,13 +4735,13 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
                                                                             ),
                                                                             strong:
                                                                                 TextStyle(
-                                                                              fontFamily: 'SF Pro Text',
+                                                                              fontFamily: chatMessageFontFamily,
                                                                               color: const Color(0xFF000000),
                                                                               fontSize: FFAppState().chatFontSize,
                                                                               fontWeight: FontWeight.w600,
                                                                             ),
                                                                             em: TextStyle(
-                                                                              fontFamily: 'SF Pro Text',
+                                                                              fontFamily: chatMessageFontFamily,
                                                                               color: const Color(0xFF000000),
                                                                               fontSize: FFAppState().chatFontSize,
                                                                               fontStyle: FontStyle.italic,
@@ -4421,14 +4749,14 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
                                                                             ),
                                                                             tableBody:
                                                                                 TextStyle(
-                                                                              fontFamily: 'SF Pro Text',
+                                                                              fontFamily: chatMessageFontFamily,
                                                                               color: const Color(0xFF000000),
                                                                               fontSize: FFAppState().chatFontSize - 1.0,
                                                                               fontWeight: FontWeight.w400,
                                                                             ),
                                                                             tableHead:
                                                                                 TextStyle(
-                                                                              fontFamily: 'SF Pro Text',
+                                                                              fontFamily: chatMessageFontFamily,
                                                                               color: const Color(0xFF000000),
                                                                               fontSize: FFAppState().chatFontSize - 1.0,
                                                                               fontWeight: FontWeight.w600,
@@ -4467,6 +4795,7 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
                                                                           ),
                                                                       ],
                                                                     )),
+                                                                ),
                                                               // Via Qurio AI badge for received messages
                                                               if (widget.message?.sentVia == 'qurio_ai')
                                                                 Padding(
@@ -4479,7 +4808,7 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
                                                                       Text(
                                                                         'via Qurio AI',
                                                                         style: TextStyle(
-                                                                          fontFamily: 'SF Pro Text',
+                                                                          fontFamily: chatMessageFontFamily,
                                                                           color: Color(0xFF0077B5),
                                                                           fontSize: 11.0,
                                                                           fontWeight: FontWeight.w500,
@@ -4762,128 +5091,127 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
                                                                               ?.images)!
                                                                           .isNotEmpty) ==
                                                                   true)
-                                                                Builder(
-                                                                  builder: (context) {
-                                                                    final allImages =
-                                                                        widget.message?.images.toList() ?? [];
-                                                                    final count = allImages.length;
-                                                                    const double tileSize = 90.0;
-                                                                    const double gap = 2.0;
-
-                                                                    final cols = (count == 1) ? 1 : (count == 2 || count == 4) ? 2 : 3;
-                                                                    final displayImages = count > 9 ? allImages.sublist(0, 9) : allImages;
-                                                                    final displayCount = displayImages.length;
-                                                                    final rows = (displayCount / cols).ceil();
-                                                                    final showOverlay = count > 9;
-
-                                                                    Widget buildTile(String imageUrl, int index) {
-                                                                      return GestureDetector(
-                                                                        onLongPressStart: (details) {
-                                                                          if (widget.isSelectionMode) return;
-                                                                          widget.onMessageLongPress?.call(
-                                                                            widget.message!,
-                                                                            details.globalPosition,
-                                                                            null,
-                                                                          );
-                                                                        },
-                                                                        onTap: () async {
-                                                                          await Navigator.push(
-                                                                            context,
-                                                                            PageTransition(
-                                                                              type: PageTransitionType.fade,
-                                                                              child: FlutterFlowExpandedImageView(
-                                                                                image: CachedNetworkImage(
-                                                                                  fadeInDuration: const Duration(milliseconds: 300),
-                                                                                  fadeOutDuration: const Duration(milliseconds: 300),
-                                                                                  imageUrl: imageUrl,
-                                                                                  fit: BoxFit.contain,
-                                                                                ),
-                                                                                allowRotation: false,
-                                                                                tag: '${imageUrl}_${widget.message?.reference.id ?? ''}_$index',
-                                                                                useHeroAnimation: true,
-                                                                                imageUrl: imageUrl,
-                                                                              ),
-                                                                            ),
-                                                                          );
-                                                                        },
-                                                                        child: Hero(
-                                                                          tag: '${imageUrl}_${widget.message?.reference.id ?? ''}_$index',
-                                                                          transitionOnUserGestures: true,
-                                                                          child: ClipRRect(
-                                                                            borderRadius: BorderRadius.circular(4.0),
-                                                                            child: CachedNetworkImage(
-                                                                              fadeInDuration: const Duration(milliseconds: 300),
-                                                                              fadeOutDuration: const Duration(milliseconds: 300),
-                                                                              imageUrl: imageUrl,
-                                                                              width: count == 1 ? double.infinity : tileSize,
-                                                                              height: count == 1 ? 200.0 : tileSize,
-                                                                              fit: BoxFit.cover,
-                                                                              errorWidget: (context, error, stackTrace) => Image.asset(
-                                                                                'assets/images/error_image.png',
-                                                                                width: tileSize,
-                                                                                height: tileSize,
-                                                                                fit: BoxFit.cover,
-                                                                              ),
-                                                                            ),
-                                                                          ),
-                                                                        ),
-                                                                      );
-                                                                    }
-
-                                                                    if (count == 1) {
-                                                                      return buildTile(allImages[0], 0);
-                                                                    }
-
-                                                                    return Column(
-                                                                      mainAxisSize: MainAxisSize.min,
-                                                                      crossAxisAlignment: CrossAxisAlignment.start,
-                                                                      children: List.generate(rows, (row) {
-                                                                        return Padding(
-                                                                          padding: EdgeInsets.only(top: row > 0 ? gap : 0),
-                                                                          child: Row(
-                                                                            mainAxisSize: MainAxisSize.min,
-                                                                            children: List.generate(cols, (col) {
-                                                                              final idx = row * cols + col;
-                                                                              if (idx >= displayCount) {
-                                                                                return const SizedBox.shrink();
-                                                                              }
-                                                                              final isLast = showOverlay && idx == displayCount - 1;
-                                                                              return Padding(
-                                                                                padding: EdgeInsets.only(left: col > 0 ? gap : 0),
-                                                                                child: SizedBox(
-                                                                                  width: tileSize,
-                                                                                  height: tileSize,
-                                                                                  child: isLast
-                                                                                      ? Stack(
-                                                                                          fit: StackFit.expand,
-                                                                                          children: [
-                                                                                            buildTile(displayImages[idx], idx),
-                                                                                            IgnorePointer(
-                                                                                              child: Container(
-                                                                                                color: Colors.black.withOpacity(0.55),
-                                                                                                alignment: Alignment.center,
-                                                                                                child: Text(
-                                                                                                  '+${count - displayCount}',
-                                                                                                  style: const TextStyle(
-                                                                                                    color: Colors.white,
-                                                                                                    fontSize: 20,
-                                                                                                    fontWeight: FontWeight.w600,
-                                                                                                    fontFamily: 'SF Pro Text',
-                                                                                                  ),
-                                                                                                ),
+                                                                Material(
+                                                                  color: Colors
+                                                                      .transparent,
+                                                                  elevation:
+                                                                      0.0,
+                                                                  shape:
+                                                                      RoundedRectangleBorder(
+                                                                    borderRadius:
+                                                                        BorderRadius.circular(
+                                                                            8.0),
+                                                                  ),
+                                                                  child:
+                                                                      Container(
+                                                                    width:
+                                                                        200.0,
+                                                                    decoration:
+                                                                        BoxDecoration(
+                                                                      color: Colors
+                                                                          .transparent,
+                                                                      borderRadius:
+                                                                          BorderRadius.circular(
+                                                                              8.0),
+                                                                    ),
+                                                                    child:
+                                                                        Builder(
+                                                                      builder:
+                                                                          (context) {
+                                                                        final multipleImages =
+                                                                            widget.message?.images.toList() ??
+                                                                                [];
+                                                                        return Column(
+                                                                          mainAxisSize:
+                                                                              MainAxisSize.min,
+                                                                          children: List
+                                                                              .generate(
+                                                                            multipleImages.length,
+                                                                            (multipleImagesIndex) {
+                                                                              final multipleImagesItem = multipleImages[multipleImagesIndex];
+                                                                              return Stack(
+                                                                                clipBehavior: Clip.none,
+                                                                                children: [
+                                                                                  // Image container
+                                                                                  GestureDetector(
+                                                                                    onLongPressStart: (details) {
+                                                                                      if (widget.isSelectionMode) return;
+                                                                                      widget.onMessageLongPress?.call(
+                                                                                        widget.message!,
+                                                                                        details.globalPosition,
+                                                                                        null,
+                                                                                      );
+                                                                                    },
+                                                                                    onTap: () async {
+                                                                                      await Navigator.push(
+                                                                                        context,
+                                                                                        PageTransition(
+                                                                                          type: PageTransitionType.fade,
+                                                                                          child: FlutterFlowExpandedImageView(
+                                                                                            image: CachedNetworkImage(
+                                                                                              fadeInDuration: const Duration(milliseconds: 300),
+                                                                                              fadeOutDuration: const Duration(milliseconds: 300),
+                                                                                              imageUrl: valueOrDefault<String>(
+                                                                                                multipleImagesItem,
+                                                                                                'https://firebasestorage.googleapis.com/v0/b/linkedup-c3e29.firebasestorage.app/o/asset%2Fdefault-user.png?alt=media&token=35d4da12-13b0-4f43-8b8e-375e6e126683',
+                                                                                              ),
+                                                                                              fit: BoxFit.contain,
+                                                                                              errorWidget: (context, error, stackTrace) => Image.asset(
+                                                                                                'assets/images/error_image.png',
+                                                                                                fit: BoxFit.contain,
                                                                                               ),
                                                                                             ),
-                                                                                          ],
-                                                                                        )
-                                                                                      : buildTile(displayImages[idx], idx),
-                                                                                ),
+                                                                                            allowRotation: false,
+                                                                                            tag: '${valueOrDefault<String>(
+                                                                                              multipleImagesItem,
+                                                                                              'https://firebasestorage.googleapis.com/v0/b/linkedup-c3e29.firebasestorage.app/o/asset%2Fdefault-user.png?alt=media&token=35d4da12-13b0-4f43-8b8e-375e6e126683$multipleImagesIndex',
+                                                                                            )}_${widget.message?.reference.id ?? ''}',
+                                                                                            useHeroAnimation: true,
+                                                                                            imageUrl: valueOrDefault<String>(
+                                                                                              multipleImagesItem,
+                                                                                              '',
+                                                                                            ),
+                                                                                          ),
+                                                                                        ),
+                                                                                      );
+                                                                                    },
+                                                                                    child: Hero(
+                                                                                      tag: '${valueOrDefault<String>(
+                                                                                        multipleImagesItem,
+                                                                                        'https://firebasestorage.googleapis.com/v0/b/linkedup-c3e29.firebasestorage.app/o/asset%2Fdefault-user.png?alt=media&token=35d4da12-13b0-4f43-8b8e-375e6e126683$multipleImagesIndex',
+                                                                                      )}_${widget.message?.reference.id ?? ''}',
+                                                                                      transitionOnUserGestures: true,
+                                                                                      child: ClipRRect(
+                                                                                        borderRadius: BorderRadius.circular(8.0),
+                                                                                        child: CachedNetworkImage(
+                                                                                          fadeInDuration: const Duration(milliseconds: 300),
+                                                                                          fadeOutDuration: const Duration(milliseconds: 300),
+                                                                                          imageUrl: valueOrDefault<String>(
+                                                                                            multipleImagesItem,
+                                                                                            'https://firebasestorage.googleapis.com/v0/b/linkedup-c3e29.firebasestorage.app/o/asset%2Fdefault-user.png?alt=media&token=35d4da12-13b0-4f43-8b8e-375e6e126683',
+                                                                                          ),
+                                                                                          width: double.infinity,
+                                                                                          height: 150.0,
+                                                                                          fit: BoxFit.cover,
+                                                                                          errorWidget: (context, error, stackTrace) => Image.asset(
+                                                                                            'assets/images/error_image.png',
+                                                                                            width: double.infinity,
+                                                                                            height: 150.0,
+                                                                                            fit: BoxFit.cover,
+                                                                                          ),
+                                                                                        ),
+                                                                                      ),
+                                                                                    ),
+                                                                                  ),
+                                                                                ],
                                                                               );
-                                                                            }),
-                                                                          ),
+                                                                            },
+                                                                          ).divide(
+                                                                              const SizedBox(height: 8.0)),
                                                                         );
-                                                                      }),
-                                                                    );
-                                                                  },
+                                                                      },
+                                                                    ),
+                                                                  ),
                                                                 ),
                                                               if (widget.message
                                                                           ?.audio !=
@@ -5007,8 +5335,14 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
               ),
           ]
               .divide(const SizedBox(height: 2.0))
-              .addToStart(const SizedBox(height: 8.0))
-              .addToEnd(const SizedBox(height: 8.0)),
+              .addToStart(SizedBox(
+                  height: widget.isConsecutive
+                      ? _groupedMessageSpacing
+                      : _separateMessageSpacing))
+              .addToEnd(SizedBox(
+                  height: widget.isFollowedByConsecutive
+                      ? _groupedMessageSpacing
+                      : 0.0)),
         );
       },
     );
@@ -5122,25 +5456,25 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
       // Ensure parent directory exists before writing
       final parentDir = file.parent;
       if (!await parentDir.exists()) {
-        debugPrint('Creating directory: ${parentDir.path}');
+        debugLog('Creating directory: ${parentDir.path}');
         await parentDir.create(recursive: true);
       }
 
       // Download and save
-      debugPrint('Downloading from URL: $url');
+      debugLog('Downloading from URL: $url');
       final res = await http.get(Uri.parse(url));
-      debugPrint('Download response status: ${res.statusCode}');
+      debugLog('Download response status: ${res.statusCode}');
 
       if (res.statusCode == 200) {
-        debugPrint('Saving file to: $path');
+        debugLog('Saving file to: $path');
         await file.writeAsBytes(res.bodyBytes);
-        debugPrint('File saved successfully!');
+        debugLog('File saved successfully!');
 
         // Reveal in Finder
-        debugPrint('Revealing file in Finder...');
+        debugLog('Revealing file in Finder...');
         try {
           await Process.run('open', ['-R', path]);
-          debugPrint('Download complete!');
+          debugLog('Download complete!');
 
           _showSnackBar(
             SnackBar(
@@ -5150,7 +5484,7 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
             ),
           );
         } catch (e) {
-          debugPrint('Error revealing file in Finder: $e');
+          debugLog('Error revealing file in Finder: $e');
           _showSnackBar(
             SnackBar(
               content: Text('File saved to: $path'),
@@ -5160,7 +5494,7 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
           );
         }
       } else {
-        debugPrint('Download failed with status: ${res.statusCode}');
+        debugLog('Download failed with status: ${res.statusCode}');
         _showSnackBar(
           SnackBar(
             content: Text('Failed to download file. Status: ${res.statusCode}'),
@@ -5170,7 +5504,7 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
         );
       }
     } catch (e) {
-      debugPrint('Error saving file: $e');
+      debugLog('Error saving file: $e');
       _showSnackBar(
         SnackBar(
           content: Text('Error saving file: $e'),
@@ -5183,9 +5517,9 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
 
   // Save image from message
   Future<void> _saveImage() async {
-    debugPrint('========================================');
-    debugPrint('=== SAVE IMAGE FROM MENU ===');
-    debugPrint('========================================');
+    debugLog('========================================');
+    debugLog('=== SAVE IMAGE FROM MENU ===');
+    debugLog('========================================');
 
     // Try single image first
     final imageUrl = valueOrDefault<String>(
@@ -5195,21 +5529,21 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
 
     if (imageUrl.isNotEmpty) {
       final fileName = _getFileNameFromUrl(imageUrl);
-      debugPrint('Saving single image: $fileName');
+      debugLog('Saving single image: $fileName');
       await _downloadFile(imageUrl, fileName);
     } else if (widget.message?.images != null &&
         widget.message!.images!.isNotEmpty) {
       // Save all images in the multiple images array
-      debugPrint('Saving ${widget.message!.images!.length} images');
+      debugLog('Saving ${widget.message!.images!.length} images');
       for (final imgUrl in widget.message!.images!) {
         if (imgUrl.isNotEmpty) {
           final fileName = _getFileNameFromUrl(imgUrl);
-          debugPrint('Saving image: $fileName');
+          debugLog('Saving image: $fileName');
           await _downloadFile(imgUrl, fileName);
         }
       }
     } else {
-      debugPrint('No images found in message!');
+      debugLog('No images found in message!');
       _showSnackBar(
         const SnackBar(
           content: Text('No images found in this message'),
@@ -5221,9 +5555,9 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
 
   // Save video from message
   Future<void> _saveVideo() async {
-    debugPrint('========================================');
-    debugPrint('=== SAVE VIDEO FROM MENU ===');
-    debugPrint('========================================');
+    debugLog('========================================');
+    debugLog('=== SAVE VIDEO FROM MENU ===');
+    debugLog('========================================');
 
     final videoUrl = valueOrDefault<String>(
       widget.message?.video,
@@ -5243,10 +5577,10 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
         // If it has an extension but not a video extension, add .mp4
         fileName = '${fileName.split('.').first}.mp4';
       }
-      debugPrint('Saving video: $fileName');
+      debugLog('Saving video: $fileName');
       await _downloadFile(videoUrl, fileName);
     } else {
-      debugPrint('No video found in message!');
+      debugLog('No video found in message!');
       _showSnackBar(
         const SnackBar(
           content: Text('No video found in this message'),
@@ -5257,12 +5591,12 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
   }
 
   Future<void> _downloadFile(String url, String fileName) async {
-    debugPrint('_downloadFile called with URL: $url, fileName: $fileName');
+    debugLog('_downloadFile called with URL: $url, fileName: $fileName');
 
     try {
       // Handle web platform FIRST
       if (kIsWeb) {
-        debugPrint('Platform is Web, starting download...');
+        debugLog('Platform is Web, starting download...');
         try {
           _showSnackBar(
             SnackBar(
@@ -5329,7 +5663,7 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
             ),
           );
         } catch (e) {
-          debugPrint('Error downloading file on web: $e');
+          debugLog('Error downloading file on web: $e');
           _hideSnackBar();
           _showSnackBar(
             SnackBar(
@@ -5345,7 +5679,7 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
       // Native platforms only below this point
       // macOS - Handle separately to avoid any fallthrough
       if (Platform.isMacOS) {
-        debugPrint('Platform is macOS, starting download...');
+        debugLog('Platform is macOS, starting download...');
         try {
           // Sanitize filename
           String safeFileName = fileName;
@@ -5357,9 +5691,9 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
           }
 
           // Download the file first
-          debugPrint('Downloading from URL: $url');
+          debugLog('Downloading from URL: $url');
           final response = await http.get(Uri.parse(url));
-          debugPrint('Download response status: ${response.statusCode}');
+          debugLog('Download response status: ${response.statusCode}');
 
           if (response.statusCode != 200) {
             throw Exception('Failed to download file: ${response.statusCode}');
@@ -5396,20 +5730,20 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
             try {
               final file = File(result);
               await file.writeAsBytes(response.bodyBytes);
-              debugPrint('File saved successfully to: $result');
+              debugLog('File saved successfully to: $result');
 
               // Reveal in Finder
               try {
                 await Process.run('open', ['-R', result]);
-                debugPrint('Download complete!');
+                debugLog('Download complete!');
 
                 _showSuccessPopup('Downloaded');
               } catch (e) {
-                debugPrint('Error revealing file in Finder: $e');
+                debugLog('Error revealing file in Finder: $e');
                 _showSuccessPopup('File saved');
               }
             } catch (e) {
-              debugPrint('Error saving file: $e');
+              debugLog('Error saving file: $e');
               _showSnackBar(
                 SnackBar(
                   content: Text('Error saving file: $e'),
@@ -5419,10 +5753,10 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
               );
             }
           } else {
-            debugPrint('User cancelled file save dialog');
+            debugLog('User cancelled file save dialog');
           }
         } catch (e) {
-          debugPrint('Error during download: $e');
+          debugLog('Error during download: $e');
           _showSnackBar(
             SnackBar(
               content: Text('Error downloading file: $e'),
@@ -5571,13 +5905,13 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
           );
 
           if (result != null && result.isNotEmpty) {
-            debugPrint('File saved successfully to: $result');
+            debugLog('File saved successfully to: $result');
             _showSuccessPopup('Downloaded');
           } else {
-            debugPrint('User cancelled file save dialog');
+            debugLog('User cancelled file save dialog');
           }
         } catch (e) {
-          debugPrint('Error during download: $e');
+          debugLog('Error during download: $e');
           _showSnackBar(
             SnackBar(
               content: Text('Error downloading file: $e'),
@@ -5695,6 +6029,402 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
     } else {
       return 'file_$timestamp';
     }
+  }
+}
+
+class _MessageMenuTooltipWithArrow extends StatelessWidget {
+  const _MessageMenuTooltipWithArrow({required this.text});
+
+  final String text;
+
+  static const Color _background = Color(0xFF111827);
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+          decoration: BoxDecoration(
+            color: _background,
+            borderRadius: BorderRadius.circular(6),
+          ),
+          child: Text(
+            text,
+            style: const TextStyle(
+              fontFamily: 'Inter',
+              color: Colors.white,
+              fontSize: 12,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+        ),
+        CustomPaint(
+          size: const Size(12, 6),
+          painter: _DownArrowTooltipPainter(color: _background),
+        ),
+      ],
+    );
+  }
+}
+
+class _DownArrowTooltipPainter extends CustomPainter {
+  const _DownArrowTooltipPainter({required this.color});
+
+  final Color color;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final path = Path()
+      ..moveTo(size.width * 0.5, size.height)
+      ..lineTo(0, 0)
+      ..lineTo(size.width, 0)
+      ..close();
+    canvas.drawPath(path, Paint()..color = color);
+  }
+
+  @override
+  bool shouldRepaint(covariant _DownArrowTooltipPainter oldDelegate) {
+    return oldDelegate.color != color;
+  }
+}
+
+class _MessageMenuActionBar extends StatefulWidget {
+  const _MessageMenuActionBar({
+    required this.menuIconKey,
+    required this.isPinned,
+    required this.onReact,
+    required this.onReply,
+    required this.onForward,
+    required this.onPin,
+    required this.onMore,
+  });
+
+  final GlobalKey menuIconKey;
+  final bool isPinned;
+  final VoidCallback onReact;
+  final VoidCallback onReply;
+  final VoidCallback onForward;
+  final VoidCallback onPin;
+  final VoidCallback onMore;
+
+  @override
+  State<_MessageMenuActionBar> createState() => _MessageMenuActionBarState();
+}
+
+class _MessageMenuActionBarState extends State<_MessageMenuActionBar> {
+  static const double _menuBarHeight = 44.0;
+
+  final GlobalKey _barKey = GlobalKey();
+  final List<GlobalKey> _itemKeys =
+      List<GlobalKey>.generate(4, (_) => GlobalKey());
+  int? _hoveredIndex;
+  String? _hoveredTooltip;
+
+  GlobalKey _keyForIndex(int index) {
+    if (index == 4) return widget.menuIconKey;
+    return _itemKeys[index];
+  }
+
+  double? _arrowCenterX() {
+    if (_hoveredIndex == null) return null;
+    final itemBox =
+        _keyForIndex(_hoveredIndex!).currentContext?.findRenderObject()
+            as RenderBox?;
+    final barBox =
+        _barKey.currentContext?.findRenderObject() as RenderBox?;
+    if (itemBox == null || barBox == null) return null;
+
+    final itemCenterGlobal = itemBox.localToGlobal(
+      Offset(itemBox.size.width / 2, itemBox.size.height / 2),
+    );
+    final barOriginGlobal = barBox.localToGlobal(Offset.zero);
+    return itemCenterGlobal.dx - barOriginGlobal.dx;
+  }
+
+  void _onItemHover(int index, String tooltip, bool hovered) {
+    if (hovered) {
+      setState(() {
+        _hoveredIndex = index;
+        _hoveredTooltip = tooltip;
+      });
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted && _hoveredIndex == index) setState(() {});
+      });
+    } else if (_hoveredIndex == index) {
+      setState(() {
+        _hoveredIndex = null;
+        _hoveredTooltip = null;
+      });
+    }
+  }
+
+  Widget _toolbarDivider() {
+    return Container(
+      width: 1,
+      height: 28,
+      margin: const EdgeInsets.symmetric(vertical: 4),
+      color: const Color(0xFFE5E7EB),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final arrowX = _arrowCenterX();
+
+    return Padding(
+      padding: const EdgeInsets.all(6),
+      child: Material(
+        color: Colors.transparent,
+        elevation: 4,
+        shadowColor: Colors.black26,
+        borderRadius: BorderRadius.circular(10),
+        child: Stack(
+          clipBehavior: Clip.none,
+          key: _barKey,
+          children: [
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: const Color(0xFFE5E7EB)),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.08),
+                    blurRadius: 8,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  _MessageMenuToolbarButton(
+                    key: _itemKeys[0],
+                    icon: CupertinoIcons.smiley,
+                    tooltip: 'React',
+                    onTap: widget.onReact,
+                    onHoverChanged: (h) => _onItemHover(0, 'React', h),
+                  ),
+                  _MessageMenuToolbarButton(
+                    key: _itemKeys[1],
+                    icon: CupertinoIcons.arrow_turn_up_left,
+                    tooltip: 'Reply',
+                    onTap: widget.onReply,
+                    onHoverChanged: (h) => _onItemHover(1, 'Reply', h),
+                  ),
+                  _MessageMenuToolbarButton(
+                    key: _itemKeys[2],
+                    icon: CupertinoIcons.arrow_turn_up_right,
+                    tooltip: 'Forward',
+                    onTap: widget.onForward,
+                    onHoverChanged: (h) => _onItemHover(2, 'Forward', h),
+                  ),
+                  _MessageMenuToolbarButton(
+                    key: _itemKeys[3],
+                    icon: CupertinoIcons.pin,
+                    tooltip: widget.isPinned ? 'Unpin' : 'Pin',
+                    onTap: widget.onPin,
+                    onHoverChanged: (h) =>
+                        _onItemHover(3, widget.isPinned ? 'Unpin' : 'Pin', h),
+                  ),
+                  _toolbarDivider(),
+                  _MessageMenuToolbarButton(
+                    key: widget.menuIconKey,
+                    icon: Icons.more_horiz_rounded,
+                    tooltip: 'More actions',
+                    iconSize: 14,
+                    iconColor: const Color(0xFF6B7280),
+                    onTap: widget.onMore,
+                    onHoverChanged: (h) =>
+                        _onItemHover(4, 'More actions', h),
+                  ),
+                ],
+              ),
+            ),
+            if (_hoveredTooltip != null && arrowX != null)
+              Positioned(
+                left: arrowX,
+                bottom: _menuBarHeight + 8,
+                child: FractionalTranslation(
+                  translation: const Offset(-0.5, 0),
+                  child: _MessageMenuTooltipWithArrow(text: _hoveredTooltip!),
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _MessageMenuToolbarButton extends StatefulWidget {
+  const _MessageMenuToolbarButton({
+    super.key,
+    required this.icon,
+    required this.tooltip,
+    required this.onTap,
+    this.iconSize = 18,
+    this.iconColor = const Color(0xFF1C1C1E),
+    this.onHoverChanged,
+  });
+
+  final IconData icon;
+  final String tooltip;
+  final VoidCallback onTap;
+  final double iconSize;
+  final Color iconColor;
+  final ValueChanged<bool>? onHoverChanged;
+
+  @override
+  State<_MessageMenuToolbarButton> createState() =>
+      _MessageMenuToolbarButtonState();
+}
+
+class _MessageMenuToolbarButtonState extends State<_MessageMenuToolbarButton> {
+  bool _hovered = false;
+
+  static const Color _hoverBackground = Color(0xFFF3F4F6);
+
+  @override
+  Widget build(BuildContext context) {
+    return MouseRegion(
+      onEnter: (_) {
+        setState(() => _hovered = true);
+        widget.onHoverChanged?.call(true);
+      },
+      onExit: (_) {
+        setState(() => _hovered = false);
+        widget.onHoverChanged?.call(false);
+      },
+      cursor: SystemMouseCursors.click,
+      child: GestureDetector(
+        onTap: widget.onTap,
+        behavior: HitTestBehavior.opaque,
+        child: Container(
+          constraints: const BoxConstraints(minWidth: 40, minHeight: 40),
+          decoration: BoxDecoration(
+            color: _hovered ? _hoverBackground : Colors.transparent,
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+            child: Center(
+              child: AnimatedScale(
+                scale: _hovered ? 1.14 : 1.0,
+                duration: const Duration(milliseconds: 140),
+                curve: Curves.easeOutBack,
+                child: Icon(
+                  widget.icon,
+                  size: widget.iconSize,
+                  color: widget.iconColor,
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _MessageMenuGridItem extends StatefulWidget {
+  const _MessageMenuGridItem({
+    required this.label,
+    required this.icon,
+    required this.isDestructive,
+    required this.itemSize,
+    required this.onTap,
+  });
+
+  final String label;
+  final IconData icon;
+  final bool isDestructive;
+  final double itemSize;
+  final VoidCallback onTap;
+
+  @override
+  State<_MessageMenuGridItem> createState() => _MessageMenuGridItemState();
+}
+
+class _MessageMenuGridItemState extends State<_MessageMenuGridItem> {
+  bool _hovered = false;
+
+  static const Color _hoverBackground = Color(0xFFF3F4F6);
+
+  Color get _iconColor => widget.isDestructive
+      ? const Color(0xFFFF3B30)
+      : const Color(0xFF1C1C1E);
+
+  @override
+  Widget build(BuildContext context) {
+    return MouseRegion(
+      onEnter: (_) => setState(() => _hovered = true),
+      onExit: (_) => setState(() => _hovered = false),
+      cursor: SystemMouseCursors.click,
+      child: Tooltip(
+        message: widget.label,
+        preferBelow: false,
+        verticalOffset: 10,
+        waitDuration: const Duration(milliseconds: 250),
+        decoration: BoxDecoration(
+          color: const Color(0xFF111827),
+          borderRadius: BorderRadius.circular(6),
+        ),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        textStyle: const TextStyle(
+          fontFamily: 'Inter',
+          color: Colors.white,
+          fontSize: 12,
+          fontWeight: FontWeight.w500,
+        ),
+        child: GestureDetector(
+          onTap: widget.onTap,
+          behavior: HitTestBehavior.opaque,
+          child: Container(
+            width: widget.itemSize,
+            height: widget.itemSize,
+            decoration: BoxDecoration(
+              color: _hovered ? _hoverBackground : Colors.transparent,
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                AnimatedScale(
+                  scale: _hovered ? 1.14 : 1.0,
+                  duration: const Duration(milliseconds: 140),
+                  curve: Curves.easeOutBack,
+                  child: Icon(
+                    widget.icon,
+                    size: 18,
+                    color: _iconColor,
+                  ),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  widget.label,
+                  textAlign: TextAlign.center,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontFamily: chatMessageFontFamily,
+                    fontSize: 9.5,
+                    color: widget.isDestructive
+                        ? const Color(0xFFFF3B30)
+                        : const Color(0xFF1C1C1E).withOpacity(0.8),
+                    fontWeight: FontWeight.w400,
+                    letterSpacing: -0.2,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
   }
 }
 
