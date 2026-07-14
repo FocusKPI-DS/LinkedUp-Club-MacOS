@@ -831,8 +831,8 @@ class _TodaysCalendarEventsState extends State<TodaysCalendarEvents> {
                 "Today's Schedule",
                 style: TextStyle(
                   fontFamily: '.SF Pro Display',
-                  fontSize: 28,
-                  fontWeight: FontWeight.w700,
+                  fontSize: 24,
+                  fontWeight: FontWeight.w500,
                   color: CupertinoColors.label,
                   letterSpacing: -0.8,
                   height: 1.1,

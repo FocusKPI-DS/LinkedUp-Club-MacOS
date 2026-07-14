@@ -12,8 +12,6 @@ import '/pages/chat/chat_component/add_user/add_user_widget.dart';
 import '/pages/chat/chat_component/reminder_time/reminder_time_widget.dart';
 import '/pages/event/gallary/gallary_widget.dart';
 import '/pages/chat/add_group_members/add_group_members_dialog.dart';
-import '/pages/chat/group_action_tasks/group_action_tasks_widget.dart';
-import '/pages/chat/group_chat_detail/mobile_group_tasks_widget.dart';
 import '/pages/chat/group_chat_detail/mobile_group_media_widget.dart';
 import 'dart:ui';
 import 'dart:io';
@@ -63,9 +61,6 @@ class _GroupChatDetailWidgetState extends State<GroupChatDetailWidget>
   late TabController _mediaLinksDocsTabController;
 
   final scaffoldKey = GlobalKey<ScaffoldState>();
-
-  bool _autoDetectTasksFromTranscripts = false;
-  bool _taskReminders = false;
 
   @override
   void initState() {
@@ -1000,23 +995,18 @@ class _GroupChatDetailWidgetState extends State<GroupChatDetailWidget>
         final imageUrl = images[index];
         return InkWell(
           onTap: () async {
-            await Navigator.push(
+            await FlutterFlowExpandedImageView.show(
               context,
-              PageTransition(
-                type: PageTransitionType.fade,
-                child: FlutterFlowExpandedImageView(
-                  image: CachedNetworkImage(
-                    fadeInDuration: const Duration(milliseconds: 300),
-                    fadeOutDuration: const Duration(milliseconds: 300),
-                    imageUrl: imageUrl,
-                    fit: BoxFit.contain,
-                  ),
-                  allowRotation: false,
-                  tag: imageUrl,
-                  useHeroAnimation: true,
-                  imageUrl: imageUrl,
-                ),
+              image: CachedNetworkImage(
+                fadeInDuration: const Duration(milliseconds: 300),
+                fadeOutDuration: const Duration(milliseconds: 300),
+                imageUrl: imageUrl,
+                fit: BoxFit.contain,
               ),
+              allowRotation: false,
+              tag: imageUrl,
+              useHeroAnimation: true,
+              imageUrl: imageUrl,
             );
           },
           child: Hero(
@@ -1272,40 +1262,6 @@ class _GroupChatDetailWidgetState extends State<GroupChatDetailWidget>
           ),
         );
       },
-    );
-  }
-
-  Widget _buildActionTasksPreviewStream({
-    required ChatsRecord? chatDoc,
-    required Widget Function(
-      BuildContext context,
-      AsyncSnapshot<List<ActionItemsRecord>> snapshot,
-    ) builder,
-  }) {
-    if (chatDoc == null) {
-      return builder(
-        context,
-        AsyncSnapshot<List<ActionItemsRecord>>.withData(
-          ConnectionState.done,
-          const [],
-        ),
-      );
-    }
-    if (useWindowsFirestoreRest) {
-      return RestPollBuilder<List<ActionItemsRecord>>(
-        interval: const Duration(seconds: 20),
-        fetch: () => fsQueryActionItemsByChat(chatDoc.reference, limit: 10),
-        builder: builder,
-      );
-    }
-    return StreamBuilder<List<ActionItemsRecord>>(
-      stream: queryActionItemsRecord(
-        queryBuilder: (actionItemsRecord) => actionItemsRecord
-            .where('chat_ref', isEqualTo: chatDoc.reference)
-            .orderBy('created_time', descending: true)
-            .limit(10),
-      ),
-      builder: builder,
     );
   }
 
@@ -3473,301 +3429,6 @@ class _GroupChatDetailWidgetState extends State<GroupChatDetailWidget>
                                             ),
                                           ].divide(
                                               const SizedBox(height: 12.0)),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                ),
-                                Divider(
-                                  height: 1,
-                                  thickness: 1,
-                                  color: const Color(0xFFE5E7EB),
-                                ),
-                                const SizedBox(height: 4),
-                                Container(
-                                  decoration: BoxDecoration(
-                                    color: FlutterFlowTheme.of(context)
-                                        .secondaryBackground,
-                                  ),
-                                  child: Padding(
-                                    padding: const EdgeInsets.all(16.0),
-                                    child: Column(
-                                      mainAxisSize: MainAxisSize.max,
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.start,
-                                      children: [
-                                        Text(
-                                          'Group\'s Action Tasks',
-                                          style: FlutterFlowTheme.of(context)
-                                              .titleMedium
-                                              .override(
-                                                font: GoogleFonts.inter(
-                                                  fontWeight: FontWeight.w600,
-                                                  fontStyle:
-                                                      FlutterFlowTheme.of(
-                                                              context)
-                                                          .titleMedium
-                                                          .fontStyle,
-                                                ),
-                                                color: Colors.black,
-                                                fontSize: 16.0,
-                                                letterSpacing: 0.0,
-                                                fontWeight: FontWeight.w600,
-                                                fontStyle:
-                                                    FlutterFlowTheme.of(context)
-                                                        .titleMedium
-                                                        .fontStyle,
-                                              ),
-                                        ),
-                                        const SizedBox(height: 16),
-                                        // Action Tasks Section - Inline
-                                        _buildActionTasksPreviewStream(
-                                          chatDoc: widget.chatDoc,
-                                          builder: (context, snapshot) {
-                                            final actionItems =
-                                                snapshot.data ?? [];
-                                            final taskCount =
-                                                actionItems.length;
-
-                                            return Column(
-                                              crossAxisAlignment:
-                                                  CrossAxisAlignment.start,
-                                              children: [
-                                                InkWell(
-                                                  splashColor:
-                                                      Colors.transparent,
-                                                  focusColor:
-                                                      Colors.transparent,
-                                                  hoverColor:
-                                                      Colors.transparent,
-                                                  highlightColor:
-                                                      Colors.transparent,
-                                                  onTap: () async {
-                                                    if (Platform.isIOS) {
-                                                      context.pushNamed(
-                                                        MobileGroupTasksWidget
-                                                            .routeName,
-                                                        queryParameters: {
-                                                          'chatDoc':
-                                                              serializeParam(
-                                                            widget.chatDoc,
-                                                            ParamType.Document,
-                                                          ),
-                                                        }.withoutNulls,
-                                                        extra: <String,
-                                                            dynamic>{
-                                                          'chatDoc':
-                                                              widget.chatDoc,
-                                                        },
-                                                      );
-                                                    } else {
-                                                      await Navigator.push(
-                                                        context,
-                                                        PageRouteBuilder(
-                                                          opaque: false,
-                                                          barrierColor: Colors
-                                                              .transparent,
-                                                          pageBuilder: (context,
-                                                                  animation,
-                                                                  secondaryAnimation) =>
-                                                              GroupActionTasksWidget(
-                                                            chatDoc:
-                                                                widget.chatDoc,
-                                                          ),
-                                                          transitionsBuilder:
-                                                              (context,
-                                                                  animation,
-                                                                  secondaryAnimation,
-                                                                  child) {
-                                                            const begin =
-                                                                Offset(
-                                                                    1.0, 0.0);
-                                                            const end =
-                                                                Offset.zero;
-                                                            const curve = Curves
-                                                                .easeInOut;
-                                                            var tween = Tween(
-                                                                    begin:
-                                                                        begin,
-                                                                    end: end)
-                                                                .chain(CurveTween(
-                                                                    curve:
-                                                                        curve));
-                                                            var offsetAnimation =
-                                                                animation.drive(
-                                                                    tween);
-                                                            return SlideTransition(
-                                                                position:
-                                                                    offsetAnimation,
-                                                                child: child);
-                                                          },
-                                                        ),
-                                                      );
-                                                    }
-                                                  },
-                                                  child: Container(
-                                                    width: double.infinity,
-                                                    padding:
-                                                        const EdgeInsets.all(
-                                                            12.0),
-                                                    decoration: BoxDecoration(
-                                                      color: Colors.white,
-                                                      borderRadius:
-                                                          BorderRadius.circular(
-                                                              12.0),
-                                                      border: Border.all(
-                                                        color: const Color(
-                                                            0xFFE5E7EB),
-                                                        width: 1,
-                                                      ),
-                                                    ),
-                                                    child: Row(
-                                                      mainAxisAlignment:
-                                                          MainAxisAlignment
-                                                              .spaceBetween,
-                                                      children: [
-                                                        Row(
-                                                          children: [
-                                                            Container(
-                                                              padding:
-                                                                  const EdgeInsets
-                                                                      .all(8.0),
-                                                              decoration:
-                                                                  BoxDecoration(
-                                                                color: const Color(
-                                                                        0xFF3B82F6)
-                                                                    .withOpacity(
-                                                                        0.1),
-                                                                borderRadius:
-                                                                    BorderRadius
-                                                                        .circular(
-                                                                            8.0),
-                                                              ),
-                                                              child: const Icon(
-                                                                Icons
-                                                                    .task_alt_outlined,
-                                                                size: 20,
-                                                                color: Color(
-                                                                    0xFF3B82F6),
-                                                              ),
-                                                            ),
-                                                            const SizedBox(
-                                                                width: 12),
-                                                            Column(
-                                                              crossAxisAlignment:
-                                                                  CrossAxisAlignment
-                                                                      .start,
-                                                              children: [
-                                                                Text(
-                                                                  'Action Tasks',
-                                                                  style:
-                                                                      const TextStyle(
-                                                                    fontFamily:
-                                                                        'Inter',
-                                                                    color: Color(
-                                                                        0xFF1A1F36),
-                                                                    fontSize:
-                                                                        14.0,
-                                                                    fontWeight:
-                                                                        FontWeight
-                                                                            .w600,
-                                                                  ),
-                                                                ),
-                                                                Text(
-                                                                  '$taskCount ${taskCount == 1 ? 'task' : 'tasks'}',
-                                                                  style:
-                                                                      const TextStyle(
-                                                                    fontFamily:
-                                                                        'Inter',
-                                                                    color: Color(
-                                                                        0xFF6B7280),
-                                                                    fontSize:
-                                                                        12.0,
-                                                                  ),
-                                                                ),
-                                                              ],
-                                                            ),
-                                                          ],
-                                                        ),
-                                                        const Icon(
-                                                          Icons.chevron_right,
-                                                          color:
-                                                              Color(0xFF6B7280),
-                                                          size: 24,
-                                                        ),
-                                                      ],
-                                                    ),
-                                                  ),
-                                                ),
-                                              ],
-                                            );
-                                          },
-                                        ),
-                                        const SizedBox(height: 12),
-                                        // Auto Detect Tasks from transcripts
-                                        Row(
-                                          mainAxisAlignment:
-                                              MainAxisAlignment.spaceBetween,
-                                          children: [
-                                            Expanded(
-                                              child: Text(
-                                                'Auto Detect Tasks from transcripts',
-                                                style: FlutterFlowTheme.of(
-                                                        context)
-                                                    .bodyMedium
-                                                    .override(
-                                                      fontFamily: 'Inter',
-                                                      color: const Color(
-                                                          0xFF1A1F36),
-                                                      fontSize: 14,
-                                                      fontWeight:
-                                                          FontWeight.w500,
-                                                    ),
-                                              ),
-                                            ),
-                                            Switch.adaptive(
-                                              value:
-                                                  _autoDetectTasksFromTranscripts,
-                                              onChanged: (value) => setState(
-                                                  () =>
-                                                      _autoDetectTasksFromTranscripts =
-                                                          value),
-                                              activeColor:
-                                                  const Color(0xFF3B82F6),
-                                            ),
-                                          ],
-                                        ),
-                                        const SizedBox(height: 8),
-                                        // Task Reminders
-                                        Row(
-                                          mainAxisAlignment:
-                                              MainAxisAlignment.spaceBetween,
-                                          children: [
-                                            Expanded(
-                                              child: Text(
-                                                'Task Reminders',
-                                                style: FlutterFlowTheme.of(
-                                                        context)
-                                                    .bodyMedium
-                                                    .override(
-                                                      fontFamily: 'Inter',
-                                                      color: const Color(
-                                                          0xFF1A1F36),
-                                                      fontSize: 14,
-                                                      fontWeight:
-                                                          FontWeight.w500,
-                                                    ),
-                                              ),
-                                            ),
-                                            Switch.adaptive(
-                                              value: _taskReminders,
-                                              onChanged: (value) =>
-                                                  setState(() =>
-                                                      _taskReminders = value),
-                                              activeColor:
-                                                  const Color(0xFF3B82F6),
-                                            ),
-                                          ],
                                         ),
                                       ],
                                     ),

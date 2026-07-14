@@ -441,8 +441,8 @@ class _SummerAITodosState extends State<SummerAITodos> {
                                     'Action Items',
                                     style: const TextStyle(
                                       fontFamily: '.SF Pro Display',
-                                      fontSize: 28,
-                                      fontWeight: FontWeight.w700,
+                                      fontSize: 24,
+                                      fontWeight: FontWeight.w500,
                                       color: CupertinoColors.label,
                                       letterSpacing: -0.8,
                                       height: 1.1,
@@ -551,8 +551,8 @@ class _SummerAITodosState extends State<SummerAITodos> {
                                 'Action Items',
                                 style: const TextStyle(
                                   fontFamily: '.SF Pro Display',
-                                  fontSize: 28,
-                                  fontWeight: FontWeight.w700,
+                                  fontSize: 24,
+                                  fontWeight: FontWeight.w500,
                                   color: CupertinoColors.label,
                                   letterSpacing: -0.8,
                                   height: 1.1,

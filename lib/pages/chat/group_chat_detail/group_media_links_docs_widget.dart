@@ -7,7 +7,6 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:ff_theme/flutter_flow/flutter_flow_theme.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
-import 'package:page_transition/page_transition.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'group_media_links_docs_model.dart';
 export 'group_media_links_docs_model.dart';
@@ -426,23 +425,18 @@ class _GroupMediaLinksDocsWidgetState
   Widget _buildMediaGridItem(String imageUrl) {
     return InkWell(
       onTap: () async {
-        await Navigator.push(
+        await FlutterFlowExpandedImageView.show(
           context,
-          PageTransition(
-            type: PageTransitionType.fade,
-            child: FlutterFlowExpandedImageView(
-              image: CachedNetworkImage(
-                fadeInDuration: const Duration(milliseconds: 300),
-                fadeOutDuration: const Duration(milliseconds: 300),
-                imageUrl: imageUrl,
-                fit: BoxFit.contain,
-              ),
-              allowRotation: false,
-              tag: imageUrl,
-              useHeroAnimation: true,
-              imageUrl: imageUrl,
-            ),
+          image: CachedNetworkImage(
+            fadeInDuration: const Duration(milliseconds: 300),
+            fadeOutDuration: const Duration(milliseconds: 300),
+            imageUrl: imageUrl,
+            fit: BoxFit.contain,
           ),
+          allowRotation: false,
+          tag: imageUrl,
+          useHeroAnimation: true,
+          imageUrl: imageUrl,
         );
       },
       child: Hero(

@@ -6376,11 +6376,6 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
                     _navigateToAddMembers(chat);
                   } else if (value == 'group_info') {
                     _viewGroupChat(chat);
-                  } else if (value == 'meeting_transcripts') {
-                    setState(() {
-                      _model.showMeetingTranscriptsPopup = true;
-                      _model.meetingTranscriptsPopupChat = chat;
-                    });
                   }
                 },
                 itemBuilder: (BuildContext context) {
@@ -6432,28 +6427,6 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
                         ),
                       ),
                     PopupMenuDivider(),
-                    PopupMenuItem<String>(
-                      value: 'meeting_transcripts',
-                      child: Row(
-                        children: [
-                          Icon(
-                            Icons.description_outlined,
-                            color: Color(0xFF374151),
-                            size: 18,
-                          ),
-                          SizedBox(width: 12),
-                          Text(
-                            'Meeting Transcripts',
-                            style: TextStyle(
-                              fontFamily: 'Inter',
-                              color: Color(0xFF111827),
-                              fontSize: 14,
-                              fontWeight: FontWeight.w500,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
                     PopupMenuItem<String>(
                       value: 'group_info',
                       child: Row(
@@ -9669,9 +9642,9 @@ class _ChatListItemState extends State<_ChatListItem>
                               ],
                             ),
                           ),
-                          const SizedBox(width: 10),
+                          const SizedBox(width: 6),
                           SizedBox(
-                            width: 56,
+                            width: 70,
                             child: Stack(
                               clipBehavior: Clip.none,
                               children: [
@@ -9952,6 +9925,10 @@ class _ChatListItemState extends State<_ChatListItem>
             if (difference.inHours < 24) {
               return DateFormat('h:mm a').format(messageTime);
             }
+            // Omit year when the message is from the current year.
+            if (messageTime.year == now.year) {
+              return DateFormat('MM/dd').format(messageTime);
+            }
             return DateFormat('MM/dd/yyyy').format(messageTime);
           }()
         : 'Unknown';
@@ -9963,6 +9940,10 @@ class _ChatListItemState extends State<_ChatListItem>
         color: widget.isSelected ? Color(0xFF6B7280) : Color(0xFF9CA3AF),
         fontSize: 11,
       ),
+      maxLines: 1,
+      softWrap: false,
+      overflow: TextOverflow.ellipsis,
+      textAlign: TextAlign.right,
     );
   }
 
