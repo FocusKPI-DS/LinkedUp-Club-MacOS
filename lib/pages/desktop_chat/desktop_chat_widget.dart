@@ -974,26 +974,24 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
         !kShowFoldersSidebar || _model.sidebarMode == SidebarMode.chat;
     return Container(
       width: double.infinity,
-      height: 80,
       decoration: BoxDecoration(
         color: Color.fromRGBO(
             250, 252, 255, 1), // Very light cyan tint, close to white
       ),
       child: Padding(
-        padding: EdgeInsetsDirectional.fromSTEB(16, 20, 16, 20),
+        padding: EdgeInsets.all(20),
         child: Row(
           mainAxisSize: MainAxisSize.max,
           children: [
-            // App Name
+            // App Name — match Settings page header
             Expanded(
               child: Text(
                 isChatMode ? 'Chat' : 'Folders',
                 style: TextStyle(
-                  fontFamily: 'Inter',
-                  color: Color(0xFF111827), // Dark text for light background
-                  fontSize: 20,
+                  fontFamily: 'SF Pro Display',
+                  color: Color(0xFF1A1A1A),
+                  fontSize: 24,
                   fontWeight: FontWeight.w700,
-                  letterSpacing: -0.5,
                 ),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,

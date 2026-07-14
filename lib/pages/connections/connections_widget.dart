@@ -5,12 +5,16 @@ import '/pages/desktop_chat/desktop_safe_user_builder.dart';
 import '/flutter_flow/flutter_flow_util.dart';
 import '/pages/mobile_chat/mobile_chat_widget.dart';
 import '/pages/connections/add_connections_widget.dart';
+import '/utils/desktop_pointer.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'dart:ui';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:adaptive_platform_ui/adaptive_platform_ui.dart';
+
+const double _kConnectionsContentMaxWidth = 1440;
+const double _kConnectionsSearchMaxWidth = 420;
+const double _kCardGridSpacing = 14;
 
 class ConnectionsWidget extends StatefulWidget {
   const ConnectionsWidget({super.key});
@@ -32,8 +36,7 @@ class _ConnectionsWidgetState extends State<ConnectionsWidget> {
 
   // ScrollControllers for each ListView
   final ScrollController _connectionsScrollController = ScrollController();
-  final ScrollController _requestsScrollController = ScrollController();
-  final ScrollController _sentRequestsScrollController = ScrollController();
+  final ScrollController _pendingScrollController = ScrollController();
 
   @override
   void initState() {
@@ -49,8 +52,7 @@ class _ConnectionsWidgetState extends State<ConnectionsWidget> {
   void dispose() {
     _searchController.dispose();
     _connectionsScrollController.dispose();
-    _requestsScrollController.dispose();
-    _sentRequestsScrollController.dispose();
+    _pendingScrollController.dispose();
     super.dispose();
   }
 
@@ -73,230 +75,228 @@ class _ConnectionsWidgetState extends State<ConnectionsWidget> {
     });
   }
 
+  int _gridColumnCount(double width) {
+    if (width >= 1180) return 4;
+    if (width >= 880) return 3;
+    if (width >= 560) return 2;
+    return 1;
+  }
+
+  Widget _constrainContent(Widget child) {
+    return Align(
+      alignment: Alignment.topLeft,
+      child: ConstrainedBox(
+        constraints:
+            const BoxConstraints(maxWidth: _kConnectionsContentMaxWidth),
+        child: child,
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return CupertinoPageScaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: const Color(0xFFF8FAFC),
       child: SafeArea(
-        child: Container(
-          color: Colors.white,
+        child: ColoredBox(
+          color: const Color(0xFFF8FAFC),
           child: Column(
             children: [
-              // Header with title and Add new button
-              Container(
-                color: Colors.white,
-                padding: EdgeInsets.fromLTRB(16, 16, 16, 0),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        'Connections',
-                        style: CupertinoTheme.of(context)
-                            .textTheme
-                            .navLargeTitleTextStyle
-                            .copyWith(
-                              fontSize: 34,
-                              fontWeight: FontWeight.bold,
-                            ),
-                      ),
-                    ),
-                    Material(
-                      color: Colors.transparent,
-                      child: InkWell(
-                        onTap: () {
-                          context.pushNamed(AddConnectionsWidget.routeName);
-                        },
-                        borderRadius: BorderRadius.circular(12),
-                        child: Container(
-                          padding:
-                              EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                          decoration: BoxDecoration(
-                            color: Colors.white,
-                            borderRadius: BorderRadius.circular(12),
-                            border: Border.all(
-                              color: Color(0xFFE5E7EB),
-                              width: 1,
-                            ),
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors.black.withOpacity(0.05),
-                                blurRadius: 4,
-                                offset: Offset(0, 2),
-                              ),
-                            ],
-                          ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Icon(
-                                CupertinoIcons.add,
-                                color: Color(0xFF007AFF),
-                                size: 18,
-                              ),
-                              SizedBox(width: 8),
-                              Text(
-                                'Add New',
-                                style: TextStyle(
-                                  fontFamily: 'SF Pro Text',
-                                  color: Color(0xFF007AFF),
-                                  fontSize: 14,
-                                  fontWeight: FontWeight.w600,
-                                  decoration: TextDecoration.none,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              SizedBox(height: 20),
-
-              // Filter Segmented Control
-              if (currentUserReference != null)
-                DesktopSafeUserBuilder(
-                  userRef: currentUserReference!,
-                  fetchOnce: fsGetUserOnce,
-                  builder: (context, user) {
-                    final connectionsCount =
-                        user?.friends.length ?? 0;
-                    final incomingRequestsCount =
-                        user?.friendRequests.length ?? 0;
-
-                    return Padding(
-                      padding:
-                          EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                      child: Container(
-                        width: double.infinity,
-                        child: CupertinoSlidingSegmentedControl<int>(
-                          backgroundColor: Color(0xFFF1F5F9),
-                          thumbColor: Colors.white,
-                          groupValue: _selectedTabIndex,
-                          children: {
-                            0: _buildSegment(
-                                'My Connections', connectionsCount, 0),
-                            1: _buildSegment(
-                                'Requests', incomingRequestsCount, 1),
-                            2: _buildSegment('Sent', 0, 2),
-                          },
-                          onValueChanged: (value) {
-                            if (value != null) {
-                              setState(() {
-                                _selectedTabIndex = value;
-                              });
-                            }
-                          },
-                        ),
-                      ),
-                    );
-                  },
-                )
-              else
-                Padding(
-                  padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                  child: Container(
-                    width: double.infinity,
-                    child: CupertinoSlidingSegmentedControl<int>(
-                      backgroundColor: Color(0xFFF1F5F9),
-                      thumbColor: Colors.white,
-                      groupValue: _selectedTabIndex,
-                      children: {
-                        0: _buildSegment('My Connections', 0, 0),
-                        1: _buildSegment('Requests', 0, 1),
-                        2: _buildSegment('Sent', 0, 2),
-                      },
-                      onValueChanged: (value) {
-                        if (value != null) {
-                          setState(() {
-                            _selectedTabIndex = value;
-                          });
-                        }
-                      },
-                    ),
-                  ),
-                ),
-              SizedBox(height: 16),
-
-              // Search bar
-              Container(
-                width: double.infinity,
-                padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                color: Colors.white,
-                child: Container(
-                  height: 44,
-                  decoration: BoxDecoration(
-                    color: CupertinoColors.systemGrey6,
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(
-                      color: CupertinoColors.separator,
-                      width: 0.5,
-                    ),
-                  ),
-                  child: CupertinoTextField(
-                    controller: _searchController,
-                    onChanged: (value) {
-                      setState(() {
-                        _searchQuery = value.toLowerCase();
-                      });
-                    },
-                    placeholder: 'Search connections',
-                    placeholderStyle: TextStyle(
-                      fontFamily: 'SF Pro Text',
-                      color: CupertinoColors.systemGrey,
-                      fontSize: 14,
-                      fontWeight: FontWeight.w400,
-                      decoration: TextDecoration.none,
-                    ),
-                    padding: EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-                    prefix: Padding(
-                      padding: EdgeInsets.only(left: 12, right: 8),
-                      child: Icon(
-                        CupertinoIcons.search,
-                        color: CupertinoColors.systemBlue,
-                        size: 18,
-                      ),
-                    ),
-                    suffix: _searchQuery.isNotEmpty
-                        ? GestureDetector(
-                            onTap: () {
-                              setState(() {
-                                _searchController.clear();
-                                _searchQuery = '';
-                              });
-                            },
-                            child: Padding(
-                              padding: EdgeInsets.only(right: 12),
-                              child: Icon(
-                                CupertinoIcons.xmark_circle_fill,
-                                color: CupertinoColors.systemGrey,
-                                size: 16,
-                              ),
-                            ),
-                          )
-                        : null,
-                    style: TextStyle(
-                      fontFamily: 'SF Pro Text',
-                      color: CupertinoColors.label,
-                      fontSize: 14,
-                      fontWeight: FontWeight.w400,
-                      decoration: TextDecoration.none,
-                    ),
-                    decoration: BoxDecoration(
-                      color: Colors.transparent,
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                  ),
-                ),
-              ),
-              SizedBox(height: 8),
-
-              // Content area
               Expanded(
-                child: _buildTabContent(),
+                child: _constrainContent(
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(28, 20, 28, 0),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        SizedBox(
+                          width: double.infinity,
+                          child: _buildPageHeader(),
+                        ),
+                        const SizedBox(height: 20),
+                        _buildTabsRow(),
+                        const SizedBox(height: 16),
+                        _buildSearchBar(),
+                        const SizedBox(height: 8),
+                        Expanded(
+                          child: SizedBox(
+                            width: double.infinity,
+                            child: _buildTabContent(),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
               ),
             ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildPageHeader() {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        const Expanded(
+          child: Text(
+            'Connections',
+            style: TextStyle(
+              fontFamily: 'SF Pro Display',
+              fontSize: 24,
+              fontWeight: FontWeight.w700,
+              color: Color(0xFF1A1A1A),
+              decoration: TextDecoration.none,
+            ),
+          ),
+        ),
+        Material(
+          color: Colors.transparent,
+          child: InkWell(
+            mouseCursor: SystemMouseCursors.click,
+            onTap: () {
+              showAddConnectionsDialog(context);
+            },
+            borderRadius: BorderRadius.circular(10),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              decoration: BoxDecoration(
+                color: const Color(0xFF2563EB),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: const Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.add_rounded, color: Colors.white, size: 18),
+                  SizedBox(width: 6),
+                  Text(
+                    'Add New',
+                    style: TextStyle(
+                      fontFamily: 'SF Pro Text',
+                      color: Colors.white,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      decoration: TextDecoration.none,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ).withClickCursor(),
+      ],
+    );
+  }
+
+  Widget _buildTabsRow() {
+    if (currentUserReference == null) {
+      return _buildSegmentedControl(connectionsCount: 0, pendingCount: 0);
+    }
+
+    return DesktopSafeUserBuilder(
+      userRef: currentUserReference!,
+      fetchOnce: fsGetUserOnce,
+      builder: (context, user) {
+        final connectionsCount = user?.friends.length ?? 0;
+        final incomingRequestsCount = user?.friendRequests.length ?? 0;
+        final sentRequestsCount = user == null
+            ? 0
+            : user.sentRequests
+                .where((ref) => !user.friends.contains(ref))
+                .length;
+        return _buildSegmentedControl(
+          connectionsCount: connectionsCount,
+          pendingCount: incomingRequestsCount + sentRequestsCount,
+        );
+      },
+    );
+  }
+
+  Widget _buildSegmentedControl({
+    required int connectionsCount,
+    required int pendingCount,
+  }) {
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: CupertinoSlidingSegmentedControl<int>(
+        backgroundColor: const Color(0xFFEef2F7),
+        thumbColor: Colors.white,
+        groupValue: _selectedTabIndex,
+        children: {
+          0: _buildSegment('My Connections', connectionsCount, 0),
+          1: _buildSegment('Pending', pendingCount, 1),
+        },
+        onValueChanged: (value) {
+          if (value != null) {
+            setState(() => _selectedTabIndex = value);
+          }
+        },
+      ),
+    );
+  }
+
+  Widget _buildSearchBar() {
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: _kConnectionsSearchMaxWidth),
+        child: Container(
+          height: 44,
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(22),
+            border: Border.all(color: const Color(0xFFE2E8F0), width: 1),
+          ),
+          child: CupertinoTextField(
+            controller: _searchController,
+            onChanged: (value) {
+              setState(() => _searchQuery = value.toLowerCase());
+            },
+            placeholder: 'Search connections...',
+            placeholderStyle: const TextStyle(
+              fontFamily: 'SF Pro Text',
+              color: Color(0xFF94A3B8),
+              fontSize: 14,
+              fontWeight: FontWeight.w400,
+              decoration: TextDecoration.none,
+            ),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+            prefix: const Padding(
+              padding: EdgeInsets.only(left: 14, right: 8),
+              child: Icon(
+                CupertinoIcons.search,
+                color: Color(0xFF94A3B8),
+                size: 18,
+              ),
+            ),
+            suffix: _searchQuery.isNotEmpty
+                ? GestureDetector(
+                    onTap: () {
+                      setState(() {
+                        _searchController.clear();
+                        _searchQuery = '';
+                      });
+                    },
+                    child: const Padding(
+                      padding: EdgeInsets.only(right: 12),
+                      child: Icon(
+                        CupertinoIcons.xmark_circle_fill,
+                        color: Color(0xFFCBD5E1),
+                        size: 16,
+                      ),
+                    ),
+                  ).withClickCursor()
+                : null,
+            style: const TextStyle(
+              fontFamily: 'SF Pro Text',
+              color: Color(0xFF0F172A),
+              fontSize: 14,
+              fontWeight: FontWeight.w400,
+              decoration: TextDecoration.none,
+            ),
+            decoration: const BoxDecoration(color: Colors.transparent),
           ),
         ),
       ),
@@ -325,9 +325,7 @@ class _ConnectionsWidgetState extends State<ConnectionsWidget> {
           case 0:
             return _buildConnectionsList(currentUser);
           case 1:
-            return _buildRequestsList(currentUser);
-          case 2:
-            return _buildSentRequestsList(currentUser);
+            return _buildPendingList(currentUser);
           default:
             return _buildConnectionsList(currentUser);
         }
@@ -342,88 +340,61 @@ class _ConnectionsWidgetState extends State<ConnectionsWidget> {
       return _buildEmptyState(
         icon: CupertinoIcons.person_2,
         title: 'No Connections Yet',
-        subtitle: 'Start connecting with people, Tap \'+\' to get started',
+        subtitle: 'Start connecting with people. Tap “Add New” to get started.',
       );
     }
 
     return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // Connection count and sort by row - Enhanced styling
-        Container(
-          padding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            border: Border(
-              bottom: BorderSide(
-                color: Color(0xFFF1F5F9),
-                width: 1,
-              ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(2, 8, 2, 12),
+          child: Text(
+            '${connections.length} CONNECTION${connections.length == 1 ? '' : 'S'}',
+            style: const TextStyle(
+              fontFamily: 'SF Pro Text',
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              letterSpacing: 0.8,
+              color: Color(0xFF94A3B8),
+              decoration: TextDecoration.none,
             ),
           ),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.start,
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              Text(
-                '${connections.length}',
-                style: TextStyle(
-                  fontFamily: 'SF Pro Display',
-                  fontSize: 17,
-                  fontWeight: FontWeight.w600,
-                  color: Color(0xFF1A1F36),
-                  letterSpacing: -0.2,
-                ),
-              ),
-              SizedBox(width: 6),
-              Text(
-                'connection${connections.length == 1 ? '' : 's'}',
-                style: TextStyle(
-                  fontFamily: 'SF Pro Display',
-                  fontSize: 15,
-                  fontWeight: FontWeight.w400,
-                  color: Color(0xFF64748B),
-                  letterSpacing: -0.1,
-                ),
-              ),
-            ],
-          ),
         ),
-
-        // Connections list
         Expanded(
           child: CupertinoScrollbar(
             controller: _connectionsScrollController,
-            child: ListView.separated(
-              controller: _connectionsScrollController,
-              padding: EdgeInsets.zero,
-              itemCount: connections.length,
-              separatorBuilder: (context, index) => SizedBox.shrink(),
-              itemBuilder: (context, index) {
-                final connectionRef = connections[index];
-                return DesktopSafeUserBuilder(
-                  userRef: connectionRef,
-                  fetchOnce: fsGetUserOnce,
-                  builder: (context, user) {
-                    if (user == null) {
-                      return SizedBox.shrink();
-                    }
-
-                    // Filter by search query
-                    if (_searchQuery.isNotEmpty) {
-                      final displayName = user.displayName.toLowerCase();
-                      final email = user.email.toLowerCase();
-                      final bio = user.bio.toLowerCase();
-                      if (!displayName.contains(_searchQuery) &&
-                          !email.contains(_searchQuery) &&
-                          !bio.contains(_searchQuery)) {
-                        return SizedBox.shrink();
-                      }
-                    }
-
-                    final isActuallyConnected =
-                        _isUserConnected(user.reference, currentUser);
-                    return _buildConnectionCard(user, currentUser,
-                        isConnected: isActuallyConnected);
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                final crossAxisCount = _gridColumnCount(constraints.maxWidth);
+                return GridView.builder(
+                  controller: _connectionsScrollController,
+                  padding: const EdgeInsets.only(bottom: 24),
+                  gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                    crossAxisCount: crossAxisCount,
+                    crossAxisSpacing: _kCardGridSpacing,
+                    mainAxisSpacing: _kCardGridSpacing,
+                    mainAxisExtent: 176,
+                  ),
+                  itemCount: connections.length,
+                  itemBuilder: (context, index) {
+                    final connectionRef = connections[index];
+                    return DesktopSafeUserBuilder(
+                      userRef: connectionRef,
+                      fetchOnce: fsGetUserOnce,
+                      builder: (context, user) {
+                        if (user == null || !_matchesSearch(user)) {
+                          return const SizedBox.shrink();
+                        }
+                        final isActuallyConnected =
+                            _isUserConnected(user.reference, currentUser);
+                        return _buildPersonCard(
+                          user,
+                          currentUser,
+                          isConnected: isActuallyConnected,
+                        );
+                      },
+                    );
                   },
                 );
               },
@@ -434,322 +405,388 @@ class _ConnectionsWidgetState extends State<ConnectionsWidget> {
     );
   }
 
-  Widget _buildRequestsList(UsersRecord currentUser) {
-    final requests = currentUser.friendRequests;
+  bool _matchesSearch(UsersRecord user) {
+    if (_searchQuery.isEmpty) return true;
+    final displayName = user.displayName.toLowerCase();
+    final email = user.email.toLowerCase();
+    final bio = user.bio.toLowerCase();
+    return displayName.contains(_searchQuery) ||
+        email.contains(_searchQuery) ||
+        bio.contains(_searchQuery);
+  }
 
-    if (requests.isEmpty) {
-      return _buildEmptyState(
-        icon: CupertinoIcons.person_add,
-        title: 'No Pending Requests',
-        subtitle: 'You have no pending connection requests',
-      );
+  int _mutualConnectionCount(UsersRecord currentUser, UsersRecord otherUser) {
+    return currentUser.friends
+        .toSet()
+        .intersection(otherUser.friends.toSet())
+        .length;
+  }
+
+  String _relativeTimeLabel(DateTime? time) {
+    if (time == null) return '';
+    final diff = DateTime.now().difference(time);
+    if (diff.inDays >= 365) {
+      final years = (diff.inDays / 365).floor();
+      return years == 1 ? '1 year ago' : '$years years ago';
     }
-
-    return Column(
-      children: [
-        // Request count and sort by row - Enhanced styling
-        Container(
-          padding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            border: Border(
-              bottom: BorderSide(
-                color: Color(0xFFF1F5F9),
-                width: 1,
-              ),
-            ),
-          ),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.start,
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              Text(
-                '${requests.length}',
-                style: TextStyle(
-                  fontFamily: 'SF Pro Display',
-                  fontSize: 17,
-                  fontWeight: FontWeight.w600,
-                  color: Color(0xFF1A1F36),
-                  letterSpacing: -0.2,
-                ),
-              ),
-              SizedBox(width: 6),
-              Text(
-                'request${requests.length == 1 ? '' : 's'}',
-                style: TextStyle(
-                  fontFamily: 'SF Pro Display',
-                  fontSize: 15,
-                  fontWeight: FontWeight.w400,
-                  color: Color(0xFF64748B),
-                  letterSpacing: -0.1,
-                ),
-              ),
-            ],
-          ),
-        ),
-
-        // Requests list
-        Expanded(
-          child: CupertinoScrollbar(
-            controller: _requestsScrollController,
-            child: ListView.separated(
-              controller: _requestsScrollController,
-              padding: EdgeInsets.zero,
-              itemCount: requests.length,
-              separatorBuilder: (context, index) => SizedBox.shrink(),
-              itemBuilder: (context, index) {
-                final requestRef = requests[index];
-                return DesktopSafeUserBuilder(
-                  userRef: requestRef,
-                  fetchOnce: fsGetUserOnce,
-                  builder: (context, user) {
-                    if (user == null) {
-                      return SizedBox.shrink();
-                    }
-
-                    // Filter by search query
-                    if (_searchQuery.isNotEmpty) {
-                      final displayName = user.displayName.toLowerCase();
-                      final email = user.email.toLowerCase();
-                      final bio = user.bio.toLowerCase();
-                      if (!displayName.contains(_searchQuery) &&
-                          !email.contains(_searchQuery) &&
-                          !bio.contains(_searchQuery)) {
-                        return SizedBox.shrink();
-                      }
-                    }
-
-                    return _buildRequestCard(user, currentUser);
-                  },
-                );
-              },
-            ),
-          ),
-        ),
-      ],
-    );
+    if (diff.inDays >= 30) {
+      final months = (diff.inDays / 30).floor();
+      return months == 1 ? '1 month ago' : '$months months ago';
+    }
+    if (diff.inDays >= 7) {
+      final weeks = (diff.inDays / 7).floor();
+      return weeks == 1 ? '1 week ago' : '$weeks weeks ago';
+    }
+    if (diff.inDays >= 1) {
+      return diff.inDays == 1 ? '1 day ago' : '${diff.inDays} days ago';
+    }
+    if (diff.inHours >= 1) {
+      return diff.inHours == 1 ? '1 hour ago' : '${diff.inHours} hours ago';
+    }
+    return 'Just now';
   }
 
-  Widget _buildSentRequestsList(UsersRecord currentUser) {
+  Color _avatarColorFor(UsersRecord user) {
+    const colors = <Color>[
+      Color(0xFFF59E0B),
+      Color(0xFF3B82F6),
+      Color(0xFF1E3A5F),
+      Color(0xFF8B5CF6),
+      Color(0xFF10B981),
+      Color(0xFFEF4444),
+      Color(0xFF0EA5E9),
+      Color(0xFFEC4899),
+    ];
+    final key = user.reference.id.isNotEmpty
+        ? user.reference.id
+        : user.displayName;
+    return colors[key.hashCode.abs() % colors.length];
+  }
+
+  Widget _buildPendingList(UsersRecord currentUser) {
+    final requests = currentUser.friendRequests;
     final sentRequests = currentUser.sentRequests
         .where((ref) => !currentUser.friends.contains(ref))
         .toList();
 
-    if (sentRequests.isEmpty) {
+    if (requests.isEmpty && sentRequests.isEmpty) {
       return _buildEmptyState(
-        icon: CupertinoIcons.paperplane,
-        title: 'No Sent Requests',
-        subtitle: 'You have no pending sent connection requests',
+        icon: CupertinoIcons.person_add,
+        title: 'No Pending Requests',
+        subtitle: 'You have no incoming or sent connection requests',
       );
     }
 
-    return Column(
-      children: [
-        // Sent request count and sort by row - Enhanced styling
-        Container(
-          padding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            border: Border(
-              bottom: BorderSide(
-                color: Color(0xFFF1F5F9),
-                width: 1,
-              ),
+    return CupertinoScrollbar(
+      controller: _pendingScrollController,
+      child: ListView(
+        controller: _pendingScrollController,
+        padding: const EdgeInsets.only(bottom: 24),
+        children: [
+          _buildPendingSectionHeader('Requests', requests.length),
+          if (requests.isEmpty)
+            _buildPendingSectionEmpty('No incoming requests')
+          else
+            _buildPendingCardGrid(
+              refs: requests,
+              currentUser: currentUser,
+              isIncoming: true,
             ),
-          ),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.start,
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              Text(
-                '${sentRequests.length}',
-                style: TextStyle(
-                  fontFamily: 'SF Pro Display',
-                  fontSize: 17,
-                  fontWeight: FontWeight.w600,
-                  color: Color(0xFF1A1F36),
-                  letterSpacing: -0.2,
-                ),
-              ),
-              SizedBox(width: 6),
-              Text(
-                'sent request${sentRequests.length == 1 ? '' : 's'}',
-                style: TextStyle(
-                  fontFamily: 'SF Pro Display',
-                  fontSize: 15,
-                  fontWeight: FontWeight.w400,
-                  color: Color(0xFF64748B),
-                  letterSpacing: -0.1,
-                ),
-              ),
-            ],
-          ),
-        ),
-
-        // Sent requests list
-        Expanded(
-          child: CupertinoScrollbar(
-            controller: _sentRequestsScrollController,
-            child: ListView.separated(
-              controller: _sentRequestsScrollController,
-              padding: EdgeInsets.zero,
-              itemCount: sentRequests.length,
-              separatorBuilder: (context, index) => SizedBox.shrink(),
-              itemBuilder: (context, index) {
-                final requestRef = sentRequests[index];
-                return DesktopSafeUserBuilder(
-                  userRef: requestRef,
-                  fetchOnce: fsGetUserOnce,
-                  builder: (context, user) {
-                    if (user == null) {
-                      return SizedBox.shrink();
-                    }
-                    final isValidSentRequest =
-                        _isValidSentRequest(user.reference, currentUser);
-                    if (!isValidSentRequest) {
-                      return SizedBox.shrink();
-                    }
-
-                    // Filter by search query
-                    if (_searchQuery.isNotEmpty) {
-                      final displayName = user.displayName.toLowerCase();
-                      final email = user.email.toLowerCase();
-                      final bio = user.bio.toLowerCase();
-                      if (!displayName.contains(_searchQuery) &&
-                          !email.contains(_searchQuery) &&
-                          !bio.contains(_searchQuery)) {
-                        return SizedBox.shrink();
-                      }
-                    }
-
-                    return _buildConnectionCard(user, currentUser,
-                        isSentRequest: true);
-                  },
-                );
-              },
+          const SizedBox(height: 8),
+          _buildPendingSectionHeader('Sent', sentRequests.length),
+          if (sentRequests.isEmpty)
+            _buildPendingSectionEmpty('No sent requests')
+          else
+            _buildPendingCardGrid(
+              refs: sentRequests,
+              currentUser: currentUser,
+              isIncoming: false,
             ),
-          ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 
-  Widget _buildConnectionCard(UsersRecord user, UsersRecord currentUser,
-      {bool isConnected = false,
-      bool isSentRequest = false,
-      bool hasIncomingRequest = false}) {
-    return GestureDetector(
-      onTap: () {
-        _viewUserProfile(user);
-      },
-      child: Container(
-        decoration: BoxDecoration(
-          color: Colors.white,
-          border: Border(
-            bottom: BorderSide(
-              color: Color(0xFFE5E7EB),
-              width: 1,
-            ),
-          ),
-        ),
-        child: Padding(
-          padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // User avatar
-              Container(
-                width: 48,
-                height: 48,
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(28),
-                  child: user.photoUrl.isNotEmpty
-                      ? CachedNetworkImage(
-                          imageUrl: user.photoUrl,
-                          width: 48,
-                          height: 48,
-                          fit: BoxFit.cover,
-                          placeholder: (context, url) => Container(
-                            width: 48,
-                            height: 48,
-                            decoration: BoxDecoration(
-                              color: Color(0xFFF1F5F9),
-                              shape: BoxShape.circle,
-                            ),
-                            child: Icon(
-                              CupertinoIcons.person_fill,
-                              color: Color(0xFF64748B),
-                              size: 24,
-                            ),
-                          ),
-                          errorWidget: (context, url, error) =>
-                              _buildInitialsAvatar(user),
-                        )
-                      : _buildInitialsAvatar(user),
+  Widget _buildPendingCardGrid({
+    required List<DocumentReference> refs,
+    required UsersRecord currentUser,
+    required bool isIncoming,
+  }) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final crossAxisCount = _gridColumnCount(constraints.maxWidth);
+        final totalSpacing = _kCardGridSpacing * (crossAxisCount - 1);
+        final cardWidth =
+            (constraints.maxWidth - totalSpacing) / crossAxisCount;
+
+        return Wrap(
+          spacing: _kCardGridSpacing,
+          runSpacing: _kCardGridSpacing,
+          children: [
+            for (final ref in refs)
+              SizedBox(
+                width: cardWidth,
+                child: DesktopSafeUserBuilder(
+                  userRef: ref,
+                  fetchOnce: fsGetUserOnce,
+                  builder: (context, user) {
+                    if (user == null || !_matchesSearch(user)) {
+                      return const SizedBox.shrink();
+                    }
+                    if (!isIncoming &&
+                        !_isValidSentRequest(user.reference, currentUser)) {
+                      return const SizedBox.shrink();
+                    }
+                    return SizedBox(
+                      height: 180,
+                      child: _buildPersonCard(
+                        user,
+                        currentUser,
+                        hasIncomingRequest: isIncoming,
+                        isSentRequest: !isIncoming,
+                      ),
+                    );
+                  },
                 ),
               ),
-              SizedBox(width: 10),
+          ],
+        );
+      },
+    );
+  }
 
-              // User info
+  Widget _buildPendingSectionHeader(String title, int count) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(2, 12, 2, 12),
+      child: Row(
+        children: [
+          Text(
+            title.toUpperCase(),
+            style: const TextStyle(
+              fontFamily: 'SF Pro Text',
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              letterSpacing: 0.8,
+              color: Color(0xFF94A3B8),
+              decoration: TextDecoration.none,
+            ),
+          ),
+          const SizedBox(width: 8),
+          Text(
+            '$count',
+            style: const TextStyle(
+              fontFamily: 'SF Pro Text',
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              color: Color(0xFF64748B),
+              decoration: TextDecoration.none,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPendingSectionEmpty(String message) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(2, 0, 2, 12),
+      child: Text(
+        message,
+        style: const TextStyle(
+          fontFamily: 'SF Pro Text',
+          fontSize: 14,
+          fontWeight: FontWeight.w400,
+          color: Color(0xFF94A3B8),
+          decoration: TextDecoration.none,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildPersonCard(
+    UsersRecord user,
+    UsersRecord currentUser, {
+    bool isConnected = false,
+    bool isSentRequest = false,
+    bool hasIncomingRequest = false,
+  }) {
+    final mutualCount = _mutualConnectionCount(currentUser, user);
+    final timeLabel = _relativeTimeLabel(user.createdTime);
+    final name =
+        user.displayName.isNotEmpty ? user.displayName : 'Unknown User';
+
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        mouseCursor: SystemMouseCursors.click,
+        onTap: () => _viewUserProfile(user),
+        borderRadius: BorderRadius.circular(14),
+        child: Container(
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: const Color(0xFFE5E7EB), width: 1),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
               Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(14, 14, 10, 10),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      _buildCardAvatar(user),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              name,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                fontFamily: 'SF Pro Display',
+                                color: Color(0xFF0F172A),
+                                fontSize: 15,
+                                fontWeight: FontWeight.w600,
+                                letterSpacing: -0.2,
+                                decoration: TextDecoration.none,
+                              ),
+                            ),
+                            if (user.email.isNotEmpty) ...[
+                              const SizedBox(height: 3),
+                              Row(
+                                children: [
+                                  const Icon(
+                                    Icons.mail_outline_rounded,
+                                    size: 13,
+                                    color: Color(0xFF94A3B8),
+                                  ),
+                                  const SizedBox(width: 4),
+                                  Expanded(
+                                    child: Text(
+                                      user.email,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: const TextStyle(
+                                        fontFamily: 'SF Pro Text',
+                                        color: Color(0xFF64748B),
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.w400,
+                                        decoration: TextDecoration.none,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ],
+                            if (user.bio.isNotEmpty) ...[
+                              const SizedBox(height: 8),
+                              Text(
+                                user.bio,
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                  fontFamily: 'SF Pro Text',
+                                  color: Color(0xFF475569),
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w400,
+                                  height: 1.3,
+                                  decoration: TextDecoration.none,
+                                ),
+                              ),
+                            ],
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: 4),
+                      _buildActionButtons(
+                        user,
+                        currentUser,
+                        isConnected: isConnected,
+                        isSentRequest: isSentRequest,
+                        hasIncomingRequest: hasIncomingRequest,
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              Container(
+                height: 1,
+                color: const Color(0xFFF1F5F9),
+              ),
+              Padding(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                child: Row(
                   children: [
+                    const Icon(
+                      Icons.people_outline_rounded,
+                      size: 14,
+                      color: Color(0xFF94A3B8),
+                    ),
+                    const SizedBox(width: 4),
                     Text(
-                      user.displayName.isNotEmpty
-                          ? user.displayName
-                          : 'Unknown User',
-                      style: TextStyle(
-                        fontFamily: 'SF Pro Display',
-                        color: Color(0xFF000000),
-                        fontSize: 15,
-                        fontWeight: FontWeight.w600,
-                        letterSpacing: -0.2,
-                        height: 1.2,
+                      '$mutualCount mutual',
+                      style: const TextStyle(
+                        fontFamily: 'SF Pro Text',
+                        fontSize: 12,
+                        fontWeight: FontWeight.w400,
+                        color: Color(0xFF64748B),
+                        decoration: TextDecoration.none,
                       ),
                     ),
-                    SizedBox(height: 2),
-
-                    // Bio or job title (can span multiple lines)
-                    if (user.bio.isNotEmpty)
-                      Text(
-                        user.bio,
-                        style: TextStyle(
-                          fontFamily: 'SF Pro Display',
-                          color: Color(0xFF666666),
-                          fontSize: 13,
-                          fontWeight: FontWeight.w400,
-                          height: 1.3,
-                        ),
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                      )
-                    else
-                      Text(
-                        user.email,
-                        style: TextStyle(
-                          fontFamily: 'SF Pro Display',
-                          color: Color(0xFF666666),
-                          fontSize: 13,
-                          fontWeight: FontWeight.w400,
-                          height: 1.3,
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
+                    const Spacer(),
+                    if (timeLabel.isNotEmpty) ...[
+                      const Icon(
+                        Icons.schedule_rounded,
+                        size: 14,
+                        color: Color(0xFF94A3B8),
                       ),
+                      const SizedBox(width: 4),
+                      Text(
+                        timeLabel,
+                        style: const TextStyle(
+                          fontFamily: 'SF Pro Text',
+                          fontSize: 12,
+                          fontWeight: FontWeight.w400,
+                          color: Color(0xFF64748B),
+                          decoration: TextDecoration.none,
+                        ),
+                      ),
+                    ],
                   ],
                 ),
               ),
-
-              // Action buttons (icon buttons)
-              _buildActionButtons(user, currentUser,
-                  isConnected: isConnected,
-                  isSentRequest: isSentRequest,
-                  hasIncomingRequest: hasIncomingRequest),
             ],
           ),
         ),
       ),
+    ).withClickCursor();
+  }
+
+  Widget _buildCardAvatar(UsersRecord user) {
+    return Container(
+      width: 44,
+      height: 44,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        color: _avatarColorFor(user),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: user.photoUrl.isNotEmpty
+          ? CachedNetworkImage(
+              imageUrl: user.photoUrl,
+              width: 44,
+              height: 44,
+              fit: BoxFit.cover,
+              placeholder: (context, url) => _buildInitialsAvatar(user, size: 44),
+              errorWidget: (context, url, error) =>
+                  _buildInitialsAvatar(user, size: 44),
+            )
+          : _buildInitialsAvatar(user, size: 44),
     );
   }
 
@@ -769,11 +806,12 @@ class _ConnectionsWidgetState extends State<ConnectionsWidget> {
       return Material(
         color: Colors.transparent,
         child: InkWell(
+          mouseCursor: SystemMouseCursors.click,
           onTap: () => _showMoreOptions(user, currentUser),
           borderRadius: BorderRadius.circular(20),
           child: Container(
-            width: 36,
-            height: 36,
+            width: 32,
+            height: 32,
             decoration: BoxDecoration(
               border: Border.all(
                 color: Color(0xFFE5E7EB),
@@ -782,129 +820,132 @@ class _ConnectionsWidgetState extends State<ConnectionsWidget> {
               shape: BoxShape.circle,
             ),
             child: Icon(
-              CupertinoIcons.ellipsis_vertical,
-              size: 16,
-              color: Color(0xFF666666),
+              CupertinoIcons.ellipsis,
+              size: 14,
+              color: Color(0xFF64748B),
             ),
           ),
         ),
-      );
+      ).withClickCursor();
     } else if (actuallyHasIncomingRequest && !actuallyHasSentRequest) {
-      // Accept and Decline buttons for incoming requests
-      return Row(
+      // Compact Accept / Decline for card layout
+      return Column(
         mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.end,
         children: [
           Material(
             color: Colors.transparent,
             child: InkWell(
+              mouseCursor: SystemMouseCursors.click,
               onTap: isLoading ? null : () => _acceptConnectionRequest(user),
-              borderRadius: BorderRadius.circular(4),
+              borderRadius: BorderRadius.circular(6),
               child: Container(
-                padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                padding: EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                 decoration: BoxDecoration(
                   color: Color(0xFF2563EB),
-                  borderRadius: BorderRadius.circular(4),
+                  borderRadius: BorderRadius.circular(6),
                 ),
                 child: isLoading
                     ? SizedBox(
-                        width: 16,
-                        height: 16,
+                        width: 14,
+                        height: 14,
                         child: CupertinoActivityIndicator(color: Colors.white),
                       )
                     : Text(
                         'Accept',
                         style: TextStyle(
                           fontFamily: 'SF Pro Display',
-                          fontSize: 14,
+                          fontSize: 12,
                           fontWeight: FontWeight.w600,
                           color: Colors.white,
+                          decoration: TextDecoration.none,
                         ),
                       ),
               ),
             ),
-          ),
-          SizedBox(width: 8),
+          ).withClickCursor(),
+          SizedBox(height: 6),
           Material(
             color: Colors.transparent,
             child: InkWell(
+              mouseCursor: SystemMouseCursors.click,
               onTap: isLoading ? null : () => _declineConnectionRequest(user),
-              borderRadius: BorderRadius.circular(4),
+              borderRadius: BorderRadius.circular(6),
               child: Container(
-                padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                padding: EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                 decoration: BoxDecoration(
                   border: Border.all(
                     color: Color(0xFFE5E7EB),
-                    width: 1.5,
+                    width: 1,
                   ),
-                  borderRadius: BorderRadius.circular(4),
+                  borderRadius: BorderRadius.circular(6),
+                  color: Colors.white,
                 ),
-                child: isLoading
-                    ? SizedBox(
-                        width: 16,
-                        height: 16,
-                        child: CupertinoActivityIndicator(),
-                      )
-                    : Text(
-                        'Decline',
-                        style: TextStyle(
-                          fontFamily: 'SF Pro Display',
-                          fontSize: 14,
-                          fontWeight: FontWeight.w600,
-                          color: Color(0xFF666666),
-                        ),
-                      ),
+                child: Text(
+                  'Decline',
+                  style: TextStyle(
+                    fontFamily: 'SF Pro Display',
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: Color(0xFF64748B),
+                    decoration: TextDecoration.none,
+                  ),
+                ),
               ),
             ),
-          ),
+          ).withClickCursor(),
         ],
       );
     } else if (actuallyHasSentRequest) {
-      // Show cancel button for sent requests in the "Sent" tab
-      if (_selectedTabIndex == 2) {
+      // Show cancel button for sent requests in the Pending tab
+      if (_selectedTabIndex == 1) {
         return Material(
           color: Colors.transparent,
           child: InkWell(
+            mouseCursor: SystemMouseCursors.click,
             onTap: isLoading ? null : () => _cancelConnectionRequest(user),
-            borderRadius: BorderRadius.circular(4),
+            borderRadius: BorderRadius.circular(6),
             child: Container(
-              padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              padding: EdgeInsets.symmetric(horizontal: 10, vertical: 6),
               decoration: BoxDecoration(
                 color: Color(0xFFDC2626),
-                borderRadius: BorderRadius.circular(4),
+                borderRadius: BorderRadius.circular(6),
               ),
               child: isLoading
                   ? SizedBox(
-                      width: 16,
-                      height: 16,
+                      width: 14,
+                      height: 14,
                       child: CupertinoActivityIndicator(color: Colors.white),
                     )
                   : Text(
                       'Cancel',
                       style: TextStyle(
                         fontFamily: 'SF Pro Display',
-                        fontSize: 14,
+                        fontSize: 12,
                         fontWeight: FontWeight.w600,
                         color: Colors.white,
+                        decoration: TextDecoration.none,
                       ),
                     ),
             ),
           ),
-        );
+        ).withClickCursor();
       } else {
         // Show pending state in other tabs
         return Container(
-          padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          padding: EdgeInsets.symmetric(horizontal: 10, vertical: 6),
           decoration: BoxDecoration(
             color: Color(0xFFF1F5F9),
-            borderRadius: BorderRadius.circular(4),
+            borderRadius: BorderRadius.circular(6),
           ),
           child: Text(
             'Pending',
             style: TextStyle(
               fontFamily: 'SF Pro Display',
-              fontSize: 14,
+              fontSize: 12,
               fontWeight: FontWeight.w600,
               color: Color(0xFF64748B),
+              decoration: TextDecoration.none,
             ),
           ),
         );
@@ -1052,61 +1093,27 @@ class _ConnectionsWidgetState extends State<ConnectionsWidget> {
     }
   }
 
-  Widget _buildRequestCard(UsersRecord user, UsersRecord currentUser) {
-    return _buildConnectionCard(user, currentUser, hasIncomingRequest: true);
-  }
+  Widget _buildInitialsAvatar(UsersRecord user, {double size = 48}) {
+    final parts = user.displayName.trim().split(RegExp(r'\s+'));
+    final initials = parts.isEmpty || parts.first.isEmpty
+        ? 'U'
+        : parts.map((name) => name[0]).take(2).join();
 
-  Widget _buildUserAvatar(UsersRecord user) {
     return Container(
-      width: 60,
-      height: 60,
+      width: size,
+      height: size,
       decoration: BoxDecoration(
+        color: _avatarColorFor(user),
         shape: BoxShape.circle,
-        boxShadow: [
-          BoxShadow(
-            color: CupertinoColors.systemGrey.withOpacity(0.2),
-            blurRadius: 6,
-            offset: Offset(0, 2),
-          ),
-        ],
       ),
-      child: ClipOval(
-        child: user.photoUrl.isNotEmpty
-            ? CachedNetworkImage(
-                imageUrl: user.photoUrl,
-                fit: BoxFit.cover,
-                placeholder: (context, url) => Container(
-                  color: CupertinoColors.systemGrey5,
-                  child: Icon(
-                    CupertinoIcons.person_fill,
-                    color: CupertinoColors.systemGrey,
-                    size: 28,
-                  ),
-                ),
-                errorWidget: (context, url, error) =>
-                    _buildInitialsAvatar(user),
-              )
-            : _buildInitialsAvatar(user),
-      ),
-    );
-  }
-
-  Widget _buildInitialsAvatar(UsersRecord user) {
-    final initials = user.displayName.isNotEmpty
-        ? user.displayName.split(' ').map((name) => name[0]).take(2).join()
-        : 'U';
-
-    return Container(
-      width: 48,
-      height: 48,
-      color: CupertinoColors.systemBlue,
       child: Center(
         child: Text(
           initials.toUpperCase(),
           style: TextStyle(
-            color: CupertinoColors.white,
-            fontSize: 18,
+            color: Colors.white,
+            fontSize: size * 0.36,
             fontWeight: FontWeight.w600,
+            decoration: TextDecoration.none,
           ),
         ),
       ),
@@ -1465,8 +1472,25 @@ class _ConnectionsWidgetState extends State<ConnectionsWidget> {
   }
 
   Widget _buildSegment(String label, int count, int index) {
+    final isSelected = _selectedTabIndex == index;
+    final isPendingTab = index == 1;
+    final badgeColor = count <= 0
+        ? Colors.transparent
+        : isPendingTab && !isSelected
+            ? const Color(0xFFF97316)
+            : isSelected
+                ? const Color(0xFF2563EB)
+                : const Color(0xFFE2E8F0);
+    final badgeTextColor = count <= 0
+        ? Colors.transparent
+        : isPendingTab && !isSelected
+            ? Colors.white
+            : isSelected
+                ? Colors.white
+                : const Color(0xFF64748B);
+
     return Container(
-      padding: EdgeInsets.symmetric(vertical: 8, horizontal: 4),
+      padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         mainAxisAlignment: MainAxisAlignment.center,
@@ -1477,12 +1501,10 @@ class _ConnectionsWidgetState extends State<ConnectionsWidget> {
               style: TextStyle(
                 fontFamily: 'SF Pro Text',
                 fontSize: 14,
-                fontWeight: _selectedTabIndex == index
-                    ? FontWeight.w600
-                    : FontWeight.w500,
-                color: _selectedTabIndex == index
-                    ? Color(0xFF007AFF)
-                    : Color(0xFF64748B),
+                fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
+                color: isSelected
+                    ? const Color(0xFF2563EB)
+                    : const Color(0xFF64748B),
                 decoration: TextDecoration.none,
               ),
               overflow: TextOverflow.ellipsis,
@@ -1490,17 +1512,15 @@ class _ConnectionsWidgetState extends State<ConnectionsWidget> {
             ),
           ),
           if (count > 0) ...[
-            SizedBox(width: 4),
+            const SizedBox(width: 6),
             Container(
-              padding: EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
               decoration: BoxDecoration(
-                color: _selectedTabIndex == index
-                    ? Color(0xFF007AFF)
-                    : Color(0xFFE2E8F0),
+                color: badgeColor,
                 borderRadius: BorderRadius.circular(10),
               ),
-              constraints: BoxConstraints(
-                minWidth: 16,
+              constraints: const BoxConstraints(
+                minWidth: 18,
                 minHeight: 16,
               ),
               child: Center(
@@ -1510,9 +1530,7 @@ class _ConnectionsWidgetState extends State<ConnectionsWidget> {
                     fontFamily: 'SF Pro Text',
                     fontSize: 10,
                     fontWeight: FontWeight.bold,
-                    color: _selectedTabIndex == index
-                        ? Colors.white
-                        : Color(0xFF64748B),
+                    color: badgeTextColor,
                     decoration: TextDecoration.none,
                   ),
                   textAlign: TextAlign.center,

@@ -598,7 +598,8 @@ GoRouter createRouter(AppStateNotifier appStateNotifier) {
         name: AddConnectionsWidget.routeName,
         path: AddConnectionsWidget.routePath,
         requireAuth: true,
-        builder: (context, params) => const AddConnectionsWidget(),
+        builder: (context, params) =>
+            const AddConnectionsWidget(asDialog: false),
       ),
       FFRoute(
         name: $branchio_dynamic_linking_akp5u6.TestHomePageWidget.routeName,
