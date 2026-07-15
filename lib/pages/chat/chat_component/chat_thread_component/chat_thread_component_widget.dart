@@ -309,8 +309,16 @@ class ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget> {
           .addListener(_desktopScrollListener!);
     }
 
-    // Create shared QuillController for @ detection
-    _quillController = QuillController.basic();
+    // Create shared QuillController for @ detection.
+    // Disable external rich-text (HTML) paste so Quill doesn't insert both the
+    // clipboard's HTML and plain-text representations (which duplicates text).
+    _quillController = QuillController.basic(
+      config: const QuillControllerConfig(
+        clipboardConfig: QuillClipboardConfig(
+          enableExternalRichPaste: false,
+        ),
+      ),
+    );
     _quillController!.addListener(_onQuillTextChanged);
 
     // Register global keyboard handler to intercept Cmd+V BEFORE QuillEditor consumes it
