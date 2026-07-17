@@ -67,22 +67,31 @@ async function sendLonaAnnouncement() {
     // ═══════════════════════════════════════════════════════════════
     // ANNOUNCEMENT MESSAGE - EDIT THIS!
     // ═══════════════════════════════════════════════════════════════
-    const announcementMessage = `📂 Chat Folders Update — Simplified Navigation
+    const announcementMessage = `**Lona – Messaging Update (macOS & Web)**
 
-Based on your feedback, we've heard that chat folders can make it harder to find conversations when you have a large number of chats. Here's what's changed:
+This update focuses on the messaging experience across macOS and the web app, making conversations easier to navigate while introducing a cleaner, more polished interface.
 
-✅ Pinned Chats Only (Default View)
-By default, the chat list now only shows a "Pinned" section at the top for quick access. This keeps your sidebar clean and focused.
+**What's New:**
 
-📁 Detailed Folders (On Demand)
-Want your custom folders back? Simply tap the folder icon button to toggle the full folder view on or off — it's just one click away.
+1. 🗂️ **Chat Header Enhancements** — Chat headers now provide quick access to Messages, Files & Links, Action Tasks, and Pinned Messages, making it easier to find everything related to a conversation.
 
-🕐 Inactive Chats
-Chats with no new messages for over 30 days are now automatically moved to an "Inactive" tab. This keeps your active conversations front and center without losing any history.
+2. 👥 **Group Member Avatars** — Group chat members are now displayed as an avatar stack in the chat header, so you can quickly see who's in the conversation.
 
-These updates are now live on iOS, Web, and macOS. We hope this makes your daily experience smoother!
+3. ✏️ **Easier Group Customization** — Group chat creators can now rename their group and update the group picture directly from the chat header.
 
-— The Lona Team 💙`;
+4. 🎨 **UI Refresh** — Refined interface elements throughout the messaging experience, including updates to the chat sidebar and overall layout for a cleaner, more consistent look and feel.
+
+5. 📥 **Inactive Chats** — Inactive conversations are now organized into a collapsible section at the bottom of the **All Messages** tab, helping you stay focused on your active chats.
+
+6. ⚡ **Improved Message Actions** — Hover over any message to access a contextual menu with the most commonly used actions first, with additional options available in the overflow menu.
+
+7. 🖼️ **Photo Stacks** — Multiple photos sent together are now grouped into a swipeable stack. Drag with your mouse or swipe on your trackpad to browse through images seamlessly.
+
+8. 🐞 **Bug Fixes** — Fixed an issue where pasting text into the message composer could sometimes duplicate the pasted content.
+
+Please update to the latest version. If you encounter any issues, feel free to reach out.
+
+— The Lona Team`;
     // ═══════════════════════════════════════════════════════════════
 
     try {
