@@ -16,6 +16,7 @@ import '/pages/chat/user_profile_popup/user_profile_popup.dart';
 import '/pages/chat/group_chat_detail/mobile_group_media_widget.dart';
 import 'dart:ui';
 import 'dart:io';
+import 'dart:typed_data';
 import '/custom_code/widgets/index.dart' as custom_widgets;
 import '/custom_code/services/fireflies_api_service.dart';
 import '/index.dart';
@@ -1397,140 +1398,295 @@ class _GroupChatDetailWidgetState extends State<GroupChatDetailWidget>
     final TextEditingController nameController = TextEditingController(
       text: widget.chatDoc?.title ?? '',
     );
+    XFile? pickedImage;
+    Uint8List? previewBytes;
+    var isSaving = false;
 
     await showDialog(
       context: context,
       builder: (dialogContext) {
-        return Dialog(
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
-          ),
-          child: Container(
-            padding: const EdgeInsets.all(24),
-            constraints: const BoxConstraints(maxWidth: 400),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text(
-                  'Edit Group Name',
-                  style: TextStyle(
-                    fontFamily: 'Inter',
-                    fontSize: 20,
-                    fontWeight: FontWeight.w600,
-                    color: Color(0xFF1A1F36),
+        return StatefulBuilder(
+          builder: (dialogContext, setDialogState) {
+            Future<void> pickImage() async {
+              try {
+                final picker = ImagePicker();
+                final image = await picker.pickImage(
+                  source: ImageSource.gallery,
+                  maxWidth: 512,
+                  maxHeight: 512,
+                  imageQuality: 85,
+                );
+                if (image == null) return;
+                final bytes = await image.readAsBytes();
+                setDialogState(() {
+                  pickedImage = image;
+                  previewBytes = bytes;
+                });
+              } catch (e) {
+                if (!mounted) return;
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text('Error picking image: $e'),
+                    backgroundColor: const Color(0xFFEF4444),
                   ),
-                ),
-                const SizedBox(height: 20),
-                TextField(
-                  controller: nameController,
-                  autofocus: true,
-                  decoration: InputDecoration(
-                    hintText: 'Enter group name',
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(8),
-                      borderSide: const BorderSide(color: Color(0xFFE5E7EB)),
+                );
+              }
+            }
+
+            Future<void> save() async {
+              final newName = nameController.text.trim();
+              if (newName.isEmpty || isSaving) return;
+
+              final oldName = widget.chatDoc?.title ?? '';
+              final nameChanged = oldName != newName;
+              final imageChanged = pickedImage != null;
+              if (!nameChanged && !imageChanged) {
+                Navigator.of(dialogContext).pop();
+                return;
+              }
+
+              setDialogState(() => isSaving = true);
+              try {
+                String? newImageUrl;
+                if (imageChanged) {
+                  newImageUrl = await _uploadGroupImage(pickedImage!);
+                }
+
+                final patch = <String, dynamic>{};
+                if (nameChanged) patch['title'] = newName;
+                if (newImageUrl != null) patch['chat_image_url'] = newImageUrl;
+
+                await fsPatchDocument(widget.chatDoc!.reference, patch);
+
+                final userName = currentUserDisplayName.isNotEmpty
+                    ? currentUserDisplayName
+                    : (currentUserDocument?.displayName ?? 'Someone');
+
+                if (nameChanged && imageChanged) {
+                  await _sendSystemMessage(
+                    '$userName updated the group name from "$oldName" to "$newName" and changed the group photo',
+                  );
+                } else if (nameChanged) {
+                  await _sendSystemMessage(
+                    '$userName updated the group name from "$oldName" to "$newName"',
+                  );
+                } else {
+                  await _sendSystemMessage('$userName changed the group photo');
+                }
+
+                if (mounted) {
+                  Navigator.of(dialogContext).pop();
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text(
+                        nameChanged && imageChanged
+                            ? 'Group updated successfully'
+                            : nameChanged
+                                ? 'Group name updated successfully'
+                                : 'Group photo updated successfully',
+                      ),
+                      backgroundColor: const Color(0xFF10B981),
                     ),
-                    focusedBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(8),
-                      borderSide:
-                          const BorderSide(color: Color(0xFF3B82F6), width: 2),
+                  );
+                }
+              } catch (e) {
+                setDialogState(() => isSaving = false);
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text('Error updating group: $e'),
+                      backgroundColor: const Color(0xFFEF4444),
                     ),
-                    contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 16, vertical: 12),
-                  ),
-                  style: const TextStyle(
-                    fontFamily: 'Inter',
-                    fontSize: 16,
-                    color: Color(0xFF1A1F36),
-                  ),
+                  );
+                }
+              }
+            }
+
+            final existingImageUrl = widget.chatDoc?.chatImageUrl ?? '';
+            Widget avatarChild;
+            if (previewBytes != null) {
+              avatarChild = Image.memory(
+                previewBytes!,
+                fit: BoxFit.cover,
+                width: 72,
+                height: 72,
+              );
+            } else if (existingImageUrl.isNotEmpty) {
+              avatarChild = CachedNetworkImage(
+                imageUrl: existingImageUrl,
+                fit: BoxFit.cover,
+                width: 72,
+                height: 72,
+                errorWidget: (_, __, ___) => const Icon(
+                  Icons.group_rounded,
+                  size: 32,
+                  color: Color(0xFF9CA3AF),
                 ),
-                const SizedBox(height: 24),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.end,
+              );
+            } else {
+              avatarChild = const Icon(
+                Icons.group_rounded,
+                size: 32,
+                color: Color(0xFF9CA3AF),
+              );
+            }
+
+            return Dialog(
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: Container(
+                padding: const EdgeInsets.all(24),
+                constraints: const BoxConstraints(maxWidth: 400),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    TextButton(
-                      onPressed: () => Navigator.of(context).pop(),
-                      child: const Text(
-                        'Cancel',
-                        style: TextStyle(
-                          fontFamily: 'Inter',
-                          fontSize: 14,
-                          color: Color(0xFF6B7280),
-                        ),
+                    const Text(
+                      'Edit Group',
+                      style: TextStyle(
+                        fontFamily: 'Inter',
+                        fontSize: 20,
+                        fontWeight: FontWeight.w600,
+                        color: Color(0xFF1A1F36),
                       ),
                     ),
-                    const SizedBox(width: 12),
-                    ElevatedButton(
-                      onPressed: () async {
-                        if (nameController.text.trim().isNotEmpty) {
-                          try {
-                            final oldName = widget.chatDoc?.title ?? '';
-                            final newName = nameController.text.trim();
-
-                            // Only update if name actually changed
-                            if (oldName != newName) {
-                              await fsPatchDocument(widget.chatDoc!.reference, {
-                                'title': newName,
-                              });
-
-                              // Send system message
-                              final userName = currentUserDisplayName.isNotEmpty
-                                  ? currentUserDisplayName
-                                  : (currentUserDocument?.displayName ??
-                                      'Someone');
-                              await _sendSystemMessage(
-                                '$userName updated the group name from "$oldName" to "$newName"',
-                              );
-                            }
-
-                            if (mounted) {
-                              Navigator.of(context).pop();
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(
-                                  content:
-                                      Text('Group name updated successfully'),
-                                  backgroundColor: Color(0xFF10B981),
+                    const SizedBox(height: 20),
+                    Center(
+                      child: Column(
+                        children: [
+                          GestureDetector(
+                            onTap: isSaving ? null : pickImage,
+                            child: Stack(
+                              alignment: Alignment.center,
+                              children: [
+                                Container(
+                                  width: 72,
+                                  height: 72,
+                                  decoration: const BoxDecoration(
+                                    color: Color(0xFFF3F4F6),
+                                    shape: BoxShape.circle,
+                                  ),
+                                  clipBehavior: Clip.antiAlias,
+                                  child: avatarChild,
                                 ),
-                              );
-                            }
-                          } catch (e) {
-                            if (mounted) {
-                              Navigator.of(context).pop();
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(
-                                  content:
-                                      Text('Error updating group name: $e'),
-                                  backgroundColor: const Color(0xFFEF4444),
+                                Positioned(
+                                  right: 0,
+                                  bottom: 0,
+                                  child: Container(
+                                    width: 24,
+                                    height: 24,
+                                    decoration: BoxDecoration(
+                                      color: const Color(0xFF3B82F6),
+                                      shape: BoxShape.circle,
+                                      border: Border.all(
+                                        color: Colors.white,
+                                        width: 2,
+                                      ),
+                                    ),
+                                    child: const Icon(
+                                      Icons.camera_alt,
+                                      color: Colors.white,
+                                      size: 12,
+                                    ),
+                                  ),
                                 ),
-                              );
-                            }
-                          }
-                        }
-                      },
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF3B82F6),
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 24, vertical: 12),
-                        shape: RoundedRectangleBorder(
+                              ],
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          const Text(
+                            'Tap to change photo',
+                            style: TextStyle(
+                              fontFamily: 'Inter',
+                              fontSize: 12,
+                              color: Color(0xFF6B7280),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 20),
+                    TextField(
+                      controller: nameController,
+                      autofocus: true,
+                      enabled: !isSaving,
+                      decoration: InputDecoration(
+                        hintText: 'Enter group name',
+                        border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(8),
+                          borderSide:
+                              const BorderSide(color: Color(0xFFE5E7EB)),
                         ),
-                      ),
-                      child: const Text(
-                        'Save',
-                        style: TextStyle(
-                          fontFamily: 'Inter',
-                          fontSize: 14,
-                          fontWeight: FontWeight.w500,
-                          color: Colors.white,
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(8),
+                          borderSide: const BorderSide(
+                              color: Color(0xFF3B82F6), width: 2),
                         ),
+                        contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 16, vertical: 12),
                       ),
+                      style: const TextStyle(
+                        fontFamily: 'Inter',
+                        fontSize: 16,
+                        color: Color(0xFF1A1F36),
+                      ),
+                      onSubmitted: (_) => save(),
+                    ),
+                    const SizedBox(height: 24),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.end,
+                      children: [
+                        TextButton(
+                          onPressed: isSaving
+                              ? null
+                              : () => Navigator.of(dialogContext).pop(),
+                          child: const Text(
+                            'Cancel',
+                            style: TextStyle(
+                              fontFamily: 'Inter',
+                              fontSize: 14,
+                              color: Color(0xFF6B7280),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        ElevatedButton(
+                          onPressed: isSaving ? null : save,
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFF3B82F6),
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 24, vertical: 12),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                          ),
+                          child: isSaving
+                              ? const SizedBox(
+                                  width: 16,
+                                  height: 16,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    color: Colors.white,
+                                  ),
+                                )
+                              : const Text(
+                                  'Save',
+                                  style: TextStyle(
+                                    fontFamily: 'Inter',
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w500,
+                                    color: Colors.white,
+                                  ),
+                                ),
+                        ),
+                      ],
                     ),
                   ],
                 ),
-              ],
-            ),
-          ),
+              ),
+            );
+          },
         );
       },
     );
@@ -2769,54 +2925,19 @@ class _GroupChatDetailWidgetState extends State<GroupChatDetailWidget>
                                               MainAxisAlignment.center,
                                           children: [
                                             Expanded(
-                                              child: _model.isEditingName
-                                                  ? TextField(
-                                                      controller: _model
-                                                          .groupNameController,
-                                                      textAlign:
-                                                          TextAlign.center,
-                                                      autofocus: true,
-                                                      style: const TextStyle(
-                                                        fontFamily: 'Inter',
-                                                        fontSize: 24.0,
-                                                        fontWeight:
-                                                            FontWeight.w600,
-                                                        color:
-                                                            Color(0xFF1A1F36),
-                                                      ),
-                                                      decoration:
-                                                          const InputDecoration(
-                                                        border:
-                                                            InputBorder.none,
-                                                        enabledBorder:
-                                                            InputBorder.none,
-                                                        focusedBorder:
-                                                            InputBorder.none,
-                                                        contentPadding:
-                                                            EdgeInsets.zero,
-                                                        isDense: true,
-                                                      ),
-                                                      onSubmitted: (_) =>
-                                                          _saveGroupName(),
-                                                      onEditingComplete:
-                                                          _saveGroupName,
-                                                    )
-                                                  : Text(
-                                                      valueOrDefault<String>(
-                                                        currentChatDoc?.title,
-                                                        'Group Name',
-                                                      ),
-                                                      textAlign:
-                                                          TextAlign.center,
-                                                      style: const TextStyle(
-                                                        fontFamily: 'Inter',
-                                                        fontSize: 24.0,
-                                                        fontWeight:
-                                                            FontWeight.w600,
-                                                        color:
-                                                            Color(0xFF1A1F36),
-                                                      ),
-                                                    ),
+                                              child: Text(
+                                                valueOrDefault<String>(
+                                                  currentChatDoc?.title,
+                                                  'Group Name',
+                                                ),
+                                                textAlign: TextAlign.center,
+                                                style: const TextStyle(
+                                                  fontFamily: 'Inter',
+                                                  fontSize: 24.0,
+                                                  fontWeight: FontWeight.w600,
+                                                  color: Color(0xFF1A1F36),
+                                                ),
+                                              ),
                                             ),
                                             if (currentChatDoc?.admin ==
                                                     currentUserReference ||
@@ -2824,22 +2945,14 @@ class _GroupChatDetailWidgetState extends State<GroupChatDetailWidget>
                                                     currentUserReference)
                                               InkWell(
                                                 onTap: () async {
-                                                  if (_model.isEditingName) {
-                                                    await _saveGroupName();
-                                                  } else {
-                                                    _model.isEditingName = true;
-                                                    safeSetState(() {});
-                                                  }
+                                                  await _editGroupName();
                                                 },
                                                 child: Container(
                                                   padding:
                                                       const EdgeInsets.all(8.0),
-                                                  child: Icon(
-                                                    _model.isEditingName
-                                                        ? Icons.check
-                                                        : Icons.edit,
-                                                    color:
-                                                        const Color(0xFF3B82F6),
+                                                  child: const Icon(
+                                                    Icons.edit,
+                                                    color: Color(0xFF3B82F6),
                                                     size: 20.0,
                                                   ),
                                                 ),

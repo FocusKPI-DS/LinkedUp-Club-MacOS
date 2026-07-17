@@ -29,6 +29,7 @@ import '/pages/chat/user_profile_popup/user_profile_popup.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
 import 'dart:ui';
 import 'package:flutter/foundation.dart'
     show kIsWeb, defaultTargetPlatform, TargetPlatform, listEquals;
@@ -3719,100 +3720,289 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
     }
 
     final controller = TextEditingController(text: chat.title);
+    XFile? pickedImage;
+    Uint8List? previewBytes;
+    var isSaving = false;
+
     showDialog(
       context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: Colors.white,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        title: Text(
-          'Rename Group',
-          style: TextStyle(
-            fontFamily: 'Inter',
-            fontSize: 16,
-            fontWeight: FontWeight.w600,
-            color: Color(0xFF111827),
-          ),
-        ),
-        content: TextField(
-          controller: controller,
-          autofocus: true,
-          decoration: InputDecoration(
-            hintText: 'Group name',
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(8),
-              borderSide: BorderSide(color: Color(0xFFE5E7EB)),
-            ),
-            focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(8),
-              borderSide: BorderSide(color: Color(0xFF3B82F6)),
-            ),
-            contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-          ),
-          style: TextStyle(
-            fontFamily: 'Inter',
-            fontSize: 14,
-            color: Color(0xFF111827),
-          ),
-          onSubmitted: (value) {
-            final name = value.trim();
-            if (name.isNotEmpty) {
-              Navigator.of(ctx).pop();
-              _handleRenameGroupChat(chat, name);
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) {
+          final existingImageUrl = chat.chatImageUrl;
+          Future<void> pickImage() async {
+            try {
+              final picker = ImagePicker();
+              final image = await picker.pickImage(
+                source: ImageSource.gallery,
+                maxWidth: 512,
+                maxHeight: 512,
+                imageQuality: 85,
+              );
+              if (image == null) return;
+              final bytes = await image.readAsBytes();
+              setDialogState(() {
+                pickedImage = image;
+                previewBytes = bytes;
+              });
+            } catch (e) {
+              if (!mounted) return;
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text('Error picking image: $e'),
+                  backgroundColor: Color(0xFFEF4444),
+                ),
+              );
             }
-          },
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(),
-            child: Text(
-              'Cancel',
-              style: TextStyle(
-                fontFamily: 'Inter',
-                color: Color(0xFF6B7280),
-              ),
-            ),
-          ),
-          TextButton(
-            onPressed: () {
-              final name = controller.text.trim();
-              if (name.isEmpty) return;
+          }
+
+          Future<void> save() async {
+            final name = controller.text.trim();
+            if (name.isEmpty || isSaving) return;
+            final nameChanged = name != chat.title;
+            final imageChanged = pickedImage != null;
+            if (!nameChanged && !imageChanged) {
               Navigator.of(ctx).pop();
-              _handleRenameGroupChat(chat, name);
-            },
-            child: Text(
-              'Rename',
+              return;
+            }
+
+            setDialogState(() => isSaving = true);
+            try {
+              await _handleEditGroupChat(
+                chat,
+                newName: nameChanged ? name : null,
+                imageFile: pickedImage,
+              );
+              if (ctx.mounted) Navigator.of(ctx).pop();
+            } catch (_) {
+              setDialogState(() => isSaving = false);
+            }
+          }
+
+          Widget avatarChild;
+          if (previewBytes != null) {
+            avatarChild = Image.memory(
+              previewBytes!,
+              fit: BoxFit.cover,
+              width: 72,
+              height: 72,
+            );
+          } else if (existingImageUrl.isNotEmpty) {
+            avatarChild = CachedNetworkImage(
+              imageUrl: existingImageUrl,
+              fit: BoxFit.cover,
+              width: 72,
+              height: 72,
+              errorWidget: (_, __, ___) => Icon(
+                Icons.group_rounded,
+                size: 32,
+                color: Color(0xFF9CA3AF),
+              ),
+            );
+          } else {
+            avatarChild = Icon(
+              Icons.group_rounded,
+              size: 32,
+              color: Color(0xFF9CA3AF),
+            );
+          }
+
+          return AlertDialog(
+            backgroundColor: Colors.white,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
+            title: Text(
+              'Edit Group',
               style: TextStyle(
                 fontFamily: 'Inter',
-                color: Color(0xFF3B82F6),
+                fontSize: 16,
                 fontWeight: FontWeight.w600,
+                color: Color(0xFF111827),
               ),
             ),
-          ),
-        ],
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                GestureDetector(
+                  onTap: isSaving ? null : pickImage,
+                  child: Stack(
+                    alignment: Alignment.center,
+                    children: [
+                      Container(
+                        width: 72,
+                        height: 72,
+                        decoration: BoxDecoration(
+                          color: Color(0xFFF3F4F6),
+                          shape: BoxShape.circle,
+                        ),
+                        clipBehavior: Clip.antiAlias,
+                        child: avatarChild,
+                      ),
+                      Positioned(
+                        right: 0,
+                        bottom: 0,
+                        child: Container(
+                          width: 24,
+                          height: 24,
+                          decoration: BoxDecoration(
+                            color: Color(0xFF3B82F6),
+                            shape: BoxShape.circle,
+                            border: Border.all(color: Colors.white, width: 2),
+                          ),
+                          child: Icon(
+                            Icons.camera_alt,
+                            color: Colors.white,
+                            size: 12,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ).withClickCursor(),
+                SizedBox(height: 8),
+                Text(
+                  'Tap to change photo',
+                  style: TextStyle(
+                    fontFamily: 'Inter',
+                    fontSize: 12,
+                    color: Color(0xFF6B7280),
+                  ),
+                ),
+                SizedBox(height: 16),
+                TextField(
+                  controller: controller,
+                  autofocus: true,
+                  enabled: !isSaving,
+                  decoration: InputDecoration(
+                    hintText: 'Group name',
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(8),
+                      borderSide: BorderSide(color: Color(0xFFE5E7EB)),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(8),
+                      borderSide: BorderSide(color: Color(0xFF3B82F6)),
+                    ),
+                    contentPadding:
+                        EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                  ),
+                  style: TextStyle(
+                    fontFamily: 'Inter',
+                    fontSize: 14,
+                    color: Color(0xFF111827),
+                  ),
+                  onSubmitted: (_) => save(),
+                ),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: isSaving ? null : () => Navigator.of(ctx).pop(),
+                child: Text(
+                  'Cancel',
+                  style: TextStyle(
+                    fontFamily: 'Inter',
+                    color: Color(0xFF6B7280),
+                  ),
+                ),
+              ),
+              TextButton(
+                onPressed: isSaving ? null : save,
+                child: isSaving
+                    ? SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: Color(0xFF3B82F6),
+                        ),
+                      )
+                    : Text(
+                        'Save',
+                        style: TextStyle(
+                          fontFamily: 'Inter',
+                          color: Color(0xFF3B82F6),
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+              ),
+            ],
+          );
+        },
       ),
     );
   }
 
-  Future<void> _handleRenameGroupChat(
+  Future<String> _uploadExistingGroupImage(
     ChatsRecord chat,
-    String newName,
+    XFile imageFile,
   ) async {
+    final fileName =
+        'group_images/${chat.reference.id}_${DateTime.now().millisecondsSinceEpoch}.jpg';
+    final ref = FirebaseStorage.instance.ref(fileName);
+    final UploadTask uploadTask;
+    if (kIsWeb) {
+      final bytes = await imageFile.readAsBytes();
+      uploadTask = ref.putData(
+        bytes,
+        SettableMetadata(contentType: 'image/jpeg'),
+      );
+    } else {
+      uploadTask = ref.putFile(
+        File(imageFile.path),
+        SettableMetadata(contentType: 'image/jpeg'),
+      );
+    }
+    final snapshot = await uploadTask;
+    return snapshot.ref.getDownloadURL();
+  }
+
+  Future<void> _handleEditGroupChat(
+    ChatsRecord chat, {
+    String? newName,
+    XFile? imageFile,
+  }) async {
     if (!chat.isGroup ||
         !ChatHelpers.isGroupOwner(chat, currentUserReference)) {
       return;
     }
 
     final oldName = chat.title;
-    if (oldName == newName) return;
+    final nameChanged = newName != null && newName.isNotEmpty && newName != oldName;
+    final imageChanged = imageFile != null;
+    if (!nameChanged && !imageChanged) return;
 
     try {
-      await fsPatchDocument(chat.reference, {'title': newName});
-
       final userName = currentUserDisplayName.isNotEmpty
           ? currentUserDisplayName
           : (currentUserDocument?.displayName ?? 'Someone');
-      final systemMessage =
-          '$userName updated the group name from "$oldName" to "$newName"';
+      final patch = <String, dynamic>{};
+      String? systemMessage;
+      String? newImageUrl;
+
+      if (imageChanged) {
+        newImageUrl = await _uploadExistingGroupImage(chat, imageFile);
+        patch['chat_image_url'] = newImageUrl;
+      }
+      if (nameChanged) {
+        patch['title'] = newName;
+      }
+
+      if (nameChanged && imageChanged) {
+        systemMessage =
+            '$userName updated the group name from "$oldName" to "$newName" and changed the group photo';
+      } else if (nameChanged) {
+        systemMessage =
+            '$userName updated the group name from "$oldName" to "$newName"';
+      } else {
+        systemMessage = '$userName changed the group photo';
+      }
+
+      patch['last_message'] = systemMessage;
+      patch['last_message_at'] = getCurrentTimestamp;
+      patch['last_message_sent'] = currentUserReference;
+
+      await fsPatchDocument(chat.reference, patch);
 
       await fsCreateMessage(chat.reference, {
         'content': systemMessage,
@@ -3826,22 +4016,12 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
         'is_read_by': [currentUserReference],
       });
 
-      await fsPatchDocument(chat.reference, {
-        'last_message': systemMessage,
-        'last_message_at': getCurrentTimestamp,
-        'last_message_sent': currentUserReference,
-      });
-
-      chatController.applyLocalChatLastMessageFromPatch(chat.reference, {
-        'title': newName,
-        'last_message': systemMessage,
-        'last_message_at': getCurrentTimestamp,
-        'last_message_sent': currentUserReference,
-      });
+      chatController.applyLocalChatLastMessageFromPatch(chat.reference, patch);
 
       if (_model.selectedChat?.reference.id == chat.reference.id) {
         final data = Map<String, dynamic>.from(chat.snapshotData);
-        data['title'] = newName;
+        if (nameChanged) data['title'] = newName;
+        if (newImageUrl != null) data['chat_image_url'] = newImageUrl;
         data['last_message'] = systemMessage;
         data['last_message_at'] = getCurrentTimestamp;
         data['last_message_sent'] = currentUserReference;
@@ -3854,21 +4034,28 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Group renamed successfully'),
+            content: Text(
+              nameChanged && imageChanged
+                  ? 'Group updated successfully'
+                  : nameChanged
+                      ? 'Group renamed successfully'
+                      : 'Group photo updated successfully',
+            ),
             backgroundColor: Color(0xFF10B981),
           ),
         );
       }
     } catch (e) {
-      debugLog('❌ Error renaming group chat: $e');
+      debugLog('❌ Error editing group chat: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Error renaming group: $e'),
+            content: Text('Error updating group: $e'),
             backgroundColor: Color(0xFFEF4444),
           ),
         );
       }
+      rethrow;
     }
   }
 
@@ -7641,7 +7828,7 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
           if (canRename) ...[
             const SizedBox(width: 6),
             Tooltip(
-              message: 'Rename group',
+              message: 'Edit group',
               child: InkWell(
                 mouseCursor: MaterialStateMouseCursor.clickable,
                 onTap: () => _showRenameGroupChatDialog(chat),
@@ -9637,7 +9824,7 @@ class _ChatListItemState extends State<_ChatListItem>
                 ),
                 SizedBox(width: 12),
                 Text(
-                  'Rename Group',
+                  'Edit Group',
                   style: TextStyle(
                     fontFamily: 'Inter',
                     color: Color(0xFF111827),
