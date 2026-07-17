@@ -102,7 +102,7 @@ Please update to the latest version. If you encounter any issues, feel free to r
             await lonaServiceRef.set({
                 display_name: 'Lona Service',
                 email: 'service@lona.club',
-                photo_url: 'https://firebasestorage.googleapis.com/v0/b/linkedup-c3e29.firebasestorage.app/o/asset%2Flona-logo.png?alt=media',
+                photo_url: 'https://lona.club/logo.png',
                 created_time: now,
                 uid: 'lona-service',
             });
@@ -121,7 +121,7 @@ Please update to the latest version. If you encounter any issues, feel free to r
                 is_service_chat: true,
                 is_pin: false,
                 is_private: false,
-                chat_image_url: 'https://firebasestorage.googleapis.com/v0/b/linkedup-c3e29.firebasestorage.app/o/asset%2Flona-logo.png?alt=media',
+                chat_image_url: 'https://lona.club/logo.png',
                 created_at: now,
                 created_by: lonaServiceRef,
                 members: [],
@@ -143,7 +143,7 @@ Please update to the latest version. If you encounter any issues, feel free to r
             content: announcementMessage,
             sender_ref: lonaServiceRef,
             sender_name: 'Lona Service',
-            sender_photo: 'https://firebasestorage.googleapis.com/v0/b/linkedup-c3e29.firebasestorage.app/o/asset%2Flona-logo.png?alt=media',
+            sender_photo: 'https://lona.club/logo.png',
             created_at: now,
             message_type: 'text',
             is_read_by: [],

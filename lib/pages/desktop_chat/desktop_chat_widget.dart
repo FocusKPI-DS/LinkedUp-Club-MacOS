@@ -61,6 +61,59 @@ import 'package:branchio_dynamic_linking_akp5u6/flutter_flow/custom_functions.da
 import '/custom_code/actions/index.dart' as actions;
 import '/backend/cloud_functions/callable_functions.dart';
 
+/// Lona Service logo — Storage `lona-logo.png` currently 404s; use the site logo.
+const String _kLonaServiceLogoUrl = 'https://lona.club/logo.png';
+
+bool _isBrokenLonaServiceLogoUrl(String url) {
+  return url.contains('lona-logo.png');
+}
+
+String _lonaServiceAvatarUrl(ChatsRecord chat) {
+  final stored = chat.chatImageUrl;
+  if (stored.isNotEmpty && !_isBrokenLonaServiceLogoUrl(stored)) {
+    return stored;
+  }
+  return _kLonaServiceLogoUrl;
+}
+
+Widget _buildLonaServiceAvatar({
+  required double size,
+  ChatsRecord? chat,
+}) {
+  final imageUrl =
+      chat != null ? _lonaServiceAvatarUrl(chat) : _kLonaServiceLogoUrl;
+  return Container(
+    width: size,
+    height: size,
+    decoration: BoxDecoration(
+      color: Colors.white,
+      shape: BoxShape.circle,
+      border: Border.all(color: const Color(0xFFE5E7EB), width: 1),
+    ),
+    clipBehavior: Clip.antiAlias,
+    child: CachedNetworkImage(
+      imageUrl: imageUrl,
+      fit: BoxFit.cover,
+      width: size,
+      height: size,
+      memCacheWidth: (size * 2).round(),
+      memCacheHeight: (size * 2).round(),
+      placeholder: (context, url) => Image.asset(
+        'assets/images/Logo_2.png',
+        fit: BoxFit.cover,
+        width: size,
+        height: size,
+      ),
+      errorWidget: (context, url, error) => Image.asset(
+        'assets/images/Logo_2.png',
+        fit: BoxFit.cover,
+        width: size,
+        height: size,
+      ),
+    ),
+  );
+}
+
 class DesktopChatWidget extends StatefulWidget {
   const DesktopChatWidget({Key? key}) : super(key: key);
 
@@ -881,6 +934,9 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
 
   Widget _buildCollapsedAvatar(ChatsRecord chat) {
     const double size = 36;
+    if (chat.isServiceChat) {
+      return _buildLonaServiceAvatar(size: size, chat: chat);
+    }
     if (chat.isGroup) {
       return Container(
         width: size,
@@ -7635,6 +7691,9 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
   }
 
   Widget _buildHeaderAvatar(ChatsRecord chat) {
+    if (chat.isServiceChat) {
+      return _buildLonaServiceAvatar(size: 40, chat: chat);
+    }
     if (chat.isGroup) {
       // For group chats, show the group logo
       return Container(
@@ -9999,6 +10058,9 @@ class _ChatListItemState extends State<_ChatListItem>
   }
 
   Widget _buildChatAvatar(ChatsRecord chat) {
+    if (chat.isServiceChat) {
+      return _buildLonaServiceAvatar(size: 30, chat: chat);
+    }
     if (chat.isGroup) {
       return Container(
         width: 30,
