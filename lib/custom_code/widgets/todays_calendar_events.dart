@@ -79,7 +79,9 @@ class _TodaysCalendarEventsState extends State<TodaysCalendarEvents> {
         _gmailConnected = true;
       });
     }
-    await _loadTodaysEvents(forceRefresh: cached == null);
+    // Always revalidate against Google (stale-while-revalidate) so events
+    // deleted/added since the cache was written are reflected right away.
+    await _loadTodaysEvents(forceRefresh: true);
   }
 
   /// Load cached events if available and valid
@@ -748,6 +750,47 @@ class _TodaysCalendarEventsState extends State<TodaysCalendarEvents> {
     );
   }
 
+  Widget _buildEmptyState(BuildContext context) {
+    return SizedBox(
+      width: double.infinity,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 8),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            const Icon(
+              CupertinoIcons.calendar,
+              color: CupertinoColors.secondaryLabel,
+              size: 32,
+            ),
+            const SizedBox(height: 10),
+            Text(
+              'No meetings today',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontFamily: '.SF Pro Text',
+                fontSize: 16,
+                fontWeight: FontWeight.w600,
+                color: CupertinoColors.label,
+              ),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              'You have a clear schedule. Enjoy your day!',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontFamily: '.SF Pro Text',
+                fontSize: 14,
+                color: CupertinoColors.secondaryLabel,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _buildErrorPanel(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.all(16),
@@ -809,14 +852,6 @@ class _TodaysCalendarEventsState extends State<TodaysCalendarEvents> {
 
   @override
   Widget build(BuildContext context) {
-    // Hide only when connected, loaded, and there are no events today
-    if (!_isLoading &&
-        _todayEvents.isEmpty &&
-        !_hasError &&
-        _gmailConnected) {
-      return const SizedBox.shrink();
-    }
-
     return Column(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -878,7 +913,7 @@ class _TodaysCalendarEventsState extends State<TodaysCalendarEvents> {
           else if (_hasError)
             _buildErrorPanel(context)
           else if (_todayEvents.isEmpty)
-            const SizedBox.shrink() // Hide completely if no events
+            _buildEmptyState(context)
           else ...[ 
             // Schedule items (parent provides card container)
             SizedBox(

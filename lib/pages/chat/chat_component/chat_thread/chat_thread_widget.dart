@@ -8,7 +8,7 @@ import '/auth/firebase_auth/auth_util.dart';
 import '/backend/backend.dart';
 import '/backend/firestore/firestore_desktop_adapter.dart';
 import '/backend/schema/enums/enums.dart';
-import '/pages/user_summary/user_summary_widget.dart';
+import '/pages/chat/user_profile_popup/user_profile_popup.dart';
 import '/flutter_flow/flutter_flow_audio_player.dart';
 import '/flutter_flow/flutter_flow_expanded_image_view.dart';
 import '/custom_code/widgets/video_message_widget.dart';
@@ -4326,17 +4326,10 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
                                 GestureDetector(
                                   onTap: widget.userRef != null
                                       ? () {
-                                          context.pushNamed(
-                                            UserSummaryWidget.routeName,
-                                            queryParameters: {
-                                              'userRef': serializeParam(
-                                                widget.userRef,
-                                                ParamType.DocumentReference,
-                                              ),
-                                            }.withoutNulls,
-                                            extra: <String, dynamic>{
-                                              'userRef': widget.userRef,
-                                            },
+                                          showUserProfilePopup(
+                                            context,
+                                            userRef: widget.userRef,
+                                            chatRef: widget.chatRef,
                                           );
                                         }
                                       : null,

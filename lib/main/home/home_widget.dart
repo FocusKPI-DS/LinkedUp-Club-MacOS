@@ -7,6 +7,7 @@ import '/flutter_flow/flutter_flow_util.dart';
 import '/custom_code/widgets/summerai_todos.dart';
 import '/custom_code/widgets/todays_calendar_events.dart';
 import '/custom_code/widgets/task_stats.dart';
+import '/custom_code/widgets/app_update_dialog.dart';
 import '/pages/desktop_chat/desktop_safe_user_builder.dart';
 import '/backend/firestore/firestore_desktop_adapter.dart';
 // import '/custom_code/widgets/productivity_trend_chart.dart';
@@ -186,6 +187,11 @@ class _HomeWidgetState extends State<HomeWidget> with TickerProviderStateMixin {
         );
       }
       await action_blocks.homeCheck(context);
+      // One-time (per version) update popup, shown while on the home page.
+      // Reuses the established per-platform update dialogs; no-op on web.
+      if (loggedIn && mounted) {
+        unawaited(AppUpdateDialog.maybeShowUpdatePrompt(context));
+      }
       if (!(await getPermissionStatus(locationPermission))) {
         await requestPermission(locationPermission);
       }

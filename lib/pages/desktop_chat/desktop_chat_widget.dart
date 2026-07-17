@@ -25,7 +25,7 @@ import '/pages/chat/group_chat_detail/group_media_links_docs_widget.dart';
 import '/pages/chat/chat_history/chat_history_widget.dart';
 import '/pages/chat/chat_component/group_announcements_widget.dart';
 import '/pages/chat/all_pending_requests/all_pending_requests_widget.dart';
-import '/pages/user_summary/user_summary_widget.dart';
+import '/pages/chat/user_profile_popup/user_profile_popup.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
@@ -144,8 +144,11 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
 
   void _toggleMessageSelection(MessagesRecord message) {
     setState(() {
-      if (_selectedMessages.map((m) => m.reference.id).contains(message.reference.id)) {
-        _selectedMessages.removeWhere((m) => m.reference.id == message.reference.id);
+      if (_selectedMessages
+          .map((m) => m.reference.id)
+          .contains(message.reference.id)) {
+        _selectedMessages
+            .removeWhere((m) => m.reference.id == message.reference.id);
         if (_selectedMessages.isEmpty) {
           _isSelectionMode = false;
         }
@@ -244,7 +247,8 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
     // Initialize presence system after a delay to ensure user is loaded
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (DesktopSafeUserBuilder.useOnceFetch) {
-        debugLog('🪟 [DesktopChat] Windows chat tab opened (poll mode, no list streams)');
+        debugLog(
+            '🪟 [DesktopChat] Windows chat tab opened (poll mode, no list streams)');
       }
       Future.delayed(Duration(milliseconds: 500), () {
         if (!DesktopSafeUserBuilder.useOnceFetch) {
@@ -751,9 +755,7 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
                         ),
                       ),
                     ),
-                    Divider(
-                        height: 1,
-                        color: Color.fromRGBO(230, 235, 245, 1)),
+                    Divider(height: 1, color: Color.fromRGBO(230, 235, 245, 1)),
                     // Scrollable avatar list
                     Expanded(
                       child: Obx(() {
@@ -776,8 +778,7 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
                                     chat.reference;
                             return Obx(() {
                               final _ = chatController.chats.length;
-                              final __ =
-                                  chatController.locallySeenChats.length;
+                              final __ = chatController.locallySeenChats.length;
                               final ___ =
                                   chatController.knownUnreadChats.length;
                               final hasUnread =
@@ -794,15 +795,14 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
                                   (m) => m != currentUserReference,
                                   orElse: () => chat.members.first,
                                 );
-                                displayName =
-                                    chatController.getCachedDisplayName(
-                                            otherRef.id) ??
-                                        'Chat';
+                                displayName = chatController
+                                        .getCachedDisplayName(otherRef.id) ??
+                                    'Chat';
                               }
 
                               return Padding(
-                                padding: const EdgeInsets.symmetric(
-                                    vertical: 3),
+                                padding:
+                                    const EdgeInsets.symmetric(vertical: 3),
                                 child: Center(
                                   child: Tooltip(
                                     message: displayName,
@@ -837,8 +837,7 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
                                                 padding: EdgeInsets.all(
                                                     isSelected ? 2 : 0),
                                                 child:
-                                                    _buildCollapsedAvatar(
-                                                        chat),
+                                                    _buildCollapsedAvatar(chat),
                                               ),
                                             ),
                                             // Unread dot
@@ -1022,84 +1021,84 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
                 ],
               ),
             // New chat menu
-                PopupMenuButton<int>(
-                  offset: const Offset(0, 40),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    side: BorderSide(color: Color(0xFFE5E7EB), width: 1),
-                  ),
-                  color: Colors.white,
-                  elevation: 8,
-                  tooltip: 'Create new',
-                  onSelected: (value) {
-                    if (value == 1) {
-                      _clearAllViews();
-                      _model.selectedChat = null;
-                      chatController.selectedChat.value = null;
-                      _showNewMessageDialog();
-                    } else if (value == 2) {
-                      _showCreateFolderDialog();
-                    }
-                  },
-                  itemBuilder: (context) => [
-                    PopupMenuItem<int>(
-                      value: 1,
-                      mouseCursor: SystemMouseCursors.click,
-                      child: desktopClickableMenuChild(
-                        Row(
-                          children: [
-                            Icon(Icons.maps_ugc_rounded,
-                                color: Color(0xFF3B82F6), size: 20),
-                            SizedBox(width: 12),
-                            Text(
-                              'New Message',
-                              style: TextStyle(
-                                fontFamily: 'Inter',
-                                fontSize: 14,
-                                fontWeight: FontWeight.w500,
-                                color: Color(0xFF1F2937),
-                              ),
-                            ),
-                          ],
+            PopupMenuButton<int>(
+              offset: const Offset(0, 40),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+                side: BorderSide(color: Color(0xFFE5E7EB), width: 1),
+              ),
+              color: Colors.white,
+              elevation: 8,
+              tooltip: 'Create new',
+              onSelected: (value) {
+                if (value == 1) {
+                  _clearAllViews();
+                  _model.selectedChat = null;
+                  chatController.selectedChat.value = null;
+                  _showNewMessageDialog();
+                } else if (value == 2) {
+                  _showCreateFolderDialog();
+                }
+              },
+              itemBuilder: (context) => [
+                PopupMenuItem<int>(
+                  value: 1,
+                  mouseCursor: SystemMouseCursors.click,
+                  child: desktopClickableMenuChild(
+                    Row(
+                      children: [
+                        Icon(Icons.maps_ugc_rounded,
+                            color: Color(0xFF3B82F6), size: 20),
+                        SizedBox(width: 12),
+                        Text(
+                          'New Message',
+                          style: TextStyle(
+                            fontFamily: 'Inter',
+                            fontSize: 14,
+                            fontWeight: FontWeight.w500,
+                            color: Color(0xFF1F2937),
+                          ),
                         ),
-                      ),
-                    ),
-                    PopupMenuDivider(height: 1),
-                    PopupMenuItem<int>(
-                      value: 2,
-                      mouseCursor: SystemMouseCursors.click,
-                      child: desktopClickableMenuChild(
-                        Row(
-                          children: [
-                            Icon(Icons.create_new_folder_rounded,
-                                color: Color(0xFF3B82F6), size: 20),
-                            SizedBox(width: 12),
-                            Text(
-                              'New Folder',
-                              style: TextStyle(
-                                fontFamily: 'Inter',
-                                fontSize: 14,
-                                fontWeight: FontWeight.w500,
-                                color: Color(0xFF1F2937),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ],
-                  child: MouseRegion(
-                    cursor: SystemMouseCursors.click,
-                    child: Padding(
-                      padding: const EdgeInsets.all(4.0),
-                      child: Icon(
-                        Icons.add_rounded,
-                        color: Color(0xFF374151),
-                        size: 26,
-                      ),
+                      ],
                     ),
                   ),
                 ),
+                PopupMenuDivider(height: 1),
+                PopupMenuItem<int>(
+                  value: 2,
+                  mouseCursor: SystemMouseCursors.click,
+                  child: desktopClickableMenuChild(
+                    Row(
+                      children: [
+                        Icon(Icons.create_new_folder_rounded,
+                            color: Color(0xFF3B82F6), size: 20),
+                        SizedBox(width: 12),
+                        Text(
+                          'New Folder',
+                          style: TextStyle(
+                            fontFamily: 'Inter',
+                            fontSize: 14,
+                            fontWeight: FontWeight.w500,
+                            color: Color(0xFF1F2937),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+              child: MouseRegion(
+                cursor: SystemMouseCursors.click,
+                child: Padding(
+                  padding: const EdgeInsets.all(4.0),
+                  child: Icon(
+                    Icons.add_rounded,
+                    color: Color(0xFF374151),
+                    size: 26,
+                  ),
+                ),
+              ),
+            ),
           ],
         ),
       ),
@@ -1122,7 +1121,9 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
             duration: Duration(milliseconds: 200),
             padding: EdgeInsets.all(6),
             decoration: BoxDecoration(
-              color: isActive ? Color(0xFF3B82F6).withOpacity(0.1) : Colors.transparent,
+              color: isActive
+                  ? Color(0xFF3B82F6).withOpacity(0.1)
+                  : Colors.transparent,
               borderRadius: BorderRadius.circular(8),
             ),
             child: Icon(
@@ -1174,7 +1175,8 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
                   );
                   setState(() {
                     _model.showQuickSearch = value.isNotEmpty;
-                    _model.showFullSearch = false; // Reset full search on new input
+                    _model.showFullSearch =
+                        false; // Reset full search on new input
                   });
                 },
                 onFieldSubmitted: (value) {
@@ -1281,7 +1283,7 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
         decoration: BoxDecoration(
           color: Color.fromRGBO(250, 252, 255, 1),
         ),
-        padding: const EdgeInsets.fromLTRB(16, 10, 16, 8),
+        padding: const EdgeInsets.fromLTRB(16, 2, 16, 8),
         child: Row(
           children: [
             Expanded(
@@ -1515,7 +1517,8 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
                     ? _buildFolderListView(allChats)
                     : _buildFlatChatListView(allChats),
                 // Quick search dropdown overlay
-                if (_model.showQuickSearch && chatController.searchQuery.value.isNotEmpty)
+                if (_model.showQuickSearch &&
+                    chatController.searchQuery.value.isNotEmpty)
                   _buildQuickSearchDropdown(allChats),
               ],
             );
@@ -1593,7 +1596,8 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
                         ),
                       ),
                       Container(
-                        padding: EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                        padding:
+                            EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                         decoration: BoxDecoration(
                           color: Color(0xFFE5E7EB),
                           borderRadius: BorderRadius.circular(4),
@@ -1616,8 +1620,7 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
               if (quickChats.isNotEmpty)
                 Divider(height: 1, color: Color(0xFFE5E7EB)),
               // Quick matching chats
-              for (final chat in quickChats)
-                _buildQuickSearchChatItem(chat),
+              for (final chat in quickChats) _buildQuickSearchChatItem(chat),
             ],
           ),
         ),
@@ -1750,12 +1753,14 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
                     ),
                     // Divider with chat name
                     Container(
-                      padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                      padding:
+                          EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                       decoration: BoxDecoration(
                         color: Color(0xFFF0F4FF),
                         border: Border(
                           top: BorderSide(color: Color(0xFFE5E7EB), width: 1),
-                          bottom: BorderSide(color: Color(0xFFE5E7EB), width: 1),
+                          bottom:
+                              BorderSide(color: Color(0xFFE5E7EB), width: 1),
                         ),
                       ),
                       child: Row(
@@ -1801,7 +1806,8 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
                                 _clearAllViews();
                                 _model.selectedChat = _model.searchPreviewChat;
                               });
-                              chatController.selectChat(_model.searchPreviewChat!);
+                              chatController
+                                  .selectChat(_model.searchPreviewChat!);
                               _model.searchPreviewChat = null;
                               _model.searchPreviewMessageId = null;
                             },
@@ -1831,7 +1837,8 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
                                 _model.searchPreviewMessageId = null;
                               });
                             },
-                            child: Icon(Icons.close, size: 16, color: Color(0xFF9CA3AF)),
+                            child: Icon(Icons.close,
+                                size: 16, color: Color(0xFF9CA3AF)),
                           ).withClickCursor(),
                         ],
                       ),
@@ -1876,8 +1883,7 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
               chatResults.length,
               Icons.chat_bubble_outline,
             ),
-            for (final chat in chatResults)
-              _buildSearchChatItem(chat),
+            for (final chat in chatResults) _buildSearchChatItem(chat),
           ],
 
           // Message results section
@@ -2042,7 +2048,8 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
               // Scroll to message after preview builds
               WidgetsBinding.instance.addPostFrameCallback((_) {
                 Future.delayed(Duration(milliseconds: 600), () {
-                  _searchPreviewThreadKey.currentState?.scrollToMessage(messageId);
+                  _searchPreviewThreadKey.currentState
+                      ?.scrollToMessage(messageId);
                 });
               });
             } else {
@@ -2090,7 +2097,8 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
                             color: Color(0xFFDFE3E8),
                             borderRadius: BorderRadius.circular(4),
                           ),
-                          child: Icon(Icons.person, size: 12, color: Color(0xFF9CA3AF)),
+                          child: Icon(Icons.person,
+                              size: 12, color: Color(0xFF9CA3AF)),
                         ),
                       ),
                     )
@@ -2102,12 +2110,15 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
                         color: Color(0xFFDFE3E8),
                         borderRadius: BorderRadius.circular(4),
                       ),
-                      child: Icon(Icons.person, size: 12, color: Color(0xFF9CA3AF)),
+                      child: Icon(Icons.person,
+                          size: 12, color: Color(0xFF9CA3AF)),
                     ),
                   SizedBox(width: 6),
                   // Sender name
                   Text(
-                    result.senderName.isNotEmpty ? result.senderName : 'Unknown',
+                    result.senderName.isNotEmpty
+                        ? result.senderName
+                        : 'Unknown',
                     style: TextStyle(
                       fontFamily: 'Inter',
                       fontSize: 12.5,
@@ -2127,7 +2138,9 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         Icon(
-                          result.isGroup ? Icons.groups_outlined : Icons.person_outline,
+                          result.isGroup
+                              ? Icons.groups_outlined
+                              : Icons.person_outline,
                           size: 10,
                           color: Color(0xFF3B82F6),
                         ),
@@ -2159,7 +2172,8 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
               ),
               SizedBox(height: 4),
               // Message content with highlighted query
-              _buildHighlightedText(_cleanMessageContent(result.content), query),
+              _buildHighlightedText(
+                  _cleanMessageContent(result.content), query),
             ],
           ),
         ),
@@ -2192,7 +2206,7 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
       return Text(
         text,
         style: TextStyle(
-          fontFamily: 'Inter', fontSize: 12.5, color: Color(0xFF374151)),
+            fontFamily: 'Inter', fontSize: 12.5, color: Color(0xFF374151)),
         maxLines: 2,
         overflow: TextOverflow.ellipsis,
       );
@@ -2288,14 +2302,15 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
 
   Widget _buildFlatChatListView(List<ChatsRecord> filteredChats) {
     final userRef = currentUserReference;
-    final pinned = filteredChats.where((c) => c.isPinnedByUser(userRef)).toList();
-    final rest = filteredChats.where((c) => !c.isPinnedByUser(userRef)).toList();
+    final pinned =
+        filteredChats.where((c) => c.isPinnedByUser(userRef)).toList();
+    final rest =
+        filteredChats.where((c) => !c.isPinnedByUser(userRef)).toList();
     final inactive = _getInactiveChats();
 
     if (filteredChats.isEmpty && inactive.isEmpty) {
       final tabIndex = _model.tabController?.index ?? 0;
-      final emptyMessage =
-          tabIndex == 1 ? 'No unread chats' : 'No chats yet';
+      final emptyMessage = tabIndex == 1 ? 'No unread chats' : 'No chats yet';
       final emptyIcon = tabIndex == 1
           ? Icons.mark_email_read_outlined
           : CupertinoIcons.chat_bubble_2;
@@ -2329,10 +2344,12 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
             pinned.length,
             Icons.push_pin_rounded,
             _model.isPinnedCollapsed,
-            () => setState(() => _model.isPinnedCollapsed = !_model.isPinnedCollapsed),
+            () => setState(
+                () => _model.isPinnedCollapsed = !_model.isPinnedCollapsed),
           ),
           if (!_model.isPinnedCollapsed)
-            for (final chat in pinned) _buildFolderChatItem(chat, showPinIcon: false),
+            for (final chat in pinned)
+              _buildFolderChatItem(chat, showPinIcon: false),
         ],
 
         // All other chats — flat, sorted by time (already sorted by controller)
@@ -2372,9 +2389,8 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
     final folderedIds = _folderedChatIds();
     // Pinned takes precedence over folders: a pinned chat always shows in the
     // Pinned section (and is excluded from its folder below).
-    final pinned = filteredChats
-        .where((c) => c.isPinnedByUser(userRef))
-        .toList();
+    final pinned =
+        filteredChats.where((c) => c.isPinnedByUser(userRef)).toList();
     final groups = filteredChats
         .where((c) =>
             !c.isPinnedByUser(userRef) &&
@@ -2398,7 +2414,8 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
             pinned.length,
             Icons.push_pin_rounded,
             _model.isPinnedCollapsed,
-            () => setState(() => _model.isPinnedCollapsed = !_model.isPinnedCollapsed),
+            () => setState(
+                () => _model.isPinnedCollapsed = !_model.isPinnedCollapsed),
           ),
           if (!_model.isPinnedCollapsed)
             for (final chat in pinned)
@@ -2416,11 +2433,11 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
             groups.length,
             Icons.group_outlined,
             _model.isGroupCollapsed,
-            () => setState(() => _model.isGroupCollapsed = !_model.isGroupCollapsed),
+            () => setState(
+                () => _model.isGroupCollapsed = !_model.isGroupCollapsed),
           ),
           if (!_model.isGroupCollapsed)
-            for (final chat in groups)
-              _buildFolderChatItem(chat),
+            for (final chat in groups) _buildFolderChatItem(chat),
         ],
 
         // DM
@@ -2433,8 +2450,7 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
             () => setState(() => _model.isDMCollapsed = !_model.isDMCollapsed),
           ),
           if (!_model.isDMCollapsed)
-            for (final chat in dms)
-              _buildFolderChatItem(chat),
+            for (final chat in dms) _buildFolderChatItem(chat),
         ],
 
         ..._buildInactiveSection(),
@@ -2625,7 +2641,8 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
                         color: Color(0xFFE5E7EB),
                         borderRadius: BorderRadius.circular(4),
                       ),
-                      child: Icon(Icons.add_rounded, size: 14, color: Color(0xFF6B7280)),
+                      child: Icon(Icons.add_rounded,
+                          size: 14, color: Color(0xFF6B7280)),
                     ),
                   ),
                 ),
@@ -3020,8 +3037,7 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
     _applyLocalRemoveChatsFromOtherFolders(ids, exceptFolderId: exceptFolderId);
     for (final folder in previousFolders) {
       if (folder.reference.id == exceptFolderId) continue;
-      final toRemove =
-          ids.where((id) => folder.chatIds.contains(id)).toList();
+      final toRemove = ids.where((id) => folder.chatIds.contains(id)).toList();
       if (toRemove.isEmpty) continue;
       try {
         await fsArrayRemove(folder.reference, 'chat_ids', toRemove);
@@ -3111,7 +3127,8 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
             orElse: () => dm.members.first,
           );
           final user = await _getOrCreateUserFuture(otherUserRef);
-          dmNameMap[dm.reference.id] = user.displayName.isNotEmpty ? user.displayName : 'User';
+          dmNameMap[dm.reference.id] =
+              user.displayName.isNotEmpty ? user.displayName : 'User';
         } catch (_) {
           dmNameMap[dm.reference.id] = 'Direct Message';
         }
@@ -3137,7 +3154,9 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
           final query = searchQuery.value.toLowerCase();
           final filteredGroups = query.isEmpty
               ? allGroups
-              : allGroups.where((g) => g.title.toLowerCase().contains(query)).toList();
+              : allGroups
+                  .where((g) => g.title.toLowerCase().contains(query))
+                  .toList();
           final filteredDMs = query.isEmpty
               ? allDMs
               : allDMs.where((d) {
@@ -3148,13 +3167,24 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
 
           return AlertDialog(
             backgroundColor: Colors.white,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
             title: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(title, style: TextStyle(fontFamily: 'Inter', fontSize: 16, fontWeight: FontWeight.w600, color: Color(0xFF111827))),
+                Text(title,
+                    style: TextStyle(
+                        fontFamily: 'Inter',
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                        color: Color(0xFF111827))),
                 SizedBox(height: 4),
-                Text(subtitle, style: TextStyle(fontFamily: 'Inter', fontSize: 12, fontWeight: FontWeight.w400, color: Color(0xFF6B7280))),
+                Text(subtitle,
+                    style: TextStyle(
+                        fontFamily: 'Inter',
+                        fontSize: 12,
+                        fontWeight: FontWeight.w400,
+                        color: Color(0xFF6B7280))),
               ],
             ),
             content: SizedBox(
@@ -3170,14 +3200,26 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
                     },
                     decoration: InputDecoration(
                       hintText: 'Search chats...',
-                      hintStyle: TextStyle(fontFamily: 'Inter', fontSize: 13, color: Color(0xFF9CA3AF)),
-                      prefixIcon: Icon(Icons.search, size: 18, color: Color(0xFF9CA3AF)),
-                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: Color(0xFFE5E7EB))),
-                      focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: Color(0xFF3B82F6))),
-                      contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      hintStyle: TextStyle(
+                          fontFamily: 'Inter',
+                          fontSize: 13,
+                          color: Color(0xFF9CA3AF)),
+                      prefixIcon: Icon(Icons.search,
+                          size: 18, color: Color(0xFF9CA3AF)),
+                      border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(8),
+                          borderSide: BorderSide(color: Color(0xFFE5E7EB))),
+                      focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(8),
+                          borderSide: BorderSide(color: Color(0xFF3B82F6))),
+                      contentPadding:
+                          EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                       isDense: true,
                     ),
-                    style: TextStyle(fontFamily: 'Inter', fontSize: 13, color: Color(0xFF111827)),
+                    style: TextStyle(
+                        fontFamily: 'Inter',
+                        fontSize: 13,
+                        color: Color(0xFF111827)),
                   ),
                   SizedBox(height: 8),
                   // Select all / count
@@ -3202,13 +3244,20 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
                         },
                         child: Text(
                           'Select All',
-                          style: TextStyle(fontFamily: 'Inter', fontSize: 12, fontWeight: FontWeight.w500, color: Color(0xFF3B82F6)),
+                          style: TextStyle(
+                              fontFamily: 'Inter',
+                              fontSize: 12,
+                              fontWeight: FontWeight.w500,
+                              color: Color(0xFF3B82F6)),
                         ),
                       ).withClickCursor(),
                       Spacer(),
                       Text(
                         '${selectedIds.length} selected',
-                        style: TextStyle(fontFamily: 'Inter', fontSize: 12, color: Color(0xFF9CA3AF)),
+                        style: TextStyle(
+                            fontFamily: 'Inter',
+                            fontSize: 12,
+                            color: Color(0xFF9CA3AF)),
                       ),
                     ],
                   ),
@@ -3224,14 +3273,20 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              _buildPickerSectionLabel('Groups', Icons.group_outlined, filteredGroups.length),
+                              _buildPickerSectionLabel('Groups',
+                                  Icons.group_outlined, filteredGroups.length),
                               SizedBox(height: 4),
                               Expanded(
                                 child: filteredGroups.isEmpty
                                     ? Center(
                                         child: Text(
-                                          query.isEmpty ? 'None' : 'No chats found',
-                                          style: TextStyle(fontFamily: 'Inter', fontSize: 12, color: Color(0xFF9CA3AF)),
+                                          query.isEmpty
+                                              ? 'None'
+                                              : 'No chats found',
+                                          style: TextStyle(
+                                              fontFamily: 'Inter',
+                                              fontSize: 12,
+                                              color: Color(0xFF9CA3AF)),
                                         ),
                                       )
                                     : Scrollbar(
@@ -3244,20 +3299,36 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
                                             for (final chat in filteredGroups)
                                               _buildPickerChatRow(
                                                 chat: chat,
-                                                isChecked: selectedIds.contains(chat.reference.id),
-                                                isAlreadyInFolder: existingChatIds.contains(chat.reference.id),
-                                                isLockedInOtherFolder: lockedChatIds.contains(chat.reference.id),
-                                                isPinned: chat.isPinnedByUser(currentUserReference),
-                                                folderNames: chatFolderMap[chat.reference.id],
+                                                isChecked: selectedIds.contains(
+                                                    chat.reference.id),
+                                                isAlreadyInFolder:
+                                                    existingChatIds.contains(
+                                                        chat.reference.id),
+                                                isLockedInOtherFolder:
+                                                    lockedChatIds.contains(
+                                                        chat.reference.id),
+                                                isPinned: chat.isPinnedByUser(
+                                                    currentUserReference),
+                                                folderNames: chatFolderMap[
+                                                    chat.reference.id],
                                                 onTap: () {
-                                                  if (existingChatIds.contains(chat.reference.id)) return;
-                                                  if (lockedChatIds.contains(chat.reference.id)) return;
-                                                  if (chat.isPinnedByUser(currentUserReference)) return;
+                                                  if (existingChatIds.contains(
+                                                      chat.reference.id))
+                                                    return;
+                                                  if (lockedChatIds.contains(
+                                                      chat.reference.id))
+                                                    return;
+                                                  if (chat.isPinnedByUser(
+                                                      currentUserReference))
+                                                    return;
                                                   setDialogState(() {
-                                                    if (selectedIds.contains(chat.reference.id)) {
-                                                      selectedIds.remove(chat.reference.id);
+                                                    if (selectedIds.contains(
+                                                        chat.reference.id)) {
+                                                      selectedIds.remove(
+                                                          chat.reference.id);
                                                     } else {
-                                                      selectedIds.add(chat.reference.id);
+                                                      selectedIds.add(
+                                                          chat.reference.id);
                                                     }
                                                   });
                                                 },
@@ -3280,14 +3351,22 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              _buildPickerSectionLabel('Direct Messages', Icons.person_outline_rounded, filteredDMs.length),
+                              _buildPickerSectionLabel(
+                                  'Direct Messages',
+                                  Icons.person_outline_rounded,
+                                  filteredDMs.length),
                               SizedBox(height: 4),
                               Expanded(
                                 child: filteredDMs.isEmpty
                                     ? Center(
                                         child: Text(
-                                          query.isEmpty ? 'None' : 'No chats found',
-                                          style: TextStyle(fontFamily: 'Inter', fontSize: 12, color: Color(0xFF9CA3AF)),
+                                          query.isEmpty
+                                              ? 'None'
+                                              : 'No chats found',
+                                          style: TextStyle(
+                                              fontFamily: 'Inter',
+                                              fontSize: 12,
+                                              color: Color(0xFF9CA3AF)),
                                         ),
                                       )
                                     : Scrollbar(
@@ -3300,21 +3379,38 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
                                             for (final chat in filteredDMs)
                                               _buildPickerChatRow(
                                                 chat: chat,
-                                                resolvedName: dmNameMap[chat.reference.id],
-                                                isChecked: selectedIds.contains(chat.reference.id),
-                                                isAlreadyInFolder: existingChatIds.contains(chat.reference.id),
-                                                isLockedInOtherFolder: lockedChatIds.contains(chat.reference.id),
-                                                isPinned: chat.isPinnedByUser(currentUserReference),
-                                                folderNames: chatFolderMap[chat.reference.id],
+                                                resolvedName: dmNameMap[
+                                                    chat.reference.id],
+                                                isChecked: selectedIds.contains(
+                                                    chat.reference.id),
+                                                isAlreadyInFolder:
+                                                    existingChatIds.contains(
+                                                        chat.reference.id),
+                                                isLockedInOtherFolder:
+                                                    lockedChatIds.contains(
+                                                        chat.reference.id),
+                                                isPinned: chat.isPinnedByUser(
+                                                    currentUserReference),
+                                                folderNames: chatFolderMap[
+                                                    chat.reference.id],
                                                 onTap: () {
-                                                  if (existingChatIds.contains(chat.reference.id)) return;
-                                                  if (lockedChatIds.contains(chat.reference.id)) return;
-                                                  if (chat.isPinnedByUser(currentUserReference)) return;
+                                                  if (existingChatIds.contains(
+                                                      chat.reference.id))
+                                                    return;
+                                                  if (lockedChatIds.contains(
+                                                      chat.reference.id))
+                                                    return;
+                                                  if (chat.isPinnedByUser(
+                                                      currentUserReference))
+                                                    return;
                                                   setDialogState(() {
-                                                    if (selectedIds.contains(chat.reference.id)) {
-                                                      selectedIds.remove(chat.reference.id);
+                                                    if (selectedIds.contains(
+                                                        chat.reference.id)) {
+                                                      selectedIds.remove(
+                                                          chat.reference.id);
                                                     } else {
-                                                      selectedIds.add(chat.reference.id);
+                                                      selectedIds.add(
+                                                          chat.reference.id);
                                                     }
                                                   });
                                                 },
@@ -3335,14 +3431,20 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
             actions: [
               TextButton(
                 onPressed: () => Navigator.of(ctx).pop(),
-                child: Text('Cancel', style: TextStyle(fontFamily: 'Inter', color: Color(0xFF6B7280))),
+                child: Text('Cancel',
+                    style: TextStyle(
+                        fontFamily: 'Inter', color: Color(0xFF6B7280))),
               ),
               TextButton(
                 onPressed: () {
                   onConfirm(selectedIds);
                   Navigator.of(ctx).pop();
                 },
-                child: Text(actionLabel, style: TextStyle(fontFamily: 'Inter', color: Color(0xFF3B82F6), fontWeight: FontWeight.w600)),
+                child: Text(actionLabel,
+                    style: TextStyle(
+                        fontFamily: 'Inter',
+                        color: Color(0xFF3B82F6),
+                        fontWeight: FontWeight.w600)),
               ),
             ],
           );
@@ -3361,7 +3463,12 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
           SizedBox(width: 6),
           Text(
             '$label ($count)',
-            style: TextStyle(fontFamily: 'Inter', fontSize: 11, fontWeight: FontWeight.w700, color: Color(0xFF6B7280), letterSpacing: 0.3),
+            style: TextStyle(
+                fontFamily: 'Inter',
+                fontSize: 11,
+                fontWeight: FontWeight.w700,
+                color: Color(0xFF6B7280),
+                letterSpacing: 0.3),
           ),
         ],
       ),
@@ -3379,7 +3486,10 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
     List<String>? folderNames,
     required VoidCallback onTap,
   }) {
-    final displayName = resolvedName ?? (chat.title.isNotEmpty ? chat.title : (chat.isGroup ? 'Group Chat' : 'Direct Message'));
+    final displayName = resolvedName ??
+        (chat.title.isNotEmpty
+            ? chat.title
+            : (chat.isGroup ? 'Group Chat' : 'Direct Message'));
     final isGroup = chat.isGroup;
     // Disabled when already in this folder, filed in another folder, or pinned.
     // Pinned chats take precedence and live in the Pinned section only.
@@ -3403,14 +3513,20 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
                 width: 20,
                 height: 20,
                 decoration: BoxDecoration(
-                  color: (isChecked || isAlreadyInFolder) ? Color(0xFF3B82F6) : Colors.white,
+                  color: (isChecked || isAlreadyInFolder)
+                      ? Color(0xFF3B82F6)
+                      : Colors.white,
                   borderRadius: BorderRadius.circular(4),
                   border: Border.all(
-                    color: (isChecked || isAlreadyInFolder) ? Color(0xFF3B82F6) : Color(0xFFD1D5DB),
+                    color: (isChecked || isAlreadyInFolder)
+                        ? Color(0xFF3B82F6)
+                        : Color(0xFFD1D5DB),
                     width: 1.5,
                   ),
                 ),
-                child: (isChecked || isAlreadyInFolder) ? Icon(Icons.check, size: 14, color: Colors.white) : null,
+                child: (isChecked || isAlreadyInFolder)
+                    ? Icon(Icons.check, size: 14, color: Colors.white)
+                    : null,
               ),
               SizedBox(width: 10),
               // Avatar
@@ -3425,19 +3541,27 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
                         memCacheWidth: 60,
                         memCacheHeight: 60,
                         placeholder: (context, url) => Container(
-                          width: 30, height: 30, color: Color(0xFFE5E7EB),
-                          child: Icon(isGroup ? Icons.group : Icons.person, size: 14, color: Color(0xFF6B7280)),
+                          width: 30,
+                          height: 30,
+                          color: Color(0xFFE5E7EB),
+                          child: Icon(isGroup ? Icons.group : Icons.person,
+                              size: 14, color: Color(0xFF6B7280)),
                         ),
                         errorWidget: (context, url, error) => Container(
-                          width: 30, height: 30, color: Color(0xFFE5E7EB),
-                          child: Icon(isGroup ? Icons.group : Icons.person, size: 14, color: Color(0xFF6B7280)),
+                          width: 30,
+                          height: 30,
+                          color: Color(0xFFE5E7EB),
+                          child: Icon(isGroup ? Icons.group : Icons.person,
+                              size: 14, color: Color(0xFF6B7280)),
                         ),
                       )
                     : Container(
                         width: 30,
                         height: 30,
-                        decoration: BoxDecoration(color: Color(0xFFE5E7EB), shape: BoxShape.circle),
-                        child: Icon(isGroup ? Icons.group : Icons.person, size: 14, color: Color(0xFF6B7280)),
+                        decoration: BoxDecoration(
+                            color: Color(0xFFE5E7EB), shape: BoxShape.circle),
+                        child: Icon(isGroup ? Icons.group : Icons.person,
+                            size: 14, color: Color(0xFF6B7280)),
                       ),
               ),
               SizedBox(width: 10),
@@ -3451,7 +3575,9 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
                       style: TextStyle(
                         fontFamily: 'Inter',
                         fontSize: 13,
-                        fontWeight: (isChecked || isAlreadyInFolder) ? FontWeight.w600 : FontWeight.w400,
+                        fontWeight: (isChecked || isAlreadyInFolder)
+                            ? FontWeight.w600
+                            : FontWeight.w400,
                         color: Color(0xFF111827),
                       ),
                       overflow: TextOverflow.ellipsis,
@@ -3461,12 +3587,16 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
                         padding: EdgeInsets.only(top: 2),
                         child: Row(
                           children: [
-                            Icon(Icons.folder_outlined, size: 10, color: Color(0xFF9CA3AF)),
+                            Icon(Icons.folder_outlined,
+                                size: 10, color: Color(0xFF9CA3AF)),
                             SizedBox(width: 3),
                             Expanded(
                               child: Text(
                                 folderNames.join(', '),
-                                style: TextStyle(fontFamily: 'Inter', fontSize: 10, color: Color(0xFF9CA3AF)),
+                                style: TextStyle(
+                                    fontFamily: 'Inter',
+                                    fontSize: 10,
+                                    color: Color(0xFF9CA3AF)),
                                 overflow: TextOverflow.ellipsis,
                               ),
                             ),
@@ -3476,18 +3606,27 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
                     if (isAlreadyInFolder)
                       Text(
                         'Already in this folder',
-                        style: TextStyle(fontFamily: 'Inter', fontSize: 10, color: Color(0xFF9CA3AF), fontStyle: FontStyle.italic),
+                        style: TextStyle(
+                            fontFamily: 'Inter',
+                            fontSize: 10,
+                            color: Color(0xFF9CA3AF),
+                            fontStyle: FontStyle.italic),
                       ),
                     if (isPinned && !isAlreadyInFolder)
                       Padding(
                         padding: EdgeInsets.only(top: 2),
                         child: Row(
                           children: [
-                            Icon(Icons.push_pin_rounded, size: 10, color: Color(0xFF9CA3AF)),
+                            Icon(Icons.push_pin_rounded,
+                                size: 10, color: Color(0xFF9CA3AF)),
                             SizedBox(width: 3),
                             Text(
                               "Pinned — can't be added to folders",
-                              style: TextStyle(fontFamily: 'Inter', fontSize: 10, color: Color(0xFF9CA3AF), fontStyle: FontStyle.italic),
+                              style: TextStyle(
+                                  fontFamily: 'Inter',
+                                  fontSize: 10,
+                                  color: Color(0xFF9CA3AF),
+                                  fontStyle: FontStyle.italic),
                             ),
                           ],
                         ),
@@ -3502,7 +3641,8 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
     );
   }
 
-  Future<void> _createFolder(String name, {List<String>? selectedChatIds}) async {
+  Future<void> _createFolder(String name,
+      {List<String>? selectedChatIds}) async {
     if (currentUserReference == null) {
       debugLog('❌ _createFolder: currentUserReference is null');
       return;
@@ -3521,7 +3661,8 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
           'updated_at': getCurrentTimestamp,
         },
       );
-      debugLog('✅ Folder "$name" created successfully with ${selectedChatIds?.length ?? 0} groups');
+      debugLog(
+          '✅ Folder "$name" created successfully with ${selectedChatIds?.length ?? 0} groups');
 
       // Make the folder visible immediately. On Windows/Linux the folder list
       // is refreshed via a 30s poll (no live stream), so without this the new
@@ -3570,8 +3711,6 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
       }
     }
   }
-
-
 
   void _showRenameGroupChatDialog(ChatsRecord chat) {
     if (!chat.isGroup ||
@@ -3781,7 +3920,8 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(),
             child: Text('Cancel',
-                style: TextStyle(fontFamily: 'Inter', color: Color(0xFF6B7280))),
+                style:
+                    TextStyle(fontFamily: 'Inter', color: Color(0xFF6B7280))),
           ),
           TextButton(
             onPressed: () {
@@ -3828,7 +3968,8 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(),
             child: Text('Cancel',
-                style: TextStyle(fontFamily: 'Inter', color: Color(0xFF6B7280))),
+                style:
+                    TextStyle(fontFamily: 'Inter', color: Color(0xFF6B7280))),
           ),
           TextButton(
             onPressed: () {
@@ -3896,8 +4037,8 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
     // A chat can only live in one folder. If it's already filed, every other
     // folder is disabled — the user must "Move to Unfiled" first to relocate it.
     // Pinned chats take precedence and can't be added to any folder.
-    final isFiledElsewhere = _model.chatFolders
-        .any((f) => f.chatIds.contains(chat.reference.id));
+    final isFiledElsewhere =
+        _model.chatFolders.any((f) => f.chatIds.contains(chat.reference.id));
     final isPinned = chat.isPinnedByUser(currentUserReference);
     final items = <PopupMenuEntry<String>>[
       // Existing folders
@@ -3913,13 +4054,9 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
               child: Row(
                 children: [
                   Icon(
-                    containsChat
-                        ? Icons.folder_rounded
-                        : Icons.folder_outlined,
+                    containsChat ? Icons.folder_rounded : Icons.folder_outlined,
                     size: 16,
-                    color: containsChat
-                        ? Color(0xFF3B82F6)
-                        : Color(0xFF374151),
+                    color: containsChat ? Color(0xFF3B82F6) : Color(0xFF374151),
                   ),
                   SizedBox(width: 8),
                   Expanded(
@@ -3929,9 +4066,8 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
                         fontFamily: 'Inter',
                         fontSize: 13,
                         color: Color(0xFF111827),
-                        fontWeight: containsChat
-                            ? FontWeight.w600
-                            : FontWeight.w400,
+                        fontWeight:
+                            containsChat ? FontWeight.w600 : FontWeight.w400,
                       ),
                       overflow: TextOverflow.ellipsis,
                     ),
@@ -4032,8 +4168,7 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
       );
       try {
         for (final folder in previousFolders) {
-          if (folder.reference.id != value &&
-              folder.chatIds.contains(chatId)) {
+          if (folder.reference.id != value && folder.chatIds.contains(chatId)) {
             await fsArrayRemove(
               folder.reference,
               'chat_ids',
@@ -4549,7 +4684,8 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
                                 }
 
                                 return InkWell(
-                                  mouseCursor: MaterialStateMouseCursor.clickable,
+                                  mouseCursor:
+                                      MaterialStateMouseCursor.clickable,
                                   onTap: () {
                                     setState(() {
                                       if (isSelected) {
@@ -4748,7 +4884,8 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
     _model.groupChatTab = GroupChatTab.messages;
   }
 
-  List<(String, GroupChatTab, IconData)> _chatHeaderTabConfigs(ChatsRecord chat) {
+  List<(String, GroupChatTab, IconData)> _chatHeaderTabConfigs(
+      ChatsRecord chat) {
     const dmTabs = <(String, GroupChatTab, IconData)>[
       ('Messages', GroupChatTab.messages, Icons.chat_bubble_outline_rounded),
       ('Files and Links', GroupChatTab.filesAndLinks, Icons.folder_outlined),
@@ -4766,9 +4903,7 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
 
   void _selectGroupChatTab(GroupChatTab tab) {
     final chat = _model.selectedChat;
-    if (chat != null &&
-        !chat.isGroup &&
-        tab == GroupChatTab.announcements) {
+    if (chat != null && !chat.isGroup && tab == GroupChatTab.announcements) {
       tab = GroupChatTab.messages;
     }
     setState(() {
@@ -5074,8 +5209,7 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
         // Get current user name
         if (currentUserReference != null) {
           try {
-            final currentUser =
-                await fsGetUserOnce(currentUserReference!);
+            final currentUser = await fsGetUserOnce(currentUserReference!);
             memberNames.add(currentUser.displayName.isNotEmpty
                 ? currentUser.displayName
                 : currentUser.email.split('@')[0]);
@@ -5529,7 +5663,8 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
                       borderRadius: BorderRadius.circular(8),
                     ),
                     child: Center(
-                      child: Icon(Icons.push_pin, size: 20, color: Color(0xFF3B82F6)),
+                      child: Icon(Icons.push_pin,
+                          size: 20, color: Color(0xFF3B82F6)),
                     ),
                   ),
                   SizedBox(width: 12),
@@ -5558,7 +5693,8 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
                         borderRadius: BorderRadius.circular(8),
                         border: Border.all(color: Color(0xFFE5E7EB)),
                       ),
-                      child: Icon(Icons.close, size: 18, color: Color(0xFF6B7280)),
+                      child:
+                          Icon(Icons.close, size: 18, color: Color(0xFF6B7280)),
                     ),
                   ),
                 ],
@@ -5589,8 +5725,7 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
               height: 28,
               child: CircularProgressIndicator(
                 strokeWidth: 2,
-                valueColor:
-                    AlwaysStoppedAnimation<Color>(Color(0xFF3B82F6)),
+                valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF3B82F6)),
               ),
             ),
           ),
@@ -5741,8 +5876,7 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
                       padding: const EdgeInsets.only(top: 6),
                       child: Row(
                         children: [
-                          Icon(Icons.image,
-                              size: 14, color: Color(0xFF9CA3AF)),
+                          Icon(Icons.image, size: 14, color: Color(0xFF9CA3AF)),
                           SizedBox(width: 4),
                           Text(
                             '${1 + msg.images.length} image(s)',
@@ -5829,7 +5963,8 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
                       borderRadius: BorderRadius.circular(8),
                     ),
                     child: Center(
-                      child: Icon(Icons.folder_rounded, size: 20, color: Color(0xFF3B82F6)),
+                      child: Icon(Icons.folder_rounded,
+                          size: 20, color: Color(0xFF3B82F6)),
                     ),
                   ),
                   SizedBox(width: 12),
@@ -5872,7 +6007,8 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
                         borderRadius: BorderRadius.circular(8),
                         border: Border.all(color: Color(0xFFE5E7EB)),
                       ),
-                      child: Icon(Icons.close, size: 18, color: Color(0xFF6B7280)),
+                      child:
+                          Icon(Icons.close, size: 18, color: Color(0xFF6B7280)),
                     ),
                   ),
                 ],
@@ -5900,8 +6036,7 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
               height: 32,
               child: CircularProgressIndicator(
                 strokeWidth: 2.5,
-                valueColor:
-                    AlwaysStoppedAnimation<Color>(Color(0xFF3B82F6)),
+                valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF3B82F6)),
               ),
             ),
           ),
@@ -6018,8 +6153,7 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
                       if (raw.contains('?')) raw = raw.split('?').first;
                     }
                     raw = Uri.decodeComponent(raw);
-                    final stripped =
-                        raw.replaceFirst(RegExp(r'^\d{10,}_'), '');
+                    final stripped = raw.replaceFirst(RegExp(r'^\d{10,}_'), '');
                     fileName = (stripped.isNotEmpty && stripped.contains('.'))
                         ? stripped
                         : (raw.isNotEmpty ? raw : 'File');
@@ -6146,9 +6280,9 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
                             decoration: BoxDecoration(
                                 color: Color(0xFFFEF2F2),
                                 borderRadius: BorderRadius.circular(6),
-                                border:
-                                    Border.all(color: Color(0xFFFECACA))),
-                            child: Row(mainAxisSize: MainAxisSize.min, children: [
+                                border: Border.all(color: Color(0xFFFECACA))),
+                            child:
+                                Row(mainAxisSize: MainAxisSize.min, children: [
                               Icon(Icons.timer_off_rounded,
                                   size: 12, color: Color(0xFFEF4444)),
                               SizedBox(width: 4),
@@ -6167,9 +6301,9 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
                             decoration: BoxDecoration(
                                 color: Color(0xFFEFF6FF),
                                 borderRadius: BorderRadius.circular(6),
-                                border:
-                                    Border.all(color: Color(0xFFBFDBFE))),
-                            child: Row(mainAxisSize: MainAxisSize.min, children: [
+                                border: Border.all(color: Color(0xFFBFDBFE))),
+                            child:
+                                Row(mainAxisSize: MainAxisSize.min, children: [
                               Icon(Icons.download_rounded,
                                   size: 14, color: Color(0xFF3B82F6)),
                               SizedBox(width: 4),
@@ -6225,27 +6359,27 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
             ],
           )
         : Center(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(
-                      Icons.chat_bubble_outline,
-                      color: Color(0xFF9CA3AF),
-                      size: 64,
-                    ),
-                    SizedBox(height: 16),
-                    Text(
-                      'Select a chat to start messaging',
-                      style: TextStyle(
-                        fontFamily: 'Inter',
-                        color: Color(0xFF6B7280),
-                        fontSize: 18,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                  ],
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  Icons.chat_bubble_outline,
+                  color: Color(0xFF9CA3AF),
+                  size: 64,
                 ),
-              );
+                SizedBox(height: 16),
+                Text(
+                  'Select a chat to start messaging',
+                  style: TextStyle(
+                    fontFamily: 'Inter',
+                    color: Color(0xFF6B7280),
+                    fontSize: 18,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ],
+            ),
+          );
   }
 
   Widget _buildRightSidePanel(Widget content, VoidCallback onClose,
@@ -6328,7 +6462,8 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
                 } else {
                   // Try one-click first (uses Qurio token or Firebase popup)
                   final meetUrl = await GoogleMeetCreator.createInstantMeeting(
-                    chatTitle: chat.title.isNotEmpty ? chat.title : 'Quick Meeting',
+                    chatTitle:
+                        chat.title.isNotEmpty ? chat.title : 'Quick Meeting',
                   );
                   if (meetUrl != null) {
                     await MeetingService.startMeeting(
@@ -6464,112 +6599,111 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
                 elevation: 8,
               )
             : PopupMenuButton<String>(
-                  onSelected: (String value) {
-                    if (value == 'search') {
-                      _openChatSearchPanel();
-                    } else if (value == 'profile') {
-                      _viewUserProfile(chat);
-                    } else if (value == 'block_toggle') {
-                      _toggleBlockUser(chat);
-                    } else if (value == 'group') {
-                      _viewGroupChat(chat);
-                    }
-                  },
-                  itemBuilder: (BuildContext context) {
-                    // Direct chat options
-                    final otherUserRef = chat.members.firstWhere(
-                      (member) => member != currentUserReference,
-                      orElse: () => chat.members.first,
-                    );
+                onSelected: (String value) {
+                  if (value == 'search') {
+                    _openChatSearchPanel();
+                  } else if (value == 'profile') {
+                    _viewUserProfile(chat);
+                  } else if (value == 'block_toggle') {
+                    _toggleBlockUser(chat);
+                  } else if (value == 'group') {
+                    _viewGroupChat(chat);
+                  }
+                },
+                itemBuilder: (BuildContext context) {
+                  // Direct chat options
+                  final otherUserRef = chat.members.firstWhere(
+                    (member) => member != currentUserReference,
+                    orElse: () => chat.members.first,
+                  );
 
-                    return <PopupMenuEntry<String>>[
-                      PopupMenuItem<String>(
-                        value: 'search',
-                        child: Row(
+                  return <PopupMenuEntry<String>>[
+                    PopupMenuItem<String>(
+                      value: 'search',
+                      child: Row(
+                        children: [
+                          Icon(
+                            Icons.search_rounded,
+                            color: Color(0xFF374151),
+                            size: 18,
+                          ),
+                          SizedBox(width: 12),
+                          Text(
+                            'Search in chat',
+                            style: TextStyle(
+                              fontFamily: 'Inter',
+                              color: Color(0xFF111827),
+                              fontSize: 14,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    PopupMenuItem<String>(
+                      value: 'profile',
+                      child: Row(
+                        children: [
+                          Icon(
+                            Icons.person,
+                            color: Color(0xFF374151),
+                            size: 18,
+                          ),
+                          SizedBox(width: 12),
+                          Text(
+                            'View User Profile',
+                            style: TextStyle(
+                              fontFamily: 'Inter',
+                              color: Color(0xFF111827),
+                              fontSize: 14,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    PopupMenuItem<String>(
+                      value: 'block_toggle',
+                      child: Obx(() {
+                        final isBlockedNow = chatController.blockedUserIds.value
+                            .contains(otherUserRef.id);
+                        return Row(
                           children: [
                             Icon(
-                              Icons.search_rounded,
-                              color: Color(0xFF374151),
+                              isBlockedNow ? Icons.check_circle : Icons.block,
+                              color: isBlockedNow
+                                  ? Color(0xFF10B981)
+                                  : Color(0xFFDC2626),
                               size: 18,
                             ),
                             SizedBox(width: 12),
                             Text(
-                              'Search in chat',
+                              isBlockedNow ? 'Unblock User' : 'Block User',
                               style: TextStyle(
                                 fontFamily: 'Inter',
-                                color: Color(0xFF111827),
-                                fontSize: 14,
-                                fontWeight: FontWeight.w500,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      PopupMenuItem<String>(
-                        value: 'profile',
-                        child: Row(
-                          children: [
-                            Icon(
-                              Icons.person,
-                              color: Color(0xFF374151),
-                              size: 18,
-                            ),
-                            SizedBox(width: 12),
-                            Text(
-                              'View User Profile',
-                              style: TextStyle(
-                                fontFamily: 'Inter',
-                                color: Color(0xFF111827),
-                                fontSize: 14,
-                                fontWeight: FontWeight.w500,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      PopupMenuItem<String>(
-                        value: 'block_toggle',
-                        child: Obx(() {
-                          final isBlockedNow = chatController
-                              .blockedUserIds.value
-                              .contains(otherUserRef.id);
-                          return Row(
-                            children: [
-                              Icon(
-                                isBlockedNow ? Icons.check_circle : Icons.block,
                                 color: isBlockedNow
                                     ? Color(0xFF10B981)
                                     : Color(0xFFDC2626),
-                                size: 18,
+                                fontSize: 14,
+                                fontWeight: FontWeight.w500,
                               ),
-                              SizedBox(width: 12),
-                              Text(
-                                isBlockedNow ? 'Unblock User' : 'Block User',
-                                style: TextStyle(
-                                  fontFamily: 'Inter',
-                                  color: isBlockedNow
-                                      ? Color(0xFF10B981)
-                                      : Color(0xFFDC2626),
-                                  fontSize: 14,
-                                  fontWeight: FontWeight.w500,
-                                ),
-                              ),
-                            ],
-                          );
-                        }),
-                      ),
-                    ];
-                  },
-                  icon: Icon(
-                    Icons.more_vert,
-                    color: Color(0xFF9CA3AF),
-                    size: 20,
-                  ),
-                  color: Colors.white,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(8),
-                  ),
+                            ),
+                          ],
+                        );
+                      }),
+                    ),
+                  ];
+                },
+                icon: Icon(
+                  Icons.more_vert,
+                  color: Color(0xFF9CA3AF),
+                  size: 20,
                 ),
+                color: Colors.white,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
+              ),
       ],
     );
   }
@@ -6710,274 +6844,274 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
     ChatsRecord chat,
     AsyncSnapshot<List<ActionItemsRecord>> snapshot,
   ) {
-        if (!snapshot.hasData) {
-          return SizedBox.shrink();
-        }
+    if (!snapshot.hasData) {
+      return SizedBox.shrink();
+    }
 
-        final allActionItems = snapshot.data ?? [];
+    final allActionItems = snapshot.data ?? [];
 
-        // Filter out completed tasks (same logic as GroupActionTasksWidget)
-        // Deduplicate tasks by title - same logic as the Group Action Tasks page
-        final Map<String, ActionItemsRecord> uniqueTodos = {};
-        for (var todo in allActionItems) {
-          // Exclude completed tasks - must match exactly like the GroupActionTasksWidget
-          if (todo.status == 'completed') {
-            continue;
-          }
-          // Deduplicate by title - show only one task per unique title
-          if (!uniqueTodos.containsKey(todo.title)) {
-            uniqueTodos[todo.title] = todo;
-          }
-        }
-        final pendingItems = uniqueTodos.values.toList();
+    // Filter out completed tasks (same logic as GroupActionTasksWidget)
+    // Deduplicate tasks by title - same logic as the Group Action Tasks page
+    final Map<String, ActionItemsRecord> uniqueTodos = {};
+    for (var todo in allActionItems) {
+      // Exclude completed tasks - must match exactly like the GroupActionTasksWidget
+      if (todo.status == 'completed') {
+        continue;
+      }
+      // Deduplicate by title - show only one task per unique title
+      if (!uniqueTodos.containsKey(todo.title)) {
+        uniqueTodos[todo.title] = todo;
+      }
+    }
+    final pendingItems = uniqueTodos.values.toList();
 
-        final now = DateTime.now();
-        final overdueCount = pendingItems.where((item) {
-          final due = item.dueDate;
-          return due != null && due.isBefore(now);
-        }).length;
+    final now = DateTime.now();
+    final overdueCount = pendingItems.where((item) {
+      final due = item.dueDate;
+      return due != null && due.isBefore(now);
+    }).length;
 
-        final overdueItems = pendingItems.where((item) {
-          final due = item.dueDate;
-          return due != null && due.isBefore(now);
-        }).toList();
+    final overdueItems = pendingItems.where((item) {
+      final due = item.dueDate;
+      return due != null && due.isBefore(now);
+    }).toList();
 
-        final overdueTasksForCard = overdueItems.map((item) {
-          return <String, dynamic>{
-            'title': item.title,
-            'priority': item.priority,
-            'description': item.description,
-            'involved_people': item.involvedPeople,
-            'due_date': item.dueDate,
-            'created_time': item.createdTime,
-            'action_item_ref': item.reference.path,
-          };
-        }).toList();
+    final overdueTasksForCard = overdueItems.map((item) {
+      return <String, dynamic>{
+        'title': item.title,
+        'priority': item.priority,
+        'description': item.description,
+        'involved_people': item.involvedPeople,
+        'due_date': item.dueDate,
+        'created_time': item.createdTime,
+        'action_item_ref': item.reference.path,
+      };
+    }).toList();
 
-        final highPriority = pendingItems
-            .where((item) => item.priority.toLowerCase() == 'high')
-            .length;
-        final moderatePriority = pendingItems
-            .where((item) => item.priority.toLowerCase() == 'moderate')
-            .length;
-        final lowPriority = pendingItems
-            .where((item) => item.priority.toLowerCase() == 'low')
-            .length;
+    final highPriority = pendingItems
+        .where((item) => item.priority.toLowerCase() == 'high')
+        .length;
+    final moderatePriority = pendingItems
+        .where((item) => item.priority.toLowerCase() == 'moderate')
+        .length;
+    final lowPriority = pendingItems
+        .where((item) => item.priority.toLowerCase() == 'low')
+        .length;
 
-        if (pendingItems.isEmpty) {
-          return SizedBox.shrink();
-        }
+    if (pendingItems.isEmpty) {
+      return SizedBox.shrink();
+    }
 
-        final isMacOSOrWeb =
-            kIsWeb || defaultTargetPlatform == TargetPlatform.macOS;
+    final isMacOSOrWeb =
+        kIsWeb || defaultTargetPlatform == TargetPlatform.macOS;
 
-        return Container(
-          padding: EdgeInsetsDirectional.fromSTEB(20, 12, 20, 12),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            border: Border(
-              bottom: BorderSide(
-                color: Color(0xFFE5E7EB),
-                width: 1,
-              ),
-            ),
+    return Container(
+      padding: EdgeInsetsDirectional.fromSTEB(20, 12, 20, 12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        border: Border(
+          bottom: BorderSide(
+            color: Color(0xFFE5E7EB),
+            width: 1,
           ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                mainAxisSize: MainAxisSize.min,
                 children: [
-                  Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        'Action Items',
-                        style: TextStyle(
-                          fontFamily: 'Inter',
-                          color: Color(0xFF111827),
-                          fontSize: 15,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                      SizedBox(width: 8),
-                      InkWell(
-                        mouseCursor: MaterialStateMouseCursor.clickable,
-                        onTap: () {
-                          setState(() {
-                            _model.isActionItemsExpanded =
-                                !_model.isActionItemsExpanded;
-                          });
-                        },
-                        child: Icon(
-                          _model.isActionItemsExpanded
-                              ? Icons.expand_less
-                              : Icons.expand_more,
-                          size: 20,
-                          color: Color(0xFF6B7280),
-                        ),
-                      ),
-                    ],
+                  Text(
+                    'Action Items',
+                    style: TextStyle(
+                      fontFamily: 'Inter',
+                      color: Color(0xFF111827),
+                      fontSize: 15,
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
-                  Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      if (isMacOSOrWeb && overdueCount > 0) ...[
-                        Padding(
-                          padding: EdgeInsets.only(right: 10),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Icon(
-                                Icons.error_outline,
-                                size: 18,
-                                color: Color(0xFFDC2626),
+                  SizedBox(width: 8),
+                  InkWell(
+                    mouseCursor: MaterialStateMouseCursor.clickable,
+                    onTap: () {
+                      setState(() {
+                        _model.isActionItemsExpanded =
+                            !_model.isActionItemsExpanded;
+                      });
+                    },
+                    child: Icon(
+                      _model.isActionItemsExpanded
+                          ? Icons.expand_less
+                          : Icons.expand_more,
+                      size: 20,
+                      color: Color(0xFF6B7280),
+                    ),
+                  ),
+                ],
+              ),
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (isMacOSOrWeb && overdueCount > 0) ...[
+                    Padding(
+                      padding: EdgeInsets.only(right: 10),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            Icons.error_outline,
+                            size: 18,
+                            color: Color(0xFFDC2626),
+                          )
+                              .animate(
+                                onPlay: (c) => c.repeat(reverse: true),
                               )
-                                  .animate(
-                                    onPlay: (c) => c.repeat(reverse: true),
-                                  )
-                                  .scale(
-                                    begin: Offset(0.95, 0.95),
-                                    end: Offset(1.2, 1.2),
-                                    duration: 600.ms,
-                                    curve: Curves.easeInOut,
-                                  ),
-                              SizedBox(width: 4),
-                              Text(
-                                '$overdueCount overdue',
-                                style: TextStyle(
-                                  fontFamily: 'Inter',
-                                  color: Color(0xFFDC2626),
-                                  fontSize: 13,
-                                  fontWeight: FontWeight.w600,
-                                ),
+                              .scale(
+                                begin: Offset(0.95, 0.95),
+                                end: Offset(1.2, 1.2),
+                                duration: 600.ms,
+                                curve: Curves.easeInOut,
                               ),
-                            ],
+                          SizedBox(width: 4),
+                          Text(
+                            '$overdueCount overdue',
+                            style: TextStyle(
+                              fontFamily: 'Inter',
+                              color: Color(0xFFDC2626),
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                  Text(
+                    '${pendingItems.length} pending',
+                    style: TextStyle(
+                      fontFamily: 'Inter',
+                      color: Color(0xFF6B7280),
+                      fontSize: 13,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+          if (_model.isActionItemsExpanded) ...[
+            SizedBox(height: 12),
+            Wrap(
+              spacing: 10,
+              runSpacing: 8,
+              children: [
+                if (highPriority > 0)
+                  Container(
+                    padding: EdgeInsetsDirectional.fromSTEB(10, 6, 10, 6),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFFEE2E2),
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          Icons.flag,
+                          size: 13,
+                          color: const Color(0xFFDC2626),
+                        ),
+                        SizedBox(width: 5),
+                        Text(
+                          '$highPriority High',
+                          style: TextStyle(
+                            fontFamily: 'Inter',
+                            fontSize: 12,
+                            fontWeight: FontWeight.w500,
+                            color: const Color(0xFFDC2626),
                           ),
                         ),
                       ],
-                      Text(
-                        '${pendingItems.length} pending',
-                        style: TextStyle(
-                          fontFamily: 'Inter',
-                          color: Color(0xFF6B7280),
-                          fontSize: 13,
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-                    ],
+                    ),
                   ),
-                ],
-              ),
-              if (_model.isActionItemsExpanded) ...[
-                SizedBox(height: 12),
-                Wrap(
-                  spacing: 10,
-                  runSpacing: 8,
-                  children: [
-                    if (highPriority > 0)
-                      Container(
-                        padding: EdgeInsetsDirectional.fromSTEB(10, 6, 10, 6),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFFEE2E2),
-                          borderRadius: BorderRadius.circular(6),
+                if (moderatePriority > 0)
+                  Container(
+                    padding: EdgeInsetsDirectional.fromSTEB(10, 6, 10, 6),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFFEF3C7),
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          Icons.flag,
+                          size: 13,
+                          color: const Color(0xFFD97706),
                         ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(
-                              Icons.flag,
-                              size: 13,
-                              color: const Color(0xFFDC2626),
-                            ),
-                            SizedBox(width: 5),
-                            Text(
-                              '$highPriority High',
-                              style: TextStyle(
-                                fontFamily: 'Inter',
-                                fontSize: 12,
-                                fontWeight: FontWeight.w500,
-                                color: const Color(0xFFDC2626),
-                              ),
-                            ),
-                          ],
+                        SizedBox(width: 5),
+                        Text(
+                          '$moderatePriority Moderate',
+                          style: TextStyle(
+                            fontFamily: 'Inter',
+                            fontSize: 12,
+                            fontWeight: FontWeight.w500,
+                            color: const Color(0xFFD97706),
+                          ),
                         ),
-                      ),
-                    if (moderatePriority > 0)
-                      Container(
-                        padding: EdgeInsetsDirectional.fromSTEB(10, 6, 10, 6),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFFEF3C7),
-                          borderRadius: BorderRadius.circular(6),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(
-                              Icons.flag,
-                              size: 13,
-                              color: const Color(0xFFD97706),
-                            ),
-                            SizedBox(width: 5),
-                            Text(
-                              '$moderatePriority Moderate',
-                              style: TextStyle(
-                                fontFamily: 'Inter',
-                                fontSize: 12,
-                                fontWeight: FontWeight.w500,
-                                color: const Color(0xFFD97706),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    if (lowPriority > 0)
-                      Container(
-                        padding: EdgeInsetsDirectional.fromSTEB(10, 6, 10, 6),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFE0E7FF),
-                          borderRadius: BorderRadius.circular(6),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(
-                              Icons.flag,
-                              size: 13,
-                              color: const Color(0xFF4F46E5),
-                            ),
-                            SizedBox(width: 5),
-                            Text(
-                              '$lowPriority Low',
-                              style: TextStyle(
-                                fontFamily: 'Inter',
-                                fontSize: 12,
-                                fontWeight: FontWeight.w500,
-                                color: const Color(0xFF4F46E5),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                  ],
-                ),
-                if (isMacOSOrWeb &&
-                    overdueCount > 0 &&
-                    overdueTasksForCard.isNotEmpty) ...[
-                  SizedBox(height: 16),
-                  TaskReminderDigestCard(
-                    overdueCount: overdueCount,
-                    introText: 'Your attention is needed on a few tasks below.',
-                    tasks: overdueTasksForCard,
-                    onMarkDone: _markActionItemDone,
-                    onRemindAgain: _remindAgain,
-                    initialExpanded: false,
+                      ],
+                    ),
                   ),
-                ],
+                if (lowPriority > 0)
+                  Container(
+                    padding: EdgeInsetsDirectional.fromSTEB(10, 6, 10, 6),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFE0E7FF),
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          Icons.flag,
+                          size: 13,
+                          color: const Color(0xFF4F46E5),
+                        ),
+                        SizedBox(width: 5),
+                        Text(
+                          '$lowPriority Low',
+                          style: TextStyle(
+                            fontFamily: 'Inter',
+                            fontSize: 12,
+                            fontWeight: FontWeight.w500,
+                            color: const Color(0xFF4F46E5),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
               ],
+            ),
+            if (isMacOSOrWeb &&
+                overdueCount > 0 &&
+                overdueTasksForCard.isNotEmpty) ...[
+              SizedBox(height: 16),
+              TaskReminderDigestCard(
+                overdueCount: overdueCount,
+                introText: 'Your attention is needed on a few tasks below.',
+                tasks: overdueTasksForCard,
+                onMarkDone: _markActionItemDone,
+                onRemindAgain: _remindAgain,
+                initialExpanded: false,
+              ),
             ],
-          ),
-        );
+          ],
+        ],
+      ),
+    );
   }
 
   /// Show a dialog to start a new meeting.
@@ -7238,8 +7372,8 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
                   },
                   borderRadius: BorderRadius.circular(6),
                   child: Container(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 10, vertical: 5),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                     decoration: BoxDecoration(
                       color: const Color(0xFF3B82F6),
                       borderRadius: BorderRadius.circular(6),
@@ -7302,9 +7436,7 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
     return StreamBuilder<List<AnnouncementsRecord>>(
       stream: queryAnnouncementsRecord(
         parent: chat.reference,
-        queryBuilder: (q) => q
-            .where('is_pinned', isEqualTo: true)
-            .limit(1),
+        queryBuilder: (q) => q.where('is_pinned', isEqualTo: true).limit(1),
       ),
       builder: (context, snapshot) {
         if (snapshot.hasError) {
@@ -7393,15 +7525,10 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
             mouseCursor: MaterialStateMouseCursor.clickable,
             onTap: () {
               if (!otherUserRef.path.contains('ai_agent_summerai')) {
-                context.pushNamed(
-                  'UserSummary',
-                  queryParameters: {
-                    'userRef': serializeParam(
-                        otherUserRef, ParamType.DocumentReference),
-                  }.withoutNulls,
-                  extra: <String, dynamic>{
-                    'userRef': otherUserRef,
-                  },
+                showUserProfilePopup(
+                  context,
+                  user: user,
+                  userRef: otherUserRef,
                 );
               }
             },
@@ -7494,8 +7621,7 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
   Widget _buildHeaderName(ChatsRecord chat) {
     if (chat.isGroup) {
       final title = chat.title.isNotEmpty ? chat.title : 'Group Chat';
-      final canRename =
-          ChatHelpers.isGroupOwner(chat, currentUserReference);
+      final canRename = ChatHelpers.isGroupOwner(chat, currentUserReference);
 
       return Row(
         children: [
@@ -8111,15 +8237,10 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
                   mouseCursor: MaterialStateMouseCursor.clickable,
                   onTap: () {
                     Navigator.pop(dialogContext);
-                    context.pushNamed(
-                      UserSummaryWidget.routeName,
-                      queryParameters: {
-                        'userRef': serializeParam(
-                            memberRef, ParamType.DocumentReference),
-                      }.withoutNulls,
-                      extra: <String, dynamic>{
-                        'userRef': memberRef,
-                      },
+                    showUserProfilePopup(
+                      context,
+                      userRef: memberRef,
+                      groupChat: chat,
                     );
                   },
                   child: Row(
@@ -8347,11 +8468,7 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
     try {
       final user = await fsGetUserOnce(otherUserRef);
       if (context.mounted) {
-        // Show user profile inline in the right panel (macOS)
-        setState(() {
-          _model.userProfileUser = user;
-          _model.showUserProfilePanel = true;
-        });
+        await showUserProfilePopup(context, user: user);
       }
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -8814,7 +8931,8 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
   void _forwardSelectedMessages() async {
     if (_selectedMessages.isEmpty) return;
     final messages = _selectedMessages.toList()
-      ..sort((a, b) => (a.createdAt ?? DateTime.now()).compareTo(b.createdAt ?? DateTime.now()));
+      ..sort((a, b) => (a.createdAt ?? DateTime.now())
+          .compareTo(b.createdAt ?? DateTime.now()));
 
     // Step 1: Ask forward mode
     final mode = await showDialog<String>(
@@ -8854,7 +8972,9 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: Text('Cancel', style: TextStyle(fontFamily: 'SF Pro Text', color: Color(0xFF007AFF))),
+            child: Text('Cancel',
+                style: TextStyle(
+                    fontFamily: 'SF Pro Text', color: Color(0xFF007AFF))),
           ),
         ],
       ),
@@ -8905,7 +9025,9 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
                     builder: (context, query, _) {
                       final filtered = chats.where((chat) {
                         if (query.isEmpty) return true;
-                        return chat.title.toLowerCase().contains(query.toLowerCase());
+                        return chat.title
+                            .toLowerCase()
+                            .contains(query.toLowerCase());
                       }).toList();
 
                       return ListView.builder(
@@ -8913,7 +9035,9 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
                         itemBuilder: (context, index) {
                           final chat = filtered[index];
                           final displayName = chat.isGroup
-                              ? (chat.title.isNotEmpty ? chat.title : 'Group Chat')
+                              ? (chat.title.isNotEmpty
+                                  ? chat.title
+                                  : 'Group Chat')
                               : (chatController.getCachedDisplayName(
                                     chat.members
                                         .firstWhere(
@@ -8921,7 +9045,8 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
                                           orElse: () => chat.members.first,
                                         )
                                         .id,
-                                  ) ?? 'Chat');
+                                  ) ??
+                                  'Chat');
 
                           return ListTile(
                             dense: true,
@@ -8986,7 +9111,8 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Forwarded ${messages.length} message${messages.length > 1 ? 's' : ''}'),
+            content: Text(
+                'Forwarded ${messages.length} message${messages.length > 1 ? 's' : ''}'),
             backgroundColor: Color(0xFF10B981),
             duration: Duration(seconds: 2),
           ),
@@ -9004,7 +9130,8 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
     }
   }
 
-  Future<void> _executeCombinedForward(ChatsRecord targetChat, List<MessagesRecord> messages) async {
+  Future<void> _executeCombinedForward(
+      ChatsRecord targetChat, List<MessagesRecord> messages) async {
     // Pre-fetch missing user data for display names
     final userCache = <DocumentReference, UsersRecord>{};
     for (final m in messages) {
@@ -9074,17 +9201,30 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
         backgroundColor: Colors.white,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: Text('Delete $count message${count > 1 ? 's' : ''}?',
-            style: TextStyle(fontFamily: 'SF Pro Text', fontSize: 18, fontWeight: FontWeight.w600, color: Color(0xFF1C1C1E))),
+            style: TextStyle(
+                fontFamily: 'SF Pro Text',
+                fontSize: 18,
+                fontWeight: FontWeight.w600,
+                color: Color(0xFF1C1C1E))),
         content: Text('This action cannot be undone.',
-            style: TextStyle(fontFamily: 'SF Pro Text', fontSize: 14, color: Color(0xFF8E8E93))),
+            style: TextStyle(
+                fontFamily: 'SF Pro Text',
+                fontSize: 14,
+                color: Color(0xFF8E8E93))),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: Text('Cancel', style: TextStyle(fontFamily: 'SF Pro Text', color: Color(0xFF007AFF))),
+            child: Text('Cancel',
+                style: TextStyle(
+                    fontFamily: 'SF Pro Text', color: Color(0xFF007AFF))),
           ),
           TextButton(
             onPressed: () => Navigator.pop(ctx, true),
-            child: Text('Delete', style: TextStyle(fontFamily: 'SF Pro Text', color: Color(0xFFFF3B30), fontWeight: FontWeight.w600)),
+            child: Text('Delete',
+                style: TextStyle(
+                    fontFamily: 'SF Pro Text',
+                    color: Color(0xFFFF3B30),
+                    fontWeight: FontWeight.w600)),
           ),
         ],
       ),
@@ -9099,7 +9239,9 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
       _exitSelectionMode();
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('$count message${count > 1 ? 's' : ''} deleted'), backgroundColor: Color(0xFF10B981)),
+          SnackBar(
+              content: Text('$count message${count > 1 ? 's' : ''} deleted'),
+              backgroundColor: Color(0xFF10B981)),
         );
       }
     }
@@ -9184,7 +9326,9 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
                         itemBuilder: (context, index) {
                           final chat = filtered[index];
                           final displayName = chat.isGroup
-                              ? (chat.title.isNotEmpty ? chat.title : 'Group Chat')
+                              ? (chat.title.isNotEmpty
+                                  ? chat.title
+                                  : 'Group Chat')
                               : (chatController.getCachedDisplayName(
                                     chat.members
                                         .firstWhere(
@@ -9247,7 +9391,8 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
     );
   }
 
-  Future<void> _executeForward(ChatsRecord targetChat, MessagesRecord message) async {
+  Future<void> _executeForward(
+      ChatsRecord targetChat, MessagesRecord message) async {
     try {
       final forwardData = createMessagesRecordData(
         senderRef: currentUserReference,
@@ -9353,8 +9498,7 @@ class _ChatListItemState extends State<_ChatListItem>
   @override
   void didUpdateWidget(covariant _ChatListItem oldWidget) {
     super.didUpdateWidget(oldWidget);
-    final chatChanged =
-        oldWidget.chat.reference.id != widget.chat.reference.id;
+    final chatChanged = oldWidget.chat.reference.id != widget.chat.reference.id;
     final becameUnread =
         !oldWidget.hasUnreadMessages && widget.hasUnreadMessages;
     if (chatChanged || becameUnread) {
@@ -9389,13 +9533,17 @@ class _ChatListItemState extends State<_ChatListItem>
           child: Row(
             children: [
               Icon(
-                widget.chat.isPinnedByUser(currentUserReference) ? Icons.push_pin_outlined : Icons.push_pin,
+                widget.chat.isPinnedByUser(currentUserReference)
+                    ? Icons.push_pin_outlined
+                    : Icons.push_pin,
                 color: Color(0xFF374151),
                 size: 18,
               ),
               SizedBox(width: 12),
               Text(
-                widget.chat.isPinnedByUser(currentUserReference) ? 'Unpin' : 'Pin',
+                widget.chat.isPinnedByUser(currentUserReference)
+                    ? 'Unpin'
+                    : 'Pin',
                 style: TextStyle(
                   fontFamily: 'Inter',
                   color: Color(0xFF111827),
@@ -9573,12 +9721,10 @@ class _ChatListItemState extends State<_ChatListItem>
                       const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
                   child: Container(
                     width: double.infinity,
-                    padding:
-                        const EdgeInsetsDirectional.fromSTEB(16, 12, 16, 12),
+                    padding: const EdgeInsetsDirectional.fromSTEB(16, 8, 16, 8),
                     decoration: BoxDecoration(
-                      color: widget.isSelected
-                          ? Colors.white
-                          : Colors.transparent,
+                      color:
+                          widget.isSelected ? Colors.white : Colors.transparent,
                       borderRadius: BorderRadius.circular(8),
                       border: widget.isSelected
                           ? Border.all(
@@ -9604,7 +9750,7 @@ class _ChatListItemState extends State<_ChatListItem>
                     ),
                     child: IntrinsicHeight(
                       child: Row(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        crossAxisAlignment: CrossAxisAlignment.center,
                         children: [
                           _buildChatAvatar(widget.chat),
                           const SizedBox(width: 12),
@@ -9634,29 +9780,21 @@ class _ChatListItemState extends State<_ChatListItem>
                                 const SizedBox(height: 4),
                                 _getLastMessagePreview(widget.chat,
                                     isSelected: widget.isSelected),
-                                if (widget.chat.isGroup &&
-                                    widget.chat.members.isNotEmpty) ...[
-                                  const SizedBox(height: 4),
-                                  _buildGroupMemberCountBadge(widget.chat),
-                                ],
                               ],
                             ),
                           ),
                           const SizedBox(width: 6),
                           SizedBox(
                             width: 70,
-                            child: Stack(
-                              clipBehavior: Clip.none,
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              crossAxisAlignment: CrossAxisAlignment.end,
                               children: [
-                                Align(
-                                  alignment: Alignment.topRight,
-                                  child: _buildMessageTimestamp(),
-                                ),
-                                if (widget.hasUnreadMessages)
-                                  Align(
-                                    alignment: Alignment.centerRight,
-                                    child: _buildUnreadCountBadge(),
-                                  ),
+                                _buildMessageTimestamp(),
+                                if (widget.hasUnreadMessages) ...[
+                                  const SizedBox(height: 6),
+                                  _buildUnreadCountBadge(),
+                                ],
                               ],
                             ),
                           ),
@@ -9676,8 +9814,8 @@ class _ChatListItemState extends State<_ChatListItem>
   Widget _buildChatAvatar(ChatsRecord chat) {
     if (chat.isGroup) {
       return Container(
-        width: 36,
-        height: 36,
+        width: 30,
+        height: 30,
         decoration: BoxDecoration(
           color: Colors.white,
           shape: BoxShape.circle,
@@ -9745,19 +9883,19 @@ class _ChatListItemState extends State<_ChatListItem>
             clipBehavior: Clip.none,
             children: [
               Container(
-                width: 36,
-                height: 36,
+                width: 30,
+                height: 30,
                 decoration: BoxDecoration(
                   color: Color(0xFF3B82F6),
                   shape: BoxShape.circle,
                   border: Border.all(color: Color(0xFFE5E7EB), width: 1),
                 ),
                 child: ClipRRect(
-                  borderRadius: BorderRadius.circular(18),
+                  borderRadius: BorderRadius.circular(15),
                   child: CachedNetworkImage(
                     imageUrl: imageUrl,
-                    width: 36,
-                    height: 36,
+                    width: 30,
+                    height: 30,
                     fit: BoxFit.cover,
                     memCacheWidth: 72,
                     memCacheHeight: 72,
@@ -9765,8 +9903,8 @@ class _ChatListItemState extends State<_ChatListItem>
                     maxHeightDiskCache: 72,
                     filterQuality: FilterQuality.high,
                     placeholder: (context, url) => Container(
-                      width: 36,
-                      height: 36,
+                      width: 30,
+                      height: 30,
                       decoration: BoxDecoration(
                         color: Colors.white,
                         shape: BoxShape.circle,
@@ -9774,12 +9912,12 @@ class _ChatListItemState extends State<_ChatListItem>
                       child: Icon(
                         Icons.person,
                         color: Color(0xFF6B7280),
-                        size: 18,
+                        size: 16,
                       ),
                     ),
                     errorWidget: (context, url, error) => Container(
-                      width: 36,
-                      height: 36,
+                      width: 30,
+                      height: 30,
                       decoration: BoxDecoration(
                         color: Colors.white,
                         shape: BoxShape.circle,
@@ -9951,9 +10089,8 @@ class _ChatListItemState extends State<_ChatListItem>
     Widget badge(int count) {
       const badgeHeight = 16.0;
       final display = count > 99 ? '99+' : '$count';
-      final badgeWidth = display.length > 2
-          ? 26.0
-          : (display.length > 1 ? 20.0 : badgeHeight);
+      final badgeWidth =
+          display.length > 2 ? 26.0 : (display.length > 1 ? 20.0 : badgeHeight);
 
       return Container(
         width: badgeWidth,
@@ -10005,8 +10142,8 @@ class _ChatListItemState extends State<_ChatListItem>
 
     return StreamBuilder<int>(
       stream: widget.chatController.getUnreadMessageCount(widget.chat),
-      initialData: widget.chatController
-          .getCachedUnreadCount(widget.chat.reference.id),
+      initialData:
+          widget.chatController.getCachedUnreadCount(widget.chat.reference.id),
       builder: (context, snapshot) {
         final count = snapshot.data;
         if (count == null || count <= 0) {
@@ -10021,8 +10158,7 @@ class _ChatListItemState extends State<_ChatListItem>
     if (currentUserReference == null) return 0;
 
     try {
-      final messages =
-          await fsQueryChatMessages(chat.reference, limit: 500);
+      final messages = await fsQueryChatMessages(chat.reference, limit: 500);
       int count = 0;
 
       for (final message in messages) {
@@ -10040,33 +10176,8 @@ class _ChatListItemState extends State<_ChatListItem>
 
       return count;
     } catch (_) {
-      return widget.chatController
-              .getCachedUnreadCount(chat.reference.id) ??
-          0;
+      return widget.chatController.getCachedUnreadCount(chat.reference.id) ?? 0;
     }
-  }
-
-  Widget _buildGroupMemberCountBadge(ChatsRecord chat) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Icon(
-          Icons.people_outline,
-          size: 12,
-          color: Color(0xFF9CA3AF),
-        ),
-        SizedBox(width: 2),
-        Text(
-          '${chat.members.length}',
-          style: TextStyle(
-            fontFamily: 'Inter',
-            color: Color(0xFF9CA3AF),
-            fontSize: 11,
-            fontWeight: FontWeight.w500,
-          ),
-        ),
-      ],
-    );
   }
 
   Widget _getLastMessagePreview(ChatsRecord chat, {bool isSelected = false}) {
@@ -10363,14 +10474,16 @@ class _DeferredFirestoreStream<T> extends StatefulWidget {
   final Duration delay;
   final Stream<T> stream;
   final Widget placeholder;
-  final Widget Function(BuildContext context, AsyncSnapshot<T> snapshot) builder;
+  final Widget Function(BuildContext context, AsyncSnapshot<T> snapshot)
+      builder;
 
   @override
   State<_DeferredFirestoreStream<T>> createState() =>
       _DeferredFirestoreStreamState<T>();
 }
 
-class _DeferredFirestoreStreamState<T> extends State<_DeferredFirestoreStream<T>> {
+class _DeferredFirestoreStreamState<T>
+    extends State<_DeferredFirestoreStream<T>> {
   Stream<T>? _activeStream;
 
   @override
@@ -10401,7 +10514,8 @@ class _RestPollBuilder<T> extends StatefulWidget {
 
   final Duration interval;
   final Future<T> Function() fetch;
-  final Widget Function(BuildContext context, AsyncSnapshot<T> snapshot) builder;
+  final Widget Function(BuildContext context, AsyncSnapshot<T> snapshot)
+      builder;
 
   @override
   State<_RestPollBuilder<T>> createState() => _RestPollBuilderState<T>();

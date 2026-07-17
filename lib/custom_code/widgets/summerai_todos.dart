@@ -1721,35 +1721,37 @@ class _SummerAITodosState extends State<SummerAITodos> {
 
     return Container(
       key: ValueKey('empty-state-$filter'),
-      padding: const EdgeInsets.all(40),
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 8),
       child: Center(
         child: Column(
           mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.center,
           children: [
             Icon(
               icon,
-              size: 48,
               color: CupertinoColors.secondaryLabel,
+              size: 32,
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 10),
             Text(
               title,
-              style: TextStyle(
-                fontFamily: '.SF Pro Display',
-                fontSize: 17,
-                fontWeight: FontWeight.w600,
-                color: CupertinoColors.label,
-                letterSpacing: -0.3,
-              ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              subtitle,
+              textAlign: TextAlign.center,
               style: TextStyle(
                 fontFamily: '.SF Pro Text',
-                fontSize: 15,
+                fontSize: 16,
+                fontWeight: FontWeight.w600,
+                color: CupertinoColors.label,
+              ),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              subtitle,
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontFamily: '.SF Pro Text',
+                fontSize: 14,
                 color: CupertinoColors.secondaryLabel,
-                letterSpacing: -0.2,
               ),
             ),
           ],

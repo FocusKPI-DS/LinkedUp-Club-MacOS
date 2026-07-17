@@ -1,4 +1,8 @@
+import 'dart:io' show Platform;
+
+import 'package:adaptive_platform_ui/adaptive_platform_ui.dart';
 import 'package:flutter/cupertino.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:package_info_plus/package_info_plus.dart';
@@ -7,9 +11,58 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:linkedup/custom_code/services/app_update_service.dart';
 import 'package:linkedup/custom_code/services/windows_update_installer.dart';
 
-/// Shared update prompts for desktop platforms.
+/// Shared update prompts across platforms.
 class AppUpdateDialog {
   AppUpdateDialog._();
+
+  static bool _promptInFlight = false;
+
+  /// Checks for a newer version and shows the platform update dialog.
+  ///
+  /// Non-forced calls show the prompt at most once per version (a one-time
+  /// popup), so users aren't nagged on every launch. Forced calls (e.g. the
+  /// manual "Check for updates" button) always show when an update exists.
+  /// No-op on web and unsupported platforms.
+  static Future<void> maybeShowUpdatePrompt(
+    BuildContext context, {
+    bool force = false,
+  }) async {
+    if (kIsWeb) return;
+    if (!(Platform.isIOS || Platform.isMacOS || Platform.isWindows)) return;
+    if (_promptInFlight) return;
+    _promptInFlight = true;
+    try {
+      // Fall back to the last known result so a rate-limited check (e.g. when
+      // another component already checked this interval) still prompts.
+      final hasUpdate = await AppUpdateService.checkForUpdate(force: force) ??
+          AppUpdateService.lastUpdateAvailable;
+      if (hasUpdate != true) return;
+
+      final version = AppUpdateService.pendingLatestVersion ?? '';
+      if (!force && await AppUpdateService.hasPromptedForVersion(version)) {
+        return;
+      }
+      if (!context.mounted) return;
+
+      // Mark before showing so a race can't produce two popups.
+      if (!force && version.isNotEmpty) {
+        await AppUpdateService.markPromptedForVersion(version);
+      }
+      if (!context.mounted) return;
+
+      if (Platform.isMacOS) {
+        await showMac(context);
+      } else if (Platform.isWindows) {
+        await showWindows(context);
+      } else if (Platform.isIOS) {
+        await showIOS(context);
+      }
+    } catch (_) {
+      // Never let update prompting crash a page load.
+    } finally {
+      _promptInFlight = false;
+    }
+  }
 
   static Widget _releaseNotesMarkdown(
     String releaseNotes, {
@@ -319,6 +372,37 @@ class AppUpdateDialog {
         ),
       ),
     );
+  }
+
+  /// iOS: prompt to update via the App Store. Mirrors the established alert.
+  static Future<void> showIOS(BuildContext context) async {
+    try {
+      await AdaptiveAlertDialog.show(
+        context: context,
+        title: 'Update Available',
+        message:
+            'A new version of Lona is available on the App Store. Please update to continue using the latest features and improvements.',
+        icon: 'arrow.down.circle.fill',
+        actions: [
+          AlertAction(
+            title: 'Later',
+            style: AlertActionStyle.cancel,
+            onPressed: () {},
+          ),
+          AlertAction(
+            title: 'Update',
+            style: AlertActionStyle.primary,
+            onPressed: () async {
+              final appStoreUrl = AppUpdateService.getAppStoreUrl();
+              final uri = Uri.parse(appStoreUrl);
+              if (await canLaunchUrl(uri)) {
+                await launchUrl(uri, mode: LaunchMode.externalApplication);
+              }
+            },
+          ),
+        ],
+      );
+    } catch (_) {}
   }
 
   static Future<void> _runWindowsInstall(

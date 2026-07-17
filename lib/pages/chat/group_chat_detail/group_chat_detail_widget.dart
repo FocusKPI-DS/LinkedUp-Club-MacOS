@@ -12,6 +12,7 @@ import '/pages/chat/chat_component/add_user/add_user_widget.dart';
 import '/pages/chat/chat_component/reminder_time/reminder_time_widget.dart';
 import '/pages/event/gallary/gallary_widget.dart';
 import '/pages/chat/add_group_members/add_group_members_dialog.dart';
+import '/pages/chat/user_profile_popup/user_profile_popup.dart';
 import '/pages/chat/group_chat_detail/mobile_group_media_widget.dart';
 import 'dart:ui';
 import 'dart:io';
@@ -3731,17 +3732,10 @@ class _GroupChatDetailWidgetState extends State<GroupChatDetailWidget>
                                                                                 Colors.transparent,
                                                                             onTap:
                                                                                 () async {
-                                                                              context.pushNamed(
-                                                                                UserSummaryWidget.routeName,
-                                                                                queryParameters: {
-                                                                                  'userRef': serializeParam(
-                                                                                    rowUsersRecord.reference,
-                                                                                    ParamType.DocumentReference,
-                                                                                  ),
-                                                                                }.withoutNulls,
-                                                                                extra: <String, dynamic>{
-                                                                                  'userRef': rowUsersRecord.reference,
-                                                                                },
+                                                                              showUserProfilePopup(
+                                                                                context,
+                                                                                user: rowUsersRecord,
+                                                                                groupChat: widget.chatDoc,
                                                                               );
                                                                             },
                                                                             child:

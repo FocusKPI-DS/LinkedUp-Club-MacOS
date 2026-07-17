@@ -5,6 +5,7 @@ import '/pages/desktop_chat/desktop_safe_user_builder.dart';
 import '/flutter_flow/flutter_flow_util.dart';
 import '/pages/mobile_chat/mobile_chat_widget.dart';
 import '/pages/connections/add_connections_widget.dart';
+import '/pages/chat/user_profile_popup/user_profile_popup.dart';
 import '/utils/desktop_pointer.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
@@ -1261,16 +1262,7 @@ class _ConnectionsWidgetState extends State<ConnectionsWidget> {
   }
 
   void _viewUserProfile(UsersRecord user) {
-    // Navigate to user summary page
-    context.pushNamed(
-      'UserSummary',
-      queryParameters: {
-        'userRef': serializeParam(user.reference, ParamType.DocumentReference),
-      }.withoutNulls,
-      extra: <String, dynamic>{
-        'userRef': user.reference,
-      },
-    );
+    showUserProfilePopup(context, user: user);
   }
 
   Future<void> _sendConnectionRequest(UsersRecord user) async {

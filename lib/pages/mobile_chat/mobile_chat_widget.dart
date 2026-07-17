@@ -11,7 +11,7 @@ import '/pages/mobile_chat/mobile_new_chat_widget.dart';
 import '/pages/mobile_chat/mobile_new_group_chat_widget.dart';
 import '/pages/desktop_chat/chat_controller.dart';
 import '/utils/chat_helpers.dart';
-import '/pages/user_summary/user_summary_widget.dart';
+import '/pages/chat/user_profile_popup/user_profile_popup.dart';
 import '/pages/chat/group_chat_detail/group_chat_detail_widget.dart';
 import '/pages/chat/group_chat_detail/mobile_group_media_widget.dart';
 import '/pages/chat/group_chat_detail/mobile_group_tasks_widget.dart';
@@ -77,7 +77,8 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
   List<AdaptivePopupMenuItem<String>>? _currentMenuItems;
   Function(int index, AdaptivePopupMenuItem<String> item)? _currentOnSelected;
   ChatThreadComponentWidgetState? _activeChatThreadComponent;
-  final ValueNotifier<String?> _activeSelectionId = ValueNotifier<String?>(null);
+  final ValueNotifier<String?> _activeSelectionId =
+      ValueNotifier<String?>(null);
 
   // Multi-message selection state
   bool _isSelectionMode = false;
@@ -91,13 +92,18 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
   bool _isDMCollapsed = false;
   bool _isRecentCollapsed = false;
   bool _isInactiveCollapsed = true; // Inactive chats hidden by default
-  bool _isFolderMode = false; // Toggle between Chats (flat list) and Folders (grouped) mode
-  final GlobalKey<_FullScreenChatPageState> _fullScreenChatPageKey = GlobalKey<_FullScreenChatPageState>();
+  bool _isFolderMode =
+      false; // Toggle between Chats (flat list) and Folders (grouped) mode
+  final GlobalKey<_FullScreenChatPageState> _fullScreenChatPageKey =
+      GlobalKey<_FullScreenChatPageState>();
 
   void _toggleMessageSelection(MessagesRecord message) {
     setState(() {
-      if (_selectedMessages.map((m) => m.reference.id).contains(message.reference.id)) {
-        _selectedMessages.removeWhere((m) => m.reference.id == message.reference.id);
+      if (_selectedMessages
+          .map((m) => m.reference.id)
+          .contains(message.reference.id)) {
+        _selectedMessages
+            .removeWhere((m) => m.reference.id == message.reference.id);
         if (_selectedMessages.isEmpty) {
           _isSelectionMode = false;
         }
@@ -117,7 +123,8 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
           });
           _activeChatThreadComponent = null;
         } else {
-          final chatThreadComponent = _model.chatThreadComponentKey.currentState;
+          final chatThreadComponent =
+              _model.chatThreadComponentKey.currentState;
           if (chatThreadComponent != null) {
             chatThreadComponent.safeSetState(() {
               chatThreadComponent.clearHighlight();
@@ -133,7 +140,7 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
     _currentMenuPosition = null;
     _currentMenuItems = null;
     _currentOnSelected = null;
-    
+
     if (clearSelection) {
       _highlightedMessageId = null; // Reset highlight tracking
       _activeSelectionId.value = null; // Targeted reset for all messages
@@ -164,7 +171,8 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
   }) {
     // If componentState is provided (from the component itself), use it.
     // Otherwise fallback to global key (for initial main view access)
-    final activeComponent = componentState ?? _model.chatThreadComponentKey.currentState;
+    final activeComponent =
+        componentState ?? _model.chatThreadComponentKey.currentState;
 
     if (activeComponent == null && offset != null) {
       // No component state available (e.g. in full-screen chat view with media long press)
@@ -830,7 +838,6 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
     );
   }
 
-
   void _showMessageMenu(MessagesRecord message, [Offset? offset]) {
     // Trigger highlight for this message
     final chatThreadComponent = _model.chatThreadComponentKey.currentState;
@@ -844,17 +851,45 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
     final isOwnMessage = message.senderRef == currentUserReference;
     final primaryMenuItems = <Map<String, dynamic>>[
       {'label': 'React', 'icon': CupertinoIcons.smiley, 'value': 'react'},
-      {'label': 'Reply', 'icon': CupertinoIcons.arrow_turn_up_left, 'value': 'reply'},
-      {'label': 'Forward', 'icon': CupertinoIcons.arrow_turn_up_right, 'value': 'forward'},
+      {
+        'label': 'Reply',
+        'icon': CupertinoIcons.arrow_turn_up_left,
+        'value': 'reply'
+      },
+      {
+        'label': 'Forward',
+        'icon': CupertinoIcons.arrow_turn_up_right,
+        'value': 'forward'
+      },
       {'label': 'Copy', 'icon': CupertinoIcons.doc_on_doc, 'value': 'copy'},
-      {'label': 'Select', 'icon': CupertinoIcons.checkmark_circle, 'value': 'select'},
-      if (!isOwnMessage) {'label': 'Translate', 'icon': CupertinoIcons.book, 'value': 'translate'},
+      {
+        'label': 'Select',
+        'icon': CupertinoIcons.checkmark_circle,
+        'value': 'select'
+      },
+      if (!isOwnMessage)
+        {
+          'label': 'Translate',
+          'icon': CupertinoIcons.book,
+          'value': 'translate'
+        },
       {'label': 'Pin', 'icon': CupertinoIcons.pin, 'value': 'pin'},
     ];
     final secondaryMenuItems = <Map<String, dynamic>>[
-      if (isOwnMessage) {'label': 'Edit', 'icon': CupertinoIcons.pencil, 'value': 'edit'},
-      if (isOwnMessage) {'label': 'Unsend', 'icon': CupertinoIcons.arrow_counterclockwise, 'value': 'unsend'},
-      if (!isOwnMessage) {'label': 'Report', 'icon': CupertinoIcons.exclamationmark_triangle, 'value': 'report'},
+      if (isOwnMessage)
+        {'label': 'Edit', 'icon': CupertinoIcons.pencil, 'value': 'edit'},
+      if (isOwnMessage)
+        {
+          'label': 'Unsend',
+          'icon': CupertinoIcons.arrow_counterclockwise,
+          'value': 'unsend'
+        },
+      if (!isOwnMessage)
+        {
+          'label': 'Report',
+          'icon': CupertinoIcons.exclamationmark_triangle,
+          'value': 'report'
+        },
     ];
 
     // Dismiss any existing overlay AND any active text selection (prevents double-open)
@@ -870,17 +905,21 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
     final int widestRow = primaryMenuItems.length > secondaryMenuItems.length
         ? primaryMenuItems.length
         : secondaryMenuItems.length;
-    final double menuWidth = (itemSize * widestRow) + (horizontalPadding * 2) + 2.0;
-    final double menuHeight = (itemSize * 2) + (verticalPadding * 2) + dividerHeight;
+    final double menuWidth =
+        (itemSize * widestRow) + (horizontalPadding * 2) + 2.0;
+    final double menuHeight =
+        (itemSize * 2) + (verticalPadding * 2) + dividerHeight;
 
     // Calculate position near the long-press point
     final screenSize = MediaQuery.of(context).size;
     double left = (offset?.dx ?? screenSize.width / 2) - menuWidth / 2;
     double top = (offset?.dy ?? screenSize.height * 0.4) - menuHeight - 15;
     if (left < 10) left = 10;
-    if (left + menuWidth > screenSize.width - 10) left = screenSize.width - menuWidth - 10;
+    if (left + menuWidth > screenSize.width - 10)
+      left = screenSize.width - menuWidth - 10;
     if (top < 60) top = (offset?.dy ?? screenSize.height * 0.4) + 30;
-    if (top + menuHeight > screenSize.height - 60) top = screenSize.height - menuHeight - 60;
+    if (top + menuHeight > screenSize.height - 60)
+      top = screenSize.height - menuHeight - 60;
 
     _menuOverlayEntry = OverlayEntry(
       builder: (overlayContext) => Stack(
@@ -905,7 +944,8 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
               borderRadius: BorderRadius.circular(10),
               child: Container(
                 width: menuWidth,
-                padding: EdgeInsets.symmetric(horizontal: horizontalPadding, vertical: verticalPadding),
+                padding: EdgeInsets.symmetric(
+                    horizontal: horizontalPadding, vertical: verticalPadding),
                 decoration: BoxDecoration(
                   color: Colors.white.withOpacity(0.95),
                   borderRadius: BorderRadius.circular(10),
@@ -924,7 +964,8 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
                         final String value = item['value'] as String;
                         final String label = item['label'] as String;
                         final IconData icon = item['icon'] as IconData;
-                        final isDestructive = value == 'report' || value == 'unsend';
+                        final isDestructive =
+                            value == 'report' || value == 'unsend';
 
                         return GestureDetector(
                           behavior: HitTestBehavior.opaque,
@@ -945,7 +986,9 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
                                 Icon(
                                   icon,
                                   size: 16,
-                                  color: isDestructive ? const Color(0xFFFF3B30) : const Color(0xFF1C1C1E),
+                                  color: isDestructive
+                                      ? const Color(0xFFFF3B30)
+                                      : const Color(0xFF1C1C1E),
                                 ),
                                 const SizedBox(height: 2),
                                 Text(
@@ -958,7 +1001,8 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
                                     fontSize: 8.5,
                                     color: isDestructive
                                         ? const Color(0xFFFF3B30)
-                                        : const Color(0xFF1C1C1E).withOpacity(0.8),
+                                        : const Color(0xFF1C1C1E)
+                                            .withOpacity(0.8),
                                     fontWeight: FontWeight.w400,
                                     letterSpacing: -0.2,
                                     decoration: TextDecoration.none,
@@ -981,7 +1025,8 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
                         final String value = item['value'] as String;
                         final String label = item['label'] as String;
                         final IconData icon = item['icon'] as IconData;
-                        final isDestructive = value == 'report' || value == 'unsend';
+                        final isDestructive =
+                            value == 'report' || value == 'unsend';
 
                         return GestureDetector(
                           behavior: HitTestBehavior.opaque,
@@ -1002,7 +1047,9 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
                                 Icon(
                                   icon,
                                   size: 16,
-                                  color: isDestructive ? const Color(0xFFFF3B30) : const Color(0xFF1C1C1E),
+                                  color: isDestructive
+                                      ? const Color(0xFFFF3B30)
+                                      : const Color(0xFF1C1C1E),
                                 ),
                                 const SizedBox(height: 2),
                                 Text(
@@ -1015,7 +1062,8 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
                                     fontSize: 8.5,
                                     color: isDestructive
                                         ? const Color(0xFFFF3B30)
-                                        : const Color(0xFF1C1C1E).withOpacity(0.8),
+                                        : const Color(0xFF1C1C1E)
+                                            .withOpacity(0.8),
                                     fontWeight: FontWeight.w400,
                                     letterSpacing: -0.2,
                                     decoration: TextDecoration.none,
@@ -1040,7 +1088,8 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
   }
 
   void handleMessageAction(String action, MessagesRecord message) {
-    print('✅ handleMessageAction triggered: $action for message ${message.reference.id}');
+    print(
+        '✅ handleMessageAction triggered: $action for message ${message.reference.id}');
     switch (action) {
       case 'copy':
         // For text selection, 'copy' is handled natively by the SelectionArea.
@@ -2220,7 +2269,8 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
                       child: ElevatedButton(
                         onPressed: () {
                           if (editController.text.trim().isNotEmpty) {
-                            _updateMessage(message, editController.text.trim(), existingMentions);
+                            _updateMessage(message, editController.text.trim(),
+                                existingMentions);
                             Navigator.pop(context);
                           }
                         },
@@ -2278,22 +2328,31 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
           firestoreData['images'] = message.images;
         }
 
-        await MessagesRecord.createDoc(selectedChat.reference).set(firestoreData);
+        await MessagesRecord.createDoc(selectedChat.reference)
+            .set(firestoreData);
 
         // Update chat's last_message fields for preview
         String previewText = message.content;
         if (previewText.isEmpty) {
-          if (message.messageType == MessageType.image) previewText = '📷 Photo';
-          else if (message.messageType == MessageType.video) previewText = '🎥 Video';
-          else if (message.messageType == MessageType.file) previewText = '📎 File';
-          else if (message.messageType == MessageType.voice) previewText = '🎵 Audio';
-          else previewText = 'Message';
+          if (message.messageType == MessageType.image)
+            previewText = '📷 Photo';
+          else if (message.messageType == MessageType.video)
+            previewText = '🎥 Video';
+          else if (message.messageType == MessageType.file)
+            previewText = '📎 File';
+          else if (message.messageType == MessageType.voice)
+            previewText = '🎵 Audio';
+          else
+            previewText = 'Message';
         }
         await selectedChat.reference.update({
-          'last_message': previewText.length > 100 ? previewText.substring(0, 100) : previewText,
+          'last_message': previewText.length > 100
+              ? previewText.substring(0, 100)
+              : previewText,
           'last_message_at': getCurrentTimestamp,
           'last_message_sent': currentUserReference,
-          'last_message_type': message.messageType?.serialize() ?? MessageType.text.serialize(),
+          'last_message_type':
+              message.messageType?.serialize() ?? MessageType.text.serialize(),
           'last_message_seen': [currentUserReference],
         });
 
@@ -2318,14 +2377,16 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
     }
   }
 
-  Future<void> _updateMessage(MessagesRecord message, String newContent, [List<Map<String, String>>? mentions]) async {
+  Future<void> _updateMessage(MessagesRecord message, String newContent,
+      [List<Map<String, String>>? mentions]) async {
     try {
       // Re-inject mention markup if we have mentions
       var processedContent = newContent;
       if (mentions != null && mentions.isNotEmpty) {
         // Process longest names first to avoid partial matches
         final sorted = List<Map<String, String>>.from(mentions)
-          ..sort((a, b) => b['displayName']!.length.compareTo(a['displayName']!.length));
+          ..sort((a, b) =>
+              b['displayName']!.length.compareTo(a['displayName']!.length));
         for (final m in sorted) {
           processedContent = processedContent.replaceFirst(
             '@${m['displayName']}',
@@ -3028,8 +3089,9 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
                     delegate: SliverChildBuilderDelegate(
                       (context, index) {
                         final chat = filteredChats[index];
-                        final isSelected = chatController.selectedChat.value?.reference ==
-                            chat.reference;
+                        final isSelected =
+                            chatController.selectedChat.value?.reference ==
+                                chat.reference;
                         return _buildChatSearchItem(chat, isSelected);
                       },
                       childCount: filteredChats.length,
@@ -3106,8 +3168,10 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
   /// Simple flat chat list with Pinned at top and Inactive at bottom (default view).
   Widget _buildFlatChatList(List<ChatsRecord> filteredChats) {
     final userRef = currentUserReference;
-    final pinned = filteredChats.where((c) => c.isPinnedByUser(userRef)).toList();
-    final unpinned = filteredChats.where((c) => !c.isPinnedByUser(userRef)).toList();
+    final pinned =
+        filteredChats.where((c) => c.isPinnedByUser(userRef)).toList();
+    final unpinned =
+        filteredChats.where((c) => !c.isPinnedByUser(userRef)).toList();
 
     // filteredChats already has active-only chats (controller excludes inactive on All tab),
     // so all unpinned chats here are active
@@ -3128,11 +3192,11 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
             count: pinned.length,
             isCollapsed: _isPinnedCollapsed,
             unreadCount: _countUnread(pinned),
-            onToggle: () => setState(() => _isPinnedCollapsed = !_isPinnedCollapsed),
+            onToggle: () =>
+                setState(() => _isPinnedCollapsed = !_isPinnedCollapsed),
           ),
           if (!_isPinnedCollapsed)
-            for (final chat in pinned)
-              _buildChatListItemObx(chat, false),
+            for (final chat in pinned) _buildChatListItemObx(chat, false),
         ],
         // Recent section (collapsible)
         if (active.isNotEmpty) ...[
@@ -3142,11 +3206,11 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
             count: active.length,
             isCollapsed: _isRecentCollapsed,
             unreadCount: _countUnread(active),
-            onToggle: () => setState(() => _isRecentCollapsed = !_isRecentCollapsed),
+            onToggle: () =>
+                setState(() => _isRecentCollapsed = !_isRecentCollapsed),
           ),
           if (!_isRecentCollapsed)
-            for (final chat in active)
-              _buildChatListItemObx(chat, false),
+            for (final chat in active) _buildChatListItemObx(chat, false),
         ],
 
         // Inactive section (30+ days) — header always visible on the All tab
@@ -3157,11 +3221,11 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
             count: inactive.length,
             isCollapsed: _isInactiveCollapsed,
             unreadCount: _countUnread(inactive),
-            onToggle: () => setState(() => _isInactiveCollapsed = !_isInactiveCollapsed),
+            onToggle: () =>
+                setState(() => _isInactiveCollapsed = !_isInactiveCollapsed),
           ),
           if (!_isInactiveCollapsed)
-            for (final chat in inactive)
-              _buildChatListItemObx(chat, false),
+            for (final chat in inactive) _buildChatListItemObx(chat, false),
         ],
       ],
     );
@@ -3181,7 +3245,6 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
     }
     return chatController.getInactiveChatsForSidebar();
   }
-
 
   /// Chat IDs that belong to a custom folder. Foldered chats live exclusively
   /// under their folder and are hidden from the Pinned/Group/DM sections.
@@ -3233,11 +3296,11 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
             count: pinned.length,
             isCollapsed: _isPinnedCollapsed,
             unreadCount: _countUnread(pinned),
-            onToggle: () => setState(() => _isPinnedCollapsed = !_isPinnedCollapsed),
+            onToggle: () =>
+                setState(() => _isPinnedCollapsed = !_isPinnedCollapsed),
           ),
           if (!_isPinnedCollapsed)
-            for (final chat in pinned)
-              _buildChatListItemObx(chat, false),
+            for (final chat in pinned) _buildChatListItemObx(chat, false),
         ],
 
         // Custom user-created folders
@@ -3252,11 +3315,11 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
             count: groups.length,
             isCollapsed: _isGroupsCollapsed,
             unreadCount: _countUnread(groups),
-            onToggle: () => setState(() => _isGroupsCollapsed = !_isGroupsCollapsed),
+            onToggle: () =>
+                setState(() => _isGroupsCollapsed = !_isGroupsCollapsed),
           ),
           if (!_isGroupsCollapsed)
-            for (final chat in groups)
-              _buildChatListItemObx(chat, false),
+            for (final chat in groups) _buildChatListItemObx(chat, false),
         ],
 
         // DM section (active only)
@@ -3270,8 +3333,7 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
             onToggle: () => setState(() => _isDMCollapsed = !_isDMCollapsed),
           ),
           if (!_isDMCollapsed)
-            for (final chat in dms)
-              _buildChatListItemObx(chat, false),
+            for (final chat in dms) _buildChatListItemObx(chat, false),
         ],
 
         // Inactive section (30+ days) — header always visible on the All tab
@@ -3282,11 +3344,11 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
             count: inactive.length,
             isCollapsed: _isInactiveCollapsed,
             unreadCount: _countUnread(inactive),
-            onToggle: () => setState(() => _isInactiveCollapsed = !_isInactiveCollapsed),
+            onToggle: () =>
+                setState(() => _isInactiveCollapsed = !_isInactiveCollapsed),
           ),
           if (!_isInactiveCollapsed)
-            for (final chat in inactive)
-              _buildChatListItemObx(chat, false),
+            for (final chat in inactive) _buildChatListItemObx(chat, false),
         ],
       ],
     );
@@ -3463,7 +3525,8 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
                   color: Color(0xFF8E8E93),
                 ),
                 SizedBox(width: 6),
-                Icon(CupertinoIcons.folder_fill, size: 15, color: Color(0xFF007AFF)),
+                Icon(CupertinoIcons.folder_fill,
+                    size: 15, color: Color(0xFF007AFF)),
                 SizedBox(width: 8),
                 Expanded(
                   child: Text(
@@ -3516,7 +3579,8 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
                       color: Color(0xFFE5E5EA),
                       borderRadius: BorderRadius.circular(6),
                     ),
-                    child: Icon(CupertinoIcons.add, size: 14, color: Color(0xFF8E8E93)),
+                    child: Icon(CupertinoIcons.add,
+                        size: 14, color: Color(0xFF8E8E93)),
                   ),
                 ),
               ],
@@ -3524,8 +3588,7 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
           ),
         ),
         if (!folder.isCollapsed)
-          for (final chat in folderChats)
-            _buildChatListItemObx(chat, false),
+          for (final chat in folderChats) _buildChatListItemObx(chat, false),
       ],
     );
   }
@@ -3540,9 +3603,8 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
     final allChats = chatController.chats;
     final existingIds = folder.chatIds.toSet();
     // Only show chats not already in this folder
-    final availableChats = allChats
-        .where((c) => !existingIds.contains(c.reference.id))
-        .toList();
+    final availableChats =
+        allChats.where((c) => !existingIds.contains(c.reference.id)).toList();
     final availableGroups = availableChats.where((c) => c.isGroup).toList();
     final availableDMs = availableChats.where((c) => !c.isGroup).toList();
 
@@ -3558,7 +3620,8 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
             orElse: () => dm.members.first,
           );
           final user = await _getOrCreateUserFuture(otherUserRef);
-          dmNameMap[dm.reference.id] = user.displayName.isNotEmpty ? user.displayName : 'User';
+          dmNameMap[dm.reference.id] =
+              user.displayName.isNotEmpty ? user.displayName : 'User';
         } catch (_) {
           dmNameMap[dm.reference.id] = 'Direct Message';
         }
@@ -3623,7 +3686,8 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
                         ),
                       ),
                       CupertinoButton(
-                        padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                        padding:
+                            EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                         color: Color(0xFF007AFF),
                         borderRadius: BorderRadius.circular(20),
                         minSize: 0,
@@ -3632,13 +3696,15 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
                             : () async {
                                 Navigator.pop(ctx);
                                 await folder.reference.update({
-                                  'chat_ids': FieldValue.arrayUnion(selectedIds.toList()),
+                                  'chat_ids': FieldValue.arrayUnion(
+                                      selectedIds.toList()),
                                   'updated_at': FieldValue.serverTimestamp(),
                                 });
                                 // A chat belongs to only one folder — drop the
                                 // selected chats from any other folders.
                                 for (final other in _chatFolders) {
-                                  if (other.reference.id == folder.reference.id) {
+                                  if (other.reference.id ==
+                                      folder.reference.id) {
                                     continue;
                                   }
                                   final toRemove = selectedIds
@@ -3646,7 +3712,8 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
                                       .toList();
                                   if (toRemove.isEmpty) continue;
                                   await other.reference.update({
-                                    'chat_ids': FieldValue.arrayRemove(toRemove),
+                                    'chat_ids':
+                                        FieldValue.arrayRemove(toRemove),
                                     'updated_at': FieldValue.serverTimestamp(),
                                   });
                                 }
@@ -3783,7 +3850,8 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
               ),
             ),
             if (isSelected)
-              Icon(CupertinoIcons.checkmark_circle_fill, size: 22, color: Color(0xFF007AFF)),
+              Icon(CupertinoIcons.checkmark_circle_fill,
+                  size: 22, color: Color(0xFF007AFF)),
           ],
         ),
       ),
@@ -3817,8 +3885,7 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
               final name = textController.text.trim();
               if (name.isEmpty || currentUserReference == null) return;
               Navigator.pop(ctx);
-              final docRef =
-                  ChatFoldersRecord.createDoc(currentUserReference!);
+              final docRef = ChatFoldersRecord.createDoc(currentUserReference!);
               await docRef.set({
                 ...createChatFoldersRecordData(
                   name: name,
@@ -3999,9 +4066,8 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
 
   /// Build a single message search result card.
   Widget _buildMessageResultCard(MessageSearchResult result) {
-    final timeStr = result.createdAt != null
-        ? _formatMessageTime(result.createdAt!)
-        : '';
+    final timeStr =
+        result.createdAt != null ? _formatMessageTime(result.createdAt!) : '';
 
     // Highlight the matching text
     final query = chatController.searchQuery.value.toLowerCase();
@@ -5683,49 +5749,58 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
             }
           }
 
-          return Container(
-            width: 40,
-            height: 40,
-            decoration: BoxDecoration(
-              color: Color(0xFF007AFF),
-              shape: BoxShape.circle,
-            ),
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(20),
-              child: CachedNetworkImage(
-                imageUrl: imageUrl,
-                width: 40,
-                height: 40,
-                fit: BoxFit.cover,
-                memCacheWidth: 80,
-                memCacheHeight: 80,
-                maxWidthDiskCache: 80,
-                maxHeightDiskCache: 80,
-                filterQuality: FilterQuality.high,
-                placeholder: (context, url) => Container(
+          return GestureDetector(
+            onTap: otherUserRef.path.contains('ai_agent_summerai')
+                ? null
+                : () => showUserProfilePopup(
+                      context,
+                      user: userSnapshot.data,
+                      userRef: otherUserRef,
+                    ),
+            child: Container(
+              width: 40,
+              height: 40,
+              decoration: BoxDecoration(
+                color: Color(0xFF007AFF),
+                shape: BoxShape.circle,
+              ),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(20),
+                child: CachedNetworkImage(
+                  imageUrl: imageUrl,
                   width: 40,
                   height: 40,
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    shape: BoxShape.circle,
+                  fit: BoxFit.cover,
+                  memCacheWidth: 80,
+                  memCacheHeight: 80,
+                  maxWidthDiskCache: 80,
+                  maxHeightDiskCache: 80,
+                  filterQuality: FilterQuality.high,
+                  placeholder: (context, url) => Container(
+                    width: 40,
+                    height: 40,
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      shape: BoxShape.circle,
+                    ),
+                    child: Icon(
+                      Icons.person,
+                      color: Color(0xFF8E8E93),
+                      size: 18,
+                    ),
                   ),
-                  child: Icon(
-                    Icons.person,
-                    color: Color(0xFF8E8E93),
-                    size: 18,
-                  ),
-                ),
-                errorWidget: (context, url, error) => Container(
-                  width: 40,
-                  height: 40,
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    shape: BoxShape.circle,
-                  ),
-                  child: Icon(
-                    Icons.person,
-                    color: Color(0xFF8E8E93),
-                    size: 18,
+                  errorWidget: (context, url, error) => Container(
+                    width: 40,
+                    height: 40,
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      shape: BoxShape.circle,
+                    ),
+                    child: Icon(
+                      Icons.person,
+                      color: Color(0xFF8E8E93),
+                      size: 18,
+                    ),
                   ),
                 ),
               ),
@@ -5865,17 +5940,7 @@ class _MobileChatWidgetState extends State<MobileChatWidget>
     try {
       final user = await UsersRecord.getDocumentOnce(otherUserRef);
       if (context.mounted) {
-        // Navigate to new user summary page instead of old profile page
-        context.pushNamed(
-          UserSummaryWidget.routeName,
-          queryParameters: {
-            'userRef':
-                serializeParam(user.reference, ParamType.DocumentReference),
-          }.withoutNulls,
-          extra: <String, dynamic>{
-            'userRef': user.reference,
-          },
-        );
+        await showUserProfilePopup(context, user: user);
       }
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -6117,9 +6182,11 @@ class _MobileChatListItemState extends State<_MobileChatListItem>
   void _showChatMenu(ChatsRecord chat) {
     // Check if the current user has manually marked this chat as unread
     final currentUserRef = currentUserReference;
-    final isManuallyUnread = currentUserRef != null && 
-        (chat.snapshotData['marked_unread_by'] as List<dynamic>?)?.contains(currentUserRef) == true;
-    
+    final isManuallyUnread = currentUserRef != null &&
+        (chat.snapshotData['marked_unread_by'] as List<dynamic>?)
+                ?.contains(currentUserRef) ==
+            true;
+
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
@@ -6143,15 +6210,21 @@ class _MobileChatListItemState extends State<_MobileChatListItem>
             ),
             // Menu options
             _buildMenuOption(
-              icon: chat.isPinnedByUser(currentUserReference) ? Icons.push_pin : Icons.push_pin_outlined,
-              title: chat.isPinnedByUser(currentUserReference) ? 'Unpin Chat' : 'Pin Chat',
+              icon: chat.isPinnedByUser(currentUserReference)
+                  ? Icons.push_pin
+                  : Icons.push_pin_outlined,
+              title: chat.isPinnedByUser(currentUserReference)
+                  ? 'Unpin Chat'
+                  : 'Pin Chat',
               onTap: () {
                 Navigator.pop(sheetContext);
                 _togglePinChat(chat);
               },
             ),
             _buildMenuOption(
-              icon: isManuallyUnread ? Icons.mark_chat_read_outlined : Icons.mark_chat_unread_outlined,
+              icon: isManuallyUnread
+                  ? Icons.mark_chat_read_outlined
+                  : Icons.mark_chat_unread_outlined,
               title: isManuallyUnread ? 'Mark as Read' : 'Mark as Unread',
               onTap: () {
                 Navigator.pop(sheetContext);
@@ -6226,7 +6299,8 @@ class _MobileChatListItemState extends State<_MobileChatListItem>
       final userRef = currentUserReference;
       if (userRef == null) return;
       final isPinned = chat.isPinnedByUser(userRef);
-      print('📌 [_togglePinChat] Toggling pin for chat: ${chat.reference.path}, isPinnedByMe: $isPinned');
+      print(
+          '📌 [_togglePinChat] Toggling pin for chat: ${chat.reference.path}, isPinnedByMe: $isPinned');
       if (isPinned) {
         await chat.reference.update({
           'pinned_by': FieldValue.arrayRemove([userRef]),
@@ -6282,7 +6356,8 @@ class _MobileChatListItemState extends State<_MobileChatListItem>
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(isCurrentlyUnread ? 'Marked as read' : 'Marked as unread'),
+            content:
+                Text(isCurrentlyUnread ? 'Marked as read' : 'Marked as unread'),
             backgroundColor: Color(0xFF34C759),
           ),
         );
@@ -6352,7 +6427,8 @@ class _MobileChatListItemState extends State<_MobileChatListItem>
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   if (folder.chatIds.contains(chat.reference.id))
-                    Icon(CupertinoIcons.check_mark, size: 18, color: CupertinoColors.systemBlue),
+                    Icon(CupertinoIcons.check_mark,
+                        size: 18, color: CupertinoColors.systemBlue),
                   if (folder.chatIds.contains(chat.reference.id))
                     SizedBox(width: 8),
                   Text(
@@ -6375,9 +6451,11 @@ class _MobileChatListItemState extends State<_MobileChatListItem>
             child: Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Icon(CupertinoIcons.folder_badge_plus, size: 18, color: CupertinoColors.systemBlue),
+                Icon(CupertinoIcons.folder_badge_plus,
+                    size: 18, color: CupertinoColors.systemBlue),
                 SizedBox(width: 8),
-                Text('New Folder', style: TextStyle(color: CupertinoColors.systemBlue)),
+                Text('New Folder',
+                    style: TextStyle(color: CupertinoColors.systemBlue)),
               ],
             ),
           ),
@@ -6790,8 +6868,9 @@ class _MobileChatListItemState extends State<_MobileChatListItem>
 
   Widget _getLastMessagePreview(ChatsRecord chat) {
     // DEBUG: Log what data the preview receives
-    print('🔍 [Preview] chatId=${chat.reference.id} lastMessage="${chat.lastMessage}" lastMsgSent=${chat.lastMessageSent?.path} lastMsgType=${chat.lastMessageType} lastMsgAt=${chat.lastMessageAt}');
-    
+    print(
+        '🔍 [Preview] chatId=${chat.reference.id} lastMessage="${chat.lastMessage}" lastMsgSent=${chat.lastMessageSent?.path} lastMsgType=${chat.lastMessageType} lastMsgAt=${chat.lastMessageAt}');
+
     if (chat.lastMessage.isEmpty) {
       // Special handling for service chats
       if (chat.isServiceChat == true) {
@@ -6835,7 +6914,8 @@ class _MobileChatListItemState extends State<_MobileChatListItem>
                   if (chat.lastMessageSent == currentUserReference) {
                     prefix = 'You: ';
                   } else {
-                    final firstName = snapshot.data!.displayName.split(' ').first;
+                    final firstName =
+                        snapshot.data!.displayName.split(' ').first;
                     prefix = '$firstName: ';
                   }
                 }
@@ -7137,7 +7217,8 @@ class _FullScreenChatPageState extends State<_FullScreenChatPage> {
                   left: 0,
                   right: 0,
                   child: ClipRRect(
-                    borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+                    borderRadius:
+                        const BorderRadius.vertical(top: Radius.circular(20)),
                     child: BackdropFilter(
                       filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
                       child: Container(
@@ -7161,7 +7242,8 @@ class _FullScreenChatPageState extends State<_FullScreenChatPage> {
                                 });
                                 widget.onExitSelectionMode?.call();
                                 if (widget.onHideMenu != null) {
-                                  widget.onHideMenu!(/* clearSelection: true */);
+                                  widget.onHideMenu!(
+                                      /* clearSelection: true */);
                                 }
                               },
                               child: const Text(
@@ -7179,7 +7261,8 @@ class _FullScreenChatPageState extends State<_FullScreenChatPage> {
                                 fontFamily: 'SF Pro Text',
                                 fontSize: 16,
                                 fontWeight: FontWeight.w600,
-                                color: Theme.of(context).brightness == Brightness.dark
+                                color: Theme.of(context).brightness ==
+                                        Brightness.dark
                                     ? Colors.white
                                     : Colors.black,
                               ),
@@ -7190,68 +7273,112 @@ class _FullScreenChatPageState extends State<_FullScreenChatPage> {
                                   : () async {
                                       if (_localSelectedMessages.length == 1) {
                                         // Auto-proceed to forward one-by-one logic
-                                        await _runForwardLogic(context, _localSelectedMessages.toList(), isCombined: false);
+                                        await _runForwardLogic(context,
+                                            _localSelectedMessages.toList(),
+                                            isCombined: false);
                                       } else {
                                         // Show action sheet
-                                        final action = await showModalBottomSheet<String>(
+                                        final action =
+                                            await showModalBottomSheet<String>(
                                           context: context,
                                           backgroundColor: Colors.transparent,
-                                          builder: (BuildContext ctx) => Container(
-                                            margin: const EdgeInsets.fromLTRB(10, 0, 10, 34),
+                                          builder: (BuildContext ctx) =>
+                                              Container(
+                                            margin: const EdgeInsets.fromLTRB(
+                                                10, 0, 10, 34),
                                             child: Column(
                                               mainAxisSize: MainAxisSize.min,
                                               children: [
                                                 // Options card
                                                 Container(
                                                   decoration: BoxDecoration(
-                                                    color: Colors.white.withOpacity(0.95),
-                                                    borderRadius: BorderRadius.circular(14),
+                                                    color: Colors.white
+                                                        .withOpacity(0.95),
+                                                    borderRadius:
+                                                        BorderRadius.circular(
+                                                            14),
                                                   ),
                                                   child: Column(
                                                     children: [
                                                       // Title
                                                       Padding(
-                                                        padding: const EdgeInsets.fromLTRB(16, 14, 16, 4),
+                                                        padding:
+                                                            const EdgeInsets
+                                                                .fromLTRB(
+                                                                16, 14, 16, 4),
                                                         child: Text(
                                                           'Forward ${_localSelectedMessages.length} Messages',
-                                                          style: const TextStyle(
-                                                            fontFamily: 'SF Pro Text',
+                                                          style:
+                                                              const TextStyle(
+                                                            fontFamily:
+                                                                'SF Pro Text',
                                                             fontSize: 13,
-                                                            fontWeight: FontWeight.w500,
-                                                            color: Color(0xFF8E8E93),
-                                                            decoration: TextDecoration.none,
+                                                            fontWeight:
+                                                                FontWeight.w500,
+                                                            color: Color(
+                                                                0xFF8E8E93),
+                                                            decoration:
+                                                                TextDecoration
+                                                                    .none,
                                                           ),
                                                         ),
                                                       ),
-                                                      const Divider(height: 1, thickness: 0.5, color: Color(0xFFE5E5EA)),
+                                                      const Divider(
+                                                          height: 1,
+                                                          thickness: 0.5,
+                                                          color: Color(
+                                                              0xFFE5E5EA)),
                                                       // Combine option
                                                       Material(
-                                                        color: Colors.transparent,
+                                                        color:
+                                                            Colors.transparent,
                                                         child: InkWell(
-                                                          onTap: () => Navigator.pop(ctx, 'combine'),
+                                                          onTap: () =>
+                                                              Navigator.pop(ctx,
+                                                                  'combine'),
                                                           child: Container(
-                                                            width: double.infinity,
-                                                            padding: const EdgeInsets.symmetric(vertical: 14),
+                                                            width:
+                                                                double.infinity,
+                                                            padding:
+                                                                const EdgeInsets
+                                                                    .symmetric(
+                                                                    vertical:
+                                                                        14),
                                                             child: Column(
                                                               children: const [
                                                                 Text(
                                                                   'Combine & Forward',
-                                                                  style: TextStyle(
-                                                                    fontFamily: 'SF Pro Text',
-                                                                    fontSize: 17,
-                                                                    fontWeight: FontWeight.w400,
-                                                                    color: Color(0xFF007AFF),
-                                                                    decoration: TextDecoration.none,
+                                                                  style:
+                                                                      TextStyle(
+                                                                    fontFamily:
+                                                                        'SF Pro Text',
+                                                                    fontSize:
+                                                                        17,
+                                                                    fontWeight:
+                                                                        FontWeight
+                                                                            .w400,
+                                                                    color: Color(
+                                                                        0xFF007AFF),
+                                                                    decoration:
+                                                                        TextDecoration
+                                                                            .none,
                                                                   ),
                                                                 ),
-                                                                SizedBox(height: 2),
+                                                                SizedBox(
+                                                                    height: 2),
                                                                 Text(
                                                                   'Send as a single chat history',
-                                                                  style: TextStyle(
-                                                                    fontFamily: 'SF Pro Text',
-                                                                    fontSize: 12,
-                                                                    color: Color(0xFF8E8E93),
-                                                                    decoration: TextDecoration.none,
+                                                                  style:
+                                                                      TextStyle(
+                                                                    fontFamily:
+                                                                        'SF Pro Text',
+                                                                    fontSize:
+                                                                        12,
+                                                                    color: Color(
+                                                                        0xFF8E8E93),
+                                                                    decoration:
+                                                                        TextDecoration
+                                                                            .none,
                                                                   ),
                                                                 ),
                                                               ],
@@ -7259,35 +7386,62 @@ class _FullScreenChatPageState extends State<_FullScreenChatPage> {
                                                           ),
                                                         ),
                                                       ),
-                                                      const Divider(height: 1, thickness: 0.5, color: Color(0xFFE5E5EA)),
+                                                      const Divider(
+                                                          height: 1,
+                                                          thickness: 0.5,
+                                                          color: Color(
+                                                              0xFFE5E5EA)),
                                                       // Forward one-by-one option
                                                       Material(
-                                                        color: Colors.transparent,
+                                                        color:
+                                                            Colors.transparent,
                                                         child: InkWell(
-                                                          onTap: () => Navigator.pop(ctx, 'one_by_one'),
+                                                          onTap: () =>
+                                                              Navigator.pop(ctx,
+                                                                  'one_by_one'),
                                                           child: Container(
-                                                            width: double.infinity,
-                                                            padding: const EdgeInsets.symmetric(vertical: 14),
+                                                            width:
+                                                                double.infinity,
+                                                            padding:
+                                                                const EdgeInsets
+                                                                    .symmetric(
+                                                                    vertical:
+                                                                        14),
                                                             child: Column(
                                                               children: const [
                                                                 Text(
                                                                   'Forward Individually',
-                                                                  style: TextStyle(
-                                                                    fontFamily: 'SF Pro Text',
-                                                                    fontSize: 17,
-                                                                    fontWeight: FontWeight.w400,
-                                                                    color: Color(0xFF007AFF),
-                                                                    decoration: TextDecoration.none,
+                                                                  style:
+                                                                      TextStyle(
+                                                                    fontFamily:
+                                                                        'SF Pro Text',
+                                                                    fontSize:
+                                                                        17,
+                                                                    fontWeight:
+                                                                        FontWeight
+                                                                            .w400,
+                                                                    color: Color(
+                                                                        0xFF007AFF),
+                                                                    decoration:
+                                                                        TextDecoration
+                                                                            .none,
                                                                   ),
                                                                 ),
-                                                                SizedBox(height: 2),
+                                                                SizedBox(
+                                                                    height: 2),
                                                                 Text(
                                                                   'Send each message separately',
-                                                                  style: TextStyle(
-                                                                    fontFamily: 'SF Pro Text',
-                                                                    fontSize: 12,
-                                                                    color: Color(0xFF8E8E93),
-                                                                    decoration: TextDecoration.none,
+                                                                  style:
+                                                                      TextStyle(
+                                                                    fontFamily:
+                                                                        'SF Pro Text',
+                                                                    fontSize:
+                                                                        12,
+                                                                    color: Color(
+                                                                        0xFF8E8E93),
+                                                                    decoration:
+                                                                        TextDecoration
+                                                                            .none,
                                                                   ),
                                                                 ),
                                                               ],
@@ -7303,25 +7457,41 @@ class _FullScreenChatPageState extends State<_FullScreenChatPage> {
                                                 Container(
                                                   width: double.infinity,
                                                   decoration: BoxDecoration(
-                                                    color: Colors.white.withOpacity(0.95),
-                                                    borderRadius: BorderRadius.circular(14),
+                                                    color: Colors.white
+                                                        .withOpacity(0.95),
+                                                    borderRadius:
+                                                        BorderRadius.circular(
+                                                            14),
                                                   ),
                                                   child: Material(
                                                     color: Colors.transparent,
                                                     child: InkWell(
-                                                      borderRadius: BorderRadius.circular(14),
-                                                      onTap: () => Navigator.pop(ctx, 'cancel'),
+                                                      borderRadius:
+                                                          BorderRadius.circular(
+                                                              14),
+                                                      onTap: () =>
+                                                          Navigator.pop(
+                                                              ctx, 'cancel'),
                                                       child: Padding(
-                                                        padding: const EdgeInsets.symmetric(vertical: 16),
+                                                        padding:
+                                                            const EdgeInsets
+                                                                .symmetric(
+                                                                vertical: 16),
                                                         child: const Text(
                                                           'Cancel',
-                                                          textAlign: TextAlign.center,
+                                                          textAlign:
+                                                              TextAlign.center,
                                                           style: TextStyle(
-                                                            fontFamily: 'SF Pro Text',
+                                                            fontFamily:
+                                                                'SF Pro Text',
                                                             fontSize: 17,
-                                                            fontWeight: FontWeight.w600,
-                                                            color: Color(0xFF007AFF),
-                                                            decoration: TextDecoration.none,
+                                                            fontWeight:
+                                                                FontWeight.w600,
+                                                            color: Color(
+                                                                0xFF007AFF),
+                                                            decoration:
+                                                                TextDecoration
+                                                                    .none,
                                                           ),
                                                         ),
                                                       ),
@@ -7332,11 +7502,15 @@ class _FullScreenChatPageState extends State<_FullScreenChatPage> {
                                             ),
                                           ),
                                         );
-                                        
+
                                         if (action == 'combine') {
-                                          await _runForwardLogic(context, _localSelectedMessages.toList(), isCombined: true);
+                                          await _runForwardLogic(context,
+                                              _localSelectedMessages.toList(),
+                                              isCombined: true);
                                         } else if (action == 'one_by_one') {
-                                          await _runForwardLogic(context, _localSelectedMessages.toList(), isCombined: false);
+                                          await _runForwardLogic(context,
+                                              _localSelectedMessages.toList(),
+                                              isCombined: false);
                                         } else {
                                           // Cancelled or barrier dismissed
                                           if (mounted) {
@@ -7352,7 +7526,7 @@ class _FullScreenChatPageState extends State<_FullScreenChatPage> {
                               child: Text(
                                 'Forward',
                                 style: TextStyle(
-                                    fontFamily: 'SF Pro Text',
+                                  fontFamily: 'SF Pro Text',
                                   fontSize: 17,
                                   color: (_localSelectedMessages.isEmpty)
                                       ? Colors.grey
@@ -7531,7 +7705,8 @@ class _FullScreenChatPageState extends State<_FullScreenChatPage> {
                     items: chat.isGroup
                         ? [
                             // Group chat options
-                            if (ChatHelpers.isGroupAdmin(chat, currentUserReference))
+                            if (ChatHelpers.isGroupAdmin(
+                                chat, currentUserReference))
                               AdaptivePopupMenuItem(
                                 label: 'Add Members',
                                 icon: PlatformInfo.isIOS26OrHigher()
@@ -7814,15 +7989,11 @@ class _FullScreenChatPageState extends State<_FullScreenChatPage> {
         ),
       );
     } else {
-      // For DMs, navigate to new user summary page instead of old profile page
+      // For DMs, show the profile popup
       try {
         final user = await _getOtherUser(chat);
         if (context.mounted) {
-          Navigator.of(context).push(
-            MaterialPageRoute(
-              builder: (context) => UserSummaryWidget(userRef: user.reference),
-            ),
-          );
+          await showUserProfilePopup(context, user: user);
         }
       } catch (e) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -8104,9 +8275,7 @@ class _FullScreenChatPageState extends State<_FullScreenChatPage> {
     return StreamBuilder<List<AnnouncementsRecord>>(
       stream: queryAnnouncementsRecord(
         parent: chat.reference,
-        queryBuilder: (q) => q
-            .where('is_pinned', isEqualTo: true)
-            .limit(1),
+        queryBuilder: (q) => q.where('is_pinned', isEqualTo: true).limit(1),
       ),
       builder: (context, snapshot) {
         if (snapshot.hasError || !snapshot.hasData || snapshot.data!.isEmpty) {
@@ -8190,8 +8359,8 @@ class _FullScreenChatPageState extends State<_FullScreenChatPage> {
                     });
                   },
                   child: Container(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 12, vertical: 6),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                     decoration: BoxDecoration(
                       color: const Color(0xFF007AFF),
                       borderRadius: BorderRadius.circular(14),
@@ -8364,7 +8533,9 @@ class _FullScreenChatPageState extends State<_FullScreenChatPage> {
     );
   }
 
-  Future<void> _runForwardLogic(BuildContext context, List<MessagesRecord> messagesToForward, {required bool isCombined}) async {
+  Future<void> _runForwardLogic(
+      BuildContext context, List<MessagesRecord> messagesToForward,
+      {required bool isCombined}) async {
     final selectedChat = await showDialog<ChatsRecord>(
       context: context,
       builder: (context) => const ForwardChatPickerDialog(),
@@ -8393,36 +8564,40 @@ class _FullScreenChatPageState extends State<_FullScreenChatPage> {
           // Pre-fetch missing user data for display names and photos
           final userCache = <DocumentReference, UsersRecord>{};
           for (final m in sortedMessages) {
-             if (m.senderRef != null && !userCache.containsKey(m.senderRef)) {
-                 try {
-                   final doc = await UsersRecord.getDocumentOnce(m.senderRef!);
-                   userCache[m.senderRef!] = doc;
-                 } catch (e) {
-                   print('Error fetching user for history payload: $e');
-                 }
-             }
+            if (m.senderRef != null && !userCache.containsKey(m.senderRef)) {
+              try {
+                final doc = await UsersRecord.getDocumentOnce(m.senderRef!);
+                userCache[m.senderRef!] = doc;
+              } catch (e) {
+                print('Error fetching user for history payload: $e');
+              }
+            }
           }
 
           // Serialize history
           final historyList = sortedMessages.map((m) {
-                final user = m.senderRef != null ? userCache[m.senderRef!] : null;
-                final senderName = (m.hasSenderName() && m.senderName.isNotEmpty) ? m.senderName : (user?.displayName ?? 'Unknown');
-                final senderPhoto = (m.hasSenderPhoto() && m.senderPhoto.isNotEmpty) ? m.senderPhoto : (user?.photoUrl ?? '');
+            final user = m.senderRef != null ? userCache[m.senderRef!] : null;
+            final senderName = (m.hasSenderName() && m.senderName.isNotEmpty)
+                ? m.senderName
+                : (user?.displayName ?? 'Unknown');
+            final senderPhoto = (m.hasSenderPhoto() && m.senderPhoto.isNotEmpty)
+                ? m.senderPhoto
+                : (user?.photoUrl ?? '');
 
-                return {
-                  'sender_name': senderName,
-                  'sender_photo': senderPhoto,
-                  'content': m.content,
-                  'message_type': m.messageType?.name ?? 'text',
-                  'image': m.image,
-                  'images': m.images,
-                  'video': m.video,
-                  'audio': m.audio,
-                  'audio_path': m.audioPath,
-                  'attachment_url': m.attachmentUrl,
-                  'created_at': m.createdAt?.millisecondsSinceEpoch,
-                };
-              }).toList();
+            return {
+              'sender_name': senderName,
+              'sender_photo': senderPhoto,
+              'content': m.content,
+              'message_type': m.messageType?.name ?? 'text',
+              'image': m.image,
+              'images': m.images,
+              'video': m.video,
+              'audio': m.audio,
+              'audio_path': m.audioPath,
+              'attachment_url': m.attachmentUrl,
+              'created_at': m.createdAt?.millisecondsSinceEpoch,
+            };
+          }).toList();
           final historyJson = jsonEncode(historyList);
 
           // Build a single message
@@ -8436,7 +8611,8 @@ class _FullScreenChatPageState extends State<_FullScreenChatPage> {
             forwardedHistory: historyJson,
           );
 
-          await MessagesRecord.createDoc(selectedChat.reference).set(messageData);
+          await MessagesRecord.createDoc(selectedChat.reference)
+              .set(messageData);
 
           // Update chat preview for combined forward
           await selectedChat.reference.update({
@@ -8467,25 +8643,34 @@ class _FullScreenChatPageState extends State<_FullScreenChatPage> {
               firestoreData['images'] = message.images;
             }
 
-            await MessagesRecord.createDoc(selectedChat.reference).set(firestoreData);
+            await MessagesRecord.createDoc(selectedChat.reference)
+                .set(firestoreData);
 
             // Track the last message's preview text
             lastPreviewText = message.content;
             if (lastPreviewText.isEmpty) {
-              if (message.messageType == MessageType.image) lastPreviewText = '📷 Photo';
-              else if (message.messageType == MessageType.video) lastPreviewText = '🎥 Video';
-              else if (message.messageType == MessageType.file) lastPreviewText = '📎 File';
-              else if (message.messageType == MessageType.voice) lastPreviewText = '🎵 Audio';
-              else lastPreviewText = 'Message';
+              if (message.messageType == MessageType.image)
+                lastPreviewText = '📷 Photo';
+              else if (message.messageType == MessageType.video)
+                lastPreviewText = '🎥 Video';
+              else if (message.messageType == MessageType.file)
+                lastPreviewText = '📎 File';
+              else if (message.messageType == MessageType.voice)
+                lastPreviewText = '🎵 Audio';
+              else
+                lastPreviewText = 'Message';
             }
           }
 
           // Update chat preview with the last forwarded message
           await selectedChat.reference.update({
-            'last_message': lastPreviewText.length > 100 ? lastPreviewText.substring(0, 100) : lastPreviewText,
+            'last_message': lastPreviewText.length > 100
+                ? lastPreviewText.substring(0, 100)
+                : lastPreviewText,
             'last_message_at': getCurrentTimestamp,
             'last_message_sent': currentUserReference,
-            'last_message_type': sortedMessages.last.messageType?.serialize() ?? MessageType.text.serialize(),
+            'last_message_type': sortedMessages.last.messageType?.serialize() ??
+                MessageType.text.serialize(),
             'last_message_seen': [currentUserReference],
           });
         }
@@ -8636,39 +8821,39 @@ class _MenuGridItem<T> extends StatelessWidget {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-            // Icon
-            if (item.icon is String)
-              Icon(
-                _getIconForSFSymbol(item.icon as String),
-                size: 16,
-                color: isDestructive ? Color(0xFFFF3B30) : Color(0xFF1C1C1E),
-              )
-            else
-              Icon(
-                item.icon as IconData,
-                size: 16,
-                color: isDestructive ? Color(0xFFFF3B30) : Color(0xFF1C1C1E),
+              // Icon
+              if (item.icon is String)
+                Icon(
+                  _getIconForSFSymbol(item.icon as String),
+                  size: 16,
+                  color: isDestructive ? Color(0xFFFF3B30) : Color(0xFF1C1C1E),
+                )
+              else
+                Icon(
+                  item.icon as IconData,
+                  size: 16,
+                  color: isDestructive ? Color(0xFFFF3B30) : Color(0xFF1C1C1E),
+                ),
+              SizedBox(height: 2),
+              // Label
+              Text(
+                item.label,
+                textAlign: TextAlign.center,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontFamily: 'SF Pro Text',
+                  fontSize: 8.5,
+                  color: isDestructive
+                      ? Color(0xFFFF3B30)
+                      : Color(0xFF1C1C1E).withOpacity(0.8),
+                  fontWeight: FontWeight.w400,
+                  letterSpacing: -0.2,
+                ),
               ),
-            SizedBox(height: 2),
-            // Label
-            Text(
-              item.label,
-              textAlign: TextAlign.center,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                fontFamily: 'SF Pro Text',
-                fontSize: 8.5,
-                color: isDestructive
-                    ? Color(0xFFFF3B30)
-                    : Color(0xFF1C1C1E).withOpacity(0.8),
-                fontWeight: FontWeight.w400,
-                letterSpacing: -0.2,
-              ),
-            ),
-          ],
+            ],
+          ),
         ),
-      ),
       ),
     );
   }
@@ -8701,5 +8886,3 @@ IconData _getIconForSFSymbol(String symbol) {
   };
   return iconMap[symbol] ?? CupertinoIcons.circle;
 }
-
-

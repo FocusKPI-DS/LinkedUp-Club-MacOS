@@ -5,7 +5,7 @@ import '/pages/desktop_chat/desktop_safe_user_builder.dart';
 import '/pages/desktop_chat/rest_poll_builder.dart';
 import '/flutter_flow/flutter_flow_util.dart';
 import '/pages/mobile_chat/mobile_chat_widget.dart';
-import '/pages/user_summary/user_summary_widget.dart';
+import '/pages/chat/user_profile_popup/user_profile_popup.dart';
 import '/utils/desktop_pointer.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
@@ -1358,15 +1358,7 @@ class _AddConnectionsWidgetState extends State<AddConnectionsWidget> {
       child: InkWell(
         mouseCursor: SystemMouseCursors.click,
         onTap: () {
-          Navigator.push(
-            context,
-            CupertinoPageRoute(
-              builder: (context) => UserSummaryWidget(
-                userRef: user.reference,
-                isEditable: false,
-              ),
-            ),
-          );
+          showUserProfilePopup(context, user: user);
         },
         borderRadius: BorderRadius.circular(14),
         child: Container(
