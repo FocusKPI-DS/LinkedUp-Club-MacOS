@@ -12,11 +12,11 @@ import '/pages/chat/chat_component/add_user/add_user_widget.dart';
 import '/pages/chat/chat_component/reminder_time/reminder_time_widget.dart';
 import '/pages/event/gallary/gallary_widget.dart';
 import '/pages/chat/add_group_members/add_group_members_dialog.dart';
-import '/pages/chat/group_action_tasks/group_action_tasks_widget.dart';
-import '/pages/chat/group_chat_detail/mobile_group_tasks_widget.dart';
+import '/pages/chat/user_profile_popup/user_profile_popup.dart';
 import '/pages/chat/group_chat_detail/mobile_group_media_widget.dart';
 import 'dart:ui';
 import 'dart:io';
+import 'dart:typed_data';
 import '/custom_code/widgets/index.dart' as custom_widgets;
 import '/custom_code/services/fireflies_api_service.dart';
 import '/index.dart';
@@ -63,9 +63,6 @@ class _GroupChatDetailWidgetState extends State<GroupChatDetailWidget>
   late TabController _mediaLinksDocsTabController;
 
   final scaffoldKey = GlobalKey<ScaffoldState>();
-
-  bool _autoDetectTasksFromTranscripts = false;
-  bool _taskReminders = false;
 
   @override
   void initState() {
@@ -1000,23 +997,18 @@ class _GroupChatDetailWidgetState extends State<GroupChatDetailWidget>
         final imageUrl = images[index];
         return InkWell(
           onTap: () async {
-            await Navigator.push(
+            await FlutterFlowExpandedImageView.show(
               context,
-              PageTransition(
-                type: PageTransitionType.fade,
-                child: FlutterFlowExpandedImageView(
-                  image: CachedNetworkImage(
-                    fadeInDuration: const Duration(milliseconds: 300),
-                    fadeOutDuration: const Duration(milliseconds: 300),
-                    imageUrl: imageUrl,
-                    fit: BoxFit.contain,
-                  ),
-                  allowRotation: false,
-                  tag: imageUrl,
-                  useHeroAnimation: true,
-                  imageUrl: imageUrl,
-                ),
+              image: CachedNetworkImage(
+                fadeInDuration: const Duration(milliseconds: 300),
+                fadeOutDuration: const Duration(milliseconds: 300),
+                imageUrl: imageUrl,
+                fit: BoxFit.contain,
               ),
+              allowRotation: false,
+              tag: imageUrl,
+              useHeroAnimation: true,
+              imageUrl: imageUrl,
             );
           },
           child: Hero(
@@ -1275,40 +1267,6 @@ class _GroupChatDetailWidgetState extends State<GroupChatDetailWidget>
     );
   }
 
-  Widget _buildActionTasksPreviewStream({
-    required ChatsRecord? chatDoc,
-    required Widget Function(
-      BuildContext context,
-      AsyncSnapshot<List<ActionItemsRecord>> snapshot,
-    ) builder,
-  }) {
-    if (chatDoc == null) {
-      return builder(
-        context,
-        AsyncSnapshot<List<ActionItemsRecord>>.withData(
-          ConnectionState.done,
-          const [],
-        ),
-      );
-    }
-    if (useWindowsFirestoreRest) {
-      return RestPollBuilder<List<ActionItemsRecord>>(
-        interval: const Duration(seconds: 20),
-        fetch: () => fsQueryActionItemsByChat(chatDoc.reference, limit: 10),
-        builder: builder,
-      );
-    }
-    return StreamBuilder<List<ActionItemsRecord>>(
-      stream: queryActionItemsRecord(
-        queryBuilder: (actionItemsRecord) => actionItemsRecord
-            .where('chat_ref', isEqualTo: chatDoc.reference)
-            .orderBy('created_time', descending: true)
-            .limit(10),
-      ),
-      builder: builder,
-    );
-  }
-
   /// Helper function to send a system update message to the group chat
   Future<void> _sendSystemMessage(String messageContent) async {
     if (widget.chatDoc == null || currentUserReference == null) return;
@@ -1440,140 +1398,295 @@ class _GroupChatDetailWidgetState extends State<GroupChatDetailWidget>
     final TextEditingController nameController = TextEditingController(
       text: widget.chatDoc?.title ?? '',
     );
+    XFile? pickedImage;
+    Uint8List? previewBytes;
+    var isSaving = false;
 
     await showDialog(
       context: context,
       builder: (dialogContext) {
-        return Dialog(
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
-          ),
-          child: Container(
-            padding: const EdgeInsets.all(24),
-            constraints: const BoxConstraints(maxWidth: 400),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text(
-                  'Edit Group Name',
-                  style: TextStyle(
-                    fontFamily: 'Inter',
-                    fontSize: 20,
-                    fontWeight: FontWeight.w600,
-                    color: Color(0xFF1A1F36),
+        return StatefulBuilder(
+          builder: (dialogContext, setDialogState) {
+            Future<void> pickImage() async {
+              try {
+                final picker = ImagePicker();
+                final image = await picker.pickImage(
+                  source: ImageSource.gallery,
+                  maxWidth: 512,
+                  maxHeight: 512,
+                  imageQuality: 85,
+                );
+                if (image == null) return;
+                final bytes = await image.readAsBytes();
+                setDialogState(() {
+                  pickedImage = image;
+                  previewBytes = bytes;
+                });
+              } catch (e) {
+                if (!mounted) return;
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text('Error picking image: $e'),
+                    backgroundColor: const Color(0xFFEF4444),
                   ),
-                ),
-                const SizedBox(height: 20),
-                TextField(
-                  controller: nameController,
-                  autofocus: true,
-                  decoration: InputDecoration(
-                    hintText: 'Enter group name',
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(8),
-                      borderSide: const BorderSide(color: Color(0xFFE5E7EB)),
+                );
+              }
+            }
+
+            Future<void> save() async {
+              final newName = nameController.text.trim();
+              if (newName.isEmpty || isSaving) return;
+
+              final oldName = widget.chatDoc?.title ?? '';
+              final nameChanged = oldName != newName;
+              final imageChanged = pickedImage != null;
+              if (!nameChanged && !imageChanged) {
+                Navigator.of(dialogContext).pop();
+                return;
+              }
+
+              setDialogState(() => isSaving = true);
+              try {
+                String? newImageUrl;
+                if (imageChanged) {
+                  newImageUrl = await _uploadGroupImage(pickedImage!);
+                }
+
+                final patch = <String, dynamic>{};
+                if (nameChanged) patch['title'] = newName;
+                if (newImageUrl != null) patch['chat_image_url'] = newImageUrl;
+
+                await fsPatchDocument(widget.chatDoc!.reference, patch);
+
+                final userName = currentUserDisplayName.isNotEmpty
+                    ? currentUserDisplayName
+                    : (currentUserDocument?.displayName ?? 'Someone');
+
+                if (nameChanged && imageChanged) {
+                  await _sendSystemMessage(
+                    '$userName updated the group name from "$oldName" to "$newName" and changed the group photo',
+                  );
+                } else if (nameChanged) {
+                  await _sendSystemMessage(
+                    '$userName updated the group name from "$oldName" to "$newName"',
+                  );
+                } else {
+                  await _sendSystemMessage('$userName changed the group photo');
+                }
+
+                if (mounted) {
+                  Navigator.of(dialogContext).pop();
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text(
+                        nameChanged && imageChanged
+                            ? 'Group updated successfully'
+                            : nameChanged
+                                ? 'Group name updated successfully'
+                                : 'Group photo updated successfully',
+                      ),
+                      backgroundColor: const Color(0xFF10B981),
                     ),
-                    focusedBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(8),
-                      borderSide:
-                          const BorderSide(color: Color(0xFF3B82F6), width: 2),
+                  );
+                }
+              } catch (e) {
+                setDialogState(() => isSaving = false);
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text('Error updating group: $e'),
+                      backgroundColor: const Color(0xFFEF4444),
                     ),
-                    contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 16, vertical: 12),
-                  ),
-                  style: const TextStyle(
-                    fontFamily: 'Inter',
-                    fontSize: 16,
-                    color: Color(0xFF1A1F36),
-                  ),
+                  );
+                }
+              }
+            }
+
+            final existingImageUrl = widget.chatDoc?.chatImageUrl ?? '';
+            Widget avatarChild;
+            if (previewBytes != null) {
+              avatarChild = Image.memory(
+                previewBytes!,
+                fit: BoxFit.cover,
+                width: 72,
+                height: 72,
+              );
+            } else if (existingImageUrl.isNotEmpty) {
+              avatarChild = CachedNetworkImage(
+                imageUrl: existingImageUrl,
+                fit: BoxFit.cover,
+                width: 72,
+                height: 72,
+                errorWidget: (_, __, ___) => const Icon(
+                  Icons.group_rounded,
+                  size: 32,
+                  color: Color(0xFF9CA3AF),
                 ),
-                const SizedBox(height: 24),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.end,
+              );
+            } else {
+              avatarChild = const Icon(
+                Icons.group_rounded,
+                size: 32,
+                color: Color(0xFF9CA3AF),
+              );
+            }
+
+            return Dialog(
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: Container(
+                padding: const EdgeInsets.all(24),
+                constraints: const BoxConstraints(maxWidth: 400),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    TextButton(
-                      onPressed: () => Navigator.of(context).pop(),
-                      child: const Text(
-                        'Cancel',
-                        style: TextStyle(
-                          fontFamily: 'Inter',
-                          fontSize: 14,
-                          color: Color(0xFF6B7280),
-                        ),
+                    const Text(
+                      'Edit Group',
+                      style: TextStyle(
+                        fontFamily: 'Inter',
+                        fontSize: 20,
+                        fontWeight: FontWeight.w600,
+                        color: Color(0xFF1A1F36),
                       ),
                     ),
-                    const SizedBox(width: 12),
-                    ElevatedButton(
-                      onPressed: () async {
-                        if (nameController.text.trim().isNotEmpty) {
-                          try {
-                            final oldName = widget.chatDoc?.title ?? '';
-                            final newName = nameController.text.trim();
-
-                            // Only update if name actually changed
-                            if (oldName != newName) {
-                              await fsPatchDocument(widget.chatDoc!.reference, {
-                                'title': newName,
-                              });
-
-                              // Send system message
-                              final userName = currentUserDisplayName.isNotEmpty
-                                  ? currentUserDisplayName
-                                  : (currentUserDocument?.displayName ??
-                                      'Someone');
-                              await _sendSystemMessage(
-                                '$userName updated the group name from "$oldName" to "$newName"',
-                              );
-                            }
-
-                            if (mounted) {
-                              Navigator.of(context).pop();
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(
-                                  content:
-                                      Text('Group name updated successfully'),
-                                  backgroundColor: Color(0xFF10B981),
+                    const SizedBox(height: 20),
+                    Center(
+                      child: Column(
+                        children: [
+                          GestureDetector(
+                            onTap: isSaving ? null : pickImage,
+                            child: Stack(
+                              alignment: Alignment.center,
+                              children: [
+                                Container(
+                                  width: 72,
+                                  height: 72,
+                                  decoration: const BoxDecoration(
+                                    color: Color(0xFFF3F4F6),
+                                    shape: BoxShape.circle,
+                                  ),
+                                  clipBehavior: Clip.antiAlias,
+                                  child: avatarChild,
                                 ),
-                              );
-                            }
-                          } catch (e) {
-                            if (mounted) {
-                              Navigator.of(context).pop();
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(
-                                  content:
-                                      Text('Error updating group name: $e'),
-                                  backgroundColor: const Color(0xFFEF4444),
+                                Positioned(
+                                  right: 0,
+                                  bottom: 0,
+                                  child: Container(
+                                    width: 24,
+                                    height: 24,
+                                    decoration: BoxDecoration(
+                                      color: const Color(0xFF3B82F6),
+                                      shape: BoxShape.circle,
+                                      border: Border.all(
+                                        color: Colors.white,
+                                        width: 2,
+                                      ),
+                                    ),
+                                    child: const Icon(
+                                      Icons.camera_alt,
+                                      color: Colors.white,
+                                      size: 12,
+                                    ),
+                                  ),
                                 ),
-                              );
-                            }
-                          }
-                        }
-                      },
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF3B82F6),
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 24, vertical: 12),
-                        shape: RoundedRectangleBorder(
+                              ],
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          const Text(
+                            'Tap to change photo',
+                            style: TextStyle(
+                              fontFamily: 'Inter',
+                              fontSize: 12,
+                              color: Color(0xFF6B7280),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 20),
+                    TextField(
+                      controller: nameController,
+                      autofocus: true,
+                      enabled: !isSaving,
+                      decoration: InputDecoration(
+                        hintText: 'Enter group name',
+                        border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(8),
+                          borderSide:
+                              const BorderSide(color: Color(0xFFE5E7EB)),
                         ),
-                      ),
-                      child: const Text(
-                        'Save',
-                        style: TextStyle(
-                          fontFamily: 'Inter',
-                          fontSize: 14,
-                          fontWeight: FontWeight.w500,
-                          color: Colors.white,
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(8),
+                          borderSide: const BorderSide(
+                              color: Color(0xFF3B82F6), width: 2),
                         ),
+                        contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 16, vertical: 12),
                       ),
+                      style: const TextStyle(
+                        fontFamily: 'Inter',
+                        fontSize: 16,
+                        color: Color(0xFF1A1F36),
+                      ),
+                      onSubmitted: (_) => save(),
+                    ),
+                    const SizedBox(height: 24),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.end,
+                      children: [
+                        TextButton(
+                          onPressed: isSaving
+                              ? null
+                              : () => Navigator.of(dialogContext).pop(),
+                          child: const Text(
+                            'Cancel',
+                            style: TextStyle(
+                              fontFamily: 'Inter',
+                              fontSize: 14,
+                              color: Color(0xFF6B7280),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        ElevatedButton(
+                          onPressed: isSaving ? null : save,
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFF3B82F6),
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 24, vertical: 12),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                          ),
+                          child: isSaving
+                              ? const SizedBox(
+                                  width: 16,
+                                  height: 16,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    color: Colors.white,
+                                  ),
+                                )
+                              : const Text(
+                                  'Save',
+                                  style: TextStyle(
+                                    fontFamily: 'Inter',
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w500,
+                                    color: Colors.white,
+                                  ),
+                                ),
+                        ),
+                      ],
                     ),
                   ],
                 ),
-              ],
-            ),
-          ),
+              ),
+            );
+          },
         );
       },
     );
@@ -2812,54 +2925,19 @@ class _GroupChatDetailWidgetState extends State<GroupChatDetailWidget>
                                               MainAxisAlignment.center,
                                           children: [
                                             Expanded(
-                                              child: _model.isEditingName
-                                                  ? TextField(
-                                                      controller: _model
-                                                          .groupNameController,
-                                                      textAlign:
-                                                          TextAlign.center,
-                                                      autofocus: true,
-                                                      style: const TextStyle(
-                                                        fontFamily: 'Inter',
-                                                        fontSize: 24.0,
-                                                        fontWeight:
-                                                            FontWeight.w600,
-                                                        color:
-                                                            Color(0xFF1A1F36),
-                                                      ),
-                                                      decoration:
-                                                          const InputDecoration(
-                                                        border:
-                                                            InputBorder.none,
-                                                        enabledBorder:
-                                                            InputBorder.none,
-                                                        focusedBorder:
-                                                            InputBorder.none,
-                                                        contentPadding:
-                                                            EdgeInsets.zero,
-                                                        isDense: true,
-                                                      ),
-                                                      onSubmitted: (_) =>
-                                                          _saveGroupName(),
-                                                      onEditingComplete:
-                                                          _saveGroupName,
-                                                    )
-                                                  : Text(
-                                                      valueOrDefault<String>(
-                                                        currentChatDoc?.title,
-                                                        'Group Name',
-                                                      ),
-                                                      textAlign:
-                                                          TextAlign.center,
-                                                      style: const TextStyle(
-                                                        fontFamily: 'Inter',
-                                                        fontSize: 24.0,
-                                                        fontWeight:
-                                                            FontWeight.w600,
-                                                        color:
-                                                            Color(0xFF1A1F36),
-                                                      ),
-                                                    ),
+                                              child: Text(
+                                                valueOrDefault<String>(
+                                                  currentChatDoc?.title,
+                                                  'Group Name',
+                                                ),
+                                                textAlign: TextAlign.center,
+                                                style: const TextStyle(
+                                                  fontFamily: 'Inter',
+                                                  fontSize: 24.0,
+                                                  fontWeight: FontWeight.w600,
+                                                  color: Color(0xFF1A1F36),
+                                                ),
+                                              ),
                                             ),
                                             if (currentChatDoc?.admin ==
                                                     currentUserReference ||
@@ -2867,22 +2945,14 @@ class _GroupChatDetailWidgetState extends State<GroupChatDetailWidget>
                                                     currentUserReference)
                                               InkWell(
                                                 onTap: () async {
-                                                  if (_model.isEditingName) {
-                                                    await _saveGroupName();
-                                                  } else {
-                                                    _model.isEditingName = true;
-                                                    safeSetState(() {});
-                                                  }
+                                                  await _editGroupName();
                                                 },
                                                 child: Container(
                                                   padding:
                                                       const EdgeInsets.all(8.0),
-                                                  child: Icon(
-                                                    _model.isEditingName
-                                                        ? Icons.check
-                                                        : Icons.edit,
-                                                    color:
-                                                        const Color(0xFF3B82F6),
+                                                  child: const Icon(
+                                                    Icons.edit,
+                                                    color: Color(0xFF3B82F6),
                                                     size: 20.0,
                                                   ),
                                                 ),
@@ -3478,301 +3548,6 @@ class _GroupChatDetailWidgetState extends State<GroupChatDetailWidget>
                                     ),
                                   ),
                                 ),
-                                Divider(
-                                  height: 1,
-                                  thickness: 1,
-                                  color: const Color(0xFFE5E7EB),
-                                ),
-                                const SizedBox(height: 4),
-                                Container(
-                                  decoration: BoxDecoration(
-                                    color: FlutterFlowTheme.of(context)
-                                        .secondaryBackground,
-                                  ),
-                                  child: Padding(
-                                    padding: const EdgeInsets.all(16.0),
-                                    child: Column(
-                                      mainAxisSize: MainAxisSize.max,
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.start,
-                                      children: [
-                                        Text(
-                                          'Group\'s Action Tasks',
-                                          style: FlutterFlowTheme.of(context)
-                                              .titleMedium
-                                              .override(
-                                                font: GoogleFonts.inter(
-                                                  fontWeight: FontWeight.w600,
-                                                  fontStyle:
-                                                      FlutterFlowTheme.of(
-                                                              context)
-                                                          .titleMedium
-                                                          .fontStyle,
-                                                ),
-                                                color: Colors.black,
-                                                fontSize: 16.0,
-                                                letterSpacing: 0.0,
-                                                fontWeight: FontWeight.w600,
-                                                fontStyle:
-                                                    FlutterFlowTheme.of(context)
-                                                        .titleMedium
-                                                        .fontStyle,
-                                              ),
-                                        ),
-                                        const SizedBox(height: 16),
-                                        // Action Tasks Section - Inline
-                                        _buildActionTasksPreviewStream(
-                                          chatDoc: widget.chatDoc,
-                                          builder: (context, snapshot) {
-                                            final actionItems =
-                                                snapshot.data ?? [];
-                                            final taskCount =
-                                                actionItems.length;
-
-                                            return Column(
-                                              crossAxisAlignment:
-                                                  CrossAxisAlignment.start,
-                                              children: [
-                                                InkWell(
-                                                  splashColor:
-                                                      Colors.transparent,
-                                                  focusColor:
-                                                      Colors.transparent,
-                                                  hoverColor:
-                                                      Colors.transparent,
-                                                  highlightColor:
-                                                      Colors.transparent,
-                                                  onTap: () async {
-                                                    if (Platform.isIOS) {
-                                                      context.pushNamed(
-                                                        MobileGroupTasksWidget
-                                                            .routeName,
-                                                        queryParameters: {
-                                                          'chatDoc':
-                                                              serializeParam(
-                                                            widget.chatDoc,
-                                                            ParamType.Document,
-                                                          ),
-                                                        }.withoutNulls,
-                                                        extra: <String,
-                                                            dynamic>{
-                                                          'chatDoc':
-                                                              widget.chatDoc,
-                                                        },
-                                                      );
-                                                    } else {
-                                                      await Navigator.push(
-                                                        context,
-                                                        PageRouteBuilder(
-                                                          opaque: false,
-                                                          barrierColor: Colors
-                                                              .transparent,
-                                                          pageBuilder: (context,
-                                                                  animation,
-                                                                  secondaryAnimation) =>
-                                                              GroupActionTasksWidget(
-                                                            chatDoc:
-                                                                widget.chatDoc,
-                                                          ),
-                                                          transitionsBuilder:
-                                                              (context,
-                                                                  animation,
-                                                                  secondaryAnimation,
-                                                                  child) {
-                                                            const begin =
-                                                                Offset(
-                                                                    1.0, 0.0);
-                                                            const end =
-                                                                Offset.zero;
-                                                            const curve = Curves
-                                                                .easeInOut;
-                                                            var tween = Tween(
-                                                                    begin:
-                                                                        begin,
-                                                                    end: end)
-                                                                .chain(CurveTween(
-                                                                    curve:
-                                                                        curve));
-                                                            var offsetAnimation =
-                                                                animation.drive(
-                                                                    tween);
-                                                            return SlideTransition(
-                                                                position:
-                                                                    offsetAnimation,
-                                                                child: child);
-                                                          },
-                                                        ),
-                                                      );
-                                                    }
-                                                  },
-                                                  child: Container(
-                                                    width: double.infinity,
-                                                    padding:
-                                                        const EdgeInsets.all(
-                                                            12.0),
-                                                    decoration: BoxDecoration(
-                                                      color: Colors.white,
-                                                      borderRadius:
-                                                          BorderRadius.circular(
-                                                              12.0),
-                                                      border: Border.all(
-                                                        color: const Color(
-                                                            0xFFE5E7EB),
-                                                        width: 1,
-                                                      ),
-                                                    ),
-                                                    child: Row(
-                                                      mainAxisAlignment:
-                                                          MainAxisAlignment
-                                                              .spaceBetween,
-                                                      children: [
-                                                        Row(
-                                                          children: [
-                                                            Container(
-                                                              padding:
-                                                                  const EdgeInsets
-                                                                      .all(8.0),
-                                                              decoration:
-                                                                  BoxDecoration(
-                                                                color: const Color(
-                                                                        0xFF3B82F6)
-                                                                    .withOpacity(
-                                                                        0.1),
-                                                                borderRadius:
-                                                                    BorderRadius
-                                                                        .circular(
-                                                                            8.0),
-                                                              ),
-                                                              child: const Icon(
-                                                                Icons
-                                                                    .task_alt_outlined,
-                                                                size: 20,
-                                                                color: Color(
-                                                                    0xFF3B82F6),
-                                                              ),
-                                                            ),
-                                                            const SizedBox(
-                                                                width: 12),
-                                                            Column(
-                                                              crossAxisAlignment:
-                                                                  CrossAxisAlignment
-                                                                      .start,
-                                                              children: [
-                                                                Text(
-                                                                  'Action Tasks',
-                                                                  style:
-                                                                      const TextStyle(
-                                                                    fontFamily:
-                                                                        'Inter',
-                                                                    color: Color(
-                                                                        0xFF1A1F36),
-                                                                    fontSize:
-                                                                        14.0,
-                                                                    fontWeight:
-                                                                        FontWeight
-                                                                            .w600,
-                                                                  ),
-                                                                ),
-                                                                Text(
-                                                                  '$taskCount ${taskCount == 1 ? 'task' : 'tasks'}',
-                                                                  style:
-                                                                      const TextStyle(
-                                                                    fontFamily:
-                                                                        'Inter',
-                                                                    color: Color(
-                                                                        0xFF6B7280),
-                                                                    fontSize:
-                                                                        12.0,
-                                                                  ),
-                                                                ),
-                                                              ],
-                                                            ),
-                                                          ],
-                                                        ),
-                                                        const Icon(
-                                                          Icons.chevron_right,
-                                                          color:
-                                                              Color(0xFF6B7280),
-                                                          size: 24,
-                                                        ),
-                                                      ],
-                                                    ),
-                                                  ),
-                                                ),
-                                              ],
-                                            );
-                                          },
-                                        ),
-                                        const SizedBox(height: 12),
-                                        // Auto Detect Tasks from transcripts
-                                        Row(
-                                          mainAxisAlignment:
-                                              MainAxisAlignment.spaceBetween,
-                                          children: [
-                                            Expanded(
-                                              child: Text(
-                                                'Auto Detect Tasks from transcripts',
-                                                style: FlutterFlowTheme.of(
-                                                        context)
-                                                    .bodyMedium
-                                                    .override(
-                                                      fontFamily: 'Inter',
-                                                      color: const Color(
-                                                          0xFF1A1F36),
-                                                      fontSize: 14,
-                                                      fontWeight:
-                                                          FontWeight.w500,
-                                                    ),
-                                              ),
-                                            ),
-                                            Switch.adaptive(
-                                              value:
-                                                  _autoDetectTasksFromTranscripts,
-                                              onChanged: (value) => setState(
-                                                  () =>
-                                                      _autoDetectTasksFromTranscripts =
-                                                          value),
-                                              activeColor:
-                                                  const Color(0xFF3B82F6),
-                                            ),
-                                          ],
-                                        ),
-                                        const SizedBox(height: 8),
-                                        // Task Reminders
-                                        Row(
-                                          mainAxisAlignment:
-                                              MainAxisAlignment.spaceBetween,
-                                          children: [
-                                            Expanded(
-                                              child: Text(
-                                                'Task Reminders',
-                                                style: FlutterFlowTheme.of(
-                                                        context)
-                                                    .bodyMedium
-                                                    .override(
-                                                      fontFamily: 'Inter',
-                                                      color: const Color(
-                                                          0xFF1A1F36),
-                                                      fontSize: 14,
-                                                      fontWeight:
-                                                          FontWeight.w500,
-                                                    ),
-                                              ),
-                                            ),
-                                            Switch.adaptive(
-                                              value: _taskReminders,
-                                              onChanged: (value) =>
-                                                  setState(() =>
-                                                      _taskReminders = value),
-                                              activeColor:
-                                                  const Color(0xFF3B82F6),
-                                            ),
-                                          ],
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                ),
                                 Container(
                                   decoration: BoxDecoration(
                                     color: FlutterFlowTheme.of(context)
@@ -4070,17 +3845,10 @@ class _GroupChatDetailWidgetState extends State<GroupChatDetailWidget>
                                                                                 Colors.transparent,
                                                                             onTap:
                                                                                 () async {
-                                                                              context.pushNamed(
-                                                                                UserSummaryWidget.routeName,
-                                                                                queryParameters: {
-                                                                                  'userRef': serializeParam(
-                                                                                    rowUsersRecord.reference,
-                                                                                    ParamType.DocumentReference,
-                                                                                  ),
-                                                                                }.withoutNulls,
-                                                                                extra: <String, dynamic>{
-                                                                                  'userRef': rowUsersRecord.reference,
-                                                                                },
+                                                                              showUserProfilePopup(
+                                                                                context,
+                                                                                user: rowUsersRecord,
+                                                                                groupChat: widget.chatDoc,
                                                                               );
                                                                             },
                                                                             child:

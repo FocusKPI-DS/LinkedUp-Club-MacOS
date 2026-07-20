@@ -67,21 +67,31 @@ async function sendLonaAnnouncement() {
     // ═══════════════════════════════════════════════════════════════
     // ANNOUNCEMENT MESSAGE - EDIT THIS!
     // ═══════════════════════════════════════════════════════════════
-    const announcementMessage = `Lona v1.9.31 - Update (iOS & macOS)
+    const announcementMessage = `**Lona – Messaging Update (macOS & Web)**
 
-This update brings improvements to both iOS and macOS versions:
+This update focuses on the messaging experience across macOS and the web app, making conversations easier to navigate while introducing a cleaner, more polished interface.
 
-What's New:
+**What's New:**
 
-1. App Store Version Check — Lona now automatically checks the App Store for the latest version on both iOS and macOS. If your app is outdated, you'll see a prompt to update.
+1. 🗂️ **Chat Header Enhancements** — Chat headers now provide quick access to Messages, Files & Links, Action Tasks, and Pinned Messages, making it easier to find everything related to a conversation.
 
-2. Cleaner Group Chat View (iOS) — Removed the Action Items stats bar from group chat headers for a cleaner, more focused chat experience.
+2. 👥 **Group Member Avatars** — Group chat members are now displayed as an avatar stack in the chat header, so you can quickly see who's in the conversation.
 
-3. macOS UI Improvements — Updated various UI elements to match macOS native design patterns, including the Group Info panel and profile settings.
+3. ✏️ **Easier Group Customization** — Group chat creators can now rename their group and update the group picture directly from the chat header.
+
+4. 🎨 **UI Refresh** — Refined interface elements throughout the messaging experience, including updates to the chat sidebar and overall layout for a cleaner, more consistent look and feel.
+
+5. 📥 **Inactive Chats** — Inactive conversations are now organized into a collapsible section at the bottom of the **All Messages** tab, helping you stay focused on your active chats.
+
+6. ⚡ **Improved Message Actions** — Hover over any message to access a contextual menu with the most commonly used actions first, with additional options available in the overflow menu.
+
+7. 🖼️ **Photo Stacks** — Multiple photos sent together are now grouped into a swipeable stack. Drag with your mouse or swipe on your trackpad to browse through images seamlessly.
+
+8. 🐞 **Bug Fixes** — Fixed an issue where pasting text into the message composer could sometimes duplicate the pasted content.
 
 Please update to the latest version. If you encounter any issues, feel free to reach out.
 
--- The Lona Team`;
+— The Lona Team`;
     // ═══════════════════════════════════════════════════════════════
 
     try {
@@ -92,7 +102,7 @@ Please update to the latest version. If you encounter any issues, feel free to r
             await lonaServiceRef.set({
                 display_name: 'Lona Service',
                 email: 'service@lona.club',
-                photo_url: 'https://firebasestorage.googleapis.com/v0/b/linkedup-c3e29.firebasestorage.app/o/asset%2Flona-logo.png?alt=media',
+                photo_url: 'https://lona.club/logo.png',
                 created_time: now,
                 uid: 'lona-service',
             });
@@ -111,7 +121,7 @@ Please update to the latest version. If you encounter any issues, feel free to r
                 is_service_chat: true,
                 is_pin: false,
                 is_private: false,
-                chat_image_url: 'https://firebasestorage.googleapis.com/v0/b/linkedup-c3e29.firebasestorage.app/o/asset%2Flona-logo.png?alt=media',
+                chat_image_url: 'https://lona.club/logo.png',
                 created_at: now,
                 created_by: lonaServiceRef,
                 members: [],
@@ -133,7 +143,7 @@ Please update to the latest version. If you encounter any issues, feel free to r
             content: announcementMessage,
             sender_ref: lonaServiceRef,
             sender_name: 'Lona Service',
-            sender_photo: 'https://firebasestorage.googleapis.com/v0/b/linkedup-c3e29.firebasestorage.app/o/asset%2Flona-logo.png?alt=media',
+            sender_photo: 'https://lona.club/logo.png',
             created_at: now,
             message_type: 'text',
             is_read_by: [],

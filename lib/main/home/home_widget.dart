@@ -2,22 +2,20 @@ import '/auth/base_auth_user_provider.dart';
 import '/auth/firebase_auth/auth_util.dart';
 import '/backend/backend.dart';
 import '/backend/schema/structs/index.dart';
-import '/components/invite_friends_button_widget.dart';
 import '/flutter_flow/flutter_flow_animations.dart';
 import '/flutter_flow/flutter_flow_util.dart';
 import '/custom_code/widgets/summerai_todos.dart';
 import '/custom_code/widgets/todays_calendar_events.dart';
 import '/custom_code/widgets/task_stats.dart';
+import '/custom_code/widgets/app_update_dialog.dart';
 import '/pages/desktop_chat/desktop_safe_user_builder.dart';
 import '/backend/firestore/firestore_desktop_adapter.dart';
 // import '/custom_code/widgets/productivity_trend_chart.dart';
 import 'dart:async';
 import 'dart:io' show Platform;
-import 'dart:ui';
 import '/actions/actions.dart' as action_blocks;
 import '/custom_code/actions/index.dart' as actions;
 import '/flutter_flow/permissions_util.dart';
-import 'package:flutter/cupertino.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
@@ -31,10 +29,6 @@ import 'package:branchio_dynamic_linking_akp5u6/custom_code/actions/index.dart'
 import 'package:branchio_dynamic_linking_akp5u6/flutter_flow/custom_functions.dart'
     as branchio_dynamic_linking_akp5u6_functions;
 import 'package:get/get.dart';
-
-import 'package:adaptive_platform_ui/adaptive_platform_ui.dart';
-import 'package:liquid_glass_renderer/liquid_glass_renderer.dart';
-import 'package:share_plus/share_plus.dart';
 
 /// Staged load phases for Windows (avoids concurrent Firestore + shader crash).
 enum _WindowsHomeLoadPhase { shell, stats, calendar, full }
@@ -80,10 +74,9 @@ class _HomeWidgetState extends State<HomeWidget> with TickerProviderStateMixin {
           rowBox.localToGlobal(Offset.zero, ancestor: stackBox).dy;
       return rowTop + (rowBox.size.height - bannerHeight) / 2;
     }
-    final pagePaddingTop = isMobile ? 24.0 : 40.0;
-    final headerTopSpacing = isMobile ? 20.0 : 32.0;
+    final pagePaddingTop = isMobile ? 18.0 : 28.0;
     const rowHeight = 38.0;
-    return pagePaddingTop + headerTopSpacing + (rowHeight - bannerHeight) / 2;
+    return pagePaddingTop + (rowHeight - bannerHeight) / 2;
   }
 
   void _showActionItemAnnouncement(String message) {
@@ -194,6 +187,11 @@ class _HomeWidgetState extends State<HomeWidget> with TickerProviderStateMixin {
         );
       }
       await action_blocks.homeCheck(context);
+      // One-time (per version) update popup, shown while on the home page.
+      // Reuses the established per-platform update dialogs; no-op on web.
+      if (loggedIn && mounted) {
+        unawaited(AppUpdateDialog.maybeShowUpdatePrompt(context));
+      }
       if (!(await getPermissionStatus(locationPermission))) {
         await requestPermission(locationPermission);
       }
@@ -267,52 +265,6 @@ class _HomeWidgetState extends State<HomeWidget> with TickerProviderStateMixin {
     super.dispose();
   }
 
-  bool get _isWindowsDesktop => !kIsWeb && Platform.isWindows;
-
-  /// Header actions: liquid_glass shaders crash on Windows desktop.
-  Widget _buildHeaderActionButton({
-    required bool isMobile,
-    required VoidCallback onPressed,
-    required IconData icon,
-  }) {
-    if (_isWindowsDesktop) {
-      return Material(
-        color: Colors.white,
-        shape: const CircleBorder(),
-        elevation: 1,
-        shadowColor: const Color(0xFF0F172A).withOpacity(0.08),
-        child: InkWell(
-          customBorder: const CircleBorder(),
-          onTap: onPressed,
-          child: Padding(
-            padding: EdgeInsets.all(isMobile ? 9 : 10),
-            child: Icon(
-              icon,
-              size: isMobile ? 16 : 17,
-              color: const Color(0xFF007AFF),
-            ),
-          ),
-        ),
-      );
-    }
-
-    return LiquidStretch(
-      stretch: 0.5,
-      interactionScale: 1.05,
-      child: GlassGlow(
-        glowColor: Colors.white24,
-        glowRadius: 1.0,
-        child: AdaptiveFloatingActionButton(
-          mini: true,
-          backgroundColor: Colors.white,
-          foregroundColor: const Color(0xFF007AFF),
-          onPressed: onPressed,
-          child: Icon(icon, size: isMobile ? 16 : 17),
-        ),
-      ),
-    );
-  }
-
   // Helper method to detect if we're on mobile (iOS or mobile web)
   bool _isMobile(BuildContext context) {
     if (kIsWeb) {
@@ -323,6 +275,8 @@ class _HomeWidgetState extends State<HomeWidget> with TickerProviderStateMixin {
     // Native iOS or Android
     return !kIsWeb && (Platform.isIOS || Platform.isAndroid);
   }
+
+  bool get _isWindowsDesktop => !kIsWeb && Platform.isWindows;
 
   @override
   Widget build(BuildContext context) {
@@ -351,7 +305,7 @@ class _HomeWidgetState extends State<HomeWidget> with TickerProviderStateMixin {
                   child: Padding(
                     padding: EdgeInsetsDirectional.fromSTEB(
                       isMobile ? 20.0 : 40.0,
-                      isMobile ? 24.0 : 40.0,
+                      isMobile ? 18.0 : 28.0,
                       isMobile ? 20.0 : 40.0,
                       isMobile ? 24.0 : 40.0,
                     ),
@@ -484,8 +438,6 @@ class _HomeWidgetState extends State<HomeWidget> with TickerProviderStateMixin {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // Add top spacing
-        SizedBox(height: isMobile ? 20.0 : 32.0),
         if (currentUserReference != null)
           DesktopSafeUserBuilder(
             userRef: currentUserReference!,
@@ -510,57 +462,42 @@ class _HomeWidgetState extends State<HomeWidget> with TickerProviderStateMixin {
                 greeting = 'Good Evening';
               }
 
+              final greetingStyle = TextStyle(
+                fontFamily: '.SF Pro Display',
+                color: Color(0xFF1E293B),
+                fontSize: isMobile ? 30 : 32,
+                fontWeight: FontWeight.w500,
+                letterSpacing: isMobile ? -0.4 : -0.5,
+              );
+              final nameStyle = TextStyle(
+                fontFamily: '.SF Pro Display',
+                color: Color(0xFF2563EB),
+                fontSize: isMobile ? 30 : 32,
+                fontWeight: FontWeight.w700,
+                letterSpacing: isMobile ? -0.4 : -0.5,
+              );
+
               return Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // First line: Greeting + Action buttons
+                  // Greeting + name on one line
                   KeyedSubtree(
                     key: _headerGreetingRowKey,
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      crossAxisAlignment: CrossAxisAlignment.center,
-                      children: [
-                        Expanded(
-                          child: Text(
-                            greeting,
-                            style: TextStyle(
-                              fontFamily: '.SF Pro Display',
-                              color: Color(0xFF1E293B),
-                              fontSize: isMobile ? 30 : 32,
-                              fontWeight: FontWeight.w800,
-                              letterSpacing: isMobile ? -0.4 : -0.5,
-                            ),
+                    child: Text.rich(
+                      TextSpan(
+                        children: [
+                          TextSpan(
+                            text: '$greeting, ',
+                            style: greetingStyle,
                           ),
-                        ),
-                        Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            _buildHeaderActionButton(
-                              isMobile: isMobile,
-                              onPressed: () => _showEmailInviteDialog(),
-                              icon: CupertinoIcons.mail_solid,
-                            ),
-                            SizedBox(width: isMobile ? 8.0 : 12.0),
-                            _buildHeaderActionButton(
-                              isMobile: isMobile,
-                              onPressed: () => _showInviteDialog(context),
-                              icon: CupertinoIcons.person_add_solid,
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
-                  ),
-                  SizedBox(height: isMobile ? 4 : 6),
-                  // Second line: User's name
-                  Text(
-                    userName,
-                    style: TextStyle(
-                      fontFamily: '.SF Pro Display',
-                      color: Color(0xFF2563EB),
-                      fontSize: isMobile ? 30 : 32,
-                      fontWeight: FontWeight.w800,
-                      letterSpacing: isMobile ? -0.4 : -0.5,
+                          TextSpan(
+                            text: userName,
+                            style: nameStyle,
+                          ),
+                        ],
+                      ),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
                     ),
                   ),
                   SizedBox(height: isMobile ? 6 : 8),
@@ -610,167 +547,6 @@ class _HomeWidgetState extends State<HomeWidget> with TickerProviderStateMixin {
       ),
       child: const TodaysCalendarEvents(),
     );
-  }
-
-  String _getInviteMessage() {
-    // Get current user's UID for personalized referral link
-    final userUid = currentUserUid.isNotEmpty
-        ? currentUserUid
-        : (currentUserReference?.id ?? '');
-
-    // Create personalized referral link
-    final referralLink = 'https://lona.club/invite/$userUid';
-
-    return 'Hey! I\'ve been using this app named Lona for communication, and it\'s amazing! It really boosts productivity and makes team collaboration so much easier. You should check it out!\n\nJoin me on Lona: $referralLink';
-  }
-
-  Future<void> _shareInviteMessage() async {
-    // Open native iOS share sheet (like WhatsApp)
-    // Get screen size for share position origin
-    final size = MediaQuery.of(context).size;
-    final sharePositionOrigin = Rect.fromLTWH(
-      size.width / 2 - 100,
-      size.height / 2,
-      200,
-      100,
-    );
-
-    await Share.share(
-      _getInviteMessage(),
-      sharePositionOrigin: sharePositionOrigin,
-    );
-  }
-
-  void _showInviteDialog(BuildContext context) async {
-    // Show iOS 26+ adaptive dialog with invite options (iOS 26+ liquid glass effect)
-    await AdaptiveAlertDialog.show(
-      context: context,
-      title: 'Invite Friends',
-      message:
-          'Share Lona with your friends and boost your team\'s productivity together!',
-      icon: 'person.2.fill',
-      actions: [
-        AlertAction(
-          title: 'Cancel',
-          style: AlertActionStyle.cancel,
-          onPressed: () {},
-        ),
-        AlertAction(
-          title: 'Share',
-          style: AlertActionStyle.primary,
-          onPressed: () {
-            _shareInviteMessage();
-          },
-        ),
-      ],
-    );
-  }
-
-  void _showEmailInviteDialog() {
-    final emailController = TextEditingController();
-
-    showCupertinoDialog(
-      context: context,
-      builder: (dialogContext) => CupertinoAlertDialog(
-        title: Text('Invite via Email'),
-        content: Padding(
-          padding: const EdgeInsets.only(top: 10.0),
-          child: CupertinoTextField(
-            controller: emailController,
-            placeholder: 'Recipient Email',
-            keyboardType: TextInputType.emailAddress,
-          ),
-        ),
-        actions: [
-          CupertinoDialogAction(
-            child: Text('Cancel'),
-            onPressed: () => Navigator.pop(dialogContext),
-          ),
-          CupertinoDialogAction(
-            child: Text('Send Invite'),
-            onPressed: () async {
-              final email = emailController.text.trim();
-              if (email.isEmpty || !email.contains('@')) {
-                Navigator.pop(dialogContext);
-                return;
-              }
-              Navigator.pop(dialogContext);
-
-              try {
-                final userUid = currentUserUid.isNotEmpty
-                    ? currentUserUid
-                    : (currentUserReference?.id ?? '');
-                final referralLink = 'https://lona.club/invite/$userUid';
-
-                await actions.sendResendInvite(
-                  email: email,
-                  senderName: currentUserDisplayName,
-                  referralLink: referralLink,
-                );
-
-                // Show green tick overlay
-                _showSuccessTick();
-              } catch (e) {
-                // Silently fail
-              }
-            },
-          ),
-        ],
-      ),
-    );
-  }
-
-  void _showSuccessTick() {
-    final overlay = Overlay.of(context);
-    late OverlayEntry entry;
-
-    entry = OverlayEntry(
-      builder: (context) => Positioned(
-        top: 50,
-        left: 0,
-        right: 0,
-        child: Center(
-          child: TweenAnimationBuilder<double>(
-            tween: Tween(begin: 0.0, end: 1.0),
-            duration: Duration(milliseconds: 300),
-            builder: (context, value, child) {
-              return Opacity(
-                opacity: value,
-                child: Transform.scale(
-                  scale: value,
-                  child: Container(
-                    padding: EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: Color(0xFF10B981),
-                      shape: BoxShape.circle,
-                      boxShadow: [
-                        BoxShadow(
-                          color: Color(0xFF10B981).withOpacity(0.3),
-                          blurRadius: 20,
-                          spreadRadius: 5,
-                        ),
-                      ],
-                    ),
-                    child: Icon(
-                      Icons.check,
-                      color: Colors.white,
-                      size: 32,
-                    ),
-                  ),
-                ),
-              );
-            },
-          ),
-        ),
-      ),
-    );
-
-    overlay.insert(entry);
-
-    // Remove after 1.5 seconds
-    Future.delayed(Duration(milliseconds: 1500), () {
-      entry.remove();
-    });
   }
 
   Widget _buildSummerAITasksSection(BuildContext context) {

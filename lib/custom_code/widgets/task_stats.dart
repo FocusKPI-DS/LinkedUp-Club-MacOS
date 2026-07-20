@@ -1,8 +1,18 @@
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'dart:async';
 import '/backend/backend.dart';
 import '/auth/firebase_auth/auth_util.dart';
 import '/backend/firestore/firestore_desktop_adapter.dart';
+
+const TextStyle _kTaskStatsHeaderStyle = TextStyle(
+  fontFamily: '.SF Pro Display',
+  fontSize: 24,
+  fontWeight: FontWeight.w500,
+  color: CupertinoColors.label,
+  letterSpacing: -0.8,
+  height: 1.1,
+);
 
 class TaskStats extends StatefulWidget {
   const TaskStats({super.key});
@@ -137,12 +147,7 @@ class _TaskStatsState extends State<TaskStats> {
                 children: [
                   const Text(
                     'Task Stats',
-                    style: TextStyle(
-                      fontFamily: 'Inter',
-                      fontSize: 18,
-                      fontWeight: FontWeight.w600,
-                      color: Color(0xFF1E293B),
-                    ),
+                    style: _kTaskStatsHeaderStyle,
                   ),
                   TextButton(
                     onPressed: () {
@@ -443,12 +448,7 @@ class _TaskStatsState extends State<TaskStats> {
         children: [
           const Text(
             'Task Stats',
-            style: TextStyle(
-              fontFamily: 'Inter',
-              fontSize: 18,
-              fontWeight: FontWeight.w600,
-              color: Color(0xFF1E293B),
-            ),
+            style: _kTaskStatsHeaderStyle,
           ),
           const SizedBox(height: 24),
           Center(

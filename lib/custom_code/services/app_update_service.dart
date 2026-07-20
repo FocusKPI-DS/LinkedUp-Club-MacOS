@@ -26,6 +26,13 @@ class AppUpdateService {
   /// Cached release info from the most recent successful check.
   static Map<String, String>? pendingReleaseInfo;
 
+  /// Latest version string from the most recent successful check (any platform).
+  static String? pendingLatestVersion;
+
+  /// Result of the most recent successful check. Survives rate-limited calls so
+  /// the one-time prompt can still fire even if another component checked first.
+  static bool? lastUpdateAvailable;
+
   /// How often to poll for updates.
   static Duration get checkInterval {
     if (!kIsWeb && Platform.isWindows) {
@@ -47,25 +54,35 @@ class AppUpdateService {
         final info = await fetchGitHubLatestRelease(assetExtension: '.dmg');
         if (info == null) return null;
         pendingReleaseInfo = info;
-        return _evaluateVersion(info['version'] ?? '', currentVersion);
+        pendingLatestVersion = info['version'];
+        final result =
+            await _evaluateVersion(info['version'] ?? '', currentVersion);
+        if (result != null) lastUpdateAvailable = result;
+        return result;
       }
 
       if (Platform.isIOS) {
         final latestVersion = await _fetchLatestVersionFromAppStore();
         if (latestVersion == null) return null;
+        pendingLatestVersion = latestVersion;
         await _recordCheck();
-        return _isVersionNewer(latestVersion, currentVersion);
+        final result = _isVersionNewer(latestVersion, currentVersion);
+        lastUpdateAvailable = result;
+        return result;
       }
 
       if (Platform.isWindows) {
         final info = await fetchWindowsReleaseInfo();
         if (info == null) return null;
         pendingReleaseInfo = info;
-        return _evaluateWindowsUpdate(
+        pendingLatestVersion = info['version'];
+        final result = await _evaluateWindowsUpdate(
           info,
           currentVersion,
           packageInfo.buildNumber,
         );
+        if (result != null) lastUpdateAvailable = result;
+        return result;
       }
 
       return null;
@@ -367,6 +384,29 @@ class AppUpdateService {
     try {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString(_skippedVersionKey, version);
+    } catch (_) {}
+  }
+
+  static const String _promptShownVersionKey =
+      'app_update_prompt_shown_version';
+
+  /// Whether the one-time update prompt has already been shown for [version].
+  static Future<bool> hasPromptedForVersion(String version) async {
+    if (version.isEmpty) return false;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      return prefs.getString(_promptShownVersionKey) == version;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// Records that the one-time update prompt has been shown for [version].
+  static Future<void> markPromptedForVersion(String version) async {
+    if (version.isEmpty) return;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(_promptShownVersionKey, version);
     } catch (_) {}
   }
 

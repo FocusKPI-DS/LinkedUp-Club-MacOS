@@ -444,34 +444,29 @@ class _ChatHistoryWidgetState extends State<ChatHistoryWidget> {
                         padding: EdgeInsets.only(top: 4),
                         child: InkWell(
                           onTap: () async {
-                            await Navigator.push(
+                            await FlutterFlowExpandedImageView.show(
                               context,
-                              PageTransition(
-                                type: PageTransitionType.fade,
-                                child: FlutterFlowExpandedImageView(
-                                  image: CachedNetworkImage(
-                                    fadeInDuration:
-                                        const Duration(milliseconds: 300),
-                                    fadeOutDuration:
-                                        const Duration(milliseconds: 300),
-                                    imageUrl: valueOrDefault<String>(
-                                      imageUrl,
-                                      message.attachmentUrl ?? '',
-                                    ),
-                                    fit: BoxFit.contain,
-                                  ),
-                                  allowRotation: false,
-                                  tag: valueOrDefault<String>(
-                                    imageUrl,
-                                    message.attachmentUrl ??
-                                        'image_${message.reference.id}',
-                                  ),
-                                  useHeroAnimation: true,
-                                  imageUrl: valueOrDefault<String>(
-                                    imageUrl,
-                                    message.attachmentUrl ?? '',
-                                  ),
+                              image: CachedNetworkImage(
+                                fadeInDuration:
+                                    const Duration(milliseconds: 300),
+                                fadeOutDuration:
+                                    const Duration(milliseconds: 300),
+                                imageUrl: valueOrDefault<String>(
+                                  imageUrl,
+                                  message.attachmentUrl ?? '',
                                 ),
+                                fit: BoxFit.contain,
+                              ),
+                              allowRotation: false,
+                              tag: valueOrDefault<String>(
+                                imageUrl,
+                                message.attachmentUrl ??
+                                    'image_${message.reference.id}',
+                              ),
+                              useHeroAnimation: true,
+                              imageUrl: valueOrDefault<String>(
+                                imageUrl,
+                                message.attachmentUrl ?? '',
                               ),
                             );
                           },

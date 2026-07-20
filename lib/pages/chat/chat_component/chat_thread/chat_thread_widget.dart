@@ -8,7 +8,7 @@ import '/auth/firebase_auth/auth_util.dart';
 import '/backend/backend.dart';
 import '/backend/firestore/firestore_desktop_adapter.dart';
 import '/backend/schema/enums/enums.dart';
-import '/pages/user_summary/user_summary_widget.dart';
+import '/pages/chat/user_profile_popup/user_profile_popup.dart';
 import '/flutter_flow/flutter_flow_audio_player.dart';
 import '/flutter_flow/flutter_flow_expanded_image_view.dart';
 import '/custom_code/widgets/video_message_widget.dart';
@@ -43,7 +43,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 // import 'package:flutter_spinkit/flutter_spinkit.dart';
 import 'package:google_fonts/google_fonts.dart' hide Config;
-import 'package:page_transition/page_transition.dart';
 // import 'package:provider/provider.dart';
 import 'chat_thread_model.dart';
 export 'chat_thread_model.dart';
@@ -1868,6 +1867,43 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
     }
   }
 
+  /// Name above the first message in a sender streak (group chats, received).
+  Widget? _buildSenderNameAbove() {
+    if (!widget.isGroup || widget.isConsecutive) return null;
+    final name = valueOrDefault<String>(widget.name, 'No One');
+    if (name.trim().isEmpty) return null;
+    // Match bubble gutter (12) + inner horizontal padding (14) so the name
+    // lines up with text inside the bubble, not the bubble's outer edge.
+    return Padding(
+      padding: const EdgeInsetsDirectional.fromSTEB(26.0, 0.0, 12.0, 4.0),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            name,
+            style: FlutterFlowTheme.of(context).bodySmall.override(
+                  font: GoogleFonts.inter(),
+                  color: const Color(0xFF6B7280),
+                  fontSize: 11.0,
+                  letterSpacing: 0.0,
+                  fontWeight: FontWeight.w600,
+                ),
+          ),
+          if (widget.message?.isPinned == true)
+            const Padding(
+              padding: EdgeInsets.only(left: 4.0),
+              child: Icon(
+                Icons.star_rounded,
+                color: Color(0xFFFFD700),
+                size: 14.0,
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
   // Wrap a bubble in a Stack and pin the menu in its top-right corner.
   // Reactions badge overlaps the bottom of the bubble (WhatsApp style)
   Widget _withMessageMenu({required Widget bubble}) {
@@ -3360,12 +3396,12 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
                                                         constraints:
                                                             BoxConstraints(
                                                           maxWidth: hasMedia
-                                                              ? 320.0
+                                                              ? 400.0
                                                               : availableWidth *
                                                                   0.7,
                                                         ),
                                                         width: hasMedia
-                                                            ? 320.0
+                                                            ? 400.0
                                                             : null, // Fixed width when has image or video
                                                         decoration:
                                                             BoxDecoration(
@@ -3427,7 +3463,7 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
                                                                     constraints:
                                                                         const BoxConstraints(
                                                                       maxWidth:
-                                                                          320.0,
+                                                                          400.0,
                                                                     ),
                                                                     margin: const EdgeInsets
                                                                         .only(
@@ -3506,7 +3542,7 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
                                                                     constraints:
                                                                         BoxConstraints(
                                                                       maxWidth: hasMedia
-                                                                          ? 320.0
+                                                                          ? 400.0
                                                                           : double
                                                                               .infinity,
                                                                     ),
@@ -3801,7 +3837,7 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
                                                                           ?.image !=
                                                                       '')
                                                                 SizedBox(
-                                                                  width: 240.0,
+                                                                  width: 340.0,
                                                                   child: Align(
                                                                   alignment:
                                                                       AlignmentDirectional
@@ -3822,12 +3858,12 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
                                                                           constraints:
                                                                               BoxConstraints(
                                                                             maxWidth:
-                                                                                200.0,
+                                                                                300.0,
                                                                             maxHeight:
-                                                                                260.0,
+                                                                                380.0,
                                                                           ),
                                                                           width:
-                                                                              200.0,
+                                                                              300.0,
                                                                           margin:
                                                                               const EdgeInsets.only(
                                                                             bottom:
@@ -3857,11 +3893,8 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
                                                                             },
                                                                             onTap:
                                                                                 () async {
-                                                                              await Navigator.push(
+                                                                              await FlutterFlowExpandedImageView.show(
                                                                                 context,
-                                                                                PageTransition(
-                                                                                  type: PageTransitionType.fade,
-                                                                                  child: FlutterFlowExpandedImageView(
                                                                                     image: CachedNetworkImage(
                                                                                       fadeInDuration: const Duration(milliseconds: 300),
                                                                                       fadeOutDuration: const Duration(milliseconds: 300),
@@ -3881,8 +3914,7 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
                                                                                       widget.message?.image,
                                                                                       '',
                                                                                     ),
-                                                                                  ),
-                                                                                ),
+                                                                                  
                                                                               );
                                                                             },
                                                                             child:
@@ -3906,12 +3938,12 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
                                                                                     widget.message?.image,
                                                                                     'https://firebasestorage.googleapis.com/v0/b/linkedup-c3e29.firebasestorage.app/o/asset%2Fdefault-user.png?alt=media&token=35d4da12-13b0-4f43-8b8e-375e6e126683',
                                                                                   ),
-                                                                                  width: 200.0,
-                                                                                  height: 200.0,
+                                                                                  width: 300.0,
+                                                                                  height: 300.0,
                                                                                   fit: BoxFit.cover,
                                                                                   errorWidget: (context, error, stackTrace) => Container(
-                                                                                    width: 200.0,
-                                                                                    height: 200.0,
+                                                                                    width: 300.0,
+                                                                                    height: 300.0,
                                                                                     color: const Color(0xFFE5E7EB),
                                                                                     child: Icon(
                                                                                       Icons.broken_image,
@@ -3947,12 +3979,12 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
                                                                   constraints:
                                                                       BoxConstraints(
                                                                     maxWidth:
-                                                                        320.0,
+                                                                        400.0,
                                                                     maxHeight:
                                                                         400.0,
                                                                   ),
                                                                   width:
-                                                                      320.0, // Min width so Chewie controls don't overflow
+                                                                      400.0, // Min width so Chewie controls don't overflow
                                                                   margin:
                                                                       const EdgeInsets
                                                                           .only(
@@ -4007,9 +4039,9 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
                                                                           widget.message?.video ??
                                                                               '',
                                                                       width:
-                                                                          320.0,
+                                                                          400.0,
                                                                       height:
-                                                                          200.0,
+                                                                          300.0,
                                                                       isOwnMessage:
                                                                           isMe,
                                                                     ),
@@ -4037,7 +4069,7 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
                                                                   child:
                                                                       Container(
                                                                     width:
-                                                                        200.0,
+                                                                        300.0,
                                                                     decoration:
                                                                         BoxDecoration(
                                                                       color: Colors
@@ -4075,11 +4107,8 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
                                                                                       );
                                                                                     },
                                                                                     onTap: () async {
-                                                                                      await Navigator.push(
+                                                                                      await FlutterFlowExpandedImageView.show(
                                                                                         context,
-                                                                                        PageTransition(
-                                                                                          type: PageTransitionType.fade,
-                                                                                          child: FlutterFlowExpandedImageView(
                                                                                             image: CachedNetworkImage(
                                                                                               fadeInDuration: const Duration(milliseconds: 300),
                                                                                               fadeOutDuration: const Duration(milliseconds: 300),
@@ -4103,8 +4132,7 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
                                                                                               multipleImagesItem,
                                                                                               '',
                                                                                             ),
-                                                                                          ),
-                                                                                        ),
+                                                                                          
                                                                                       );
                                                                                     },
                                                                                     child: Hero(
@@ -4298,17 +4326,10 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
                                 GestureDetector(
                                   onTap: widget.userRef != null
                                       ? () {
-                                          context.pushNamed(
-                                            UserSummaryWidget.routeName,
-                                            queryParameters: {
-                                              'userRef': serializeParam(
-                                                widget.userRef,
-                                                ParamType.DocumentReference,
-                                              ),
-                                            }.withoutNulls,
-                                            extra: <String, dynamic>{
-                                              'userRef': widget.userRef,
-                                            },
+                                          showUserProfilePopup(
+                                            context,
+                                            userRef: widget.userRef,
+                                            chatRef: widget.chatRef,
                                           );
                                         }
                                       : null,
@@ -4346,6 +4367,9 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
                                         crossAxisAlignment:
                                             CrossAxisAlignment.start,
                                         children: [
+                                          if (_buildSenderNameAbove()
+                                              case final senderNameAbove?)
+                                            senderNameAbove,
                                           Align(
                                             alignment:
                                                 const AlignmentDirectional(
@@ -4450,12 +4474,12 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
                                                         constraints:
                                                             BoxConstraints(
                                                           maxWidth: hasMedia
-                                                              ? 320.0
+                                                              ? 400.0
                                                               : availableWidth *
                                                                   0.7,
                                                         ),
                                                         width: hasMedia
-                                                            ? 320.0
+                                                            ? 400.0
                                                             : null, // Fixed width when has image or video
                                                         decoration:
                                                             BoxDecoration(
@@ -4517,7 +4541,7 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
                                                                     constraints:
                                                                         const BoxConstraints(
                                                                       maxWidth:
-                                                                          320.0,
+                                                                          400.0,
                                                                     ),
                                                                     margin: const EdgeInsets
                                                                         .only(
@@ -4596,7 +4620,7 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
                                                                     constraints:
                                                                         BoxConstraints(
                                                                       maxWidth: hasMedia
-                                                                          ? 320.0
+                                                                          ? 400.0
                                                                           : double
                                                                               .infinity,
                                                                     ),
@@ -4880,7 +4904,7 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
                                                                           ?.image !=
                                                                       '')
                                                                 SizedBox(
-                                                                  width: 240.0,
+                                                                  width: 340.0,
                                                                   child: Align(
                                                                   alignment:
                                                                       AlignmentDirectional
@@ -4901,12 +4925,12 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
                                                                           constraints:
                                                                               BoxConstraints(
                                                                             maxWidth:
-                                                                                200.0,
+                                                                                300.0,
                                                                             maxHeight:
-                                                                                260.0,
+                                                                                380.0,
                                                                           ),
                                                                           width:
-                                                                              200.0,
+                                                                              300.0,
                                                                           margin:
                                                                               const EdgeInsets.only(
                                                                             bottom:
@@ -4931,11 +4955,8 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
                                                                             },
                                                                             onTap:
                                                                                 () async {
-                                                                              await Navigator.push(
+                                                                              await FlutterFlowExpandedImageView.show(
                                                                                 context,
-                                                                                PageTransition(
-                                                                                  type: PageTransitionType.fade,
-                                                                                  child: FlutterFlowExpandedImageView(
                                                                                     image: CachedNetworkImage(
                                                                                       fadeInDuration: const Duration(milliseconds: 300),
                                                                                       fadeOutDuration: const Duration(milliseconds: 300),
@@ -4959,8 +4980,7 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
                                                                                       widget.message?.image,
                                                                                       '',
                                                                                     ),
-                                                                                  ),
-                                                                                ),
+                                                                                  
                                                                               );
                                                                             },
                                                                             child:
@@ -4979,8 +4999,8 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
                                                                                     widget.message?.image,
                                                                                     'https://firebasestorage.googleapis.com/v0/b/linkedup-c3e29.firebasestorage.app/o/asset%2Fdefault-user.png?alt=media&token=35d4da12-13b0-4f43-8b8e-375e6e126683',
                                                                                   ),
-                                                                                  width: 200.0,
-                                                                                  height: 200.0,
+                                                                                  width: 300.0,
+                                                                                  height: 300.0,
                                                                                   fit: BoxFit.cover,
                                                                                   errorWidget: (context, error, stackTrace) => Image.asset(
                                                                                     'assets/images/error_image.png',
@@ -5015,12 +5035,12 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
                                                                   constraints:
                                                                       BoxConstraints(
                                                                     maxWidth:
-                                                                        320.0,
+                                                                        400.0,
                                                                     maxHeight:
                                                                         400.0,
                                                                   ),
                                                                   width:
-                                                                      320.0, // Min width so Chewie controls don't overflow
+                                                                      400.0, // Min width so Chewie controls don't overflow
                                                                   margin:
                                                                       const EdgeInsets
                                                                           .only(
@@ -5075,9 +5095,9 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
                                                                           widget.message?.video ??
                                                                               '',
                                                                       width:
-                                                                          320.0,
+                                                                          400.0,
                                                                       height:
-                                                                          200.0,
+                                                                          300.0,
                                                                       isOwnMessage:
                                                                           isMe,
                                                                     ),
@@ -5105,7 +5125,7 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
                                                                   child:
                                                                       Container(
                                                                     width:
-                                                                        200.0,
+                                                                        300.0,
                                                                     decoration:
                                                                         BoxDecoration(
                                                                       color: Colors
@@ -5143,11 +5163,8 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
                                                                                       );
                                                                                     },
                                                                                     onTap: () async {
-                                                                                      await Navigator.push(
+                                                                                      await FlutterFlowExpandedImageView.show(
                                                                                         context,
-                                                                                        PageTransition(
-                                                                                          type: PageTransitionType.fade,
-                                                                                          child: FlutterFlowExpandedImageView(
                                                                                             image: CachedNetworkImage(
                                                                                               fadeInDuration: const Duration(milliseconds: 300),
                                                                                               fadeOutDuration: const Duration(milliseconds: 300),
@@ -5171,8 +5188,7 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
                                                                                               multipleImagesItem,
                                                                                               '',
                                                                                             ),
-                                                                                          ),
-                                                                                        ),
+                                                                                          
                                                                                       );
                                                                                     },
                                                                                     child: Hero(
@@ -5233,64 +5249,6 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
                                                                     widget
                                                                         .message!
                                                                         .attachmentUrl),
-                                                              // Sender name inside bubble (bottom left for received messages)
-                                                              if (widget
-                                                                      .isGroup &&
-                                                                  !widget
-                                                                      .isConsecutive)
-                                                                Padding(
-                                                                  padding:
-                                                                      const EdgeInsetsDirectional
-                                                                          .fromSTEB(
-                                                                          0.0,
-                                                                          4.0,
-                                                                          0.0,
-                                                                          0.0),
-                                                                  child: Row(
-                                                                    mainAxisAlignment:
-                                                                        MainAxisAlignment
-                                                                            .start,
-                                                                    mainAxisSize:
-                                                                        MainAxisSize
-                                                                            .min,
-                                                                    children: [
-                                                                      Text(
-                                                                        valueOrDefault<
-                                                                            String>(
-                                                                          widget
-                                                                              .name,
-                                                                          'No One',
-                                                                        ),
-                                                                        style: FlutterFlowTheme.of(context)
-                                                                            .bodySmall
-                                                                            .override(
-                                                                              font: GoogleFonts.inter(),
-                                                                              color: const Color(0xFF6B7280),
-                                                                              fontSize: 11.0,
-                                                                              letterSpacing: 0.0,
-                                                                              fontWeight: FontWeight.w600,
-                                                                            ),
-                                                                      ),
-                                                                      if (widget
-                                                                              .message
-                                                                              ?.isPinned ==
-                                                                          true)
-                                                                        Padding(
-                                                                          padding: const EdgeInsets
-                                                                              .only(
-                                                                              left: 4.0),
-                                                                          child:
-                                                                              Icon(
-                                                                            Icons.star_rounded,
-                                                                            color:
-                                                                                const Color(0xFFFFD700),
-                                                                            size:
-                                                                                14.0,
-                                                                          ),
-                                                                        ),
-                                                                    ],
-                                                                  ),
-                                                                ),
                                                             ].divide(
                                                                 const SizedBox(
                                                                     height:

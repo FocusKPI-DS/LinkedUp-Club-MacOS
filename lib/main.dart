@@ -625,7 +625,6 @@ class _MyAppState extends State<MyApp> {
           .toList();
   late Stream<BaseAuthUser> userStream;
   Timer? _windowsUpdateCheckTimer;
-  bool _updateDialogShowing = false;
 
   final authUserSub = authenticatedUserStream.listen((user) {
     // Trigger Gmail prefetch when user is authenticated
@@ -723,71 +722,23 @@ class _MyAppState extends State<MyApp> {
     }
   }
 
-  /// Check for app updates and show alert if update is available
+  /// Check for app updates and show the one-time prompt if a newer version
+  /// exists. Delegates to the shared, per-version-gated entry so the same
+  /// prompt is never shown twice (also triggered from the home page).
   Future<void> _checkForAppUpdate({
     bool force = false,
     bool immediate = false,
   }) async {
-    if (_updateDialogShowing) return;
     try {
       if (!force && !immediate) {
         await Future.delayed(const Duration(seconds: 3));
       }
-
-      final hasUpdate = await AppUpdateService.checkForUpdate(force: force);
-      if (hasUpdate == true && mounted) {
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          final context = appNavigatorKey.currentContext;
-          if (context == null || !mounted || _updateDialogShowing) return;
-          _updateDialogShowing = true;
-          Future<void> dialogFuture;
-          if (Platform.isMacOS) {
-            dialogFuture = AppUpdateDialog.showMac(context);
-          } else if (Platform.isWindows) {
-            dialogFuture = AppUpdateDialog.showWindows(context);
-          } else {
-            dialogFuture = _showUpdateDialog(context);
-          }
-          dialogFuture.whenComplete(() {
-            _updateDialogShowing = false;
-          });
-        });
-      }
+      if (!mounted) return;
+      final context = appNavigatorKey.currentContext;
+      if (context == null) return;
+      await AppUpdateDialog.maybeShowUpdatePrompt(context, force: force);
     } catch (e) {
       debugLog('Error checking for app update: $e');
-    }
-  }
-
-  /// Show update alert dialog for iOS (App Store)
-  Future<void> _showUpdateDialog(BuildContext context) async {
-    try {
-      await AdaptiveAlertDialog.show(
-        context: context,
-        title: 'Update Available',
-        message:
-            'A new version of Lona is available on the App Store. Please update to continue using the latest features and improvements.',
-        icon: 'arrow.down.circle.fill',
-        actions: [
-          AlertAction(
-            title: 'Later',
-            style: AlertActionStyle.cancel,
-            onPressed: () {},
-          ),
-          AlertAction(
-            title: 'Update',
-            style: AlertActionStyle.primary,
-            onPressed: () async {
-              final appStoreUrl = AppUpdateService.getAppStoreUrl();
-              final uri = Uri.parse(appStoreUrl);
-              if (await canLaunchUrl(uri)) {
-                await launchUrl(uri, mode: LaunchMode.externalApplication);
-              }
-            },
-          ),
-        ],
-      );
-    } catch (e) {
-      debugLog('Error showing update dialog: $e');
     }
   }
 

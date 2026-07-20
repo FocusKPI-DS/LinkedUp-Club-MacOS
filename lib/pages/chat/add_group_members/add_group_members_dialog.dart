@@ -2,13 +2,11 @@ import '/auth/firebase_auth/auth_util.dart';
 import '/backend/backend.dart';
 import '/backend/firestore/firestore_desktop_adapter.dart';
 import '/backend/schema/enums/enums.dart';
-import '/components/invite_friends_button_widget.dart';
 import '/flutter_flow/flutter_flow_util.dart';
+import '/pages/desktop_chat/rest_poll_builder.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
-import '/custom_code/actions/index.dart' as actions;
 
 final Map<String, Future<UsersRecord>> _addMemberUserFutureCache = {};
 final Map<String, UsersRecord> _addMemberUserRecordCache = {};
@@ -109,17 +107,6 @@ Future<void> showAddGroupMembersDialog({
                   _AddMembersSearchBar(controller: searchController, onChanged: () {
                     setDialogState(() {});
                   }),
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        const InviteFriendsButtonWidget(),
-                        const SizedBox(width: 16),
-                        _EmailInviteButton(parentContext: context),
-                      ],
-                    ),
-                  ),
                   Expanded(
                     child: _AddMembersCandidatePanel(
                       chat: chat,
@@ -378,55 +365,7 @@ class _AddMembersCandidatePanelState extends State<_AddMembersCandidatePanel> {
     return entries;
   }
 
-  @override
-  Widget build(BuildContext context) {
-    if (_loading) {
-      return const Center(
-        child: CircularProgressIndicator(
-          valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF3B82F6)),
-        ),
-      );
-    }
-
-    if (_friendRefs.isEmpty && _workspaceRefs.isEmpty) {
-      return const Center(
-        child: Padding(
-          padding: EdgeInsets.all(24.0),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(
-                Icons.people_outline,
-                size: 48.0,
-                color: Color(0xFFE5E7EB),
-              ),
-              SizedBox(height: 16.0),
-              Text(
-                'No connections available',
-                style: TextStyle(
-                  fontFamily: 'Inter',
-                  fontSize: 16.0,
-                  fontWeight: FontWeight.w600,
-                  color: Color(0xFF6B7280),
-                ),
-              ),
-              SizedBox(height: 8.0),
-              Text(
-                'All your connections are already in this group',
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  fontFamily: 'Inter',
-                  fontSize: 14.0,
-                  color: Color(0xFF9CA3AF),
-                ),
-              ),
-            ],
-          ),
-        ),
-      );
-    }
-
-    final entries = _visibleEntries();
+  Widget _buildUserList(List<_CandidateListEntry> entries) {
     if (entries.isEmpty) {
       return const Center(
         child: Text(
@@ -458,6 +397,120 @@ class _AddMembersCandidatePanelState extends State<_AddMembersCandidatePanel> {
         );
       },
     );
+  }
+
+  List<_CandidateListEntry> _globalSearchEntries(List<UsersRecord> allUsers) {
+    final existingIds = widget.chat.members.map((m) => m.id).toSet();
+    final filtered = allUsers.where((user) {
+      if (user.reference.id == currentUserReference?.id) return false;
+      if (existingIds.contains(user.reference.id)) return false;
+      if (user.displayName.isEmpty && user.email.isEmpty) return false;
+      return _matchesSearch(user);
+    }).toList()
+      ..sort((a, b) => a.displayName
+          .toLowerCase()
+          .compareTo(b.displayName.toLowerCase()));
+
+    for (final user in filtered) {
+      _usersById[user.reference.id] = user;
+    }
+
+    return filtered
+        .map((user) => _CandidateListEntry.user(user.reference))
+        .toList();
+  }
+
+  Widget _buildGlobalSearchResults() {
+    Widget buildFromSnapshot(AsyncSnapshot<List<UsersRecord>> snapshot) {
+      if (snapshot.hasError) {
+        return const Center(
+          child: Text(
+            'Error loading users',
+            style: TextStyle(
+              fontFamily: 'Inter',
+              fontSize: 14.0,
+              color: Color(0xFF9CA3AF),
+            ),
+          ),
+        );
+      }
+      if (!snapshot.hasData) {
+        return const Center(
+          child: CircularProgressIndicator(
+            valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF3B82F6)),
+          ),
+        );
+      }
+      return _buildUserList(_globalSearchEntries(snapshot.data!));
+    }
+
+    if (useWindowsFirestoreRest) {
+      return RestPollBuilder<List<UsersRecord>>(
+        interval: const Duration(seconds: 30),
+        fetch: () => fsQueryUsers(limit: 200),
+        builder: (context, snapshot) => buildFromSnapshot(snapshot),
+      );
+    }
+
+    return StreamBuilder<List<UsersRecord>>(
+      stream: queryUsersRecord(),
+      builder: (context, snapshot) => buildFromSnapshot(snapshot),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (widget.searchQuery.isNotEmpty) {
+      return _buildGlobalSearchResults();
+    }
+
+    if (_loading) {
+      return const Center(
+        child: CircularProgressIndicator(
+          valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF3B82F6)),
+        ),
+      );
+    }
+
+    if (_friendRefs.isEmpty && _workspaceRefs.isEmpty) {
+      return const Center(
+        child: Padding(
+          padding: EdgeInsets.all(24.0),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(
+                Icons.search,
+                size: 48.0,
+                color: Color(0xFFE5E7EB),
+              ),
+              SizedBox(height: 16.0),
+              Text(
+                'Search for people',
+                style: TextStyle(
+                  fontFamily: 'Inter',
+                  fontSize: 16.0,
+                  fontWeight: FontWeight.w600,
+                  color: Color(0xFF6B7280),
+                ),
+              ),
+              SizedBox(height: 8.0),
+              Text(
+                'Search by name or email to find people to add',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontFamily: 'Inter',
+                  fontSize: 14.0,
+                  color: Color(0xFF9CA3AF),
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    return _buildUserList(_visibleEntries());
   }
 }
 
@@ -550,7 +603,7 @@ class _AddMembersSearchBar extends StatelessWidget {
                   color: Color(0xFF1A1F36),
                 ),
                 decoration: const InputDecoration(
-                  hintText: 'Search connections',
+                  hintText: 'Search by name or email',
                   hintStyle: TextStyle(
                     fontFamily: 'Inter',
                     fontSize: 14.0,
@@ -706,104 +759,4 @@ class _AddMemberCandidateTile extends StatelessWidget {
           ),
         );
   }
-}
-
-class _EmailInviteButton extends StatelessWidget {
-  const _EmailInviteButton({required this.parentContext});
-
-  final BuildContext parentContext;
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: () => _showEmailInviteDialog(parentContext),
-        borderRadius: BorderRadius.circular(20.0),
-        child: Container(
-          padding: const EdgeInsets.all(12.0),
-          decoration: BoxDecoration(
-            color: const Color(0xFFF3F4F6),
-            borderRadius: BorderRadius.circular(20.0),
-            border: Border.all(
-              color: const Color(0xFFE5E7EB),
-              width: 1.0,
-            ),
-          ),
-          child: const Icon(
-            CupertinoIcons.mail_solid,
-            color: Color(0xFF3B82F6),
-            size: 20.0,
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-void _showEmailInviteDialog(BuildContext context) {
-  final emailController = TextEditingController();
-
-  showCupertinoDialog(
-    context: context,
-    builder: (dialogContext) => CupertinoAlertDialog(
-      title: const Text('Invite via Email'),
-      content: Padding(
-        padding: const EdgeInsets.only(top: 10.0),
-        child: CupertinoTextField(
-          controller: emailController,
-          placeholder: 'Recipient Email',
-          keyboardType: TextInputType.emailAddress,
-        ),
-      ),
-      actions: [
-        CupertinoDialogAction(
-          child: const Text('Cancel'),
-          onPressed: () => Navigator.pop(dialogContext),
-        ),
-        CupertinoDialogAction(
-          child: const Text('Send Invite'),
-          onPressed: () async {
-            final email = emailController.text.trim();
-            if (email.isEmpty || !email.contains('@')) {
-              Navigator.pop(dialogContext);
-              return;
-            }
-            Navigator.pop(dialogContext);
-
-            try {
-              final userUid = currentUserUid.isNotEmpty
-                  ? currentUserUid
-                  : (currentUserReference?.id ?? '');
-              final referralLink = 'https://lona.club/invite/$userUid';
-
-              await actions.sendResendInvite(
-                email: email,
-                senderName: currentUserDisplayName,
-                referralLink: referralLink,
-              );
-
-              if (context.mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('Invite sent successfully'),
-                    backgroundColor: Color(0xFF34C759),
-                  ),
-                );
-              }
-            } catch (e) {
-              if (context.mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('Failed to send invite'),
-                    backgroundColor: Color(0xFFEF4444),
-                  ),
-                );
-              }
-            }
-          },
-        ),
-      ],
-    ),
-  );
 }

@@ -8,6 +8,7 @@ import '/backend/firebase_storage/storage.dart';
 import '/backend/schema/enums/enums.dart';
 import 'package:ff_theme/flutter_flow/flutter_flow_theme.dart';
 import '../chat_thread/chat_thread_widget.dart';
+import '../photo_stack_bubble.dart';
 import '../rich_chat_input/rich_chat_input_widget.dart';
 import '/backend/firestore/firestore_desktop_adapter.dart';
 import 'package:flutter/material.dart';
@@ -308,8 +309,16 @@ class ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget> {
           .addListener(_desktopScrollListener!);
     }
 
-    // Create shared QuillController for @ detection
-    _quillController = QuillController.basic();
+    // Create shared QuillController for @ detection.
+    // Disable external rich-text (HTML) paste so Quill doesn't insert both the
+    // clipboard's HTML and plain-text representations (which duplicates text).
+    _quillController = QuillController.basic(
+      config: const QuillControllerConfig(
+        clipboardConfig: QuillClipboardConfig(
+          enableExternalRichPaste: false,
+        ),
+      ),
+    );
     _quillController!.addListener(_onQuillTextChanged);
 
     // Register global keyboard handler to intercept Cmd+V BEFORE QuillEditor consumes it
@@ -1328,9 +1337,86 @@ class ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget> {
     safeSetState(() {});
   }
 
+  /// Image URLs on a message (`images` preferred, else single `image`).
+  List<String> _photoUrlsForMessage(MessagesRecord message) {
+    if (message.images.isNotEmpty) {
+      return message.images.where((u) => u.trim().isNotEmpty).toList();
+    }
+    if (message.image.trim().isNotEmpty) {
+      return [message.image];
+    }
+    return const [];
+  }
+
+  bool _isPhotoOnlyMessage(MessagesRecord message) {
+    if (message.isSystemMessage) return false;
+    final urls = _photoUrlsForMessage(message);
+    if (urls.isEmpty) return false;
+    // Treat as photo message when typed as image, or content is empty with media.
+    if (message.messageType == MessageType.image) return true;
+    final content = message.content.trim();
+    return content.isEmpty;
+  }
+
+  bool _samePhotoBurst(MessagesRecord a, MessagesRecord b) {
+    if (a.senderRef == null || b.senderRef == null) return false;
+    if (a.senderRef != b.senderRef) return false;
+    if (!_isPhotoOnlyMessage(a) || !_isPhotoOnlyMessage(b)) return false;
+    final aTime = a.createdAt;
+    final bTime = b.createdAt;
+    if (aTime == null || bTime == null) return false;
+    // iMessage-style: photos sent within a short window.
+    return aTime.difference(bTime).abs() <= const Duration(seconds: 60);
+  }
+
+  /// messages are newest-first (index 0 = newest). Returns display rows that
+  /// collapse consecutive photo bursts into a single stack item.
+  List<_ThreadDisplayItem> _buildThreadDisplayItems(
+    List<MessagesRecord> messages,
+  ) {
+    final items = <_ThreadDisplayItem>[];
+    var i = 0;
+    while (i < messages.length) {
+      final message = messages[i];
+      final urls = _photoUrlsForMessage(message);
+
+      if (!_isPhotoOnlyMessage(message)) {
+        items.add(_ThreadDisplayItem.single(message));
+        i++;
+        continue;
+      }
+
+      // Gather consecutive photo burst toward older messages (higher indices).
+      final group = <MessagesRecord>[message];
+      var j = i + 1;
+      while (j < messages.length && _samePhotoBurst(group.last, messages[j])) {
+        group.add(messages[j]);
+        j++;
+      }
+
+      // Collect URLs oldest → newest for natural swipe order.
+      final allUrls = <String>[];
+      for (final m in group.reversed) {
+        allUrls.addAll(_photoUrlsForMessage(m));
+      }
+
+      if (allUrls.length <= 1) {
+        items.add(_ThreadDisplayItem.single(message));
+      } else {
+        items.add(_ThreadDisplayItem.photoStack(
+          messages: group,
+          imageUrls: allUrls,
+        ));
+      }
+      i = j;
+    }
+    return items;
+  }
+
   void _scrollToMessageById(String messageId, List<MessagesRecord> messages) {
-    for (int i = 0; i < messages.length; i++) {
-      if (messages[i].reference.id == messageId) {
+    final items = _buildThreadDisplayItems(messages);
+    for (int i = 0; i < items.length; i++) {
+      if (items[i].containsMessageId(messageId)) {
         _model.itemScrollController?.scrollTo(
           index: i,
           duration: const Duration(milliseconds: 300),
@@ -1345,23 +1431,29 @@ class ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget> {
     if (messages.isEmpty) {
       return const Center(child: Text('No messages yet'));
     }
+
+    final displayItems = _buildThreadDisplayItems(messages);
+
     return ScrollablePositionedList.builder(
-      itemCount: messages.length,
+      itemCount: displayItems.length,
       itemScrollController: _model.itemScrollController,
       itemPositionsListener: _model.itemPositionsListener,
       reverse: true,
       padding: const EdgeInsets.symmetric(vertical: 8),
       itemBuilder: (context, index) {
-        final message = messages[index];
+        final item = displayItems[index];
 
         bool showTimestamp = false;
         bool isConsecutive = false;
         bool isFollowedByConsecutive = false;
 
-        if (index == messages.length - 1) {
+        final message = item.primaryMessage;
+
+        // Compare against neighboring *display* rows for spacing/timestamps.
+        if (index == displayItems.length - 1) {
           showTimestamp = true;
         } else {
-          final previousMessage = messages[index + 1];
+          final previousMessage = displayItems[index + 1].primaryMessage;
           if (message.createdAt != null && previousMessage.createdAt != null) {
             final difference =
                 message.createdAt!.difference(previousMessage.createdAt!);
@@ -1379,7 +1471,7 @@ class ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget> {
         }
 
         if (index > 0) {
-          final nextMessage = messages[index - 1];
+          final nextMessage = displayItems[index - 1].primaryMessage;
           var showTimestampBeforeNext = false;
           if (message.createdAt != null && nextMessage.createdAt != null) {
             final difference =
@@ -1396,6 +1488,24 @@ class ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget> {
             isFollowedByConsecutive =
                 message.senderRef == nextMessage.senderRef;
           }
+        }
+
+        if (item.isPhotoStack) {
+          final isMine =
+              message.senderRef?.path == currentUserReference?.path;
+          final stackName = _resolveUserName(message);
+          return PhotoStackBubble(
+            key: ValueKey(
+              'photo_stack_${item.messages.map((m) => m.reference.id).join('_')}',
+            ),
+            imageUrls: item.imageUrls,
+            isMine: isMine,
+            messageId: message.reference.id,
+            senderName: stackName,
+            isGroup: widget.chatReference?.isGroup ?? false,
+            isConsecutive: isConsecutive,
+            isFollowedByConsecutive: isFollowedByConsecutive,
+          );
         }
 
         if (message.senderRef != null &&
@@ -2216,6 +2326,44 @@ class ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget> {
         ),
       ),
     );
+  }
+}
+
+class _ThreadDisplayItem {
+  const _ThreadDisplayItem._({
+    required this.messages,
+    required this.imageUrls,
+    required this.isPhotoStack,
+  });
+
+  factory _ThreadDisplayItem.single(MessagesRecord message) {
+    return _ThreadDisplayItem._(
+      messages: [message],
+      imageUrls: const [],
+      isPhotoStack: false,
+    );
+  }
+
+  factory _ThreadDisplayItem.photoStack({
+    required List<MessagesRecord> messages,
+    required List<String> imageUrls,
+  }) {
+    return _ThreadDisplayItem._(
+      messages: messages,
+      imageUrls: imageUrls,
+      isPhotoStack: true,
+    );
+  }
+
+  final List<MessagesRecord> messages;
+  final List<String> imageUrls;
+  final bool isPhotoStack;
+
+  /// Newest message in the group (primary for alignment / timestamps).
+  MessagesRecord get primaryMessage => messages.first;
+
+  bool containsMessageId(String messageId) {
+    return messages.any((m) => m.reference.id == messageId);
   }
 }
 

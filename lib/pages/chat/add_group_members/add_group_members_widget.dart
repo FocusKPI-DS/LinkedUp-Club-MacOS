@@ -4,6 +4,7 @@ import '/backend/firestore/firestore_desktop_adapter.dart';
 import '/backend/schema/enums/enums.dart';
 import '/flutter_flow/flutter_flow_util.dart';
 import '/pages/desktop_chat/desktop_safe_user_builder.dart';
+import '/pages/desktop_chat/rest_poll_builder.dart';
 import 'dart:io';
 import 'package:adaptive_platform_ui/adaptive_platform_ui.dart';
 import 'package:cached_network_image/cached_network_image.dart';
@@ -234,7 +235,7 @@ class _AddGroupMembersWidgetState extends State<AddGroupMembersWidget> {
             color: Color(0xFF1C1C1E),
           ),
           decoration: InputDecoration(
-            hintText: 'Search connections',
+            hintText: 'Search by name or email',
             hintStyle: TextStyle(
               fontFamily: 'SF Pro Text',
               fontSize: 16,
@@ -254,6 +255,10 @@ class _AddGroupMembersWidgetState extends State<AddGroupMembersWidget> {
   }
 
   Widget _buildMembersList() {
+    if (_searchQuery.isNotEmpty) {
+      return _buildGlobalSearchResults();
+    }
+
     return Container(
       color: Colors.white,
       child: AuthUserStreamWidget(
@@ -335,6 +340,96 @@ class _AddGroupMembersWidgetState extends State<AddGroupMembersWidget> {
     );
   }
 
+  Widget _buildGlobalSearchResults() {
+    Widget buildFromSnapshot(AsyncSnapshot<List<UsersRecord>> snapshot) {
+      if (snapshot.hasError) {
+        return Center(
+          child: Text(
+            'Error loading users',
+            style: TextStyle(
+              fontFamily: 'SF Pro Text',
+              fontSize: 16,
+              color: Color(0xFF8E8E93),
+            ),
+          ),
+        );
+      }
+      if (!snapshot.hasData) {
+        return Center(child: CupertinoActivityIndicator());
+      }
+
+      final existingIds =
+          (widget.chatDoc?.members ?? []).map((m) => m.id).toSet();
+      final filtered = snapshot.data!.where((user) {
+        if (user.reference.id == currentUserReference?.id) return false;
+        if (existingIds.contains(user.reference.id)) return false;
+        if (user.displayName.isEmpty && user.email.isEmpty) return false;
+        final name = user.displayName.toLowerCase();
+        final email = user.email.toLowerCase();
+        return name.contains(_searchQuery) || email.contains(_searchQuery);
+      }).toList()
+        ..sort((a, b) => a.displayName
+            .toLowerCase()
+            .compareTo(b.displayName.toLowerCase()));
+
+      if (filtered.isEmpty) {
+        return Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(
+                CupertinoIcons.search,
+                size: 64,
+                color: Color(0xFFD1D1D6),
+              ),
+              SizedBox(height: 16),
+              Text(
+                'No results found',
+                style: TextStyle(
+                  fontFamily: 'SF Pro Text',
+                  fontSize: 16,
+                  color: Color(0xFF8E8E93),
+                ),
+              ),
+              SizedBox(height: 8),
+              Text(
+                'Try searching with a different name or email',
+                style: TextStyle(
+                  fontFamily: 'SF Pro Text',
+                  fontSize: 14,
+                  color: Color(0xFFAEAEB2),
+                ),
+              ),
+            ],
+          ),
+        );
+      }
+
+      return ListView.builder(
+        padding: EdgeInsets.symmetric(horizontal: 16),
+        itemCount: filtered.length,
+        itemBuilder: (context, index) {
+          final user = filtered[index];
+          final isSelected = _isMemberSelected(user.reference);
+          return _buildUserTile(user, user.reference, isSelected);
+        },
+      );
+    }
+
+    if (useWindowsFirestoreRest) {
+      return RestPollBuilder<List<UsersRecord>>(
+        interval: const Duration(seconds: 30),
+        fetch: () => fsQueryUsers(limit: 200),
+        builder: (context, snapshot) => buildFromSnapshot(snapshot),
+      );
+    }
+
+    return StreamBuilder<List<UsersRecord>>(
+      stream: queryUsersRecord(),
+      builder: (context, snapshot) => buildFromSnapshot(snapshot),
+    );
+  }
+
   Widget _buildCandidateList(
     List<DocumentReference> friendRefs,
     List<DocumentReference> workspaceRefs,
@@ -346,13 +441,13 @@ class _AddGroupMembersWidgetState extends State<AddGroupMembersWidget> {
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Icon(
-              CupertinoIcons.person_2_fill,
+              CupertinoIcons.search,
               size: 64,
               color: Color(0xFFD1D1D6),
             ),
             SizedBox(height: 16),
             Text(
-              'No users available to add',
+              'Search for people',
               style: TextStyle(
                 fontFamily: 'SF Pro Text',
                 fontSize: 16,
@@ -361,7 +456,7 @@ class _AddGroupMembersWidgetState extends State<AddGroupMembersWidget> {
             ),
             SizedBox(height: 8),
             Text(
-              'All workspace members are already in this group',
+              'Search by name or email to find people to add',
               style: TextStyle(
                 fontFamily: 'SF Pro Text',
                 fontSize: 14,

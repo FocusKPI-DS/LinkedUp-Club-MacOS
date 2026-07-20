@@ -116,7 +116,14 @@ class _RichChatInputWidgetState extends State<RichChatInputWidget> {
     if (widget.controller != null) {
       _controller = widget.controller!;
     } else {
-      _controller = QuillController.basic();
+      // Disable external rich-text (HTML) paste to avoid duplicate-paste.
+      _controller = QuillController.basic(
+        config: const QuillControllerConfig(
+          clipboardConfig: QuillClipboardConfig(
+            enableExternalRichPaste: false,
+          ),
+        ),
+      );
       if (widget.initialText != null && widget.initialText!.isNotEmpty) {
         _controller.document =
             Document.fromDelta(Delta()..insert(widget.initialText!));
@@ -747,21 +754,11 @@ class _RichChatInputWidgetState extends State<RichChatInputWidget> {
     debugLog('📋 [paste] Ctrl+V in message input');
     final handled = await widget.onTryPasteImage!();
     debugLog('📋 [paste] attachment handled=$handled');
-    if (handled || !mounted) return;
-
-    final data = await Clipboard.getData(Clipboard.kTextPlain);
-    final text = data?.text;
-    if (text == null || text.isEmpty) return;
-
-    final selection = _controller.selection;
-    final start = selection.start;
-    final end = selection.end;
-    _controller.replaceText(
-      start,
-      end - start,
-      text,
-      TextSelection.collapsed(offset: start + text.length),
-    );
+    // If an image/file was on the clipboard it has now been added as an
+    // attachment. For plain text we intentionally do NOTHING here and let the
+    // QuillEditor perform the paste itself. Inserting the text manually as well
+    // duplicated it — returning `true` from a HardwareKeyboard handler does not
+    // stop Quill's own paste, so the text was inserted twice (e.g. "testtest").
   }
 
   Widget _buildQuillEditor() {
