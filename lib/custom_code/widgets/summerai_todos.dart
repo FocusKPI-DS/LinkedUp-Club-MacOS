@@ -28,6 +28,8 @@ class _SummerAITodosState extends State<SummerAITodos> {
   final Set<String> _completedTasks = {};
   String _selectedFilter = 'pending'; // 'all', 'pending', or 'completed'
   List<ActionItemsRecord>? _cachedTodos; // Cache to prevent flickering
+  /// Paths removed locally until the server/stream catch up (avoids resurrecting deletes).
+  final Set<String> _locallyDeletedTodoPaths = {};
 
   // Track tasks being completed with animation progress
   final Map<String, double> _completingTasks =
@@ -42,7 +44,6 @@ class _SummerAITodosState extends State<SummerAITodos> {
   String? _selectedPriority; // null, 'high', 'moderate', 'low'
   String?
       _selectedDueDateFilter; // null, 'has_due', 'no_due', 'overdue', 'today', 'this_week'
-  String? _selectedGroupName; // null or specific group name
 
   @override
   void initState() {
@@ -81,14 +82,23 @@ class _SummerAITodosState extends State<SummerAITodos> {
     List<ActionItemsRecord> serverTodos,
     List<ActionItemsRecord>? cached,
   ) {
-    if (cached == null || cached.isEmpty) {
-      return serverTodos;
-    }
     final serverPaths = serverTodos.map((t) => t.reference.path).toSet();
+    // Drop tombstones once the server no longer returns those docs.
+    _locallyDeletedTodoPaths.removeWhere((path) => !serverPaths.contains(path));
+
+    final filteredServer = serverTodos
+        .where((t) => !_locallyDeletedTodoPaths.contains(t.reference.path))
+        .toList();
+
+    if (cached == null || cached.isEmpty) {
+      return filteredServer;
+    }
+
     final localOnly = cached
         .where((t) => !serverPaths.contains(t.reference.path))
+        .where((t) => !_locallyDeletedTodoPaths.contains(t.reference.path))
         .toList();
-    final merged = [...localOnly, ...serverTodos];
+    final merged = [...localOnly, ...filteredServer];
     merged.sort((a, b) {
       final aTime = a.createdTime ?? DateTime.fromMillisecondsSinceEpoch(0);
       final bTime = b.createdTime ?? DateTime.fromMillisecondsSinceEpoch(0);
@@ -385,25 +395,6 @@ class _SummerAITodosState extends State<SummerAITodos> {
             }
           }
 
-          // Group name filter
-          if (_selectedGroupName != null && _selectedGroupName!.isNotEmpty) {
-            final selectedGroupLower = _selectedGroupName!.toLowerCase().trim();
-            final taskGroupName = t.groupName.toLowerCase().trim();
-
-            // Check if groupName matches
-            if (taskGroupName == selectedGroupLower) {
-              // Match found, continue
-            } else if (t.groupName.isEmpty && t.chatRef != null) {
-              // If groupName is empty, we need to check chatRef title
-              // Since we can't do async here, we'll skip this task if groupName doesn't match
-              // and groupName is empty (chatRef titles will be handled separately if needed)
-              return false;
-            } else {
-              // groupName doesn't match
-              return false;
-            }
-          }
-
           return true;
         }).toList();
 
@@ -471,37 +462,7 @@ class _SummerAITodosState extends State<SummerAITodos> {
                                 // Filter button with dropdown
                                 _buildFilterDropdown(),
                                 const SizedBox(width: 8),
-                                // Add Task button - iOS style
-                                CupertinoButton(
-                                  padding: const EdgeInsets.symmetric(
-                                      horizontal: 14, vertical: 8),
-                                  color: CupertinoColors.systemBlue,
-                                  borderRadius: BorderRadius.circular(8),
-                                  onPressed: () {
-                                    _showAddNewDialog();
-                                  },
-                                  child: Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      Icon(
-                                        CupertinoIcons.add,
-                                        size: 16,
-                                        color: CupertinoColors.white,
-                                      ),
-                                      const SizedBox(width: 6),
-                                      const Text(
-                                        'Task',
-                                        style: TextStyle(
-                                          fontFamily: '.SF Pro Text',
-                                          fontSize: 15,
-                                          fontWeight: FontWeight.w600,
-                                          color: CupertinoColors.white,
-                                          letterSpacing: -0.2,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
+                                _buildAddTaskButton(),
                               ],
                             ),
                           ],
@@ -581,37 +542,7 @@ class _SummerAITodosState extends State<SummerAITodos> {
                             // Filter button with dropdown
                             _buildFilterDropdown(),
                             const SizedBox(width: 8),
-                            // Add Task button - iOS style
-                            CupertinoButton(
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: 14, vertical: 8),
-                              color: CupertinoColors.systemBlue,
-                              borderRadius: BorderRadius.circular(8),
-                              onPressed: () {
-                                _showAddNewDialog();
-                              },
-                              child: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Icon(
-                                    CupertinoIcons.add,
-                                    size: 16,
-                                    color: CupertinoColors.white,
-                                  ),
-                                  const SizedBox(width: 6),
-                                  const Text(
-                                    'Task',
-                                    style: TextStyle(
-                                      fontFamily: '.SF Pro Text',
-                                      fontSize: 15,
-                                      fontWeight: FontWeight.w600,
-                                      color: CupertinoColors.white,
-                                      letterSpacing: -0.2,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
+                            _buildAddTaskButton(),
                           ],
                         ),
                       ],
@@ -645,7 +576,6 @@ class _SummerAITodosState extends State<SummerAITodos> {
     final TextEditingController titleController = TextEditingController();
     final TextEditingController descriptionController = TextEditingController();
 
-    // Get current user
     if (currentUserReference == null) {
       showCupertinoDialog(
         context: context,
@@ -664,187 +594,408 @@ class _SummerAITodosState extends State<SummerAITodos> {
     }
 
     final currentUser = await fsGetUserOnce(currentUserReference!);
-
-    // Note: Group assignment removed for iOS-native dialog simplicity
-
-    // Initialize priority
     String selectedPriority = 'low';
-
-    // Track selected due date (nullable)
     DateTime? selectedDueDate;
+    var isCreating = false;
+    final dueDateFieldKey = GlobalKey();
+    material.OverlayEntry? dueDateOverlay;
+
+    void closeDueDateOverlay() {
+      dueDateOverlay?.remove();
+      dueDateOverlay = null;
+    }
 
     final parentContext = context;
-    final createdItem = await showCupertinoDialog<ActionItemsRecord?>(
+    final createdItem = await material.showDialog<ActionItemsRecord?>(
       context: context,
+      barrierColor: const Color(0x66000000),
       builder: (dialogContext) {
-        return StatefulBuilder(
+        return material.StatefulBuilder(
           builder: (context, setDialogState) {
-            return CupertinoAlertDialog(
-              title: const Text(
-                'Create New Action Item',
-                style: TextStyle(
-                  fontFamily: '.SF Pro Display',
-                  fontSize: 17,
-                  fontWeight: FontWeight.w600,
+            DateTime dateOnly(DateTime d) => DateTime(d.year, d.month, d.day);
+
+            String dueDateLabel() {
+              if (selectedDueDate == null) return 'No due date';
+              return DateFormat('MMM d, yyyy').format(selectedDueDate!);
+            }
+
+            Future<void> openDueDateCalendar() async {
+              final box = dueDateFieldKey.currentContext?.findRenderObject()
+                  as RenderBox?;
+              if (box == null || !box.hasSize) return;
+
+              closeDueDateOverlay();
+
+              final overlayState = material.Overlay.of(context);
+              final overlayBox = overlayState.context.findRenderObject()
+                  as RenderBox;
+              final topLeft =
+                  box.localToGlobal(Offset.zero, ancestor: overlayBox);
+              final fieldWidth = box.size.width;
+              final left = topLeft.dx;
+              final top = topLeft.dy + box.size.height + 6;
+              final panelWidth = fieldWidth.clamp(280.0, 320.0);
+
+              var viewedMonth = DateTime(
+                (selectedDueDate ?? DateTime.now()).year,
+                (selectedDueDate ?? DateTime.now()).month,
+              );
+
+              late material.OverlayEntry entry;
+              entry = material.OverlayEntry(
+                builder: (overlayContext) {
+                  return material.Stack(
+                    children: [
+                      material.Positioned.fill(
+                        child: material.GestureDetector(
+                          behavior: HitTestBehavior.opaque,
+                          onTap: closeDueDateOverlay,
+                          child: const ColoredBox(color: Color(0x00000000)),
+                        ),
+                      ),
+                      material.Positioned(
+                        left: left,
+                        top: top,
+                        width: panelWidth,
+                        child: material.Material(
+                          color: Colors.white,
+                          elevation: 10,
+                          shadowColor: Colors.black26,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            side: const BorderSide(color: Color(0xFFE5E7EB)),
+                          ),
+                          child: material.StatefulBuilder(
+                            builder: (menuContext, setMenuState) {
+                              return _DueDateCalendarPanel(
+                                viewedMonth: viewedMonth,
+                                selectedDate: selectedDueDate,
+                                onViewedMonthChanged: (month) {
+                                  setMenuState(() => viewedMonth = month);
+                                },
+                                onSelected: (date) {
+                                  setDialogState(
+                                      () => selectedDueDate = date);
+                                  closeDueDateOverlay();
+                                },
+                                onClear: () {
+                                  setDialogState(
+                                      () => selectedDueDate = null);
+                                  closeDueDateOverlay();
+                                },
+                                onToday: () {
+                                  final today = dateOnly(DateTime.now());
+                                  setDialogState(() {
+                                    selectedDueDate = today;
+                                  });
+                                  closeDueDateOverlay();
+                                },
+                              );
+                            },
+                          ),
+                        ),
+                      ),
+                    ],
+                  );
+                },
+              );
+              dueDateOverlay = entry;
+              overlayState.insert(entry);
+            }
+
+            Future<void> createTask() async {
+              if (isCreating) return;
+              if (titleController.text.trim().isEmpty) {
+                if (parentContext.mounted) {
+                  material.ScaffoldMessenger.of(parentContext).showSnackBar(
+                    const material.SnackBar(
+                      content: Text('Please enter a task title'),
+                      backgroundColor: Color(0xFFEF4444),
+                    ),
+                  );
+                }
+                return;
+              }
+
+              setDialogState(() => isCreating = true);
+              try {
+                final now = DateTime.now();
+                final actionItemData = createActionItemsRecordData(
+                  title: titleController.text.trim(),
+                  groupName: '',
+                  priority: selectedPriority,
+                  status: 'pending',
+                  userRef: currentUser.reference,
+                  workspaceRef: currentUser.currentWorkspaceRef,
+                  chatRef: null,
+                  involvedPeople: [currentUser.displayName],
+                  createdTime: now,
+                  lastSummaryAt: now,
+                  dueDate: selectedDueDate,
+                  description: descriptionController.text.trim(),
+                );
+
+                final ref = await fsCreateActionItem(actionItemData);
+                final newItem = ActionItemsRecord.getDocumentFromData(
+                  actionItemData,
+                  ref,
+                );
+
+                if (dialogContext.mounted) {
+                  Navigator.pop(dialogContext, newItem);
+                }
+              } catch (e) {
+                setDialogState(() => isCreating = false);
+                if (parentContext.mounted) {
+                  material.ScaffoldMessenger.of(parentContext).showSnackBar(
+                    material.SnackBar(
+                      content: Text('Error creating action item: $e'),
+                      backgroundColor: const Color(0xFFEF4444),
+                    ),
+                  );
+                }
+              }
+            }
+
+            Widget priorityChip(String value, String label) {
+              final selected = selectedPriority == value;
+              return material.Expanded(
+                child: material.InkWell(
+                  onTap: isCreating
+                      ? null
+                      : () => setDialogState(() => selectedPriority = value),
+                  borderRadius: BorderRadius.circular(10),
+                  child: Container(
+                    height: 40,
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(
+                      color: selected
+                          ? const Color(0xFFDBEAFE)
+                          : Colors.white,
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(
+                        color: selected
+                            ? const Color(0xFF93C5FD)
+                            : const Color(0xFFE5E7EB),
+                      ),
+                    ),
+                    child: Text(
+                      label,
+                      style: TextStyle(
+                        fontFamily: 'Inter',
+                        fontSize: 14,
+                        fontWeight: FontWeight.w500,
+                        color: selected
+                            ? const Color(0xFF1D4ED8)
+                            : const Color(0xFF374151),
+                      ),
+                    ),
+                  ),
                 ),
+              );
+            }
+
+            material.InputDecoration fieldDecoration(String hint) {
+              return material.InputDecoration(
+                hintText: hint,
+                hintStyle: const TextStyle(
+                  fontFamily: 'Inter',
+                  fontSize: 14,
+                  color: Color(0xFF9CA3AF),
+                ),
+                filled: true,
+                fillColor: Colors.white,
+                contentPadding:
+                    const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                border: material.OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(10),
+                  borderSide: const BorderSide(color: Color(0xFFE5E7EB)),
+                ),
+                enabledBorder: material.OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(10),
+                  borderSide: const BorderSide(color: Color(0xFFE5E7EB)),
+                ),
+                focusedBorder: material.OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(10),
+                  borderSide:
+                      const BorderSide(color: Color(0xFF3B82F6), width: 1.5),
+                ),
+              );
+            }
+
+            const labelStyle = TextStyle(
+              fontFamily: 'Inter',
+              fontSize: 13,
+              fontWeight: FontWeight.w500,
+              color: Color(0xFF374151),
+            );
+
+            return material.Dialog(
+              backgroundColor: Colors.white,
+              insetPadding:
+                  const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
               ),
-              content: SizedBox(
-                width: double.maxFinite,
-                child: SingleChildScrollView(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 440),
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(24, 24, 24, 20),
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       const Text(
-                        'Title',
+                        'New task',
                         style: TextStyle(
-                          fontFamily: '.SF Pro Text',
-                          fontSize: 15,
-                          fontWeight: FontWeight.w600,
+                          fontFamily: 'Inter',
+                          fontSize: 22,
+                          fontWeight: FontWeight.w700,
+                          color: Color(0xFF111827),
                         ),
                       ),
+                      const SizedBox(height: 20),
+                      const Text('Title', style: labelStyle),
                       const SizedBox(height: 8),
-                      CupertinoTextField(
+                      material.TextField(
                         controller: titleController,
                         autofocus: true,
-                        maxLines: 2,
-                        placeholder: 'Enter task title',
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          color: CupertinoColors.systemGrey6,
-                          borderRadius: BorderRadius.circular(8),
-                        ),
+                        enabled: !isCreating,
                         style: const TextStyle(
-                          fontFamily: '.SF Pro Text',
-                          fontSize: 17,
+                          fontFamily: 'Inter',
+                          fontSize: 14,
+                          color: Color(0xFF111827),
                         ),
+                        decoration:
+                            fieldDecoration('What needs to get done?'),
                       ),
-                      const SizedBox(height: 24),
-                      const Text(
-                        'Description (Optional)',
-                        style: TextStyle(
-                          fontFamily: '.SF Pro Text',
-                          fontSize: 15,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
+                      const SizedBox(height: 16),
+                      const Text('Priority', style: labelStyle),
                       const SizedBox(height: 8),
-                      CupertinoTextField(
-                        controller: descriptionController,
-                        maxLines: 4,
-                        placeholder: 'Enter task description',
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          color: CupertinoColors.systemGrey6,
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        style: const TextStyle(
-                          fontFamily: '.SF Pro Text',
-                          fontSize: 15,
-                        ),
-                      ),
-                      const SizedBox(height: 24),
-                      const Text(
-                        'Priority',
-                        style: TextStyle(
-                          fontFamily: '.SF Pro Text',
-                          fontSize: 15,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                      const SizedBox(height: 12),
-                      CupertinoPicker(
-                        itemExtent: 32,
-                        scrollController: FixedExtentScrollController(
-                          initialItem: ['low', 'moderate', 'high', 'urgent']
-                              .indexOf(selectedPriority),
-                        ),
-                        onSelectedItemChanged: (index) {
-                          setDialogState(() {
-                            selectedPriority =
-                                ['low', 'moderate', 'high', 'urgent'][index];
-                          });
-                        },
-                        children: const [
-                          Text('Low'),
-                          Text('Moderate'),
-                          Text('High'),
-                          Text('Urgent'),
-                        ],
-                      ),
-                      const SizedBox(height: 24),
-                      const Text(
-                        'Due Date (Optional)',
-                        style: TextStyle(
-                          fontFamily: '.SF Pro Text',
-                          fontSize: 15,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                      const SizedBox(height: 12),
                       Row(
                         children: [
-                          Expanded(
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: 12, vertical: 12),
-                              decoration: BoxDecoration(
-                                color: CupertinoColors.systemGrey6,
-                                borderRadius: BorderRadius.circular(8),
+                          priorityChip('low', 'Low'),
+                          const SizedBox(width: 8),
+                          priorityChip('moderate', 'Medium'),
+                          const SizedBox(width: 8),
+                          priorityChip('high', 'High'),
+                        ],
+                      ),
+                      const SizedBox(height: 16),
+                      const Text('Due date (optional)', style: labelStyle),
+                      const SizedBox(height: 8),
+                      material.InkWell(
+                        key: dueDateFieldKey,
+                        onTap: isCreating ? null : openDueDateCalendar,
+                        borderRadius: BorderRadius.circular(10),
+                        child: Container(
+                          height: 44,
+                          padding: const EdgeInsets.symmetric(horizontal: 12),
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(10),
+                            border:
+                                Border.all(color: const Color(0xFFE5E7EB)),
+                          ),
+                          child: Row(
+                            children: [
+                              const material.Icon(
+                                material.Icons.calendar_today_outlined,
+                                size: 18,
+                                color: Color(0xFF6B7280),
                               ),
-                              child: Text(
-                                selectedDueDate != null
-                                    ? DateFormat('MMM dd, yyyy')
-                                        .format(selectedDueDate!)
-                                    : 'No due date',
-                                style: const TextStyle(
-                                  fontFamily: '.SF Pro Text',
-                                  fontSize: 15,
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: Text(
+                                  dueDateLabel(),
+                                  style: TextStyle(
+                                    fontFamily: 'Inter',
+                                    fontSize: 14,
+                                    color: selectedDueDate != null
+                                        ? const Color(0xFF111827)
+                                        : const Color(0xFF6B7280),
+                                  ),
                                 ),
+                              ),
+                              const material.Icon(
+                                material.Icons.keyboard_arrow_down,
+                                size: 20,
+                                color: Color(0xFF9CA3AF),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      const Text('Description (optional)', style: labelStyle),
+                      const SizedBox(height: 8),
+                      material.TextField(
+                        controller: descriptionController,
+                        enabled: !isCreating,
+                        maxLines: 4,
+                        style: const TextStyle(
+                          fontFamily: 'Inter',
+                          fontSize: 14,
+                          color: Color(0xFF111827),
+                        ),
+                        decoration: fieldDecoration('Add more detail'),
+                      ),
+                      const SizedBox(height: 24),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.end,
+                        children: [
+                          material.OutlinedButton(
+                            onPressed: isCreating
+                                ? null
+                                : () => Navigator.pop(dialogContext),
+                            style: material.OutlinedButton.styleFrom(
+                              foregroundColor: const Color(0xFF111827),
+                              side: const BorderSide(color: Color(0xFFE5E7EB)),
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 16, vertical: 12),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                            ),
+                            child: const Text(
+                              'Cancel',
+                              style: TextStyle(
+                                fontFamily: 'Inter',
+                                fontSize: 14,
+                                fontWeight: FontWeight.w500,
                               ),
                             ),
                           ),
-                          const SizedBox(width: 12),
-                          CupertinoButton(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 12, vertical: 8),
-                            color: CupertinoColors.systemGrey6,
-                            onPressed: () async {
-                              final now = DateTime.now();
-                              await showCupertinoModalPopup<DateTime>(
-                                context: context,
-                                builder: (context) => Container(
-                                  height: 216,
-                                  padding: const EdgeInsets.only(top: 6),
-                                  margin: EdgeInsets.only(
-                                    bottom: MediaQuery.of(context)
-                                        .viewInsets
-                                        .bottom,
-                                  ),
-                                  color: CupertinoColors.systemBackground
-                                      .resolveFrom(context),
-                                  child: SafeArea(
-                                    top: false,
-                                    child: CupertinoDatePicker(
-                                      initialDateTime: selectedDueDate ?? now,
-                                      minimumDate: DateTime(now.year - 5),
-                                      maximumDate: DateTime(now.year + 10),
-                                      mode: CupertinoDatePickerMode.date,
-                                      use24hFormat: true,
-                                      onDateTimeChanged: (DateTime newDate) {
-                                        setDialogState(() {
-                                          selectedDueDate = DateTime(
-                                              newDate.year,
-                                              newDate.month,
-                                              newDate.day);
-                                        });
-                                      },
+                          const SizedBox(width: 10),
+                          material.ElevatedButton(
+                            onPressed: isCreating ? null : createTask,
+                            style: material.ElevatedButton.styleFrom(
+                              backgroundColor: const Color(0xFF3B82F6),
+                              foregroundColor: Colors.white,
+                              elevation: 0,
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 16, vertical: 12),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                            ),
+                            child: isCreating
+                                ? const SizedBox(
+                                    width: 16,
+                                    height: 16,
+                                    child: material.CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                      color: Colors.white,
+                                    ),
+                                  )
+                                : const Text(
+                                    'Create Task',
+                                    style: TextStyle(
+                                      fontFamily: 'Inter',
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.w600,
                                     ),
                                   ),
-                                ),
-                              );
-                            },
-                            child: const Text('Pick date'),
                           ),
                         ],
                       ),
@@ -852,84 +1003,13 @@ class _SummerAITodosState extends State<SummerAITodos> {
                   ),
                 ),
               ),
-              actions: [
-                CupertinoDialogAction(
-                  child: const Text('Cancel'),
-                  onPressed: () => Navigator.pop(context),
-                ),
-                CupertinoDialogAction(
-                  isDefaultAction: true,
-                  onPressed: () async {
-                    if (titleController.text.trim().isEmpty) {
-                      showCupertinoDialog(
-                        context: context,
-                        builder: (context) => CupertinoAlertDialog(
-                          title: const Text('Error'),
-                          content: const Text('Please enter a task title'),
-                          actions: [
-                            CupertinoDialogAction(
-                              child: const Text('OK'),
-                              onPressed: () => Navigator.pop(context),
-                            ),
-                          ],
-                        ),
-                      );
-                      return;
-                    }
-
-                    try {
-                      final now = DateTime.now();
-
-                      final actionItemData = createActionItemsRecordData(
-                        title: titleController.text.trim(),
-                        groupName: '',
-                        priority: selectedPriority,
-                        status: 'pending',
-                        userRef: currentUser.reference,
-                        workspaceRef: currentUser.currentWorkspaceRef,
-                        chatRef: null,
-                        involvedPeople: [currentUser.displayName],
-                        createdTime: now,
-                        lastSummaryAt: now,
-                        dueDate: selectedDueDate,
-                        description: descriptionController.text.trim(),
-                      );
-
-                      final ref = await fsCreateActionItem(actionItemData);
-                      final newItem = ActionItemsRecord.getDocumentFromData(
-                        actionItemData,
-                        ref,
-                      );
-
-                      if (dialogContext.mounted) {
-                        Navigator.pop(dialogContext, newItem);
-                      }
-                    } catch (e) {
-                      if (dialogContext.mounted) {
-                        showCupertinoDialog(
-                          context: dialogContext,
-                          builder: (errorContext) => CupertinoAlertDialog(
-                            title: const Text('Error'),
-                            content: Text('Error creating action item: $e'),
-                            actions: [
-                              CupertinoDialogAction(
-                                child: const Text('OK'),
-                                onPressed: () => Navigator.pop(errorContext),
-                              ),
-                            ],
-                          ),
-                        );
-                      }
-                    }
-                  },
-                  child: const Text('Create'),
-                ),
-              ],
             );
           },
         );
       },
     );
+
+    closeDueDateOverlay();
 
     if (createdItem != null && parentContext.mounted) {
       _prependCachedTodo(createdItem);
@@ -1126,11 +1206,20 @@ class _SummerAITodosState extends State<SummerAITodos> {
       final titleKey = todo.title.toLowerCase().trim();
       final chatPath = todo.chatRef?.path;
       setState(() {
-        _cachedTodos?.removeWhere(
-          (t) =>
-              t.title.toLowerCase().trim() == titleKey &&
-              (chatPath == null || t.chatRef?.path == chatPath),
-        );
+        final matchingPaths = (_cachedTodos ?? [])
+            .where(
+              (t) =>
+                  t.reference.path == todo.reference.path ||
+                  (t.title.toLowerCase().trim() == titleKey &&
+                      (chatPath == null || t.chatRef?.path == chatPath)),
+            )
+            .map((t) => t.reference.path);
+        _locallyDeletedTodoPaths.add(todo.reference.path);
+        _locallyDeletedTodoPaths.addAll(matchingPaths);
+        _cachedTodos = (_cachedTodos ?? [])
+            .where(
+                (t) => !_locallyDeletedTodoPaths.contains(t.reference.path))
+            .toList();
       });
       if (mounted) {
         widget.onShowAnnouncement?.call('Action item deleted');
@@ -1148,101 +1237,411 @@ class _SummerAITodosState extends State<SummerAITodos> {
   }
 
   Future<void> _showEditDialog(ActionItemsRecord todo) async {
-    final titleController = material.TextEditingController(text: todo.title);
-    final validPriorities = ['low', 'medium', 'high', 'urgent'];
+    final titleController = TextEditingController(text: todo.title);
+    final descriptionController =
+        TextEditingController(text: todo.description);
     final priorityValue =
         todo.priority.isNotEmpty ? todo.priority.toLowerCase() : 'low';
-    String selectedPriority =
-        validPriorities.contains(priorityValue) ? priorityValue : 'low';
+    String selectedPriority;
+    switch (priorityValue) {
+      case 'high':
+      case 'urgent':
+        selectedPriority = 'high';
+        break;
+      case 'medium':
+      case 'moderate':
+        selectedPriority = 'moderate';
+        break;
+      default:
+        selectedPriority = 'low';
+    }
     DateTime? selectedDueDate = todo.dueDate;
+    var isSaving = false;
+    final dueDateFieldKey = GlobalKey();
+    material.OverlayEntry? dueDateOverlay;
 
+    void closeDueDateOverlay() {
+      dueDateOverlay?.remove();
+      dueDateOverlay = null;
+    }
+
+    final parentContext = context;
     await material.showDialog(
       context: context,
-      builder: (context) {
+      barrierColor: const Color(0x66000000),
+      builder: (dialogContext) {
         return material.StatefulBuilder(
           builder: (context, setDialogState) {
-            return material.AlertDialog(
+            DateTime dateOnly(DateTime d) => DateTime(d.year, d.month, d.day);
+
+            String dueDateLabel() {
+              if (selectedDueDate == null) return 'No due date';
+              return DateFormat('MMM d, yyyy').format(selectedDueDate!);
+            }
+
+            Future<void> openDueDateCalendar() async {
+              final box = dueDateFieldKey.currentContext?.findRenderObject()
+                  as RenderBox?;
+              if (box == null || !box.hasSize) return;
+
+              closeDueDateOverlay();
+
+              final overlayState = material.Overlay.of(context);
+              final overlayBox =
+                  overlayState.context.findRenderObject() as RenderBox;
+              final topLeft =
+                  box.localToGlobal(Offset.zero, ancestor: overlayBox);
+              final fieldWidth = box.size.width;
+              final left = topLeft.dx;
+              final top = topLeft.dy + box.size.height + 6;
+              final panelWidth = fieldWidth.clamp(280.0, 320.0);
+
+              var viewedMonth = DateTime(
+                (selectedDueDate ?? DateTime.now()).year,
+                (selectedDueDate ?? DateTime.now()).month,
+              );
+
+              late material.OverlayEntry entry;
+              entry = material.OverlayEntry(
+                builder: (overlayContext) {
+                  return material.Stack(
+                    children: [
+                      material.Positioned.fill(
+                        child: material.GestureDetector(
+                          behavior: HitTestBehavior.opaque,
+                          onTap: closeDueDateOverlay,
+                          child: const ColoredBox(color: Color(0x00000000)),
+                        ),
+                      ),
+                      material.Positioned(
+                        left: left,
+                        top: top,
+                        width: panelWidth,
+                        child: material.Material(
+                          color: Colors.white,
+                          elevation: 10,
+                          shadowColor: Colors.black26,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            side: const BorderSide(color: Color(0xFFE5E7EB)),
+                          ),
+                          child: material.StatefulBuilder(
+                            builder: (menuContext, setMenuState) {
+                              return _DueDateCalendarPanel(
+                                viewedMonth: viewedMonth,
+                                selectedDate: selectedDueDate,
+                                onViewedMonthChanged: (month) {
+                                  setMenuState(() => viewedMonth = month);
+                                },
+                                onSelected: (date) {
+                                  setDialogState(
+                                      () => selectedDueDate = date);
+                                  closeDueDateOverlay();
+                                },
+                                onClear: () {
+                                  setDialogState(
+                                      () => selectedDueDate = null);
+                                  closeDueDateOverlay();
+                                },
+                                onToday: () {
+                                  final today = dateOnly(DateTime.now());
+                                  setDialogState(() {
+                                    selectedDueDate = today;
+                                  });
+                                  closeDueDateOverlay();
+                                },
+                              );
+                            },
+                          ),
+                        ),
+                      ),
+                    ],
+                  );
+                },
+              );
+              dueDateOverlay = entry;
+              overlayState.insert(entry);
+            }
+
+            Future<void> saveTask() async {
+              if (isSaving) return;
+              final title = titleController.text.trim();
+              if (title.isEmpty) {
+                if (parentContext.mounted) {
+                  material.ScaffoldMessenger.of(parentContext).showSnackBar(
+                    const material.SnackBar(
+                      content: Text('Please enter a task title'),
+                      backgroundColor: Color(0xFFEF4444),
+                    ),
+                  );
+                }
+                return;
+              }
+
+              setDialogState(() => isSaving = true);
+              try {
+                await fsPatchDocument(todo.reference, {
+                  'title': title,
+                  'priority': selectedPriority,
+                  'due_date': selectedDueDate,
+                  'description': descriptionController.text.trim(),
+                });
+                if (dialogContext.mounted) {
+                  Navigator.pop(dialogContext);
+                }
+              } catch (e) {
+                setDialogState(() => isSaving = false);
+                if (parentContext.mounted) {
+                  material.ScaffoldMessenger.of(parentContext).showSnackBar(
+                    material.SnackBar(
+                      content: Text('Error updating task: $e'),
+                      backgroundColor: const Color(0xFFEF4444),
+                    ),
+                  );
+                }
+              }
+            }
+
+            Widget priorityChip(String value, String label) {
+              final selected = selectedPriority == value;
+              return material.Expanded(
+                child: material.InkWell(
+                  onTap: isSaving
+                      ? null
+                      : () => setDialogState(() => selectedPriority = value),
+                  borderRadius: BorderRadius.circular(10),
+                  child: Container(
+                    height: 40,
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(
+                      color: selected
+                          ? const Color(0xFFDBEAFE)
+                          : Colors.white,
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(
+                        color: selected
+                            ? const Color(0xFF93C5FD)
+                            : const Color(0xFFE5E7EB),
+                      ),
+                    ),
+                    child: Text(
+                      label,
+                      style: TextStyle(
+                        fontFamily: 'Inter',
+                        fontSize: 14,
+                        fontWeight: FontWeight.w500,
+                        color: selected
+                            ? const Color(0xFF1D4ED8)
+                            : const Color(0xFF374151),
+                      ),
+                    ),
+                  ),
+                ),
+              );
+            }
+
+            material.InputDecoration fieldDecoration(String hint) {
+              return material.InputDecoration(
+                hintText: hint,
+                hintStyle: const TextStyle(
+                  fontFamily: 'Inter',
+                  fontSize: 14,
+                  color: Color(0xFF9CA3AF),
+                ),
+                filled: true,
+                fillColor: Colors.white,
+                contentPadding:
+                    const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                border: material.OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(10),
+                  borderSide: const BorderSide(color: Color(0xFFE5E7EB)),
+                ),
+                enabledBorder: material.OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(10),
+                  borderSide: const BorderSide(color: Color(0xFFE5E7EB)),
+                ),
+                focusedBorder: material.OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(10),
+                  borderSide:
+                      const BorderSide(color: Color(0xFF3B82F6), width: 1.5),
+                ),
+              );
+            }
+
+            const labelStyle = TextStyle(
+              fontFamily: 'Inter',
+              fontSize: 13,
+              fontWeight: FontWeight.w500,
+              color: Color(0xFF374151),
+            );
+
+            return material.Dialog(
               backgroundColor: Colors.white,
+              insetPadding:
+                  const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(16),
               ),
-              title: const Text('Edit Task'),
-              content: SizedBox(
-                width: double.maxFinite,
-                child: SingleChildScrollView(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 440),
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(24, 24, 24, 20),
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
+                      const Text(
+                        'Edit task',
+                        style: TextStyle(
+                          fontFamily: 'Inter',
+                          fontSize: 22,
+                          fontWeight: FontWeight.w700,
+                          color: Color(0xFF111827),
+                        ),
+                      ),
+                      const SizedBox(height: 20),
+                      const Text('Title', style: labelStyle),
+                      const SizedBox(height: 8),
                       material.TextField(
                         controller: titleController,
                         autofocus: true,
-                        maxLines: 3,
-                        decoration: const material.InputDecoration(
-                          hintText: 'Enter task title',
-                          border: material.OutlineInputBorder(),
+                        enabled: !isSaving,
+                        style: const TextStyle(
+                          fontFamily: 'Inter',
+                          fontSize: 14,
+                          color: Color(0xFF111827),
                         ),
+                        decoration:
+                            fieldDecoration('What needs to get done?'),
                       ),
                       const SizedBox(height: 16),
-                      material.DropdownButtonFormField<String>(
-                        value: selectedPriority,
-                        decoration: const material.InputDecoration(
-                          labelText: 'Priority',
-                          border: material.OutlineInputBorder(),
-                        ),
-                        items: validPriorities
-                            .map(
-                              (p) => material.DropdownMenuItem(
-                                value: p,
-                                child: Text(
-                                  p[0].toUpperCase() + p.substring(1),
-                                ),
-                              ),
-                            )
-                            .toList(),
-                        onChanged: (value) {
-                          if (value != null) {
-                            setDialogState(() => selectedPriority = value);
-                          }
-                        },
-                      ),
-                      const SizedBox(height: 16),
+                      const Text('Priority', style: labelStyle),
+                      const SizedBox(height: 8),
                       Row(
                         children: [
-                          Expanded(
-                            child: material.OutlinedButton.icon(
-                              onPressed: () async {
-                                final picked = await material.showDatePicker(
-                                  context: context,
-                                  initialDate:
-                                      selectedDueDate ?? DateTime.now(),
-                                  firstDate: DateTime(2020),
-                                  lastDate: DateTime(2100),
-                                );
-                                if (picked != null) {
-                                  setDialogState(
-                                      () => selectedDueDate = picked);
-                                }
-                              },
-                              icon: material.Icon(
+                          priorityChip('low', 'Low'),
+                          const SizedBox(width: 8),
+                          priorityChip('moderate', 'Medium'),
+                          const SizedBox(width: 8),
+                          priorityChip('high', 'High'),
+                        ],
+                      ),
+                      const SizedBox(height: 16),
+                      const Text('Due date (optional)', style: labelStyle),
+                      const SizedBox(height: 8),
+                      material.InkWell(
+                        key: dueDateFieldKey,
+                        onTap: isSaving ? null : openDueDateCalendar,
+                        borderRadius: BorderRadius.circular(10),
+                        child: Container(
+                          height: 44,
+                          padding: const EdgeInsets.symmetric(horizontal: 12),
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(10),
+                            border:
+                                Border.all(color: const Color(0xFFE5E7EB)),
+                          ),
+                          child: Row(
+                            children: [
+                              const material.Icon(
                                 material.Icons.calendar_today_outlined,
+                                size: 18,
+                                color: Color(0xFF6B7280),
                               ),
-                              label: Text(
-                                selectedDueDate != null
-                                    ? DateFormat('MMM dd, yyyy')
-                                        .format(selectedDueDate!)
-                                    : 'Set due date',
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: Text(
+                                  dueDateLabel(),
+                                  style: TextStyle(
+                                    fontFamily: 'Inter',
+                                    fontSize: 14,
+                                    color: selectedDueDate != null
+                                        ? const Color(0xFF111827)
+                                        : const Color(0xFF6B7280),
+                                  ),
+                                ),
+                              ),
+                              const material.Icon(
+                                material.Icons.keyboard_arrow_down,
+                                size: 20,
+                                color: Color(0xFF9CA3AF),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      const Text('Description (optional)', style: labelStyle),
+                      const SizedBox(height: 8),
+                      material.TextField(
+                        controller: descriptionController,
+                        enabled: !isSaving,
+                        maxLines: 4,
+                        style: const TextStyle(
+                          fontFamily: 'Inter',
+                          fontSize: 14,
+                          color: Color(0xFF111827),
+                        ),
+                        decoration: fieldDecoration('Add more detail'),
+                      ),
+                      const SizedBox(height: 24),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.end,
+                        children: [
+                          material.OutlinedButton(
+                            onPressed: isSaving
+                                ? null
+                                : () => Navigator.pop(dialogContext),
+                            style: material.OutlinedButton.styleFrom(
+                              foregroundColor: const Color(0xFF111827),
+                              side:
+                                  const BorderSide(color: Color(0xFFE5E7EB)),
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 16, vertical: 12),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                            ),
+                            child: const Text(
+                              'Cancel',
+                              style: TextStyle(
+                                fontFamily: 'Inter',
+                                fontSize: 14,
+                                fontWeight: FontWeight.w500,
                               ),
                             ),
                           ),
-                          const SizedBox(width: 8),
-                          material.OutlinedButton(
-                            onPressed: selectedDueDate == null
-                                ? null
-                                : () => setDialogState(
-                                      () => selectedDueDate = null,
+                          const SizedBox(width: 10),
+                          material.ElevatedButton(
+                            onPressed: isSaving ? null : saveTask,
+                            style: material.ElevatedButton.styleFrom(
+                              backgroundColor: const Color(0xFF3B82F6),
+                              foregroundColor: Colors.white,
+                              elevation: 0,
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 16, vertical: 12),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                            ),
+                            child: isSaving
+                                ? const SizedBox(
+                                    width: 16,
+                                    height: 16,
+                                    child: material.CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                      color: Colors.white,
                                     ),
-                            child: const Text('Clear'),
+                                  )
+                                : const Text(
+                                    'Save Task',
+                                    style: TextStyle(
+                                      fontFamily: 'Inter',
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
                           ),
                         ],
                       ),
@@ -1250,44 +1649,15 @@ class _SummerAITodosState extends State<SummerAITodos> {
                   ),
                 ),
               ),
-              actions: [
-                material.TextButton(
-                  onPressed: () => Navigator.pop(context),
-                  child: const Text('Cancel'),
-                ),
-                material.ElevatedButton(
-                  onPressed: () async {
-                    final title = titleController.text.trim();
-                    if (title.isEmpty) return;
-
-                    try {
-                      await fsPatchDocument(todo.reference, {
-                        'title': title,
-                        'priority': selectedPriority,
-                        'due_date': selectedDueDate,
-                      });
-                      if (context.mounted) Navigator.pop(context);
-                    } catch (e) {
-                      if (context.mounted) {
-                        material.ScaffoldMessenger.of(context).showSnackBar(
-                          material.SnackBar(
-                            content: Text('Error updating task: $e'),
-                            backgroundColor: material.Colors.red,
-                          ),
-                        );
-                      }
-                    }
-                  },
-                  child: const Text('Save'),
-                ),
-              ],
             );
           },
         );
       },
     );
 
+    closeDueDateOverlay();
     titleController.dispose();
+    descriptionController.dispose();
   }
 
   Widget _buildTodoRow(
@@ -1307,6 +1677,7 @@ class _SummerAITodosState extends State<SummerAITodos> {
       opacity: opacity,
       child: Container(
         margin: const EdgeInsets.only(bottom: 12),
+        clipBehavior: Clip.antiAlias,
         decoration: BoxDecoration(
           color: CupertinoColors.white,
           borderRadius: BorderRadius.circular(16),
@@ -1330,22 +1701,15 @@ class _SummerAITodosState extends State<SummerAITodos> {
           ],
         ),
         child: Stack(
-          clipBehavior: Clip.none,
           children: [
-            // Left accent border
+            // Left accent — clipped by the card's border radius
             Positioned(
               left: 0,
               top: 0,
               bottom: 0,
               child: Container(
                 width: 4,
-                decoration: BoxDecoration(
-                  color: priorityColor,
-                  borderRadius: const BorderRadius.only(
-                    topLeft: Radius.circular(16),
-                    bottomLeft: Radius.circular(16),
-                  ),
-                ),
+                color: priorityColor,
               ),
             ),
             Padding(
@@ -1397,6 +1761,27 @@ class _SummerAITodosState extends State<SummerAITodos> {
                             _buildPeopleAvatars(todo),
                           ],
                         ),
+                        if (todo.description.trim().isNotEmpty) ...[
+                          const SizedBox(height: 6),
+                          Text(
+                            todo.description.trim(),
+                            style: TextStyle(
+                              fontFamily: '.SF Pro Display',
+                              fontSize: 13,
+                              fontWeight: FontWeight.w400,
+                              color: todo.status == 'completed'
+                                  ? const Color(0xFF94A3B8)
+                                  : const Color(0xFF64748B),
+                              decoration: todo.status == 'completed'
+                                  ? TextDecoration.lineThrough
+                                  : TextDecoration.none,
+                              decorationColor: const Color(0xFF94A3B8),
+                              height: 1.35,
+                            ),
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ],
                         const SizedBox(height: 12),
                         Row(
                           crossAxisAlignment: CrossAxisAlignment.center,
@@ -1761,9 +2146,44 @@ class _SummerAITodosState extends State<SummerAITodos> {
   }
 
   bool _hasActiveFilters() {
-    return _selectedPriority != null ||
-        _selectedDueDateFilter != null ||
-        (_selectedGroupName != null && _selectedGroupName!.isNotEmpty);
+    return _selectedPriority != null || _selectedDueDateFilter != null;
+  }
+
+  Widget _buildAddTaskButton() {
+    return material.Material(
+      color: Colors.transparent,
+      child: material.InkWell(
+        onTap: _showAddNewDialog,
+        borderRadius: BorderRadius.circular(10),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+          decoration: BoxDecoration(
+            color: const Color(0xFF3B82F6),
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: const Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              material.Icon(
+                material.Icons.add,
+                size: 16,
+                color: Colors.white,
+              ),
+              SizedBox(width: 6),
+              Text(
+                'Task',
+                style: TextStyle(
+                  fontFamily: 'Inter',
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                  color: Colors.white,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 
   Widget _buildFilterDropdown() {
@@ -1771,8 +2191,6 @@ class _SummerAITodosState extends State<SummerAITodos> {
       hasActiveFilters: _hasActiveFilters(),
       selectedPriority: _selectedPriority,
       selectedDueDateFilter: _selectedDueDateFilter,
-      selectedGroupName: _selectedGroupName,
-      cachedTodos: _cachedTodos,
       onPriorityChanged: (value) {
         setState(() {
           _selectedPriority = value;
@@ -1783,16 +2201,10 @@ class _SummerAITodosState extends State<SummerAITodos> {
           _selectedDueDateFilter = value;
         });
       },
-      onGroupNameChanged: (value) {
-        setState(() {
-          _selectedGroupName = value;
-        });
-      },
       onClearAll: () {
         setState(() {
           _selectedPriority = null;
           _selectedDueDateFilter = null;
-          _selectedGroupName = null;
         });
       },
     );
@@ -1927,22 +2339,16 @@ class _FilterDropdownButton extends StatefulWidget {
   final bool hasActiveFilters;
   final String? selectedPriority;
   final String? selectedDueDateFilter;
-  final String? selectedGroupName;
-  final List<ActionItemsRecord>? cachedTodos;
   final Function(String?) onPriorityChanged;
   final Function(String?) onDueDateChanged;
-  final Function(String?) onGroupNameChanged;
   final VoidCallback onClearAll;
 
   const _FilterDropdownButton({
     required this.hasActiveFilters,
     required this.selectedPriority,
     required this.selectedDueDateFilter,
-    required this.selectedGroupName,
-    required this.cachedTodos,
     required this.onPriorityChanged,
     required this.onDueDateChanged,
-    required this.onGroupNameChanged,
     required this.onClearAll,
   });
 
@@ -1953,8 +2359,30 @@ class _FilterDropdownButton extends StatefulWidget {
 class _FilterDropdownButtonState extends State<_FilterDropdownButton> {
   OverlayEntry? _overlayEntry;
   bool _isOpen = false;
-  final TextEditingController _searchController = TextEditingController();
-  String _searchQuery = '';
+
+  static const _labelStyle = TextStyle(
+    fontFamily: 'Inter',
+    fontSize: 13,
+    fontWeight: FontWeight.w500,
+    color: Color(0xFF374151),
+  );
+
+  @override
+  void didUpdateWidget(covariant _FilterDropdownButton oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (_overlayEntry == null) return;
+    if (oldWidget.selectedPriority == widget.selectedPriority &&
+        oldWidget.selectedDueDateFilter == widget.selectedDueDateFilter &&
+        oldWidget.hasActiveFilters == widget.hasActiveFilters) {
+      return;
+    }
+    // Parent setState rebuilds StreamBuilder; marking the overlay dirty during
+    // that build throws. Refresh after the current frame instead.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      _overlayEntry?.markNeedsBuild();
+    });
+  }
 
   void _toggleDropdown() {
     if (_isOpen) {
@@ -1984,172 +2412,188 @@ class _FilterDropdownButtonState extends State<_FilterDropdownButton> {
 
   OverlayEntry _createOverlayEntry() {
     return OverlayEntry(
-      builder: (context) => GestureDetector(
-        onTap: () => _closeDropdown(),
-        child: Container(
-          color: CupertinoColors.black.withOpacity(0.3),
-          child: Center(
-            child: GestureDetector(
-              onTap: () {}, // Prevent closing when clicking inside
-              child: Container(
-                width: 300,
-                constraints: const BoxConstraints(maxHeight: 500),
-                decoration: BoxDecoration(
-                  color: CupertinoColors.systemBackground,
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(
-                    color: CupertinoColors.separator,
-                    width: 1,
+      builder: (context) {
+        final maxDialogHeight =
+            MediaQuery.sizeOf(context).height * 0.85;
+        return material.Material(
+          color: const Color(0x66000000),
+          child: material.GestureDetector(
+            onTap: _closeDropdown,
+            behavior: HitTestBehavior.opaque,
+            child: Center(
+              child: material.GestureDetector(
+                onTap: () {},
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(
+                    maxWidth: 440,
+                    maxHeight: maxDialogHeight,
                   ),
-                  boxShadow: [
-                    BoxShadow(
-                      color: CupertinoColors.black.withOpacity(0.15),
-                      blurRadius: 20,
-                      offset: const Offset(0, 8),
-                      spreadRadius: 0,
+                  child: material.Material(
+                    color: Colors.white,
+                    elevation: 0,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16),
                     ),
-                  ],
-                ),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    // Search bar
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 12, vertical: 8),
-                      decoration: BoxDecoration(
-                        border: Border(
-                          bottom: BorderSide(
-                            color: CupertinoColors.separator,
-                            width: 1,
+                    clipBehavior: Clip.antiAlias,
+                    child: SingleChildScrollView(
+                      padding: const EdgeInsets.fromLTRB(24, 24, 24, 20),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            'Filter',
+                            style: TextStyle(
+                              fontFamily: 'Inter',
+                              fontSize: 22,
+                              fontWeight: FontWeight.w700,
+                              color: Color(0xFF111827),
+                            ),
                           ),
-                        ),
-                      ),
-                      child: CupertinoTextField(
-                        controller: _searchController,
-                        onChanged: (value) {
-                          setState(() {
-                            _searchQuery = value.toLowerCase();
-                          });
-                        },
-                        placeholder: 'Search...',
-                        padding: const EdgeInsets.symmetric(vertical: 8),
-                        decoration: BoxDecoration(
-                          color: CupertinoColors.systemGrey6,
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        style: const TextStyle(
-                          fontFamily: '.SF Pro Text',
-                          fontSize: 14,
-                          color: CupertinoColors.label,
-                        ),
-                      ),
-                    ),
-                    // Filter options
-                    Flexible(
-                      child: SingleChildScrollView(
-                        child: Padding(
-                          padding: const EdgeInsets.all(12),
-                          child: Column(
-                            mainAxisSize: MainAxisSize.min,
-                            crossAxisAlignment: CrossAxisAlignment.start,
+                          const SizedBox(height: 20),
+                          _buildFilterSection(
+                            'Priority',
+                            [
+                              _FilterOption('Low', 'low',
+                                  widget.selectedPriority == 'low'),
+                              _FilterOption(
+                                  'Medium',
+                                  'moderate',
+                                  widget.selectedPriority == 'moderate'),
+                              _FilterOption('High', 'high',
+                                  widget.selectedPriority == 'high'),
+                            ],
+                            (value) {
+                              widget.onPriorityChanged(
+                                  value == widget.selectedPriority
+                                      ? null
+                                      : value);
+                            },
+                            equalWidth: true,
+                          ),
+                          const SizedBox(height: 16),
+                          _buildFilterSection(
+                            'Due date',
+                            [
+                              _FilterOption(
+                                  'Has due',
+                                  'has_due',
+                                  widget.selectedDueDateFilter == 'has_due'),
+                              _FilterOption(
+                                  'No due',
+                                  'no_due',
+                                  widget.selectedDueDateFilter == 'no_due'),
+                              _FilterOption(
+                                  'Overdue',
+                                  'overdue',
+                                  widget.selectedDueDateFilter == 'overdue'),
+                              _FilterOption(
+                                  'Today',
+                                  'today',
+                                  widget.selectedDueDateFilter == 'today'),
+                              _FilterOption(
+                                  'This week',
+                                  'this_week',
+                                  widget.selectedDueDateFilter ==
+                                      'this_week'),
+                            ],
+                            (value) {
+                              widget.onDueDateChanged(
+                                  value == widget.selectedDueDateFilter
+                                      ? null
+                                      : value);
+                            },
+                          ),
+                          const SizedBox(height: 24),
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.end,
                             children: [
-                              // Priority section
-                              _buildFilterSection(
-                                'Priority',
-                                [
-                                  _FilterOption('High', 'high',
-                                      widget.selectedPriority == 'high'),
-                                  _FilterOption('Moderate', 'moderate',
-                                      widget.selectedPriority == 'moderate'),
-                                  _FilterOption('Low', 'low',
-                                      widget.selectedPriority == 'low'),
-                                ],
-                                (value) => widget.onPriorityChanged(
-                                    value == widget.selectedPriority
-                                        ? null
-                                        : value),
+                              material.OutlinedButton(
+                                onPressed: widget.onClearAll,
+                                style: material.OutlinedButton.styleFrom(
+                                  foregroundColor: const Color(0xFF111827),
+                                  side: const BorderSide(
+                                      color: Color(0xFFE5E7EB)),
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 16, vertical: 12),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(10),
+                                  ),
+                                ),
+                                child: const Text(
+                                  'Clear all',
+                                  style: TextStyle(
+                                    fontFamily: 'Inter',
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
                               ),
-                              const SizedBox(height: 16),
-                              Container(
-                                height: 1,
-                                color: CupertinoColors.separator,
-                              ),
-                              const SizedBox(height: 16),
-                              // Due Date section
-                              _buildFilterSection(
-                                'Due Date',
-                                [
-                                  _FilterOption(
-                                      'Has Due',
-                                      'has_due',
-                                      widget.selectedDueDateFilter ==
-                                          'has_due'),
-                                  _FilterOption('No Due', 'no_due',
-                                      widget.selectedDueDateFilter == 'no_due'),
-                                  _FilterOption(
-                                      'Overdue',
-                                      'overdue',
-                                      widget.selectedDueDateFilter ==
-                                          'overdue'),
-                                  _FilterOption('Today', 'today',
-                                      widget.selectedDueDateFilter == 'today'),
-                                  _FilterOption(
-                                      'This Week',
-                                      'this_week',
-                                      widget.selectedDueDateFilter ==
-                                          'this_week'),
-                                ],
-                                (value) => widget.onDueDateChanged(
-                                    value == widget.selectedDueDateFilter
-                                        ? null
-                                        : value),
-                              ),
-                              const SizedBox(height: 16),
-                              Container(
-                                height: 1,
-                                color: CupertinoColors.separator,
-                              ),
-                              const SizedBox(height: 16),
-                              // Group Name section
-                              _buildGroupNameSection(),
-                              const SizedBox(height: 12),
-                              Container(
-                                height: 1,
-                                color: CupertinoColors.separator,
-                              ),
-                              const SizedBox(height: 8),
-                              // Clear All button
-                              SizedBox(
-                                width: double.infinity,
-                                child: CupertinoButton(
-                                  padding:
-                                      const EdgeInsets.symmetric(vertical: 8),
-                                  minSize: 0,
-                                  onPressed: () {
-                                    widget.onClearAll();
-                                    _closeDropdown();
-                                  },
-                                  child: const Text(
-                                    'Clear All',
-                                    style: TextStyle(
-                                      fontFamily: '.SF Pro Text',
-                                      fontSize: 13,
-                                      fontWeight: FontWeight.w500,
-                                      color: CupertinoColors.secondaryLabel,
-                                    ),
+                              const SizedBox(width: 10),
+                              material.ElevatedButton(
+                                onPressed: _closeDropdown,
+                                style: material.ElevatedButton.styleFrom(
+                                  backgroundColor: const Color(0xFF3B82F6),
+                                  foregroundColor: Colors.white,
+                                  elevation: 0,
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 16, vertical: 12),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(10),
+                                  ),
+                                ),
+                                child: const Text(
+                                  'Done',
+                                  style: TextStyle(
+                                    fontFamily: 'Inter',
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w600,
                                   ),
                                 ),
                               ),
                             ],
                           ),
-                        ),
+                        ],
                       ),
                     ),
-                  ],
+                  ),
                 ),
               ),
             ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildFilterChip(_FilterOption option, VoidCallback onTap) {
+    return material.InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(10),
+      child: Container(
+        height: 40,
+        padding: const EdgeInsets.symmetric(horizontal: 14),
+        decoration: BoxDecoration(
+          color: option.isSelected
+              ? const Color(0xFFDBEAFE)
+              : Colors.white,
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(
+            color: option.isSelected
+                ? const Color(0xFF93C5FD)
+                : const Color(0xFFE5E7EB),
+          ),
+        ),
+        alignment: Alignment.center,
+        child: Text(
+          option.label,
+          style: TextStyle(
+            fontFamily: 'Inter',
+            fontSize: 14,
+            fontWeight: FontWeight.w500,
+            color: option.isSelected
+                ? const Color(0xFF1D4ED8)
+                : const Color(0xFF374151),
           ),
         ),
       ),
@@ -2157,169 +2601,52 @@ class _FilterDropdownButtonState extends State<_FilterDropdownButton> {
   }
 
   Widget _buildFilterSection(
-      String title, List<_FilterOption> options, Function(String?) onChanged) {
-    final filteredOptions = options.where((opt) {
-      if (_searchQuery.isEmpty) return true;
-      return opt.label.toLowerCase().contains(_searchQuery);
-    }).toList();
-
-    if (filteredOptions.isEmpty) return const SizedBox.shrink();
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Text(
-          title,
-          style: const TextStyle(
-            fontFamily: 'Inter',
-            fontSize: 11,
-            fontWeight: FontWeight.w600,
-            color: Color(0xFF9CA3AF),
-            letterSpacing: 0.5,
-          ),
-        ),
-        const SizedBox(height: 8),
-        Wrap(
-          spacing: 6,
-          runSpacing: 6,
-          children: filteredOptions.map((option) {
-            return CupertinoButton(
-              padding: EdgeInsets.zero,
-              minSize: 0,
-              onPressed: () => onChanged(option.value),
-              child: Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                decoration: BoxDecoration(
-                  color: option.isSelected
-                      ? CupertinoColors.systemBlue
-                      : CupertinoColors.systemGrey6,
-                  borderRadius: BorderRadius.circular(6),
-                  border: Border.all(
-                    color: option.isSelected
-                        ? CupertinoColors.systemBlue
-                        : CupertinoColors.separator,
-                    width: 1,
-                  ),
-                ),
-                child: Text(
-                  option.label,
-                  style: TextStyle(
-                    fontFamily: '.SF Pro Text',
-                    fontSize: 12,
-                    fontWeight: FontWeight.w500,
-                    color: option.isSelected
-                        ? CupertinoColors.white
-                        : CupertinoColors.label,
-                  ),
-                ),
-              ),
-            );
-          }).toList(),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildGroupNameSection() {
-    final groupNames = <String>{};
-    if (widget.cachedTodos != null) {
-      for (var todo in widget.cachedTodos!) {
-        if (todo.groupName.isNotEmpty) {
-          groupNames.add(todo.groupName);
-        }
-      }
-    }
-
-    final sortedGroupNames = groupNames.toList()..sort();
-    final filteredGroups = sortedGroupNames.where((name) {
-      if (_searchQuery.isEmpty) return true;
-      return name.toLowerCase().contains(_searchQuery);
-    }).toList();
+    String title,
+    List<_FilterOption> options,
+    Function(String?) onChanged, {
+    bool equalWidth = false,
+  }) {
+    if (options.isEmpty) return const SizedBox.shrink();
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       mainAxisSize: MainAxisSize.min,
       children: [
-        const Text(
-          'Group Name',
-          style: TextStyle(
-            fontFamily: 'Inter',
-            fontSize: 11,
-            fontWeight: FontWeight.w600,
-            color: Color(0xFF9CA3AF),
-            letterSpacing: 0.5,
-          ),
-        ),
+        Text(title, style: _labelStyle),
         const SizedBox(height: 8),
-        Container(
-          width: double.infinity,
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-          decoration: BoxDecoration(
-            color: CupertinoColors.systemBackground,
-            borderRadius: BorderRadius.circular(6),
-            border: Border.all(
-              color: CupertinoColors.separator,
-              width: 1,
-            ),
-          ),
-          child: CupertinoButton(
-            padding: EdgeInsets.zero,
-            minSize: 0,
-            onPressed: () {
-              showCupertinoModalPopup(
-                context: context,
-                builder: (context) => Container(
-                  height: 200,
-                  child: CupertinoPicker(
-                    itemExtent: 32,
-                    scrollController: FixedExtentScrollController(
-                      initialItem: widget.selectedGroupName == null
-                          ? 0
-                          : filteredGroups.indexOf(widget.selectedGroupName!) +
-                              1,
-                    ),
-                    onSelectedItemChanged: (index) {
-                      widget.onGroupNameChanged(
-                        index == 0 ? null : filteredGroups[index - 1],
-                      );
-                    },
-                    children: [
-                      const Text('All Groups'),
-                      ...filteredGroups.map((name) => Text(name)),
-                    ],
+        if (equalWidth)
+          Row(
+            children: [
+              for (var i = 0; i < options.length; i++) ...[
+                if (i > 0) const SizedBox(width: 8),
+                Expanded(
+                  child: _buildFilterChip(
+                    options[i],
+                    () => onChanged(options[i].value),
                   ),
-                ),
-              );
-            },
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text(
-                  widget.selectedGroupName ?? 'All Groups',
-                  style: const TextStyle(
-                    fontFamily: '.SF Pro Text',
-                    fontSize: 12,
-                    color: CupertinoColors.label,
-                  ),
-                ),
-                const Icon(
-                  CupertinoIcons.chevron_down,
-                  size: 18,
-                  color: CupertinoColors.secondaryLabel,
                 ),
               ],
-            ),
+            ],
+          )
+        else
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: options.map((option) {
+              return IntrinsicWidth(
+                child: _buildFilterChip(
+                  option,
+                  () => onChanged(option.value),
+                ),
+              );
+            }).toList(),
           ),
-        ),
       ],
     );
   }
 
   @override
   void dispose() {
-    _searchController.dispose();
     // Only remove overlay; do not call _closeDropdown() which uses setState (unsafe during dispose)
     _overlayEntry?.remove();
     _overlayEntry = null;
@@ -2334,71 +2661,52 @@ class _FilterDropdownButtonState extends State<_FilterDropdownButton> {
       color: Colors.transparent,
       child: material.InkWell(
         onTap: _toggleDropdown,
-        borderRadius: BorderRadius.circular(20.0),
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(20.0),
-          child: BackdropFilter(
-            filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
-            child: AnimatedContainer(
-              duration: const Duration(milliseconds: 200),
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-              decoration: BoxDecoration(
-                // Liquid Glass effect with semi-transparent background
-                color: isActive
-                    ? CupertinoColors.systemBlue.withOpacity(0.7)
-                    : CupertinoColors.white.withOpacity(0.7),
-                borderRadius: BorderRadius.circular(20.0),
-                border: Border.all(
-                  color: isActive
-                      ? CupertinoColors.systemBlue.withOpacity(0.8)
-                      : CupertinoColors.white.withOpacity(0.8),
-                  width: 1.5,
-                ),
-                boxShadow: [
-                  BoxShadow(
-                    color: CupertinoColors.black.withOpacity(0.1),
-                    blurRadius: 10,
-                    offset: const Offset(0, 4),
-                    spreadRadius: 0,
-                  ),
-                ],
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(
-                    CupertinoIcons.slider_horizontal_3,
-                    size: 16,
-                    color: isActive
-                        ? CupertinoColors.white
-                        : CupertinoColors.systemBlue,
-                  ),
-                  const SizedBox(width: 6),
-                  Text(
-                    'Filter',
-                    style: TextStyle(
-                      fontFamily: '.SF Pro Text',
-                      fontSize: 14,
-                      fontWeight: FontWeight.w600,
-                      color: isActive
-                          ? CupertinoColors.white
-                          : CupertinoColors.systemBlue,
-                      letterSpacing: -0.2,
-                    ),
-                  ),
-                  const SizedBox(width: 4),
-                  Icon(
-                    _isOpen
-                        ? CupertinoIcons.chevron_up
-                        : CupertinoIcons.chevron_down,
-                    size: 16,
-                    color: isActive
-                        ? CupertinoColors.white
-                        : CupertinoColors.systemBlue,
-                  ),
-                ],
-              ),
+        borderRadius: BorderRadius.circular(10),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 200),
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+          decoration: BoxDecoration(
+            color: isActive ? const Color(0xFFDBEAFE) : Colors.white,
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(
+              color: isActive
+                  ? const Color(0xFF93C5FD)
+                  : const Color(0xFFE5E7EB),
             ),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              material.Icon(
+                material.Icons.tune_rounded,
+                size: 16,
+                color: isActive
+                    ? const Color(0xFF1D4ED8)
+                    : const Color(0xFF374151),
+              ),
+              const SizedBox(width: 6),
+              Text(
+                'Filter',
+                style: TextStyle(
+                  fontFamily: 'Inter',
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                  color: isActive
+                      ? const Color(0xFF1D4ED8)
+                      : const Color(0xFF374151),
+                ),
+              ),
+              const SizedBox(width: 4),
+              material.Icon(
+                _isOpen
+                    ? material.Icons.keyboard_arrow_up
+                    : material.Icons.keyboard_arrow_down,
+                size: 18,
+                color: isActive
+                    ? const Color(0xFF1D4ED8)
+                    : const Color(0xFF9CA3AF),
+              ),
+            ],
           ),
         ),
       ),
@@ -2413,3 +2721,206 @@ class _FilterOption {
 
   _FilterOption(this.label, this.value, this.isSelected);
 }
+
+class _DueDateCalendarPanel extends StatelessWidget {
+  const _DueDateCalendarPanel({
+    required this.viewedMonth,
+    required this.selectedDate,
+    required this.onViewedMonthChanged,
+    required this.onSelected,
+    required this.onClear,
+    required this.onToday,
+  });
+
+  final DateTime viewedMonth;
+  final DateTime? selectedDate;
+  final ValueChanged<DateTime> onViewedMonthChanged;
+  final ValueChanged<DateTime> onSelected;
+  final VoidCallback onClear;
+  final VoidCallback onToday;
+
+  DateTime _dateOnly(DateTime d) => DateTime(d.year, d.month, d.day);
+
+  @override
+  Widget build(BuildContext context) {
+    final firstOfMonth = DateTime(viewedMonth.year, viewedMonth.month, 1);
+    // Sunday-start grid to match the mockup.
+    final startOffset = firstOfMonth.weekday % 7;
+    final daysInMonth =
+        DateTime(viewedMonth.year, viewedMonth.month + 1, 0).day;
+    final today = _dateOnly(DateTime.now());
+    final selected =
+        selectedDate != null ? _dateOnly(selectedDate!) : null;
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Row(
+            children: [
+              material.InkWell(
+                onTap: () => onViewedMonthChanged(
+                  DateTime(viewedMonth.year, viewedMonth.month - 1),
+                ),
+                borderRadius: BorderRadius.circular(16),
+                child: const Padding(
+                  padding: EdgeInsets.all(6),
+                  child: Icon(
+                    CupertinoIcons.chevron_left,
+                    size: 16,
+                    color: Color(0xFF374151),
+                  ),
+                ),
+              ),
+              Expanded(
+                child: Text(
+                  DateFormat('MMMM yyyy').format(firstOfMonth),
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                    fontFamily: 'Inter',
+                    fontSize: 15,
+                    fontWeight: FontWeight.w600,
+                    color: Color(0xFF111827),
+                  ),
+                ),
+              ),
+              material.InkWell(
+                onTap: () => onViewedMonthChanged(
+                  DateTime(viewedMonth.year, viewedMonth.month + 1),
+                ),
+                borderRadius: BorderRadius.circular(16),
+                child: const Padding(
+                  padding: EdgeInsets.all(6),
+                  child: Icon(
+                    CupertinoIcons.chevron_right,
+                    size: 16,
+                    color: Color(0xFF374151),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: const [
+              Expanded(child: Center(child: Text('S', style: _weekdayStyle))),
+              Expanded(child: Center(child: Text('M', style: _weekdayStyle))),
+              Expanded(child: Center(child: Text('T', style: _weekdayStyle))),
+              Expanded(child: Center(child: Text('W', style: _weekdayStyle))),
+              Expanded(child: Center(child: Text('T', style: _weekdayStyle))),
+              Expanded(child: Center(child: Text('F', style: _weekdayStyle))),
+              Expanded(child: Center(child: Text('S', style: _weekdayStyle))),
+            ],
+          ),
+          const SizedBox(height: 8),
+          GridView.builder(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            itemCount: 42,
+            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: 7,
+              mainAxisSpacing: 4,
+              crossAxisSpacing: 4,
+            ),
+            itemBuilder: (context, index) {
+              final dayNum = index - startOffset + 1;
+              if (dayNum < 1 || dayNum > daysInMonth) {
+                return const SizedBox.shrink();
+              }
+              final date =
+                  DateTime(viewedMonth.year, viewedMonth.month, dayNum);
+              final isSelected = selected == date;
+              final isToday = today == date;
+              return material.InkWell(
+                onTap: () => onSelected(date),
+                customBorder: const CircleBorder(),
+                child: Container(
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: isSelected
+                        ? const Color(0xFFDBEAFE)
+                        : Colors.transparent,
+                    border: Border.all(
+                      color: isSelected || isToday
+                          ? const Color(0xFF93C5FD)
+                          : Colors.transparent,
+                    ),
+                  ),
+                  child: Text(
+                    '$dayNum',
+                    style: TextStyle(
+                      fontFamily: 'Inter',
+                      fontSize: 13,
+                      fontWeight:
+                          isSelected ? FontWeight.w600 : FontWeight.w400,
+                      color: const Color(0xFF111827),
+                    ),
+                  ),
+                ),
+              );
+            },
+          ),
+          const SizedBox(height: 8),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              material.OutlinedButton(
+                onPressed: onClear,
+                style: material.OutlinedButton.styleFrom(
+                  foregroundColor: const Color(0xFF374151),
+                  side: const BorderSide(color: Color(0xFFE5E7EB)),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                  minimumSize: const Size(88, 40),
+                  tapTargetSize: material.MaterialTapTargetSize.shrinkWrap,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                ),
+                child: const Text(
+                  'Clear',
+                  style: TextStyle(
+                    fontFamily: 'Inter',
+                    fontSize: 13,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ),
+              material.OutlinedButton(
+                onPressed: onToday,
+                style: material.OutlinedButton.styleFrom(
+                  foregroundColor: const Color(0xFF374151),
+                  side: const BorderSide(color: Color(0xFFE5E7EB)),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                  minimumSize: const Size(88, 40),
+                  tapTargetSize: material.MaterialTapTargetSize.shrinkWrap,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                ),
+                child: const Text(
+                  'Today',
+                  style: TextStyle(
+                    fontFamily: 'Inter',
+                    fontSize: 13,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+const _weekdayStyle = TextStyle(
+  fontFamily: 'Inter',
+  fontSize: 12,
+  fontWeight: FontWeight.w500,
+  color: Color(0xFF9CA3AF),
+);

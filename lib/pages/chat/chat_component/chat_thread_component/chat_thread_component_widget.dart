@@ -73,7 +73,7 @@ class ChatThreadComponentWidget extends StatefulWidget {
 class ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget> {
   late ChatThreadComponentModel _model;
 
-  final ValueNotifier<bool> translateNotifier = ValueNotifier(false);
+  final ValueNotifier<String?> translateNotifier = ValueNotifier<String?>(null);
 
   // Cache for user display names and photos to avoid "No One" / missing avatar fallback
   final Map<String, String> _userNameCache = {};
@@ -241,6 +241,8 @@ class ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget> {
   }
 
   void triggerTranslate(MessagesRecord message) {
+    translateNotifier.value = null;
+    translateNotifier.value = message.reference.id;
     widget.onTranslateMessage?.call(message);
   }
 

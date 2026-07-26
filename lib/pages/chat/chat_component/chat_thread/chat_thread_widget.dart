@@ -145,41 +145,99 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
   // Stable futures for "reacted by" names so tooltip doesn't show "…" on every rebuild.
   // Global cache survives widget dispose so switching chats and coming back shows names immediately.
   static final Map<String, String> _globalReactionNamesCache = {};
+  /// Persists translations across leaving/re-entering a thread (same app session).
+  /// Key: messageId|content|targetLang → translated text.
+  static final Map<String, String> _globalTranslationCache = {};
   final Map<String, Future<String>> _reactionNamesFutureCache = {};
   ScaffoldMessengerState? _scaffoldMessenger;
   String? _translatedContent;
   bool _isTranslating = false;
   bool _isPreviewOpen = false;
 
+  String _resolveTranslateTargetLang() {
+    var targetLang = FFAppState().translateLanguage;
+    if (targetLang == 'system' || targetLang.isEmpty) {
+      final locale = WidgetsBinding.instance.platformDispatcher.locale;
+      targetLang = locale.languageCode.toLowerCase();
+      final country = locale.countryCode?.toLowerCase();
+      if (targetLang == 'zh' && country != null) {
+        targetLang = (country == 'tw' || country == 'hk') ? 'zh-tw' : 'zh-cn';
+      }
+    } else {
+      targetLang = targetLang.toLowerCase();
+    }
+    if (targetLang.contains('-') &&
+        targetLang != 'zh-cn' &&
+        targetLang != 'zh-tw') {
+      targetLang = targetLang.split('-').first;
+    }
+    return targetLang;
+  }
+
+  String? _translationCacheKey() {
+    final messageId = widget.message?.reference.id;
+    final content = widget.message?.content;
+    if (messageId == null || content == null || content.trim().isEmpty) {
+      return null;
+    }
+    return '$messageId|$content|${_resolveTranslateTargetLang()}';
+  }
+
+  void _restoreCachedTranslation() {
+    final key = _translationCacheKey();
+    if (key == null) return;
+    final cached = _globalTranslationCache[key];
+    if (cached != null) {
+      _translatedContent = cached;
+    }
+  }
+
   Future<void> _translateMessage() async {
     if (_isTranslating) return;
     final content = widget.message?.content;
     if (content == null || content.trim().isEmpty) return;
 
+    final cacheKey = _translationCacheKey();
+    if (cacheKey != null) {
+      final cached = _globalTranslationCache[cacheKey];
+      if (cached != null) {
+        if (!mounted) return;
+        setState(() {
+          _translatedContent = cached;
+          _isTranslating = false;
+        });
+        return;
+      }
+    }
+
     setState(() => _isTranslating = true);
     try {
       final translator = GoogleTranslator();
-      // Use translateLanguage (incoming translation preference), NOT aiTranslationTargetLanguage (outgoing)
-      var targetLang = FFAppState().translateLanguage;
-      // Handle 'system' by detecting device locale
-      if (targetLang == 'system' || targetLang.isEmpty) {
-        final locale = WidgetsBinding.instance.platformDispatcher.locale;
-        targetLang = locale.languageCode;
-        if (locale.countryCode != null && locale.countryCode!.isNotEmpty) {
-          targetLang = '$targetLang-${locale.countryCode!.toLowerCase()}';
-        }
-      }
+      final targetLang = _resolveTranslateTargetLang();
+
       final translation = await translator.translate(
         content,
         to: targetLang,
       );
+      if (cacheKey != null) {
+        _globalTranslationCache[cacheKey] = translation.text;
+      }
+      if (!mounted) return;
       setState(() {
         _translatedContent = translation.text;
         _isTranslating = false;
       });
     } catch (e) {
       debugLog('Translation error: $e');
+      if (!mounted) return;
       setState(() => _isTranslating = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Could not translate this message'),
+          backgroundColor: Color(0xFFEF4444),
+          duration: Duration(seconds: 2),
+        ),
+      );
     }
   }
 
@@ -227,8 +285,9 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
   void initState() {
     super.initState();
     _model = createModel(context, () => ChatThreadModel());
+    _restoreCachedTranslation();
     // Auto-translate if enabled
-    if (FFAppState().autoTranslate) {
+    if (FFAppState().autoTranslate && _translatedContent == null) {
       _translateMessage();
     }
     _chatThreadComponentState = ChatThreadComponentWidget.of(context);
@@ -269,10 +328,14 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
   @override
   void didUpdateWidget(ChatThreadWidget oldWidget) {
     super.didUpdateWidget(oldWidget);
+    if (widget.message?.content != oldWidget.message?.content ||
+        widget.message?.reference.id != oldWidget.message?.reference.id) {
+      _translatedContent = null;
+      _restoreCachedTranslation();
+    }
     // When auto-translate is on, translate if content changed or not yet translated
     if (FFAppState().autoTranslate) {
       if (widget.message?.content != oldWidget.message?.content) {
-        _translatedContent = null;
         _translateMessage();
       } else if (_translatedContent == null &&
           widget.message?.content != null &&
@@ -3722,7 +3785,6 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
                                                                             _translatedContent!,
                                                                             style: FlutterFlowTheme.of(context).bodyMedium.override(
                                                                                   fontFamily: 'Inter',
-                                                                                  fontStyle: FontStyle.italic,
                                                                                   color: Colors.black87,
                                                                                   fontSize: FFAppState().chatFontSize,
                                                                                 ),
@@ -4800,7 +4862,6 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
                                                                             _translatedContent!,
                                                                             style: FlutterFlowTheme.of(context).bodyMedium.override(
                                                                                   fontFamily: 'Inter',
-                                                                                  fontStyle: FontStyle.italic,
                                                                                   color: Colors.black87,
                                                                                   fontSize: FFAppState().chatFontSize,
                                                                                 ),
