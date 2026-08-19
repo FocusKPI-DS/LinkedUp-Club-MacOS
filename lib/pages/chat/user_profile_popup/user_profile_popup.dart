@@ -4,8 +4,8 @@ import '/backend/firestore/firestore_desktop_adapter.dart';
 import '/flutter_flow/flutter_flow_util.dart';
 import '/pages/chat/chat_component/memo/memo_widget.dart';
 import '/utils/chat_helpers.dart';
+import '/utils/open_direct_chat.dart';
 import '/utils/desktop_pointer.dart';
-import '/index.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
@@ -224,13 +224,7 @@ class _UserProfilePopupState extends State<UserProfilePopup> {
       final chat = await ChatHelpers.findOrCreateDirectChat(_ref);
       if (!mounted) return;
       Navigator.of(context).pop();
-      context.pushNamed(
-        ChatDetailWidget.routeName,
-        queryParameters: {
-          'chatDoc': serializeParam(chat, ParamType.Document),
-        }.withoutNulls,
-        extra: <String, dynamic>{'chatDoc': chat},
-      );
+      await openDirectChat(chat);
     });
   }
 

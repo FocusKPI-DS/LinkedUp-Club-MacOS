@@ -4,7 +4,6 @@ import '/backend/firestore/firestore_desktop_adapter.dart';
 import '/pages/desktop_chat/desktop_safe_user_builder.dart';
 import '/pages/desktop_chat/rest_poll_builder.dart';
 import '/flutter_flow/flutter_flow_util.dart';
-import '/pages/mobile_chat/mobile_chat_widget.dart';
 import '/pages/chat/user_profile_popup/user_profile_popup.dart';
 import '/utils/desktop_pointer.dart';
 import 'package:flutter/cupertino.dart';
@@ -20,6 +19,7 @@ import '/flutter_flow/flutter_flow_widgets.dart';
 import '/index.dart';
 import '/custom_code/actions/index.dart' as actions;
 import '/utils/chat_helpers.dart';
+import '/utils/open_direct_chat.dart';
 
 const double _kAddConnectionsDialogMaxWidth = 980;
 const double _kAddConnectionsDialogMaxHeightFactor = 0.72;
@@ -27,12 +27,15 @@ const double _kAddConnectionsDialogInset = 48;
 const double _kAddConnectionsDialogPadding = 36;
 const double _kAddConnectionsCardSpacing = 14;
 
-Future<void> showAddConnectionsDialog(BuildContext context) {
-  return showDialog<void>(
+Future<void> showAddConnectionsDialog(BuildContext context) async {
+  final chat = await showDialog<ChatsRecord>(
     context: context,
     barrierColor: Colors.black.withOpacity(0.45),
     builder: (dialogContext) => const AddConnectionsWidget(asDialog: true),
   );
+  if (chat != null && context.mounted) {
+    await openDirectChat(chat, context: context);
+  }
 }
 
 class AddConnectionsWidget extends StatefulWidget {
@@ -1675,15 +1678,12 @@ class _AddConnectionsWidgetState extends State<AddConnectionsWidget> {
       final chatToOpen =
           await ChatHelpers.findOrCreateDirectChat(user.reference);
 
-      if (context.mounted) {
-        context.pushNamed(
-          'Chat',
-          queryParameters: {
-            'chatDoc': serializeParam(chatToOpen, ParamType.Document),
-          }.withoutNulls,
-          extra: <String, dynamic>{'chatDoc': chatToOpen},
-        );
+      if (!context.mounted) return;
+      if (_asDialog) {
+        Navigator.of(context).pop(chatToOpen);
+        return;
       }
+      await openDirectChat(chatToOpen, context: context);
     } catch (e) {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
