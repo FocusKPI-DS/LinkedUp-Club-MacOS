@@ -67,27 +67,23 @@ async function sendLonaAnnouncement() {
     // ═══════════════════════════════════════════════════════════════
     // ANNOUNCEMENT MESSAGE - EDIT THIS!
     // ═══════════════════════════════════════════════════════════════
-    const announcementMessage = `**Lona – Messaging Update (macOS & Web)**
+    const announcementMessage = `**Lona v1.9.34 — Social & Chat UX Update (macOS & Web)**
 
-This update focuses on the messaging experience across macOS and the web app, making conversations easier to navigate while introducing a cleaner, more polished interface.
+This update brings a refreshed social experience and polished chat interface across macOS and the web app.
 
 **What's New:**
 
-1. 🗂️ **Chat Header Enhancements** — Chat headers now provide quick access to Messages, Files & Links, Action Tasks, and Pinned Messages, making it easier to find everything related to a conversation.
+1. 🔗 **Connections Redesign** — Your connections are now displayed as modern cards in a responsive grid layout. Requests and Sent tabs have been combined into a single **Pending** tab, and adding connections opens as a compact dialog.
 
-2. 👥 **Group Member Avatars** — Group chat members are now displayed as an avatar stack in the chat header, so you can quickly see who's in the conversation.
+2. 👤 **User Profile Popup** — Tap any user's avatar to see a Discord-style profile popup with quick actions: add friend, block user, copy email, and view mutual friends & groups — no more navigating away from your conversation.
 
-3. ✏️ **Easier Group Customization** — Group chat creators can now rename their group and update the group picture directly from the chat header.
+3. 🖼️ **Photo Stacks** — Multiple photos sent together are now grouped into an iMessage-style swipeable stack. Browse through images seamlessly with your mouse or trackpad.
 
-4. 🎨 **UI Refresh** — Refined interface elements throughout the messaging experience, including updates to the chat sidebar and overall layout for a cleaner, more consistent look and feel.
+4. 👥 **Group Management** — Group owners can now change the group photo directly from chat settings. Adding members now searches all Lona users by name or email.
 
-5. 📥 **Inactive Chats** — Inactive conversations are now organized into a collapsible section at the bottom of the **All Messages** tab, helping you stay focused on your active chats.
+5. 🏠 **Home Page Polish** — Cleaner greeting display, unified section headers, and improved empty states for Today's Schedule and Action Items.
 
-6. ⚡ **Improved Message Actions** — Hover over any message to access a contextual menu with the most commonly used actions first, with additional options available in the overflow menu.
-
-7. 🖼️ **Photo Stacks** — Multiple photos sent together are now grouped into a swipeable stack. Drag with your mouse or swipe on your trackpad to browse through images seamlessly.
-
-8. 🐞 **Bug Fixes** — Fixed an issue where pasting text into the message composer could sometimes duplicate the pasted content.
+6. 🐞 **Bug Fixes** — Fixed an issue where pasting text into the message composer could duplicate the pasted content. Fixed Lona Service avatar display.
 
 Please update to the latest version. If you encounter any issues, feel free to reach out.
 

@@ -60,6 +60,7 @@ class DesktopChatModel extends FlutterFlowModel {
   String? groupImagePath;
   String? groupImageUrl;
   bool isUploadingImage = false;
+  bool groupInviteApprovalRequired = false;
 
   // Inline group info panel
   bool showGroupInfoPanel = false;

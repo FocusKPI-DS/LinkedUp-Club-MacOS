@@ -4,6 +4,7 @@ import '/backend/firestore/firestore_desktop_adapter.dart';
 import '/backend/schema/enums/enums.dart';
 import '/flutter_flow/flutter_flow_util.dart';
 import '/pages/desktop_chat/rest_poll_builder.dart';
+import '/utils/chat_helpers.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
@@ -132,81 +133,153 @@ Future<void> showAddGroupMembersDialog({
                       ),
                       child: SizedBox(
                         width: double.infinity,
-                        child: ElevatedButton(
-                          onPressed: () async {
-                            try {
-                              await fsPatchDocument(chat.reference, {
-                                ...mapToFirestore({
-                                  'members': selectedMembers,
-                                }),
-                              });
+                        child: Builder(
+                          builder: (context) {
+                            final isAdmin = ChatHelpers.isGroupAdmin(
+                                chat, currentUserReference);
+                            final canDirectlyAdd = isAdmin || !chat.inviteApprovalRequired;
+                            return ElevatedButton(
+                              onPressed: () async {
+                                try {
+                                  final userName =
+                                      currentUserDisplayName.isNotEmpty
+                                          ? currentUserDisplayName
+                                          : (currentUserDocument?.displayName ??
+                                              'Someone');
 
-                              final userName =
-                                  currentUserDisplayName.isNotEmpty
-                                      ? currentUserDisplayName
-                                      : (currentUserDocument?.displayName ??
-                                          'Someone');
-                              final systemMessage =
-                                  '$userName added $addedCount ${addedCount == 1 ? 'member' : 'members'}';
+                                  if (canDirectlyAdd) {
+                                    // Admin or approval not required: directly add members
+                                    await fsPatchDocument(chat.reference, {
+                                      ...mapToFirestore({
+                                        'members': selectedMembers,
+                                      }),
+                                    });
 
-                              await fsCreateMessage(
-                                chat.reference,
-                                {
-                                  'content': systemMessage,
-                                  'chat_ref': chat.reference,
-                                  'sender_ref': currentUserReference,
-                                  'timestamp': getCurrentTimestamp,
-                                  'message_type': 'system',
-                                },
-                              );
+                                    final systemMessage =
+                                        '$userName added $addedCount ${addedCount == 1 ? 'member' : 'members'}';
 
-                              await fsPatchDocument(chat.reference, {
-                                'last_message': systemMessage,
-                                'last_message_at': getCurrentTimestamp,
-                                'last_message_sent': currentUserReference,
-                                'last_message_type':
-                                    MessageType.text.serialize(),
-                              });
+                                    await fsCreateMessage(
+                                      chat.reference,
+                                      {
+                                        'content': systemMessage,
+                                        'chat_ref': chat.reference,
+                                        'sender_ref': currentUserReference,
+                                        'timestamp': getCurrentTimestamp,
+                                        'message_type': 'system',
+                                      },
+                                    );
 
-                              if (context.mounted) {
-                                Navigator.of(dialogContext).pop();
-                                onMembersAdded?.call();
-                              }
-                            } catch (e) {
-                              if (context.mounted) {
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(
-                                    content: Text('Failed to add members'),
-                                    backgroundColor: Color(0xFFEF4444),
-                                  ),
-                                );
-                              }
-                            }
-                          },
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: const Color(0xFF3B82F6),
-                            foregroundColor: Colors.white,
-                            padding: const EdgeInsets.symmetric(vertical: 14.0),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12.0),
-                            ),
-                            elevation: 0,
-                          ),
-                          child: Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              const Icon(Icons.check, size: 20.0),
-                              const SizedBox(width: 8.0),
-                              Text(
-                                'Add $addedCount ${addedCount == 1 ? 'member' : 'members'}',
-                                style: const TextStyle(
-                                  fontFamily: 'Inter',
-                                  fontSize: 16.0,
-                                  fontWeight: FontWeight.w600,
+                                    await fsPatchDocument(chat.reference, {
+                                      'last_message': systemMessage,
+                                      'last_message_at': getCurrentTimestamp,
+                                      'last_message_sent': currentUserReference,
+                                      'last_message_type':
+                                          MessageType.text.serialize(),
+                                    });
+                                  } else {
+                                    // Non-admin: submit as pending member requests
+                                    final newMemberRefs = selectedMembers
+                                        .where((ref) => !chat.members
+                                            .any((m) => m.id == ref.id))
+                                        .toList();
+
+                                    final pendingEntries = newMemberRefs
+                                        .map((ref) => {
+                                              'user_ref': ref,
+                                              'requested_by':
+                                                  currentUserReference,
+                                              'requested_at':
+                                                  getCurrentTimestamp,
+                                            })
+                                        .toList();
+
+                                    await chat.reference.update({
+                                      'pending_members':
+                                          FieldValue.arrayUnion(pendingEntries),
+                                    });
+
+                                    final systemMessage =
+                                        '$userName requested to add $addedCount ${addedCount == 1 ? 'member' : 'members'}';
+
+                                    await fsCreateMessage(
+                                      chat.reference,
+                                      {
+                                        'content': systemMessage,
+                                        'chat_ref': chat.reference,
+                                        'sender_ref': currentUserReference,
+                                        'timestamp': getCurrentTimestamp,
+                                        'message_type': 'system',
+                                      },
+                                    );
+
+                                    await fsPatchDocument(chat.reference, {
+                                      'last_message': systemMessage,
+                                      'last_message_at': getCurrentTimestamp,
+                                      'last_message_sent': currentUserReference,
+                                      'last_message_type':
+                                          MessageType.text.serialize(),
+                                    });
+                                  }
+
+                                  if (context.mounted) {
+                                    Navigator.of(dialogContext).pop();
+                                    onMembersAdded?.call();
+                                    if (!canDirectlyAdd) {
+                                      ScaffoldMessenger.of(context).showSnackBar(
+                                        const SnackBar(
+                                          content: Text(
+                                              'Request sent! Waiting for admin approval.'),
+                                          backgroundColor: Color(0xFF3B82F6),
+                                        ),
+                                      );
+                                    }
+                                  }
+                                } catch (e) {
+                                  if (context.mounted) {
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      const SnackBar(
+                                        content: Text('Failed to add members'),
+                                        backgroundColor: Color(0xFFEF4444),
+                                      ),
+                                    );
+                                  }
+                                }
+                              },
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: canDirectlyAdd
+                                    ? const Color(0xFF3B82F6)
+                                    : const Color(0xFFF59E0B),
+                                foregroundColor: Colors.white,
+                                padding:
+                                    const EdgeInsets.symmetric(vertical: 14.0),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(12.0),
                                 ),
+                                elevation: 0,
                               ),
-                            ],
-                          ),
+                              child: Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Icon(
+                                      canDirectlyAdd
+                                          ? Icons.check
+                                          : Icons.send_rounded,
+                                      size: 20.0),
+                                  const SizedBox(width: 8.0),
+                                  Text(
+                                    canDirectlyAdd
+                                        ? 'Add $addedCount ${addedCount == 1 ? 'member' : 'members'}'
+                                        : 'Request to add $addedCount ${addedCount == 1 ? 'member' : 'members'}',
+                                    style: const TextStyle(
+                                      fontFamily: 'Inter',
+                                      fontSize: 16.0,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            );
+                          },
                         ),
                       ),
                     ),

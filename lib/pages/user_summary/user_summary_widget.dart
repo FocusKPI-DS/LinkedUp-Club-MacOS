@@ -1,4 +1,6 @@
+import '/components/skeleton/skeleton_templates.dart';
 import '/auth/firebase_auth/auth_util.dart';
+import '/custom_code/actions/index.dart' as actions;
 import '/utils/debug_log.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_functions/cloud_functions.dart';
@@ -335,6 +337,13 @@ class _UserSummaryWidgetState extends State<UserSummaryWidget> {
       if (mounted) {
         _showSuccessMessage('Connection request sent to ${user.displayName}');
       }
+
+      // Fire-and-forget: send email notification to recipient
+      actions.sendConnectionRequestEmail(
+        recipientEmail: user.email,
+        recipientName: user.displayName,
+        senderName: currentUserData.displayName,
+      );
     } catch (e) {
       debugLog('Error sending connection request: $e');
       if (mounted) {

@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'package:flutter/cupertino.dart';
 import '/utils/debug_log.dart';
 import 'package:flutter/material.dart' as material;
@@ -471,12 +472,13 @@ class _SummerAITodosState extends State<SummerAITodos> {
                                 // Filter button with dropdown
                                 _buildFilterDropdown(),
                                 const SizedBox(width: 8),
-                                // Add Task button - iOS style
+                                // Add Task button - styled to match filter button
                                 CupertinoButton(
                                   padding: const EdgeInsets.symmetric(
                                       horizontal: 14, vertical: 8),
                                   color: CupertinoColors.systemBlue,
-                                  borderRadius: BorderRadius.circular(8),
+                                  borderRadius: BorderRadius.circular(20),
+                                  minSize: 0,
                                   onPressed: () {
                                     _showAddNewDialog();
                                   },
@@ -493,7 +495,7 @@ class _SummerAITodosState extends State<SummerAITodos> {
                                         'Task',
                                         style: TextStyle(
                                           fontFamily: '.SF Pro Text',
-                                          fontSize: 15,
+                                          fontSize: 14,
                                           fontWeight: FontWeight.w600,
                                           color: CupertinoColors.white,
                                           letterSpacing: -0.2,
@@ -581,12 +583,13 @@ class _SummerAITodosState extends State<SummerAITodos> {
                             // Filter button with dropdown
                             _buildFilterDropdown(),
                             const SizedBox(width: 8),
-                            // Add Task button - iOS style
+                            // Add Task button - styled to match filter button
                             CupertinoButton(
                               padding: const EdgeInsets.symmetric(
                                   horizontal: 14, vertical: 8),
                               color: CupertinoColors.systemBlue,
-                              borderRadius: BorderRadius.circular(8),
+                              borderRadius: BorderRadius.circular(20),
+                              minSize: 0,
                               onPressed: () {
                                 _showAddNewDialog();
                               },
@@ -603,7 +606,7 @@ class _SummerAITodosState extends State<SummerAITodos> {
                                     'Task',
                                     style: TextStyle(
                                       fontFamily: '.SF Pro Text',
-                                      fontSize: 15,
+                                      fontSize: 14,
                                       fontWeight: FontWeight.w600,
                                       color: CupertinoColors.white,
                                       letterSpacing: -0.2,
@@ -719,7 +722,43 @@ class _SummerAITodosState extends State<SummerAITodos> {
                           fontSize: 17,
                         ),
                       ),
-                      const SizedBox(height: 24),
+                      const SizedBox(height: 20),
+                      const Text(
+                        'Priority',
+                        style: TextStyle(
+                          fontFamily: '.SF Pro Text',
+                          fontSize: 15,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      CupertinoSlidingSegmentedControl<String>(
+                        groupValue: selectedPriority,
+                        children: const {
+                          'low': Padding(
+                            padding: EdgeInsets.symmetric(horizontal: 4),
+                            child: Text('Low', style: TextStyle(fontSize: 13)),
+                          ),
+                          'moderate': Padding(
+                            padding: EdgeInsets.symmetric(horizontal: 4),
+                            child: Text('Med', style: TextStyle(fontSize: 13)),
+                          ),
+                          'high': Padding(
+                            padding: EdgeInsets.symmetric(horizontal: 4),
+                            child: Text('High', style: TextStyle(fontSize: 13)),
+                          ),
+                          'urgent': Padding(
+                            padding: EdgeInsets.symmetric(horizontal: 4),
+                            child: Text('Urgent', style: TextStyle(fontSize: 13)),
+                          ),
+                        },
+                        onValueChanged: (value) {
+                          setDialogState(() {
+                            selectedPriority = value ?? 'low';
+                          });
+                        },
+                      ),
+                      const SizedBox(height: 20),
                       const Text(
                         'Description (Optional)',
                         style: TextStyle(
@@ -731,7 +770,7 @@ class _SummerAITodosState extends State<SummerAITodos> {
                       const SizedBox(height: 8),
                       CupertinoTextField(
                         controller: descriptionController,
-                        maxLines: 4,
+                        maxLines: 3,
                         placeholder: 'Enter task description',
                         padding: const EdgeInsets.all(12),
                         decoration: BoxDecoration(
@@ -743,36 +782,7 @@ class _SummerAITodosState extends State<SummerAITodos> {
                           fontSize: 15,
                         ),
                       ),
-                      const SizedBox(height: 24),
-                      const Text(
-                        'Priority',
-                        style: TextStyle(
-                          fontFamily: '.SF Pro Text',
-                          fontSize: 15,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                      const SizedBox(height: 12),
-                      CupertinoPicker(
-                        itemExtent: 32,
-                        scrollController: FixedExtentScrollController(
-                          initialItem: ['low', 'moderate', 'high', 'urgent']
-                              .indexOf(selectedPriority),
-                        ),
-                        onSelectedItemChanged: (index) {
-                          setDialogState(() {
-                            selectedPriority =
-                                ['low', 'moderate', 'high', 'urgent'][index];
-                          });
-                        },
-                        children: const [
-                          Text('Low'),
-                          Text('Moderate'),
-                          Text('High'),
-                          Text('Urgent'),
-                        ],
-                      ),
-                      const SizedBox(height: 24),
+                      const SizedBox(height: 20),
                       const Text(
                         'Due Date (Optional)',
                         style: TextStyle(
@@ -781,7 +791,7 @@ class _SummerAITodosState extends State<SummerAITodos> {
                           fontWeight: FontWeight.w600,
                         ),
                       ),
-                      const SizedBox(height: 12),
+                      const SizedBox(height: 8),
                       Row(
                         children: [
                           Expanded(
@@ -804,48 +814,78 @@ class _SummerAITodosState extends State<SummerAITodos> {
                               ),
                             ),
                           ),
-                          const SizedBox(width: 12),
+                          const SizedBox(width: 8),
                           CupertinoButton(
                             padding: const EdgeInsets.symmetric(
                                 horizontal: 12, vertical: 8),
                             color: CupertinoColors.systemGrey6,
                             onPressed: () async {
                               final now = DateTime.now();
-                              await showCupertinoModalPopup<DateTime>(
-                                context: context,
-                                builder: (context) => Container(
-                                  height: 216,
-                                  padding: const EdgeInsets.only(top: 6),
-                                  margin: EdgeInsets.only(
-                                    bottom: MediaQuery.of(context)
-                                        .viewInsets
-                                        .bottom,
-                                  ),
-                                  color: CupertinoColors.systemBackground
-                                      .resolveFrom(context),
-                                  child: SafeArea(
-                                    top: false,
-                                    child: CupertinoDatePicker(
-                                      initialDateTime: selectedDueDate ?? now,
-                                      minimumDate: DateTime(now.year - 5),
-                                      maximumDate: DateTime(now.year + 10),
-                                      mode: CupertinoDatePickerMode.date,
-                                      use24hFormat: true,
-                                      onDateTimeChanged: (DateTime newDate) {
-                                        setDialogState(() {
-                                          selectedDueDate = DateTime(
-                                              newDate.year,
-                                              newDate.month,
-                                              newDate.day);
-                                        });
-                                      },
+                              // Use Material date picker on desktop, Cupertino on iOS
+                              if (!kIsWeb && (Platform.isMacOS || Platform.isWindows || Platform.isLinux)) {
+                                final picked = await material.showDatePicker(
+                                  context: context,
+                                  initialDate: selectedDueDate ?? now,
+                                  firstDate: DateTime(now.year - 5),
+                                  lastDate: DateTime(now.year + 10),
+                                );
+                                if (picked != null) {
+                                  setDialogState(() {
+                                    selectedDueDate = DateTime(
+                                        picked.year, picked.month, picked.day);
+                                  });
+                                }
+                              } else {
+                                await showCupertinoModalPopup<DateTime>(
+                                  context: context,
+                                  builder: (context) => Container(
+                                    height: 216,
+                                    padding: const EdgeInsets.only(top: 6),
+                                    margin: EdgeInsets.only(
+                                      bottom: MediaQuery.of(context)
+                                          .viewInsets
+                                          .bottom,
+                                    ),
+                                    color: CupertinoColors.systemBackground
+                                        .resolveFrom(context),
+                                    child: SafeArea(
+                                      top: false,
+                                      child: CupertinoDatePicker(
+                                        initialDateTime: selectedDueDate ?? now,
+                                        minimumDate: DateTime(now.year - 5),
+                                        maximumDate: DateTime(now.year + 10),
+                                        mode: CupertinoDatePickerMode.date,
+                                        use24hFormat: true,
+                                        onDateTimeChanged: (DateTime newDate) {
+                                          setDialogState(() {
+                                            selectedDueDate = DateTime(
+                                                newDate.year,
+                                                newDate.month,
+                                                newDate.day);
+                                          });
+                                        },
+                                      ),
                                     ),
                                   ),
-                                ),
-                              );
+                                );
+                              }
                             },
                             child: const Text('Pick date'),
                           ),
+                          if (selectedDueDate != null)
+                            CupertinoButton(
+                              padding: const EdgeInsets.only(left: 4),
+                              onPressed: () {
+                                setDialogState(() {
+                                  selectedDueDate = null;
+                                });
+                              },
+                              child: Icon(
+                                CupertinoIcons.xmark_circle_fill,
+                                size: 20,
+                                color: CupertinoColors.systemGrey,
+                              ),
+                            ),
                         ],
                       ),
                     ],

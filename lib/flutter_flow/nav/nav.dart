@@ -109,7 +109,7 @@ GoRouter createRouter(AppStateNotifier appStateNotifier) {
     errorBuilder: (context, state) => appStateNotifier.loggedIn
         ? (!kIsWeb && Platform.isIOS
             ? NavBarPage(initialPage: 'MobileChat')
-            : NavBarPage())
+            : NavBarPage(initialPage: 'DesktopChat'))
         : const WelcomeWidget(),
     routes: [
       FFRoute(
@@ -126,13 +126,13 @@ GoRouter createRouter(AppStateNotifier appStateNotifier) {
           final result = appStateNotifier.loggedIn
               ? (!kIsWeb && Platform.isIOS
                   ? NavBarPage(initialPage: tab ?? 'MobileChat')
-                  : NavBarPage(initialPage: tab))
+                  : NavBarPage(initialPage: tab ?? 'DesktopChat'))
               : const WelcomeWidget();
           final initialPageLabel = !appStateNotifier.loggedIn
               ? 'Welcome'
               : (!kIsWeb && Platform.isIOS)
                   ? (tab ?? 'MobileChat')
-                  : (tab ?? 'Home');
+                  : (tab ?? 'DesktopChat');
           debugLog('   Returning NavBarPage with initialPage: $initialPageLabel');
           return result;
         },

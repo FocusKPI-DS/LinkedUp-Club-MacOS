@@ -4310,6 +4310,13 @@ class _OnboardingProfileWidgetState extends State<OnboardingProfileWidget>
       if (mounted) {
         _showSuccessMessage('Connection request sent to ${user.displayName}');
       }
+
+      // Fire-and-forget: send email notification to recipient
+      actions.sendConnectionRequestEmail(
+        recipientEmail: user.email,
+        recipientName: user.displayName,
+        senderName: currentUser.displayName,
+      );
     } catch (e) {
       print('Error sending connection request: $e');
       if (mounted) {

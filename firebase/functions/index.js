@@ -13,6 +13,7 @@ exports.newsOnCreate = require('./newsNotifications').newsOnCreate;
 // Export workspace invitation email function
 exports.sendWorkspaceInviteEmail = require('./sendWorkspaceInviteEmail').sendWorkspaceInviteEmail;
 exports.sendInviteEmail = require('./sendInviteEmail').sendInviteEmail;
+exports.sendConnectionRequestEmail = require('./sendConnectionRequestEmail').sendConnectionRequestEmail;
 
 // Export Task Reminders
 exports.runTaskReminders = require('./runTaskReminders').runTaskReminders;
@@ -1358,9 +1359,14 @@ async function sendPushNotifications(snapshot) {
 
       if (isGroupChat) {
         // Format iOS/macOS body for group chats: "Username: Message content"
-        formattedBodyIOS = `${senderName}: ${body}`;
+        // IMPORTANT: Check if body already contains the sender prefix (from sendMessageNotificationTrigger)
+        // to avoid duplication like "Dan: Dan: Hello"
+        if (!body.startsWith(`${senderName}:`)) {
+          formattedBodyIOS = `${senderName}: ${body}`;
+        } else {
+          formattedBodyIOS = body; // Already formatted
+        }
         console.log(`📱 Formatted iOS/macOS notification for group chat: "${formattedBodyIOS}"`);
-
         // Get group logo from chat document
         try {
           let chatDocPath = null;

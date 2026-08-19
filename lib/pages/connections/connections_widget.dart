@@ -1,4 +1,6 @@
+import '/components/skeleton/skeleton_templates.dart';
 import '/auth/firebase_auth/auth_util.dart';
+import '/custom_code/actions/index.dart' as actions;
 import '/backend/backend.dart';
 import '/backend/firestore/firestore_desktop_adapter.dart';
 import '/pages/desktop_chat/desktop_safe_user_builder.dart';
@@ -6,6 +8,8 @@ import '/flutter_flow/flutter_flow_util.dart';
 import '/pages/mobile_chat/mobile_chat_widget.dart';
 import '/pages/connections/add_connections_widget.dart';
 import '/pages/chat/user_profile_popup/user_profile_popup.dart';
+import '/pages/profile_settings/profile_settings_widget.dart';
+import '/pages/profile_settings/profile_settings_model.dart';
 import '/utils/desktop_pointer.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
@@ -38,6 +42,43 @@ class _ConnectionsWidgetState extends State<ConnectionsWidget> {
   // ScrollControllers for each ListView
   final ScrollController _connectionsScrollController = ScrollController();
   final ScrollController _pendingScrollController = ScrollController();
+  final ScrollController _suggestionsScrollController = ScrollController();
+
+  // Same-company suggestion state
+  bool _suggestionsCollapsed = false;
+  List<UsersRecord>? _suggestedUsers;
+  bool _isLoadingSuggestions = false;
+  bool _isAddingAll = false;
+  int _suggestionsPage = 0;
+  static const int _suggestionsPerPage = 8;
+
+  // Public email domains to exclude from "same company" matching
+  static const Set<String> _publicEmailDomains = {
+    'gmail.com', 'googlemail.com',
+    'outlook.com', 'outlook.co.uk', 'live.com', 'live.co.uk',
+    'hotmail.com', 'hotmail.co.uk', 'hotmail.fr', 'hotmail.de',
+    'msn.com',
+    'yahoo.com', 'yahoo.co.uk', 'yahoo.co.jp', 'yahoo.fr', 'yahoo.de',
+    'ymail.com', 'rocketmail.com',
+    'icloud.com', 'me.com', 'mac.com',
+    'aol.com', 'aim.com',
+    'qq.com', 'foxmail.com',
+    '163.com', '126.com', 'yeah.net',
+    'sina.com', 'sina.cn', 'sohu.com',
+    'mail.com', 'email.com',
+    'protonmail.com', 'proton.me', 'pm.me',
+    'zoho.com', 'zohomail.com',
+    'yandex.com', 'yandex.ru',
+    'mail.ru', 'inbox.ru', 'list.ru', 'bk.ru',
+    'gmx.com', 'gmx.de', 'gmx.net',
+    'web.de', 't-online.de', 'freenet.de',
+    'naver.com', 'daum.net', 'hanmail.net',
+    'rediffmail.com',
+    'tutanota.com', 'tuta.io',
+    'fastmail.com', 'fastmail.fm',
+    'hey.com',
+    'test.com', 'tester.com', 'example.com',
+  };
 
   @override
   void initState() {
@@ -54,6 +95,7 @@ class _ConnectionsWidgetState extends State<ConnectionsWidget> {
     _searchController.dispose();
     _connectionsScrollController.dispose();
     _pendingScrollController.dispose();
+    _suggestionsScrollController.dispose();
     super.dispose();
   }
 
@@ -306,9 +348,7 @@ class _ConnectionsWidgetState extends State<ConnectionsWidget> {
 
   Widget _buildTabContent() {
     if (currentUserReference == null) {
-      return Center(
-        child: CupertinoActivityIndicator(),
-      );
+      return const ConnectionsGridSkeleton();
     }
 
     return DesktopSafeUserBuilder(
@@ -316,9 +356,7 @@ class _ConnectionsWidgetState extends State<ConnectionsWidget> {
       fetchOnce: fsGetUserOnce,
       builder: (context, currentUser) {
         if (currentUser == null) {
-          return Center(
-            child: CupertinoActivityIndicator(),
-          );
+          return const ConnectionsGridSkeleton();
         }
 
         // Show tab content based on selected tab
@@ -334,20 +372,539 @@ class _ConnectionsWidgetState extends State<ConnectionsWidget> {
     );
   }
 
+  /// Extract email domain from an email address. Returns null for public domains.
+  String? _getCompanyDomain(String email) {
+    if (email.isEmpty || !email.contains('@')) return null;
+    final domain = email.split('@').last.toLowerCase();
+    if (_publicEmailDomains.contains(domain)) return null;
+    return domain;
+  }
+
+  /// Load same-company user suggestions from Firestore.
+  Future<void> _loadSuggestions(UsersRecord currentUser) async {
+    final domain = _getCompanyDomain(currentUser.email);
+    print('🔍 [Suggestions] User email: ${currentUser.email}, domain: $domain');
+    if (domain == null) {
+      // Public email domain — no suggestions possible
+      setState(() {
+        _suggestedUsers = [];
+        _isLoadingSuggestions = false;
+      });
+      return;
+    }
+
+    if (_isLoadingSuggestions) return;
+    setState(() => _isLoadingSuggestions = true);
+
+    try {
+      // Query all users — we'll filter by email domain client-side
+      // (Firestore doesn't support "endsWith" queries natively)
+      final querySnapshot = await FirebaseFirestore.instance
+          .collection('users')
+          .get();
+
+      final suggestions = <UsersRecord>[];
+      for (final doc in querySnapshot.docs) {
+        final user = UsersRecord.fromSnapshot(doc);
+
+        // Skip self
+        if (user.reference.id == currentUserReference?.id) continue;
+        // Skip already connected
+        if (currentUser.friends.contains(user.reference)) continue;
+        // Skip already sent request
+        if (currentUser.sentRequests.contains(user.reference)) continue;
+        // Skip already received request
+        if (currentUser.friendRequests.contains(user.reference)) continue;
+        // Check same domain
+        final userDomain = _getCompanyDomain(user.email);
+        if (userDomain != domain) continue;
+
+        suggestions.add(user);
+      }
+
+      if (mounted) {
+        setState(() {
+          _suggestedUsers = suggestions;
+          _isLoadingSuggestions = false;
+          _suggestionsPage = 0;
+        });
+      }
+    } catch (e) {
+      print('❌ Error loading suggestions: $e');
+      if (mounted) {
+        setState(() {
+          _suggestedUsers = [];
+          _isLoadingSuggestions = false;
+        });
+      }
+    }
+  }
+
+  /// Send connection requests to all suggested users at once.
+  Future<void> _connectAll(List<UsersRecord> users, UsersRecord currentUser) async {
+    if (_isAddingAll) return;
+    setState(() => _isAddingAll = true);
+
+    int successCount = 0;
+    for (final user in users) {
+      try {
+        // Check if target user has auto-accept enabled
+        final targetUser = await fsGetUserOnce(user.reference);
+        final senderDomain = _getCompanyDomain(currentUser.email);
+        final targetDomain = _getCompanyDomain(targetUser.email);
+
+        bool shouldAutoAccept = targetUser.autoAcceptAllRequests;
+        if (!shouldAutoAccept && targetUser.autoAcceptSameCompany &&
+            senderDomain != null && senderDomain == targetDomain) {
+          shouldAutoAccept = true;
+        }
+        if (!shouldAutoAccept && senderDomain != null &&
+            targetUser.autoAcceptEmailDomains.contains(senderDomain)) {
+          shouldAutoAccept = true;
+        }
+
+        if (shouldAutoAccept) {
+          // Directly add as friends (skip the request flow)
+          await fsArrayUnion(currentUserReference!, 'friends', [user.reference]);
+          await fsArrayUnion(user.reference, 'friends', [currentUserReference!]);
+        } else {
+          // Send a regular connection request
+          await fsArrayUnion(currentUserReference!, 'sent_requests', [user.reference]);
+          await fsArrayUnion(user.reference, 'friend_requests', [currentUserReference!]);
+        }
+        successCount++;
+      } catch (e) {
+        print('❌ Error connecting with ${user.displayName}: $e');
+      }
+    }
+
+    if (mounted) {
+      setState(() => _isAddingAll = false);
+      _showSuccessMessage('$successCount connection request(s) sent!');
+      // Reload suggestions to remove the ones we just sent
+      _loadSuggestions(currentUser);
+      // Show dialog suggesting auto-approve settings (only if not already enabled)
+      if (!currentUser.autoAcceptAllRequests && !currentUser.autoAcceptSameCompany) {
+        _showAutoApproveHintDialog();
+      }
+    }
+  }
+
+  void _showAutoApproveHintDialog() {
+    showCupertinoDialog(
+      context: context,
+      builder: (ctx) => CupertinoAlertDialog(
+        title: const Text('Tip: Auto-Approve Requests'),
+        content: const Padding(
+          padding: EdgeInsets.only(top: 8),
+          child: Text(
+            'You can enable auto-approve in Settings so that colleagues from the same company don\'t need to wait for your approval.',
+            style: TextStyle(fontSize: 13),
+          ),
+        ),
+        actions: [
+          CupertinoDialogAction(
+            child: const Text('Dismiss'),
+            onPressed: () => Navigator.of(ctx).pop(),
+          ),
+          CupertinoDialogAction(
+            isDefaultAction: true,
+            child: const Text('Go to Settings'),
+            onPressed: () {
+              Navigator.of(ctx).pop();
+              Navigator.of(context).push(
+                CupertinoPageRoute(
+                  builder: (_) => ProfileSettingsWidget(
+                    initialTab: SettingsTab.connections,
+                  ),
+                ),
+              );
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSuggestionsBanner(UsersRecord currentUser) {
+    final domain = _getCompanyDomain(currentUser.email);
+    final rawDomain = currentUser.email.contains('@')
+        ? currentUser.email.split('@').last.toLowerCase()
+        : '';
+    if (rawDomain.isEmpty) return const SizedBox.shrink();
+
+    final isPublicDomain = domain == null;
+
+    // Load suggestions on first build
+    if (_suggestedUsers == null && !_isLoadingSuggestions) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _loadSuggestions(currentUser);
+      });
+    }
+
+    if (_suggestedUsers == null || _isLoadingSuggestions) {
+      return const Padding(
+        padding: EdgeInsets.symmetric(vertical: 8),
+        child: SizedBox(
+          height: 100,
+          child: ChatListSkeleton(itemCount: 2),
+        ),
+      );
+    }
+
+    if (_suggestedUsers!.isEmpty) {
+      // Show the banner frame with an empty-state message
+      final displayDomain = domain ?? rawDomain;
+      final emptyMessage = isPublicDomain
+          ? 'No colleague suggestions — you\'re using a public email (@$rawDomain). Use a company email to discover colleagues.'
+          : 'All users from @$displayDomain are already in your connections!';
+      return Container(
+        margin: const EdgeInsets.only(bottom: 12),
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          gradient: const LinearGradient(
+            colors: [Color(0xFFEFF6FF), Color(0xFFF0F9FF)],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ),
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: const Color(0xFFBFDBFE), width: 1),
+        ),
+        child: Row(
+          children: [
+            const Icon(CupertinoIcons.building_2_fill, size: 18, color: Color(0xFF93C5FD)),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                emptyMessage,
+                style: const TextStyle(
+                  fontFamily: 'SF Pro Text',
+                  fontSize: 13,
+                  color: Color(0xFF64748B),
+                  decoration: TextDecoration.none,
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    final totalUsers = _suggestedUsers!.length;
+    final totalPages = (totalUsers / _suggestionsPerPage).ceil();
+    final startIdx = _suggestionsPage * _suggestionsPerPage;
+    final endIdx = (startIdx + _suggestionsPerPage).clamp(0, totalUsers);
+    final pageUsers = _suggestedUsers!.sublist(startIdx, endIdx);
+
+    return AnimatedCrossFade(
+      firstChild: Container(
+        margin: const EdgeInsets.only(bottom: 16),
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          gradient: const LinearGradient(
+            colors: [Color(0xFFEFF6FF), Color(0xFFF0F9FF)],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ),
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: const Color(0xFFBFDBFE), width: 1),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Header row
+            Row(
+              children: [
+                const Icon(CupertinoIcons.building_2_fill, size: 18, color: Color(0xFF3B82F6)),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'People from @$domain',
+                    style: const TextStyle(
+                      fontFamily: 'SF Pro Text',
+                      fontSize: 15,
+                      fontWeight: FontWeight.w600,
+                      color: Color(0xFF1E40AF),
+                      decoration: TextDecoration.none,
+                    ),
+                  ),
+                ),
+                Text(
+                  '$totalUsers found',
+                  style: const TextStyle(
+                    fontFamily: 'SF Pro Text',
+                    fontSize: 12,
+                    color: Color(0xFF64748B),
+                    decoration: TextDecoration.none,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                // Connect All button
+                GestureDetector(
+                  onTap: _isAddingAll ? null : () => _connectAll(_suggestedUsers!, currentUser),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF3B82F6),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: _isAddingAll
+                        ? const CupertinoActivityIndicator(color: Colors.white, radius: 8)
+                        : const Text(
+                            'Connect All',
+                            style: TextStyle(
+                              fontFamily: 'SF Pro Text',
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                              color: Colors.white,
+                              decoration: TextDecoration.none,
+                            ),
+                          ),
+                  ),
+                ).withClickCursor(),
+                const SizedBox(width: 8),
+                // Collapse button
+                GestureDetector(
+                  onTap: () => setState(() => _suggestionsCollapsed = true),
+                  child: const Icon(CupertinoIcons.chevron_up, size: 16, color: Color(0xFF94A3B8)),
+                ).withClickCursor(),
+              ],
+            ),
+            const SizedBox(height: 12),
+            // User cards row
+            SizedBox(
+              height: 90,
+              child: Row(
+                children: [
+                  // Previous page button
+                  if (_suggestionsPage > 0)
+                    GestureDetector(
+                      onTap: () => setState(() => _suggestionsPage--),
+                      child: Container(
+                        width: 28,
+                        height: 28,
+                        margin: const EdgeInsets.only(right: 8),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          shape: BoxShape.circle,
+                          border: Border.all(color: const Color(0xFFE2E8F0)),
+                        ),
+                        child: const Icon(CupertinoIcons.chevron_left, size: 14, color: Color(0xFF64748B)),
+                      ),
+                    ).withClickCursor(),
+                  // User cards
+                  Expanded(
+                    child: ListView.separated(
+                      scrollDirection: Axis.horizontal,
+                      itemCount: pageUsers.length,
+                      separatorBuilder: (_, __) => const SizedBox(width: 10),
+                      itemBuilder: (context, index) {
+                        final user = pageUsers[index];
+                        final isLoading = _isOperationInProgress(user.reference.id);
+                        return Container(
+                          width: 180,
+                          padding: const EdgeInsets.all(10),
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(color: const Color(0xFFE2E8F0), width: 0.5),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  // Avatar
+                                  CircleAvatar(
+                                    radius: 16,
+                                    backgroundColor: const Color(0xFFE2E8F0),
+                                    backgroundImage: user.photoUrl.isNotEmpty
+                                        ? NetworkImage(user.photoUrl)
+                                        : null,
+                                    child: user.photoUrl.isEmpty
+                                        ? Text(
+                                            user.displayName.isNotEmpty
+                                                ? user.displayName[0].toUpperCase()
+                                                : '?',
+                                            style: const TextStyle(
+                                              fontSize: 14,
+                                              fontWeight: FontWeight.w600,
+                                              color: Color(0xFF64748B),
+                                              decoration: TextDecoration.none,
+                                            ),
+                                          )
+                                        : null,
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          user.displayName,
+                                          style: const TextStyle(
+                                            fontFamily: 'SF Pro Text',
+                                            fontSize: 13,
+                                            fontWeight: FontWeight.w600,
+                                            color: Color(0xFF1A1A1A),
+                                            decoration: TextDecoration.none,
+                                          ),
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                        Text(
+                                          user.email,
+                                          style: const TextStyle(
+                                            fontFamily: 'SF Pro Text',
+                                            fontSize: 10,
+                                            color: Color(0xFF94A3B8),
+                                            decoration: TextDecoration.none,
+                                          ),
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const Spacer(),
+                              // Connect button
+                              GestureDetector(
+                                onTap: isLoading
+                                    ? null
+                                    : () => _sendConnectionRequest(user),
+                                child: Container(
+                                  width: double.infinity,
+                                  padding: const EdgeInsets.symmetric(vertical: 6),
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFFEFF6FF),
+                                    borderRadius: BorderRadius.circular(6),
+                                    border: Border.all(color: const Color(0xFF3B82F6), width: 0.5),
+                                  ),
+                                  child: Center(
+                                    child: isLoading
+                                        ? const CupertinoActivityIndicator(radius: 8)
+                                        : const Text(
+                                            'Connect',
+                                            style: TextStyle(
+                                              fontFamily: 'SF Pro Text',
+                                              fontSize: 12,
+                                              fontWeight: FontWeight.w600,
+                                              color: Color(0xFF3B82F6),
+                                              decoration: TextDecoration.none,
+                                            ),
+                                          ),
+                                  ),
+                                ),
+                              ).withClickCursor(),
+                            ],
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                  // Next page button
+                  if (_suggestionsPage < totalPages - 1)
+                    GestureDetector(
+                      onTap: () => setState(() => _suggestionsPage++),
+                      child: Container(
+                        width: 28,
+                        height: 28,
+                        margin: const EdgeInsets.only(left: 8),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          shape: BoxShape.circle,
+                          border: Border.all(color: const Color(0xFFE2E8F0)),
+                        ),
+                        child: const Icon(CupertinoIcons.chevron_right, size: 14, color: Color(0xFF64748B)),
+                      ),
+                    ).withClickCursor(),
+                ],
+              ),
+            ),
+            // Page indicator
+            if (totalPages > 1)
+              Padding(
+                padding: const EdgeInsets.only(top: 8),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: List.generate(totalPages, (i) => Container(
+                    width: i == _suggestionsPage ? 16 : 6,
+                    height: 6,
+                    margin: const EdgeInsets.symmetric(horizontal: 2),
+                    decoration: BoxDecoration(
+                      color: i == _suggestionsPage
+                          ? const Color(0xFF3B82F6)
+                          : const Color(0xFFCBD5E1),
+                      borderRadius: BorderRadius.circular(3),
+                    ),
+                  )),
+                ),
+              ),
+          ],
+        ),
+      ),
+      secondChild: // Collapsed state — small bar to re-expand
+          GestureDetector(
+        onTap: () => setState(() => _suggestionsCollapsed = false),
+        child: Container(
+          margin: const EdgeInsets.only(bottom: 12),
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+          decoration: BoxDecoration(
+            color: const Color(0xFFEFF6FF),
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: const Color(0xFFBFDBFE), width: 0.5),
+          ),
+          child: Row(
+            children: [
+              const Icon(CupertinoIcons.building_2_fill, size: 14, color: Color(0xFF3B82F6)),
+              const SizedBox(width: 6),
+              Text(
+                '$totalUsers people from @$domain',
+                style: const TextStyle(
+                  fontFamily: 'SF Pro Text',
+                  fontSize: 13,
+                  color: Color(0xFF3B82F6),
+                  fontWeight: FontWeight.w500,
+                  decoration: TextDecoration.none,
+                ),
+              ),
+              const Spacer(),
+              const Icon(CupertinoIcons.chevron_down, size: 14, color: Color(0xFF94A3B8)),
+            ],
+          ),
+        ),
+      ).withClickCursor(),
+      crossFadeState: _suggestionsCollapsed
+          ? CrossFadeState.showSecond
+          : CrossFadeState.showFirst,
+      duration: const Duration(milliseconds: 250),
+    );
+  }
+
   Widget _buildConnectionsList(UsersRecord currentUser) {
     final connections = currentUser.friends;
 
     if (connections.isEmpty) {
-      return _buildEmptyState(
-        icon: CupertinoIcons.person_2,
-        title: 'No Connections Yet',
-        subtitle: 'Start connecting with people. Tap “Add New” to get started.',
+      return Column(
+        children: [
+          _buildSuggestionsBanner(currentUser),
+          Expanded(
+            child: _buildEmptyState(
+              icon: CupertinoIcons.person_2,
+              title: 'No Connections Yet',
+              subtitle: 'Start connecting with people. Tap "Add New" to get started.',
+            ),
+          ),
+        ],
       );
     }
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        _buildSuggestionsBanner(currentUser),
         Padding(
           padding: const EdgeInsets.fromLTRB(2, 8, 2, 12),
           child: Text(
@@ -368,6 +925,55 @@ class _ConnectionsWidgetState extends State<ConnectionsWidget> {
             child: LayoutBuilder(
               builder: (context, constraints) {
                 final crossAxisCount = _gridColumnCount(constraints.maxWidth);
+                final cardHeight = crossAxisCount == 1 ? 100.0 : 130.0;
+                // When search is active, we need to filter by loading each user
+                // Use a FutureBuilder approach to pre-filter
+                if (_searchQuery.isNotEmpty) {
+                  return FutureBuilder<List<MapEntry<DocumentReference, UsersRecord>>>(
+                    future: _loadAndFilterConnections(connections),
+                    builder: (context, snapshot) {
+                      if (!snapshot.hasData) {
+                        return ConnectionsGridSkeleton(crossAxisCount: crossAxisCount, cardHeight: cardHeight);
+                      }
+                      final filtered = snapshot.data!;
+                      if (filtered.isEmpty) {
+                        return Center(
+                          child: Text(
+                            'No matches found',
+                            style: TextStyle(
+                              fontFamily: 'SF Pro Text',
+                              fontSize: 14,
+                              color: Color(0xFF94A3B8),
+                              decoration: TextDecoration.none,
+                            ),
+                          ),
+                        );
+                      }
+                      return GridView.builder(
+                        controller: _connectionsScrollController,
+                        padding: const EdgeInsets.only(bottom: 24),
+                        gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                          crossAxisCount: crossAxisCount,
+                          crossAxisSpacing: _kCardGridSpacing,
+                          mainAxisSpacing: _kCardGridSpacing,
+                          mainAxisExtent: cardHeight,
+                        ),
+                        itemCount: filtered.length,
+                        itemBuilder: (context, index) {
+                          final user = filtered[index].value;
+                          final isActuallyConnected =
+                              _isUserConnected(user.reference, currentUser);
+                          return _buildPersonCard(
+                            user,
+                            currentUser,
+                            isConnected: isActuallyConnected,
+                          );
+                        },
+                      );
+                    },
+                  );
+                }
+                // No search — render all connections normally
                 return GridView.builder(
                   controller: _connectionsScrollController,
                   padding: const EdgeInsets.only(bottom: 24),
@@ -375,7 +981,7 @@ class _ConnectionsWidgetState extends State<ConnectionsWidget> {
                     crossAxisCount: crossAxisCount,
                     crossAxisSpacing: _kCardGridSpacing,
                     mainAxisSpacing: _kCardGridSpacing,
-                    mainAxisExtent: 176,
+                    mainAxisExtent: cardHeight,
                   ),
                   itemCount: connections.length,
                   itemBuilder: (context, index) {
@@ -384,7 +990,7 @@ class _ConnectionsWidgetState extends State<ConnectionsWidget> {
                       userRef: connectionRef,
                       fetchOnce: fsGetUserOnce,
                       builder: (context, user) {
-                        if (user == null || !_matchesSearch(user)) {
+                        if (user == null) {
                           return const SizedBox.shrink();
                         }
                         final isActuallyConnected =
@@ -404,6 +1010,23 @@ class _ConnectionsWidgetState extends State<ConnectionsWidget> {
         ),
       ],
     );
+  }
+
+  /// Pre-load all connection user data and filter by search query.
+  /// This avoids the GridView gap issue where SizedBox.shrink() creates
+  /// empty cells in a fixed grid layout.
+  Future<List<MapEntry<DocumentReference, UsersRecord>>> _loadAndFilterConnections(
+      List<DocumentReference> connections) async {
+    final results = <MapEntry<DocumentReference, UsersRecord>>[];
+    for (final ref in connections) {
+      try {
+        final user = await fsGetUserOnce(ref);
+        if (_matchesSearch(user)) {
+          results.add(MapEntry(ref, user));
+        }
+      } catch (_) {}
+    }
+    return results;
   }
 
   bool _matchesSearch(UsersRecord user) {
@@ -633,7 +1256,7 @@ class _ConnectionsWidgetState extends State<ConnectionsWidget> {
             children: [
               Expanded(
                 child: Padding(
-                  padding: const EdgeInsets.fromLTRB(14, 14, 10, 10),
+                  padding: const EdgeInsets.fromLTRB(12, 8, 8, 4),
                   child: Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
@@ -684,17 +1307,16 @@ class _ConnectionsWidgetState extends State<ConnectionsWidget> {
                               ),
                             ],
                             if (user.bio.isNotEmpty) ...[
-                              const SizedBox(height: 8),
+                              const SizedBox(height: 4),
                               Text(
                                 user.bio,
-                                maxLines: 2,
+                                maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
                                 style: const TextStyle(
                                   fontFamily: 'SF Pro Text',
                                   color: Color(0xFF475569),
-                                  fontSize: 13,
+                                  fontSize: 12,
                                   fontWeight: FontWeight.w400,
-                                  height: 1.3,
                                   decoration: TextDecoration.none,
                                 ),
                               ),
@@ -720,7 +1342,7 @@ class _ConnectionsWidgetState extends State<ConnectionsWidget> {
               ),
               Padding(
                 padding:
-                    const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                 child: Row(
                   children: [
                     const Icon(
@@ -1294,20 +1916,57 @@ class _ConnectionsWidgetState extends State<ConnectionsWidget> {
         return;
       }
 
-      await fsArrayUnion(
-        currentUserReference!,
-        'sent_requests',
-        [user.reference],
-      );
-      await fsArrayUnion(
-        user.reference,
-        'friend_requests',
-        [currentUserReference!],
-      );
+      // Check if target user has auto-accept settings enabled
+      final targetUser = await fsGetUserOnce(user.reference);
+      final senderDomain = _getCompanyDomain(currentUserData.email);
+      final targetDomain = _getCompanyDomain(targetUser.email);
 
-      if (mounted) {
-        _showSuccessMessage('Connection request sent to ${user.displayName}');
+      bool shouldAutoAccept = targetUser.autoAcceptAllRequests;
+      if (!shouldAutoAccept && targetUser.autoAcceptSameCompany &&
+          senderDomain != null && senderDomain == targetDomain) {
+        shouldAutoAccept = true;
       }
+      if (!shouldAutoAccept && senderDomain != null &&
+          targetUser.autoAcceptEmailDomains.contains(senderDomain)) {
+        shouldAutoAccept = true;
+      }
+
+      if (shouldAutoAccept) {
+        // Directly add as friends (skip the request flow)
+        await fsArrayUnion(currentUserReference!, 'friends', [user.reference]);
+        await fsArrayUnion(user.reference, 'friends', [currentUserReference!]);
+        // Clean up any stale sent_requests/friend_requests
+        await fsArrayRemove(currentUserReference!, 'sent_requests', [user.reference]);
+        await fsArrayRemove(user.reference, 'friend_requests', [currentUserReference!]);
+
+        if (mounted) {
+          _showSuccessMessage('Connected with ${user.displayName}!');
+        }
+      } else {
+        // Send a regular connection request
+        await fsArrayUnion(
+          currentUserReference!,
+          'sent_requests',
+          [user.reference],
+        );
+        await fsArrayUnion(
+          user.reference,
+          'friend_requests',
+          [currentUserReference!],
+        );
+
+        if (mounted) {
+          _showSuccessMessage('Connection request sent to ${user.displayName}');
+        }
+      }
+
+      // Fire-and-forget: send email notification to recipient
+      final currentUserData2 = await fsGetUserOnce(currentUserReference!);
+      actions.sendConnectionRequestEmail(
+        recipientEmail: user.email,
+        recipientName: user.displayName,
+        senderName: currentUserData2.displayName,
+      );
     } catch (e) {
       print('Error sending connection request: $e');
       if (mounted) {

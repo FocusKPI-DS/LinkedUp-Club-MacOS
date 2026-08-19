@@ -99,8 +99,44 @@ class _PDFViewWidgetState extends State<PDFViewWidget> {
     return 'unknown';
   }
 
+  String? _tempFilePath;
+
+  /// Downloads a remote file to a temporary directory and returns the local path.
+  Future<String?> _downloadToTemp(String url, String fileName) async {
+    try {
+      final dir = await getTemporaryDirectory();
+      // Sanitize filename
+      final safeName = fileName.replaceAll(RegExp(r'[^\w\.\-]'), '_');
+      final filePath = '${dir.path}/lona_preview_$safeName';
+      final file = File(filePath);
+
+      // Skip re-download if already cached
+      if (await file.exists() && await file.length() > 0) {
+        _tempFilePath = filePath;
+        return filePath;
+      }
+
+      final response = await http.get(Uri.parse(url));
+      if (response.statusCode == 200) {
+        await file.writeAsBytes(response.bodyBytes);
+        _tempFilePath = filePath;
+        return filePath;
+      }
+      return null;
+    } catch (e) {
+      if (kDebugMode) print('Download error: $e');
+      return null;
+    }
+  }
+
   @override
   void dispose() {
+    // Clean up temp file
+    if (_tempFilePath != null) {
+      try {
+        File(_tempFilePath!).deleteSync();
+      } catch (_) {}
+    }
     _model.maybeDispose();
     super.dispose();
   }
@@ -244,10 +280,10 @@ class _PDFViewWidgetState extends State<PDFViewWidget> {
         ),
       );
     } else if (type == 'office') {
-      // Google Docs Viewer (often more reliable for standard public URLs)
       final encodedUrl = Uri.encodeComponent(widget.url!);
-      final viewerUrl =
+      final googleViewerUrl =
           'https://docs.google.com/gview?embedded=true&url=$encodedUrl';
+      final isDesktop = !kIsWeb && (Platform.isMacOS || Platform.isWindows || Platform.isLinux);
 
       return Stack(
         children: [
@@ -257,19 +293,12 @@ class _PDFViewWidgetState extends State<PDFViewWidget> {
               children: [
                 CircularProgressIndicator(),
                 SizedBox(height: 16),
-                Padding(
-                  padding: EdgeInsets.symmetric(horizontal: 24.0),
-                  child: Text(
-                    'Loading preview...\n\nIf the file does not appear, it might not be publicly accessible (e.g. requires login). In that case, please use the Download button below.',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(color: Colors.grey),
-                  ),
-                ),
+                Text('Loading preview...', style: TextStyle(color: Colors.grey)),
               ],
             ),
           ),
           InAppWebView(
-            initialUrlRequest: URLRequest(url: WebUri(viewerUrl)),
+            initialUrlRequest: URLRequest(url: WebUri(googleViewerUrl)),
             initialSettings: InAppWebViewSettings(
               isInspectable: kDebugMode,
               mediaPlaybackRequiresUserGesture: false,
@@ -277,8 +306,85 @@ class _PDFViewWidgetState extends State<PDFViewWidget> {
               iframeAllow: "camera; microphone",
               iframeAllowFullscreen: true,
               transparentBackground: true,
+              supportZoom: true,
+              builtInZoomControls: true,
             ),
+            onLoadStop: (controller, url) async {
+              // Inject JS to detect Google Docs Viewer errors and show a helpful overlay
+              await controller.evaluateJavascript(source: '''
+                (function() {
+                  var checkCount = 0;
+                  var overlayShown = false;
+                  function checkForError() {
+                    if (overlayShown || checkCount > 60) return;
+                    checkCount++;
+                    var body = document.body ? document.body.innerText : '';
+                    if (body.indexOf('无法预览') !== -1 || 
+                        body.indexOf('sorry') !== -1 || 
+                        body.indexOf('Unable to') !== -1 ||
+                        body.indexOf('problem loading') !== -1 ||
+                        body.indexOf('加载此页面时出现问题') !== -1) {
+                      overlayShown = true;
+                      var overlay = document.createElement('div');
+                      overlay.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(255,255,255,0.95);display:flex;align-items:center;justify-content:center;z-index:99999;flex-direction:column;font-family:-apple-system,sans-serif;';
+                      overlay.innerHTML = '<div style="text-align:center;padding:24px;">' +
+                        '<div style="font-size:48px;margin-bottom:16px;">📄</div>' +
+                        '<div style="font-size:16px;font-weight:600;color:#111;margin-bottom:8px;">This page cannot be previewed</div>' +
+                        '<div style="font-size:13px;color:#6B7280;line-height:1.5;">Use the <b style=\\'color:#2563EB\\'>Open Full Document</b> button<br>at the bottom right to view the complete file.</div>' +
+                        '</div>';
+                      document.body.appendChild(overlay);
+                    }
+                  }
+                  setInterval(checkForError, 2000);
+                  checkForError();
+                })();
+              ''');
+            },
           ),
+          // "Open in App" button floating at bottom-right on desktop
+          if (isDesktop)
+            Positioned(
+              bottom: 12,
+              right: 12,
+              child: StatefulBuilder(
+                builder: (context, setLocalState) {
+                  bool isOpening = false;
+                  return ElevatedButton.icon(
+                    onPressed: () async {
+                      setLocalState(() => isOpening = true);
+                      try {
+                        final path = await _downloadToTemp(
+                          widget.url!,
+                          widget.fileName ?? 'document.docx',
+                        );
+                        if (path != null) {
+                          await Process.run('open', [path]);
+                        }
+                      } catch (e) {
+                        if (kDebugMode) print('Open file error: $e');
+                      }
+                      if (context.mounted) setLocalState(() => isOpening = false);
+                    },
+                    icon: isOpening
+                        ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                        : const Icon(Icons.open_in_new, size: 14),
+                    label: Text(
+                      isOpening ? 'Opening...' : 'Open Full Document',
+                      style: const TextStyle(fontSize: 12),
+                    ),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF2563EB),
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      elevation: 4,
+                    ),
+                  );
+                },
+              ),
+            ),
         ],
       );
     } else {

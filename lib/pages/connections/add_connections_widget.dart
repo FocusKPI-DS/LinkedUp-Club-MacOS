@@ -1739,6 +1739,14 @@ class _AddConnectionsWidgetState extends State<AddConnectionsWidget> {
       if (mounted) {
         _showSuccessMessage('Connection request sent to ${user.displayName}');
       }
+
+      // Fire-and-forget: send email notification to recipient
+      final currentUserData2 = await fsGetUserOnce(currentUserReference!);
+      actions.sendConnectionRequestEmail(
+        recipientEmail: user.email,
+        recipientName: user.displayName,
+        senderName: currentUserData2.displayName,
+      );
     } catch (e) {
       print('Error sending connection request: $e');
       if (mounted) {

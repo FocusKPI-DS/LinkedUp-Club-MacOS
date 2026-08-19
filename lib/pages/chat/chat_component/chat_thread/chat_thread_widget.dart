@@ -165,12 +165,20 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
       if (targetLang == 'system' || targetLang.isEmpty) {
         final locale = WidgetsBinding.instance.platformDispatcher.locale;
         targetLang = locale.languageCode;
-        if (locale.countryCode != null && locale.countryCode!.isNotEmpty) {
+        // Only append country code for Chinese (zh-cn / zh-tw),
+        // other languages just use the base code (e.g. 'en', 'es').
+        if (targetLang == 'zh' && locale.countryCode != null && locale.countryCode!.isNotEmpty) {
           targetLang = '$targetLang-${locale.countryCode!.toLowerCase()}';
         }
       }
+      // Strip mention markup before translating so the API
+      // doesn't mangle <@userId|DisplayName> into garbled text.
+      final cleanContent = content.replaceAllMapped(
+        RegExp(r'<@[^|]+\|([^>]+)>'),
+        (m) => '@${m.group(1)}',
+      );
       final translation = await translator.translate(
-        content,
+        cleanContent,
         to: targetLang,
       );
       setState(() {
@@ -1698,136 +1706,210 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
 
   Future<void> _showEmojiMenu() async {
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final isDesktop = !kIsWeb && (Platform.isMacOS || Platform.isWindows || Platform.isLinux);
 
-    final selected = await showModalBottomSheet<String>(
-      context: context,
-      backgroundColor: Colors.transparent,
-      isScrollControlled: true,
-      builder: (context) => Container(
-        height: MediaQuery.of(context).size.height * 0.45,
-        decoration: BoxDecoration(
-          color: isDark ? const Color(0xFF1C1C1E) : Colors.white,
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+    final emojiConfig = Config(
+      height: isDesktop ? 560 : MediaQuery.of(context).size.height * 0.35,
+      checkPlatformCompatibility: true,
+      emojiViewConfig: EmojiViewConfig(
+        columns: isDesktop ? 5 : 8,
+        emojiSizeMax: isDesktop ? 128.0 : 28.0,
+        verticalSpacing: isDesktop ? 12 : 0,
+        horizontalSpacing: isDesktop ? 12 : 0,
+        gridPadding: isDesktop
+            ? const EdgeInsets.symmetric(horizontal: 16, vertical: 12)
+            : EdgeInsets.zero,
+        recentsLimit: 28,
+        replaceEmojiOnLimitExceed: true,
+        noRecents: Text(
+          'No Recents',
+          style: TextStyle(
+            fontSize: 16,
+            color: isDark ? Colors.white54 : Colors.black54,
+          ),
         ),
-        child: Column(
-          children: [
-            // Handle bar
-            Container(
-              margin: const EdgeInsets.only(top: 12, bottom: 8),
-              width: 36,
-              height: 5,
+        loadingIndicator: const Center(
+          child: CupertinoActivityIndicator(),
+        ),
+        buttonMode: ButtonMode.CUPERTINO,
+        backgroundColor:
+            isDark ? const Color(0xFF1C1C1E) : Colors.white,
+      ),
+      skinToneConfig: const SkinToneConfig(
+        enabled: true,
+        dialogBackgroundColor: Colors.white,
+        indicatorColor: Colors.grey,
+      ),
+      categoryViewConfig: CategoryViewConfig(
+        initCategory: Category.RECENT,
+        backgroundColor:
+            isDark ? const Color(0xFF1C1C1E) : Colors.white,
+        indicatorColor: FlutterFlowTheme.of(context).primary,
+        iconColor: isDark ? Colors.white54 : Colors.black45,
+        iconColorSelected: FlutterFlowTheme.of(context).primary,
+        categoryIcons: const CategoryIcons(
+          recentIcon: CupertinoIcons.clock,
+          smileyIcon: CupertinoIcons.smiley,
+          animalIcon: CupertinoIcons.tortoise,
+          foodIcon: CupertinoIcons.cart,
+          activityIcon: CupertinoIcons.sportscourt,
+          travelIcon: CupertinoIcons.car,
+          objectIcon: CupertinoIcons.lightbulb,
+          symbolIcon: CupertinoIcons.heart,
+          flagIcon: CupertinoIcons.flag,
+        ),
+      ),
+      bottomActionBarConfig: BottomActionBarConfig(
+        backgroundColor:
+            isDark ? const Color(0xFF1C1C1E) : Colors.white,
+        buttonColor: isDark ? Colors.white54 : Colors.black45,
+        buttonIconColor: isDark ? Colors.white : Colors.black87,
+        showBackspaceButton: false,
+        showSearchViewButton: true,
+      ),
+      searchViewConfig: SearchViewConfig(
+        backgroundColor: isDark
+            ? const Color(0xFF2C2C2E)
+            : const Color(0xFFF2F2F7),
+        buttonIconColor: isDark ? Colors.white54 : Colors.black54,
+        hintText: 'Search emoji...',
+      ),
+    );
+
+    String? selected;
+
+    if (isDesktop) {
+      // Desktop: centered dialog for easy mouse interaction
+      selected = await showDialog<String>(
+        context: context,
+        barrierColor: Colors.black.withOpacity(0.3),
+        builder: (context) => Center(
+          child: Material(
+            color: Colors.transparent,
+            child: Container(
+              width: 800,
+              height: 700,
               decoration: BoxDecoration(
-                color: Colors.grey.withOpacity(0.3),
-                borderRadius: BorderRadius.circular(2.5),
+                color: isDark ? const Color(0xFF1C1C1E) : Colors.white,
+                borderRadius: BorderRadius.circular(16),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.2),
+                    blurRadius: 24,
+                    offset: const Offset(0, 8),
+                  ),
+                ],
               ),
-            ),
-            // Title
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              child: Row(
+              child: Column(
                 children: [
-                  Text(
-                    'Add Reaction',
-                    style: TextStyle(
-                      fontSize: 17,
-                      fontWeight: FontWeight.w600,
-                      color: isDark ? Colors.white : Colors.black,
+                  // Header
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                    child: Row(
+                      children: [
+                        Text(
+                          'Add Reaction',
+                          style: TextStyle(
+                            fontSize: 17,
+                            fontWeight: FontWeight.w600,
+                            color: isDark ? Colors.white : Colors.black,
+                          ),
+                        ),
+                        const Spacer(),
+                        GestureDetector(
+                          onTap: () => Navigator.pop(context),
+                          child: Icon(
+                            CupertinoIcons.xmark_circle_fill,
+                            color: isDark ? Colors.white38 : Colors.black26,
+                            size: 24,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
-                  const Spacer(),
-                  GestureDetector(
-                    onTap: () => Navigator.pop(context),
-                    child: Icon(
-                      CupertinoIcons.xmark_circle_fill,
-                      color: isDark ? Colors.white38 : Colors.black26,
-                      size: 24,
+                  Divider(height: 1, color: isDark ? Colors.white.withOpacity(0.08) : Colors.black.withOpacity(0.06)),
+                  // Emoji Picker
+                  Expanded(
+                    child: EmojiPicker(
+                      onEmojiSelected: (category, emoji) {
+                        Navigator.pop(context, emoji.emoji);
+                      },
+                      config: emojiConfig,
                     ),
                   ),
                 ],
               ),
             ),
-            // Emoji Picker - Full featured
-            Expanded(
-              child: Padding(
-                padding: const EdgeInsets.only(
-                    bottom: 20.0,
-                    left:
-                        8.0), // Add bottom padding to move buttons up, left padding for search button
-                child: EmojiPicker(
-                  onEmojiSelected: (category, emoji) {
-                    Navigator.pop(context, emoji.emoji);
-                  },
-                  config: Config(
-                    height: MediaQuery.of(context).size.height * 0.35,
-                    checkPlatformCompatibility: true,
-                    emojiViewConfig: EmojiViewConfig(
-                      emojiSizeMax: 28,
-                      verticalSpacing: 0,
-                      horizontalSpacing: 0,
-                      gridPadding: EdgeInsets.zero,
-                      recentsLimit: 28,
-                      replaceEmojiOnLimitExceed: true,
-                      noRecents: Text(
-                        'No Recents',
-                        style: TextStyle(
-                          fontSize: 16,
-                          color: isDark ? Colors.white54 : Colors.black54,
-                        ),
-                      ),
-                      loadingIndicator: const Center(
-                        child: CupertinoActivityIndicator(),
-                      ),
-                      buttonMode: ButtonMode.CUPERTINO,
-                      backgroundColor:
-                          isDark ? const Color(0xFF1C1C1E) : Colors.white,
-                    ),
-                    skinToneConfig: const SkinToneConfig(
-                      enabled: true,
-                      dialogBackgroundColor: Colors.white,
-                      indicatorColor: Colors.grey,
-                    ),
-                    categoryViewConfig: CategoryViewConfig(
-                      initCategory: Category.RECENT,
-                      backgroundColor:
-                          isDark ? const Color(0xFF1C1C1E) : Colors.white,
-                      indicatorColor: FlutterFlowTheme.of(context).primary,
-                      iconColor: isDark ? Colors.white54 : Colors.black45,
-                      iconColorSelected: FlutterFlowTheme.of(context).primary,
-                      categoryIcons: const CategoryIcons(
-                        recentIcon: CupertinoIcons.clock,
-                        smileyIcon: CupertinoIcons.smiley,
-                        animalIcon: CupertinoIcons.tortoise,
-                        foodIcon: CupertinoIcons.cart,
-                        activityIcon: CupertinoIcons.sportscourt,
-                        travelIcon: CupertinoIcons.car,
-                        objectIcon: CupertinoIcons.lightbulb,
-                        symbolIcon: CupertinoIcons.heart,
-                        flagIcon: CupertinoIcons.flag,
+          ),
+        ),
+      );
+    } else {
+      // Mobile: bottom sheet
+      selected = await showModalBottomSheet<String>(
+        context: context,
+        backgroundColor: Colors.transparent,
+        isScrollControlled: true,
+        builder: (context) => Container(
+          height: MediaQuery.of(context).size.height * 0.45,
+          decoration: BoxDecoration(
+            color: isDark ? const Color(0xFF1C1C1E) : Colors.white,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+          ),
+          child: Column(
+            children: [
+              // Handle bar
+              Container(
+                margin: const EdgeInsets.only(top: 12, bottom: 8),
+                width: 36,
+                height: 5,
+                decoration: BoxDecoration(
+                  color: Colors.grey.withOpacity(0.3),
+                  borderRadius: BorderRadius.circular(2.5),
+                ),
+              ),
+              // Header
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                child: Row(
+                  children: [
+                    Text(
+                      'Add Reaction',
+                      style: TextStyle(
+                        fontSize: 17,
+                        fontWeight: FontWeight.w600,
+                        color: isDark ? Colors.white : Colors.black,
                       ),
                     ),
-                    bottomActionBarConfig: BottomActionBarConfig(
-                      backgroundColor:
-                          isDark ? const Color(0xFF1C1C1E) : Colors.white,
-                      buttonColor: isDark ? Colors.white54 : Colors.black45,
-                      buttonIconColor: isDark ? Colors.white : Colors.black87,
-                      showBackspaceButton: false,
-                      showSearchViewButton: true,
+                    const Spacer(),
+                    GestureDetector(
+                      onTap: () => Navigator.pop(context),
+                      child: Icon(
+                        CupertinoIcons.xmark_circle_fill,
+                        color: isDark ? Colors.white38 : Colors.black26,
+                        size: 24,
+                      ),
                     ),
-                    searchViewConfig: SearchViewConfig(
-                      backgroundColor: isDark
-                          ? const Color(0xFF2C2C2E)
-                          : const Color(0xFFF2F2F7),
-                      buttonIconColor: isDark ? Colors.white54 : Colors.black54,
-                      hintText: 'Search emoji...',
-                    ),
+                  ],
+                ),
+              ),
+              Divider(height: 1, color: isDark ? Colors.white.withOpacity(0.08) : Colors.black.withOpacity(0.06)),
+              // Emoji Picker
+              Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.only(bottom: 20.0, left: 8.0),
+                  child: EmojiPicker(
+                    onEmojiSelected: (category, emoji) {
+                      Navigator.pop(context, emoji.emoji);
+                    },
+                    config: emojiConfig,
                   ),
                 ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
-      ),
-    );
+      );
+    }
 
     if (!mounted) return;
     if (selected != null && selected.isNotEmpty) {
@@ -3255,7 +3337,7 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
                       child: Container(
                         width: double.infinity,
                         color: isSelected
-                            ? const Color(0xFF007AFF).withOpacity(0.05)
+                            ? const Color(0xFF3B82F6).withOpacity(0.05)
                             : Colors.transparent,
                         child: Padding(
                           padding: _messageRowPadding,
@@ -3273,7 +3355,7 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
                                       value: isSelected,
                                       onChanged: (_) {},
                                       shape: const CircleBorder(),
-                                      activeColor: const Color(0xFF007AFF),
+                                      activeColor: const Color(0xFF3B82F6),
                                     ),
                                   ),
                                 ),
@@ -3409,19 +3491,17 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
                                                           borderRadius:
                                                               BorderRadius
                                                                   .circular(
-                                                                      18.0),
+                                                                      12.0),
                                                           border: Border.all(
-                                                            color: Colors.black
-                                                                .withOpacity(
-                                                                    0.08),
-                                                            width: 1.0,
+                                                            color: const Color(0xFFE5E7EB),
+                                                            width: 0.5,
                                                           ),
                                                           boxShadow: widget
                                                                   .isHighlighted
                                                               ? [
                                                                   BoxShadow(
                                                                     color: const Color(
-                                                                            0xFF007AFF)
+                                                                            0xFF3B82F6)
                                                                         .withOpacity(
                                                                             0.4),
                                                                     blurRadius:
@@ -3487,7 +3567,7 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
                                                                         left:
                                                                             BorderSide(
                                                                           color:
-                                                                              Color(0xFF007AFF),
+                                                                              Color(0xFF3B82F6),
                                                                           width:
                                                                               3.0,
                                                                         ),
@@ -3510,14 +3590,17 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
                                                                                 widget.message?.replyToSender ?? 'Unknown',
                                                                                 style: TextStyle(
                                                                                   fontFamily: chatMessageFontFamily,
-                                                                                  color: Color(0xFF007AFF),
+                                                                                  color: Color(0xFF3B82F6),
                                                                                   fontSize: 13.0,
                                                                                   fontWeight: FontWeight.w600,
                                                                                 ),
                                                                               ),
                                                                               const SizedBox(height: 2.0),
                                                                               Text(
-                                                                                widget.message?.replyToContent ?? '',
+                                                                              (widget.message?.replyToContent ?? '').replaceAllMapped(
+                                                                                RegExp(r'<@[^|]+\|([^>]+)>'),
+                                                                                (m) => '@${m.group(1)}',
+                                                                              ),
                                                                                 style: TextStyle(
                                                                                   fontFamily: chatMessageFontFamily,
                                                                                   color: Color(0xFF667781),
@@ -3650,7 +3733,7 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
                                                                             ),
                                                                             a: TextStyle(
                                                                               fontFamily: chatMessageFontFamily,
-                                                                              color: const Color(0xFF007AFF),
+                                                                              color: const Color(0xFF3B82F6),
                                                                               fontSize: FFAppState().chatFontSize,
                                                                               letterSpacing: -0.4,
                                                                               fontWeight: FontWeight.w400,
@@ -3882,7 +3965,10 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
                                                                             ),
                                                                           ),
                                                                           child:
-                                                                              GestureDetector(
+                                                                              MouseRegion(
+                                                                            cursor: SystemMouseCursors.click,
+                                                                            child: GestureDetector(
+                                                                            behavior: HitTestBehavior.opaque,
                                                                             onLongPressStart: (details) {
                                                                               if (widget.isSelectionMode) return;
                                                                               widget.onMessageLongPress?.call(
@@ -3954,7 +4040,8 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
                                                                               ),
                                                                             ),
                                                                           ),
-                                                                        ),
+                                                                          ), // MouseRegion
+                                                                        ), // Container
                                                                       ],
                                                                     ),
                                                                   ),
@@ -4300,7 +4387,7 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
                       child: Container(
                         width: double.infinity,
                         color: isSelected
-                            ? const Color(0xFF007AFF).withOpacity(0.05)
+                            ? const Color(0xFF3B82F6).withOpacity(0.05)
                             : Colors.transparent,
                         child: Padding(
                           padding: _messageRowPadding,
@@ -4317,7 +4404,7 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
                                       value: isSelected,
                                       onChanged: (_) {},
                                       shape: const CircleBorder(),
-                                      activeColor: const Color(0xFF007AFF),
+                                      activeColor: const Color(0xFF3B82F6),
                                     ),
                                   ),
                                 ),
@@ -4487,19 +4574,17 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
                                                           borderRadius:
                                                               BorderRadius
                                                                   .circular(
-                                                                      18.0),
+                                                                      12.0),
                                                           border: Border.all(
-                                                            color: Colors.black
-                                                                .withOpacity(
-                                                                    0.08),
-                                                            width: 1.0,
+                                                            color: const Color(0xFFE5E7EB),
+                                                            width: 0.5,
                                                           ),
                                                           boxShadow: widget
                                                                   .isHighlighted
                                                               ? [
                                                                   BoxShadow(
                                                                     color: const Color(
-                                                                            0xFF007AFF)
+                                                                            0xFF3B82F6)
                                                                         .withOpacity(
                                                                             0.4),
                                                                     blurRadius:
@@ -4565,7 +4650,7 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
                                                                         left:
                                                                             BorderSide(
                                                                           color:
-                                                                              Color(0xFF007AFF),
+                                                                              Color(0xFF3B82F6),
                                                                           width:
                                                                               3.0,
                                                                         ),
@@ -4588,14 +4673,17 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
                                                                                 widget.message?.replyToSender ?? 'Unknown',
                                                                                 style: TextStyle(
                                                                                   fontFamily: chatMessageFontFamily,
-                                                                                  color: Color(0xFF007AFF),
+                                                                                  color: Color(0xFF3B82F6),
                                                                                   fontSize: 13.0,
                                                                                   fontWeight: FontWeight.w600,
                                                                                 ),
                                                                               ),
                                                                               const SizedBox(height: 2.0),
                                                                               Text(
-                                                                                widget.message?.replyToContent ?? '',
+                                                                                (widget.message?.replyToContent ?? '').replaceAllMapped(
+                                                                                  RegExp(r'<@[^|]+\|([^>]+)>'),
+                                                                                  (m) => '@${m.group(1)}',
+                                                                                ),
                                                                                 style: TextStyle(
                                                                                   fontFamily: chatMessageFontFamily,
                                                                                   color: Color(0xFF667781),
@@ -4728,7 +4816,7 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
                                                                             ),
                                                                             a: TextStyle(
                                                                               fontFamily: chatMessageFontFamily,
-                                                                              color: const Color(0xFF007AFF),
+                                                                              color: const Color(0xFF3B82F6),
                                                                               fontSize: FFAppState().chatFontSize,
                                                                               letterSpacing: -0.4,
                                                                               fontWeight: FontWeight.w400,
@@ -4944,7 +5032,10 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
                                                                                 BorderRadius.circular(8.0),
                                                                           ),
                                                                           child:
-                                                                              GestureDetector(
+                                                                              MouseRegion(
+                                                                            cursor: SystemMouseCursors.click,
+                                                                            child: GestureDetector(
+                                                                            behavior: HitTestBehavior.opaque,
                                                                             onLongPressStart: (details) {
                                                                               if (widget.isSelectionMode) return;
                                                                               widget.onMessageLongPress?.call(
@@ -5010,7 +5101,8 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
                                                                               ),
                                                                             ),
                                                                           ),
-                                                                        ),
+                                                                          ), // MouseRegion
+                                                                        ), // Container
                                                                       ],
                                                                     ),
                                                                   ),

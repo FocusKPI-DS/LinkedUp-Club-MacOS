@@ -2475,14 +2475,19 @@ class _GroupChatDetailWidgetState extends State<GroupChatDetailWidget>
     if (confirmed != true) return;
 
     try {
-      // Remove user from chat members
-      final updatedMembers =
-          List<DocumentReference>.from(widget.chatDoc!.members);
-      updatedMembers.remove(user.reference);
+      // Atomically remove user from chat members (avoids race conditions with stale data)
+      await fsArrayRemove(
+        widget.chatDoc!.reference,
+        'members',
+        [user.reference],
+      );
 
-      await fsPatchDocument(widget.chatDoc!.reference, {
-        'members': updatedMembers,
-      });
+      // Also remove from admin_users if they were an admin
+      await fsArrayRemove(
+        widget.chatDoc!.reference,
+        'admin_users',
+        [user.reference],
+      );
 
       // Send system message
       final userName = currentUserDisplayName.isNotEmpty
@@ -2573,6 +2578,51 @@ class _GroupChatDetailWidgetState extends State<GroupChatDetailWidget>
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Error updating group type: $e'),
+            backgroundColor: const Color(0xFFEF4444),
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _toggleInviteApproval() async {
+    if (widget.chatDoc == null) return;
+
+    final currentValue = widget.chatDoc?.inviteApprovalRequired ?? false;
+    final newValue = !currentValue;
+
+    try {
+      await fsPatchDocument(widget.chatDoc!.reference, {
+        'invite_approval_required': newValue,
+      });
+
+      // Send system message
+      final userName = currentUserDisplayName.isNotEmpty
+          ? currentUserDisplayName
+          : (currentUserDocument?.displayName ?? 'Someone');
+
+      final message = newValue
+          ? '$userName enabled invite approval — new invites require admin approval'
+          : '$userName disabled invite approval — members can now invite directly';
+
+      await _sendSystemMessage(message);
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(newValue
+                ? 'Invite approval enabled'
+                : 'Invite approval disabled'),
+            backgroundColor: const Color(0xFF10B981),
+          ),
+        );
+        safeSetState(() {});
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error updating invite approval: $e'),
             backgroundColor: const Color(0xFFEF4444),
           ),
         );
@@ -3686,8 +3736,7 @@ class _GroupChatDetailWidgetState extends State<GroupChatDetailWidget>
                                                           ),
                                                         ],
                                                       ),
-                                                      if (ChatHelpers.isGroupAdmin(currentChatDoc, currentUserReference))
-                                                        Builder(
+                                                      Builder(
                                                           builder: (context) =>
                                                               InkWell(
                                                             splashColor: Colors
@@ -4191,6 +4240,336 @@ class _GroupChatDetailWidgetState extends State<GroupChatDetailWidget>
                                             );
                                           },
                                         ),
+                                        // Invite approval toggle (admin/owner only)
+                                        if (ChatHelpers.isGroupAdmin(currentChatDoc, currentUserReference))
+                                          Padding(
+                                            padding: const EdgeInsets.only(top: 16.0),
+                                            child: Container(
+                                              padding: const EdgeInsets.symmetric(
+                                                  horizontal: 16.0, vertical: 12.0),
+                                              decoration: BoxDecoration(
+                                                color: (currentChatDoc?.inviteApprovalRequired ?? false)
+                                                    ? const Color(0xFFFEF3C7)
+                                                    : const Color(0xFFF0FDF4),
+                                                borderRadius: BorderRadius.circular(12.0),
+                                                border: Border.all(
+                                                  color: (currentChatDoc?.inviteApprovalRequired ?? false)
+                                                      ? const Color(0xFFFDE68A)
+                                                      : const Color(0xFFBBF7D0),
+                                                  width: 1,
+                                                ),
+                                              ),
+                                              child: Row(
+                                                children: [
+                                                  Icon(
+                                                    (currentChatDoc?.inviteApprovalRequired ?? false)
+                                                        ? Icons.verified_user_rounded
+                                                        : Icons.shield_outlined,
+                                                    color: (currentChatDoc?.inviteApprovalRequired ?? false)
+                                                        ? const Color(0xFFF59E0B)
+                                                        : const Color(0xFF22C55E),
+                                                    size: 20,
+                                                  ),
+                                                  const SizedBox(width: 12),
+                                                  Expanded(
+                                                    child: Column(
+                                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                                      children: [
+                                                        Text(
+                                                          'Invite Approval',
+                                                          style: TextStyle(
+                                                            fontFamily: 'Inter',
+                                                            fontSize: 14.0,
+                                                            fontWeight: FontWeight.w600,
+                                                            color: (currentChatDoc?.inviteApprovalRequired ?? false)
+                                                                ? const Color(0xFF92400E)
+                                                                : const Color(0xFF166534),
+                                                          ),
+                                                        ),
+                                                        const SizedBox(height: 2),
+                                                        Text(
+                                                          (currentChatDoc?.inviteApprovalRequired ?? false)
+                                                              ? 'New invites require admin approval'
+                                                              : 'Members can invite others directly',
+                                                          style: TextStyle(
+                                                            fontFamily: 'Inter',
+                                                            fontSize: 11.0,
+                                                            color: (currentChatDoc?.inviteApprovalRequired ?? false)
+                                                                ? const Color(0xFFB45309)
+                                                                : const Color(0xFF15803D),
+                                                          ),
+                                                        ),
+                                                      ],
+                                                    ),
+                                                  ),
+                                                  Switch(
+                                                    value: currentChatDoc?.inviteApprovalRequired ?? false,
+                                                    onChanged: (_) => _toggleInviteApproval(),
+                                                    activeColor: const Color(0xFFF59E0B),
+                                                  ),
+                                                ],
+                                              ),
+                                            ),
+                                          ),
+                                        // Pending member requests section (admin/owner only)
+                                        if (ChatHelpers.isGroupAdmin(currentChatDoc, currentUserReference))
+                                          Builder(
+                                            builder: (context) {
+                                              final pendingMembers =
+                                                  (currentChatDoc?.snapshotData['pending_members'] as List<dynamic>?) ?? [];
+                                              if (pendingMembers.isEmpty) return const SizedBox.shrink();
+
+                                              return Padding(
+                                                padding: const EdgeInsets.only(top: 16.0),
+                                                child: Container(
+                                                  decoration: BoxDecoration(
+                                                    color: const Color(0xFFFFF7ED),
+                                                    borderRadius: BorderRadius.circular(12.0),
+                                                    border: Border.all(
+                                                      color: const Color(0xFFFDE68A),
+                                                      width: 1,
+                                                    ),
+                                                  ),
+                                                  child: Column(
+                                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                                    children: [
+                                                      Padding(
+                                                        padding: const EdgeInsets.symmetric(
+                                                            horizontal: 16.0, vertical: 12.0),
+                                                        child: Row(
+                                                          children: [
+                                                            const Icon(
+                                                              Icons.pending_actions_rounded,
+                                                              color: Color(0xFFF59E0B),
+                                                              size: 18,
+                                                            ),
+                                                            const SizedBox(width: 8),
+                                                            Text(
+                                                              'Pending Requests (${pendingMembers.length})',
+                                                              style: FlutterFlowTheme.of(context)
+                                                                  .titleSmall
+                                                                  .override(
+                                                                    font: GoogleFonts.inter(
+                                                                      fontWeight: FontWeight.w600,
+                                                                    ),
+                                                                    color: const Color(0xFF92400E),
+                                                                    fontSize: 14.0,
+                                                                  ),
+                                                            ),
+                                                          ],
+                                                        ),
+                                                      ),
+                                                      ...pendingMembers.map((entry) {
+                                                        final map = entry as Map<String, dynamic>;
+                                                        final userRef = map['user_ref'] as DocumentReference?;
+                                                        final requestedBy = map['requested_by'] as DocumentReference?;
+                                                        if (userRef == null) return const SizedBox.shrink();
+
+                                                        return FutureBuilder<UsersRecord>(
+                                                          future: fsGetUserOnce(userRef),
+                                                          builder: (context, userSnap) {
+                                                            if (!userSnap.hasData) {
+                                                              return const Padding(
+                                                                padding: EdgeInsets.symmetric(
+                                                                    horizontal: 16, vertical: 8),
+                                                                child: SizedBox(
+                                                                  height: 20,
+                                                                  width: 20,
+                                                                  child: CircularProgressIndicator(
+                                                                      strokeWidth: 2),
+                                                                ),
+                                                              );
+                                                            }
+
+                                                            final user = userSnap.data!;
+                                                            return Padding(
+                                                              padding: const EdgeInsets.symmetric(
+                                                                  horizontal: 12, vertical: 6),
+                                                              child: Row(
+                                                                children: [
+                                                                  CircleAvatar(
+                                                                    radius: 18,
+                                                                    backgroundImage: user.photoUrl.isNotEmpty
+                                                                        ? NetworkImage(user.photoUrl)
+                                                                        : null,
+                                                                    backgroundColor:
+                                                                        const Color(0xFFE5E7EB),
+                                                                    child: user.photoUrl.isEmpty
+                                                                        ? Text(
+                                                                            user.displayName.isNotEmpty
+                                                                                ? user.displayName[0]
+                                                                                    .toUpperCase()
+                                                                                : '?',
+                                                                            style: const TextStyle(
+                                                                              fontFamily: 'Inter',
+                                                                              color: Color(0xFF6B7280),
+                                                                              fontSize: 14,
+                                                                              fontWeight: FontWeight.w600,
+                                                                            ),
+                                                                          )
+                                                                        : null,
+                                                                  ),
+                                                                  const SizedBox(width: 10),
+                                                                  Expanded(
+                                                                    child: Column(
+                                                                      crossAxisAlignment:
+                                                                          CrossAxisAlignment.start,
+                                                                      children: [
+                                                                        Text(
+                                                                          user.displayName,
+                                                                          style: const TextStyle(
+                                                                            fontFamily: 'Inter',
+                                                                            color: Color(0xFF111827),
+                                                                            fontSize: 13,
+                                                                            fontWeight: FontWeight.w500,
+                                                                          ),
+                                                                          overflow: TextOverflow.ellipsis,
+                                                                        ),
+                                                                        if (requestedBy != null)
+                                                                          FutureBuilder<UsersRecord>(
+                                                                            future: fsGetUserOnce(
+                                                                                requestedBy),
+                                                                            builder: (ctx, reqSnap) {
+                                                                              final reqName = reqSnap
+                                                                                      .data
+                                                                                      ?.displayName ??
+                                                                                  '';
+                                                                              if (reqName.isEmpty) {
+                                                                                return const SizedBox
+                                                                                    .shrink();
+                                                                              }
+                                                                              return Text(
+                                                                                'Invited by $reqName',
+                                                                                style: const TextStyle(
+                                                                                  fontFamily: 'Inter',
+                                                                                  color:
+                                                                                      Color(0xFF9CA3AF),
+                                                                                  fontSize: 11,
+                                                                                ),
+                                                                              );
+                                                                            },
+                                                                          ),
+                                                                      ],
+                                                                    ),
+                                                                  ),
+                                                                  // Approve button
+                                                                  InkWell(
+                                                                    onTap: () async {
+                                                                      try {
+                                                                        await currentChatDoc!.reference
+                                                                            .update({
+                                                                          'members':
+                                                                              FieldValue.arrayUnion(
+                                                                                  [userRef]),
+                                                                          'pending_members':
+                                                                              FieldValue.arrayRemove(
+                                                                                  [entry]),
+                                                                        });
+
+                                                                        final userName =
+                                                                            currentUserDisplayName
+                                                                                    .isNotEmpty
+                                                                                ? currentUserDisplayName
+                                                                                : 'Admin';
+                                                                        await fsCreateMessage(
+                                                                          currentChatDoc!.reference,
+                                                                          {
+                                                                            'content':
+                                                                                '$userName approved ${user.displayName} to join the group',
+                                                                            'chat_ref':
+                                                                                currentChatDoc!
+                                                                                    .reference,
+                                                                            'sender_ref':
+                                                                                currentUserReference,
+                                                                            'timestamp':
+                                                                                getCurrentTimestamp,
+                                                                            'message_type':
+                                                                                'system',
+                                                                          },
+                                                                        );
+
+                                                                        if (mounted) {
+                                                                          setState(() {});
+                                                                        }
+                                                                      } catch (e) {
+                                                                        // Handle error silently
+                                                                      }
+                                                                    },
+                                                                    child: Container(
+                                                                      padding:
+                                                                          const EdgeInsets.symmetric(
+                                                                              horizontal: 10,
+                                                                              vertical: 5),
+                                                                      decoration: BoxDecoration(
+                                                                        color:
+                                                                            const Color(0xFF34C759),
+                                                                        borderRadius:
+                                                                            BorderRadius.circular(6),
+                                                                      ),
+                                                                      child: const Text(
+                                                                        'Approve',
+                                                                        style: TextStyle(
+                                                                          fontFamily: 'Inter',
+                                                                          color: Colors.white,
+                                                                          fontSize: 11,
+                                                                          fontWeight: FontWeight.w600,
+                                                                        ),
+                                                                      ),
+                                                                    ),
+                                                                  ),
+                                                                  const SizedBox(width: 6),
+                                                                  // Reject button
+                                                                  InkWell(
+                                                                    onTap: () async {
+                                                                      try {
+                                                                        await currentChatDoc!.reference
+                                                                            .update({
+                                                                          'pending_members':
+                                                                              FieldValue.arrayRemove(
+                                                                                  [entry]),
+                                                                        });
+                                                                        if (mounted) {
+                                                                          setState(() {});
+                                                                        }
+                                                                      } catch (e) {
+                                                                        // Handle silently
+                                                                      }
+                                                                    },
+                                                                    child: Container(
+                                                                      padding:
+                                                                          const EdgeInsets.symmetric(
+                                                                              horizontal: 10,
+                                                                              vertical: 5),
+                                                                      decoration: BoxDecoration(
+                                                                        color:
+                                                                            const Color(0xFFF3F4F6),
+                                                                        borderRadius:
+                                                                            BorderRadius.circular(6),
+                                                                      ),
+                                                                      child: const Text(
+                                                                        'Reject',
+                                                                        style: TextStyle(
+                                                                          fontFamily: 'Inter',
+                                                                          color: Color(0xFF6B7280),
+                                                                          fontSize: 11,
+                                                                          fontWeight: FontWeight.w600,
+                                                                        ),
+                                                                      ),
+                                                                    ),
+                                                                  ),
+                                                                ],
+                                                              ),
+                                                            );
+                                                          },
+                                                        );
+                                                      }),
+                                                      const SizedBox(height: 8),
+                                                    ],
+                                                  ),
+                                                ),
+                                              );
+                                            },
+                                          ),
                                         if (widget.chatDoc?.admin ==
                                             currentUserReference)
                                           Column(

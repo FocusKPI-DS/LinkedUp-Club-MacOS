@@ -6,6 +6,7 @@ import '/components/congratulatio_acc_creation_widget.dart';
 import '/flutter_flow/flutter_flow_animations.dart';
 import '/flutter_flow/flutter_flow_util.dart';
 import '/flutter_flow/flutter_flow_widgets.dart';
+import 'dart:async';
 import 'dart:io';
 import 'dart:math';
 import 'dart:ui';
@@ -905,6 +906,10 @@ class _SignUpWidgetState extends State<SignUpWidget>
                                                       referrerName = await actions
                                                           .handleReferralConnection(
                                                               userUid);
+                                                      // Auto-connect users with same company email domain
+                                                      unawaited(actions
+                                                          .autoConnectSameCompanyUsers(
+                                                              userUid));
                                                     }
 
                                                     await UsersRecord.collection

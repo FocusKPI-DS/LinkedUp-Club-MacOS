@@ -1,3 +1,4 @@
+import '/components/skeleton/skeleton_templates.dart';
 import '/auth/firebase_auth/auth_util.dart';
 import '/backend/backend.dart';
 import '/backend/firestore/firestore_desktop_adapter.dart';
@@ -42,6 +43,10 @@ class _ProfileSettingsWidgetState extends State<ProfileSettingsWidget>
   bool _isLoadingNotificationStatus = true;
   bool _waitingForSystemPermission = false;
   SettingsTab? _lastSelectedTab;
+
+  // VAPID key for web push notifications (must match the one in ensure_fcm_token.dart)
+  static const _webVapidKey =
+      'BBQ41Zx5PrbQc0iFA-9X6l6440O9CKWk9ZI3CjU-IwPK6AUo7gqhGK8RF8g75N0vnRB_Wi-G_kX-MWHOsheMQtc';
 
   final Map<String, String> _translationLanguages = {
     'system': 'System Language (Default)',
@@ -579,7 +584,10 @@ class _ProfileSettingsWidgetState extends State<ProfileSettingsWidget>
     if (currentUserReference == null) return null;
     try {
       final messaging = FirebaseMessaging.instance;
-      final token = await messaging.getToken();
+      // On web, getToken() requires the VAPID key to return the correct token
+      final token = kIsWeb
+          ? await messaging.getToken(vapidKey: _webVapidKey)
+          : await messaging.getToken();
       if (token == null || token.isEmpty) return null;
 
       final fcmTokensRef = currentUserReference!.collection('fcm_tokens');
@@ -645,8 +653,65 @@ class _ProfileSettingsWidgetState extends State<ProfileSettingsWidget>
       return;
     }
 
-    // Turning ON: check macOS system permission first
-    if (!kIsWeb && Platform.isMacOS) {
+    // Turning ON: check platform notification permission
+    if (kIsWeb) {
+      // Web: request browser notification permission via Firebase Messaging
+      bool webPermissionGranted = false;
+      try {
+        final messaging = FirebaseMessaging.instance;
+        final settings = await messaging.requestPermission(
+          alert: true,
+          badge: false,
+          sound: true,
+        );
+        webPermissionGranted =
+            settings.authorizationStatus == AuthorizationStatus.authorized ||
+            settings.authorizationStatus == AuthorizationStatus.provisional;
+      } catch (e) {
+        print('Warning: Web notification permission request failed: $e');
+        webPermissionGranted = false;
+      }
+
+      if (!webPermissionGranted) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                'Please allow notifications in your browser to receive alerts',
+                style: TextStyle(color: Colors.white),
+              ),
+              backgroundColor: Color(0xFF0077B5),
+              duration: Duration(seconds: 4),
+            ),
+          );
+        }
+        return;
+      }
+
+      // Ensure the FCM token is registered for this web session
+      try {
+        final messaging = FirebaseMessaging.instance;
+        final token = await messaging.getToken(vapidKey: _webVapidKey);
+        if (token != null && token.isNotEmpty && currentUserReference != null) {
+          final fcmTokensRef = currentUserReference!.collection('fcm_tokens');
+          final existing = await fcmTokensRef
+              .where('fcm_token', isEqualTo: token)
+              .limit(1)
+              .get();
+          if (existing.docs.isEmpty) {
+            await fcmTokensRef.add({
+              'fcm_token': token,
+              'device_type': 'Web',
+              'created_at': FieldValue.serverTimestamp(),
+              'notifications_enabled': true,
+            });
+          }
+        }
+      } catch (e) {
+        print('Warning: Failed to register web FCM token: $e');
+      }
+    } else if (Platform.isMacOS) {
+      // macOS: check system notification permission
       bool systemPermissionGranted = false;
       try {
         final messaging = FirebaseMessaging.instance;
@@ -659,12 +724,12 @@ class _ProfileSettingsWidgetState extends State<ProfileSettingsWidget>
             settings.authorizationStatus == AuthorizationStatus.authorized ||
             settings.authorizationStatus == AuthorizationStatus.provisional;
       } catch (e) {
-        print('⚠️ System notification permission not granted: $e');
+        print('Warning: System notification permission not granted: $e');
         systemPermissionGranted = false;
       }
 
       if (!systemPermissionGranted) {
-        // Permission denied — open System Settings, DON'T flip the toggle
+        // Permission denied -- open System Settings, DON'T flip the toggle
         _waitingForSystemPermission = true;
         try {
           await Process.run('open', [
@@ -723,7 +788,7 @@ class _ProfileSettingsWidgetState extends State<ProfileSettingsWidget>
     required bool isSelected,
   }) {
     return Container(
-      margin: EdgeInsets.only(bottom: 1),
+      margin: EdgeInsets.only(bottom: 2),
       child: Material(
         color: Colors.transparent,
         child: InkWell(
@@ -735,27 +800,27 @@ class _ProfileSettingsWidgetState extends State<ProfileSettingsWidget>
               _loadNotificationStatus();
             }
           },
-          borderRadius: BorderRadius.circular(5),
+          borderRadius: BorderRadius.circular(6),
           hoverColor: Color(0xFFF5F5F7),
           child: Container(
-            padding: EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+            padding: EdgeInsets.symmetric(horizontal: 14, vertical: 10),
             decoration: BoxDecoration(
               color: isSelected ? Color(0xFF007AFF).withOpacity(0.1) : Colors.transparent,
-              borderRadius: BorderRadius.circular(5),
+              borderRadius: BorderRadius.circular(6),
             ),
             child: Row(
               children: [
                 Icon(
                   icon,
-                  size: 15,
+                  size: 18,
                   color: isSelected ? Color(0xFF007AFF) : Color(0xFF8E8E93),
                 ),
-                SizedBox(width: 8),
+                SizedBox(width: 10),
                 Text(
                   title,
                   style: TextStyle(
                     fontFamily: 'SF Pro Text',
-                    fontSize: 13,
+                    fontSize: 14,
                     fontWeight: isSelected ? FontWeight.w600 : FontWeight.w400,
                     color: isSelected ? Color(0xFF007AFF) : Color(0xFF1D1D1F),
                   ),
@@ -776,6 +841,8 @@ class _ProfileSettingsWidgetState extends State<ProfileSettingsWidget>
         return 'Notifications';
       case SettingsTab.preferences:
         return 'Preferences';
+      case SettingsTab.connections:
+        return 'Connections';
       case SettingsTab.apiKeys:
         return 'API Keys';
       case SettingsTab.helpFeedback:
@@ -1385,6 +1452,297 @@ class _ProfileSettingsWidgetState extends State<ProfileSettingsWidget>
           ),
         );
       },
+    );
+  }
+
+  // State for the domain text field in connections settings
+  final TextEditingController _domainController = TextEditingController();
+
+  Widget _buildConnectionsSettingsContent() {
+    if (currentUserReference == null) {
+      return const SettingsListSkeleton();
+    }
+
+    return StreamBuilder<DocumentSnapshot>(
+      stream: currentUserReference!.snapshots(),
+      builder: (context, snapshot) {
+        if (!snapshot.hasData) {
+          return const SettingsListSkeleton();
+        }
+
+        final data = snapshot.data!.data() as Map<String, dynamic>? ?? {};
+        final autoAcceptAll = data['auto_accept_all_requests'] as bool? ?? false;
+        final autoAcceptSameCompany = data['auto_accept_same_company'] as bool? ?? false;
+        final autoAcceptDomains = List<String>.from(
+          data['auto_accept_email_domains'] as List? ?? [],
+        );
+
+        return SingleChildScrollView(
+          padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 24),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Connection Preferences',
+                style: TextStyle(
+                  fontFamily: 'SF Pro Display',
+                  fontSize: 20,
+                  fontWeight: FontWeight.w700,
+                  color: Color(0xFF1A1A1A),
+                ),
+              ),
+              const SizedBox(height: 6),
+              const Text(
+                'Control how connection requests are handled.',
+                style: TextStyle(
+                  fontFamily: 'SF Pro Text',
+                  fontSize: 13,
+                  color: Color(0xFF94A3B8),
+                ),
+              ),
+              const SizedBox(height: 24),
+
+              // Auto-Accept All
+              _buildConnectionsToggle(
+                title: 'Accept all connection requests',
+                subtitle: 'All incoming requests will be automatically approved without review.',
+                icon: CupertinoIcons.person_add,
+                value: autoAcceptAll,
+                onChanged: (val) {
+                  currentUserReference!.update({
+                    'auto_accept_all_requests': val,
+                  });
+                },
+              ),
+              const SizedBox(height: 16),
+
+              // Auto-Accept Same Company
+              _buildConnectionsToggle(
+                title: 'Auto-accept same company email',
+                subtitle: 'Requests from users with the same email domain will be auto-approved.',
+                icon: CupertinoIcons.building_2_fill,
+                value: autoAcceptSameCompany,
+                onChanged: (val) {
+                  currentUserReference!.update({
+                    'auto_accept_same_company': val,
+                  });
+                },
+              ),
+              const SizedBox(height: 24),
+
+              // Custom Email Domains
+              const Text(
+                'Custom auto-accept email domains',
+                style: TextStyle(
+                  fontFamily: 'SF Pro Text',
+                  fontSize: 15,
+                  fontWeight: FontWeight.w600,
+                  color: Color(0xFF1A1A1A),
+                ),
+              ),
+              const SizedBox(height: 4),
+              const Text(
+                'Requests from users with these email domains will be automatically approved.',
+                style: TextStyle(
+                  fontFamily: 'SF Pro Text',
+                  fontSize: 13,
+                  color: Color(0xFF94A3B8),
+                ),
+              ),
+              const SizedBox(height: 12),
+
+              // Add domain input
+              Row(
+                children: [
+                  Expanded(
+                    child: Container(
+                      height: 40,
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: const Color(0xFFE2E8F0)),
+                      ),
+                      child: CupertinoTextField(
+                        controller: _domainController,
+                        placeholder: 'e.g. focuskpi.ai',
+                        placeholderStyle: const TextStyle(
+                          fontFamily: 'SF Pro Text',
+                          fontSize: 14,
+                          color: Color(0xFF94A3B8),
+                        ),
+                        style: const TextStyle(
+                          fontFamily: 'SF Pro Text',
+                          fontSize: 14,
+                          color: Color(0xFF1A1A1A),
+                        ),
+                        padding: const EdgeInsets.symmetric(horizontal: 12),
+                        decoration: const BoxDecoration(),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  GestureDetector(
+                    onTap: () {
+                      final domain = _domainController.text.trim().toLowerCase();
+                      if (domain.isEmpty || !domain.contains('.')) return;
+                      if (autoAcceptDomains.contains(domain)) return;
+                      currentUserReference!.update({
+                        'auto_accept_email_domains': FieldValue.arrayUnion([domain]),
+                      });
+                      _domainController.clear();
+                    },
+                    child: Container(
+                      height: 40,
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF3B82F6),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: const Center(
+                        child: Text(
+                          'Add',
+                          style: TextStyle(
+                            fontFamily: 'SF Pro Text',
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600,
+                            color: Colors.white,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+
+              // Domain chips
+              if (autoAcceptDomains.isNotEmpty)
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: autoAcceptDomains.map((domain) {
+                    return Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFEFF6FF),
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(color: const Color(0xFFBFDBFE)),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            '@$domain',
+                            style: const TextStyle(
+                              fontFamily: 'SF Pro Text',
+                              fontSize: 13,
+                              color: Color(0xFF1E40AF),
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                          const SizedBox(width: 6),
+                          GestureDetector(
+                            onTap: () {
+                              currentUserReference!.update({
+                                'auto_accept_email_domains': FieldValue.arrayRemove([domain]),
+                              });
+                            },
+                            child: const Icon(
+                              CupertinoIcons.xmark_circle_fill,
+                              size: 16,
+                              color: Color(0xFF93C5FD),
+                            ),
+                          ),
+                        ],
+                      ),
+                    );
+                  }).toList(),
+                )
+              else
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF8FAFC),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: const Color(0xFFE2E8F0)),
+                  ),
+                  child: const Center(
+                    child: Text(
+                      'No custom domains added yet',
+                      style: TextStyle(
+                        fontFamily: 'SF Pro Text',
+                        fontSize: 13,
+                        color: Color(0xFF94A3B8),
+                      ),
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildConnectionsToggle({
+    required String title,
+    required String subtitle,
+    required IconData icon,
+    required bool value,
+    required ValueChanged<bool> onChanged,
+  }) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 40,
+            height: 40,
+            decoration: BoxDecoration(
+              color: const Color(0xFFEFF6FF),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Icon(icon, size: 20, color: const Color(0xFF3B82F6)),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: const TextStyle(
+                    fontFamily: 'SF Pro Text',
+                    fontSize: 15,
+                    fontWeight: FontWeight.w600,
+                    color: Color(0xFF1A1A1A),
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  subtitle,
+                  style: const TextStyle(
+                    fontFamily: 'SF Pro Text',
+                    fontSize: 12,
+                    color: Color(0xFF94A3B8),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 12),
+          CupertinoSwitch(
+            value: value,
+            activeColor: const Color(0xFF3B82F6),
+            onChanged: onChanged,
+          ),
+        ],
+      ),
     );
   }
 
@@ -2378,6 +2736,12 @@ class _ProfileSettingsWidgetState extends State<ProfileSettingsWidget>
                   isSelected: _model.selectedTab == SettingsTab.preferences,
                 ),
                 _buildSidebarItem(
+                  tab: SettingsTab.connections,
+                  title: 'Connections',
+                  icon: CupertinoIcons.person_2,
+                  isSelected: _model.selectedTab == SettingsTab.connections,
+                ),
+                _buildSidebarItem(
                   tab: SettingsTab.apiKeys,
                   title: 'API Keys',
                   icon: CupertinoIcons.lock,
@@ -3219,6 +3583,9 @@ class _ProfileSettingsWidgetState extends State<ProfileSettingsWidget>
           ),
         );
 
+      case SettingsTab.connections:
+        return _buildConnectionsSettingsContent();
+
       case SettingsTab.apiKeys:
         return _buildApiKeysContent();
 
@@ -3359,7 +3726,10 @@ class _ProfileSettingsWidgetState extends State<ProfileSettingsWidget>
                 children: [
                   _buildSidebar(),
                   Expanded(
-                    child: _buildContent(),
+                    child: Align(
+                      alignment: Alignment.topLeft,
+                      child: _buildContent(),
+                    ),
                   ),
                 ],
               )

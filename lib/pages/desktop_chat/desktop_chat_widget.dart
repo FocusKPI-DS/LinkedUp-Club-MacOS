@@ -1,3 +1,4 @@
+import '/components/skeleton/skeleton_templates.dart';
 import '/auth/firebase_auth/auth_util.dart';
 import '/utils/debug_log.dart';
 import '/utils/desktop_pointer.dart';
@@ -814,11 +815,7 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
                     Expanded(
                       child: Obx(() {
                         if (!_sidebarListReady) {
-                          return Center(
-                            child: CircularProgressIndicator(
-                              color: Color.fromARGB(255, 16, 184, 239),
-                            ),
-                          );
+                          return const ChatListSkeleton();
                         }
 
                         final filteredChats = chatController.filteredChats;
@@ -4490,6 +4487,7 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
                     _model.groupImagePath = null;
                     _model.groupImageUrl = null;
                     _model.isUploadingImage = false;
+                    _model.groupInviteApprovalRequired = false;
                   });
                 },
                 child: Container(
@@ -5083,6 +5081,79 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
                       },
                     ),
                   ),
+                  SizedBox(height: 24),
+                  // Invite approval toggle
+                  Container(
+                    padding: EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: Color(0xFFFAFBFC),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(
+                        color: Color(0xFFE5E7EB),
+                        width: 1,
+                      ),
+                    ),
+                    child: Row(
+                      children: [
+                        Container(
+                          width: 32,
+                          height: 32,
+                          decoration: BoxDecoration(
+                            color: _model.groupInviteApprovalRequired
+                                ? Color(0xFFFEF3C7)
+                                : Color(0xFFF3F4F6),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Icon(
+                            _model.groupInviteApprovalRequired
+                                ? Icons.verified_user_rounded
+                                : Icons.shield_outlined,
+                            color: _model.groupInviteApprovalRequired
+                                ? Color(0xFFF59E0B)
+                                : Color(0xFF9CA3AF),
+                            size: 18,
+                          ),
+                        ),
+                        SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Invite Approval',
+                                style: TextStyle(
+                                  fontFamily: 'Inter',
+                                  color: Color(0xFF374151),
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                              SizedBox(height: 2),
+                              Text(
+                                _model.groupInviteApprovalRequired
+                                    ? 'New invites require admin approval'
+                                    : 'Members can invite others directly',
+                                style: TextStyle(
+                                  fontFamily: 'Inter',
+                                  color: Color(0xFF9CA3AF),
+                                  fontSize: 12,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        Switch(
+                          value: _model.groupInviteApprovalRequired,
+                          onChanged: (value) {
+                            setState(() {
+                              _model.groupInviteApprovalRequired = value;
+                            });
+                          },
+                          activeColor: Color(0xFFF59E0B),
+                        ),
+                      ],
+                    ),
+                  ),
                   SizedBox(height: 32),
                   // Create group button
                   SizedBox(
@@ -5489,6 +5560,7 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
           lastMessageSent: currentUserReference,
           chatImageUrl: _model.groupImageUrl ?? '',
           admin: currentUserReference,
+          inviteApprovalRequired: _model.groupInviteApprovalRequired,
         ),
         'members': allMembers,
         'admin_users': [currentUserReference],
@@ -5530,6 +5602,7 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
         _model.groupImagePath = null;
         _model.groupImageUrl = null;
         _model.isUploadingImage = false;
+        _model.groupInviteApprovalRequired = false;
       });
       chatController.selectChat(newChat);
 
@@ -6781,8 +6854,7 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
                         ],
                       ),
                     ),
-                    if (ChatHelpers.isGroupAdmin(chat, currentUserReference))
-                      PopupMenuItem<String>(
+                    PopupMenuItem<String>(
                         value: 'add_members',
                         child: Row(
                           children: [
@@ -8247,20 +8319,14 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
                       child: ListView.separated(
                         shrinkWrap: true,
                         padding: const EdgeInsets.symmetric(vertical: 8),
-                        itemCount: members.length +
-                            (ChatHelpers.isGroupAdmin(
-                                    chat, currentUserReference)
-                                ? 1
-                                : 0),
+                        itemCount: members.length + 1,
                         separatorBuilder: (_, __) => Divider(
                           height: 1,
                           indent: 68,
                           color: Color(0xFFF3F4F6),
                         ),
                         itemBuilder: (context, index) {
-                          final canManageMembers = ChatHelpers.isGroupAdmin(
-                              chat, currentUserReference);
-                          if (canManageMembers && index == 0) {
+                          if (index == 0) {
                             return _buildAddMemberListRow(
                               onTap: () {
                                 Navigator.pop(dialogContext);
@@ -8268,8 +8334,7 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
                               },
                             );
                           }
-                          final memberIndex =
-                              canManageMembers ? index - 1 : index;
+                          final memberIndex = index - 1;
                           final memberRef = members[memberIndex];
                           return _buildGroupMemberRow(
                             chat,
@@ -8286,6 +8351,116 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
                         },
                       ),
                     ),
+                    // Invite approval toggle (admin/owner only)
+                    if (ChatHelpers.isGroupAdmin(chat, currentUserReference))
+                      Container(
+                        padding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                        decoration: BoxDecoration(
+                          color: (chat.inviteApprovalRequired)
+                              ? Color(0xFFFEF3C7)
+                              : Color(0xFFF0FDF4),
+                          border: Border(
+                            top: BorderSide(color: Color(0xFFE5E7EB), width: 1),
+                          ),
+                        ),
+                        child: Row(
+                          children: [
+                            Icon(
+                              chat.inviteApprovalRequired
+                                  ? Icons.verified_user_rounded
+                                  : Icons.shield_outlined,
+                              color: chat.inviteApprovalRequired
+                                  ? Color(0xFFF59E0B)
+                                  : Color(0xFF22C55E),
+                              size: 18,
+                            ),
+                            SizedBox(width: 10),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    'Invite Approval',
+                                    style: TextStyle(
+                                      fontFamily: 'Inter',
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w600,
+                                      color: chat.inviteApprovalRequired
+                                          ? Color(0xFF92400E)
+                                          : Color(0xFF166534),
+                                    ),
+                                  ),
+                                  Text(
+                                    chat.inviteApprovalRequired
+                                        ? 'New invites require admin approval'
+                                        : 'Members can invite directly',
+                                    style: TextStyle(
+                                      fontFamily: 'Inter',
+                                      fontSize: 11,
+                                      color: chat.inviteApprovalRequired
+                                          ? Color(0xFFB45309)
+                                          : Color(0xFF15803D),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            Switch(
+                              value: chat.inviteApprovalRequired,
+                              onChanged: (value) async {
+                                try {
+                                  await fsPatchDocument(chat.reference, {
+                                    'invite_approval_required': value,
+                                  });
+
+                                  final userName =
+                                      currentUserDisplayName.isNotEmpty
+                                          ? currentUserDisplayName
+                                          : 'Someone';
+                                  final message = value
+                                      ? '$userName enabled invite approval'
+                                      : '$userName disabled invite approval';
+
+                                  await fsCreateMessage(chat.reference, {
+                                    'content': message,
+                                    'chat_ref': chat.reference,
+                                    'sender_ref': currentUserReference,
+                                    'timestamp': getCurrentTimestamp,
+                                    'message_type': 'system',
+                                  });
+
+                                  await fsPatchDocument(chat.reference, {
+                                    'last_message': message,
+                                    'last_message_at': getCurrentTimestamp,
+                                    'last_message_sent': currentUserReference,
+                                  });
+
+                                  setDialogState(() {});
+                                  setState(() {});
+                                } catch (e) {
+                                  if (mounted) {
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      SnackBar(
+                                        content: Text(
+                                            'Error updating invite approval'),
+                                        backgroundColor: Color(0xFFEF4444),
+                                      ),
+                                    );
+                                  }
+                                }
+                              },
+                              activeColor: Color(0xFFF59E0B),
+                            ),
+                          ],
+                        ),
+                      ),
+                    // Pending member requests (admin/owner only)
+                    if (ChatHelpers.isGroupAdmin(chat, currentUserReference))
+                      _buildPendingMembersSection(
+                        chat,
+                        dialogContext,
+                        setDialogState,
+                      ),
                   ],
                 ),
               ),
@@ -8293,6 +8468,250 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
           },
         );
       },
+    );
+  }
+
+  /// Builds the "Pending Requests" section shown to admins in the group members dialog.
+  Widget _buildPendingMembersSection(
+    ChatsRecord chat,
+    BuildContext dialogContext,
+    StateSetter setDialogState,
+  ) {
+    final pendingMembers =
+        (chat.snapshotData['pending_members'] as List<dynamic>?) ?? [];
+    if (pendingMembers.isEmpty) return const SizedBox.shrink();
+
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+          decoration: BoxDecoration(
+            color: Color(0xFFFFF7ED),
+            border: Border(
+              top: BorderSide(color: Color(0xFFFDE68A), width: 1),
+            ),
+          ),
+          child: Row(
+            children: [
+              Icon(Icons.pending_actions_rounded,
+                  color: Color(0xFFF59E0B), size: 16),
+              SizedBox(width: 8),
+              Text(
+                'Pending Requests (${pendingMembers.length})',
+                style: TextStyle(
+                  fontFamily: 'Inter',
+                  color: Color(0xFF92400E),
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
+        ),
+        ...pendingMembers.map((entry) {
+          final map = entry as Map<String, dynamic>;
+          final userRef = map['user_ref'] as DocumentReference?;
+          final requestedBy = map['requested_by'] as DocumentReference?;
+          if (userRef == null) return const SizedBox.shrink();
+
+          return FutureBuilder<UsersRecord>(
+            future: fsGetUserOnce(userRef),
+            builder: (context, userSnap) {
+              if (!userSnap.hasData) {
+                return Padding(
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 20, vertical: 8),
+                  child: Row(
+                    children: [
+                      SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      ),
+                      SizedBox(width: 12),
+                      Text('Loading...',
+                          style: TextStyle(
+                              fontFamily: 'Inter',
+                              fontSize: 13,
+                              color: Color(0xFF6B7280))),
+                    ],
+                  ),
+                );
+              }
+
+              final user = userSnap.data!;
+              return Padding(
+                padding: const EdgeInsets.symmetric(
+                    horizontal: 16, vertical: 6),
+                child: Row(
+                  children: [
+                    CircleAvatar(
+                      radius: 18,
+                      backgroundImage: user.photoUrl.isNotEmpty
+                          ? NetworkImage(user.photoUrl)
+                          : null,
+                      backgroundColor: Color(0xFFE5E7EB),
+                      child: user.photoUrl.isEmpty
+                          ? Text(
+                              user.displayName.isNotEmpty
+                                  ? user.displayName[0].toUpperCase()
+                                  : '?',
+                              style: TextStyle(
+                                fontFamily: 'Inter',
+                                color: Color(0xFF6B7280),
+                                fontSize: 14,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            )
+                          : null,
+                    ),
+                    SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            user.displayName,
+                            style: TextStyle(
+                              fontFamily: 'Inter',
+                              color: Color(0xFF111827),
+                              fontSize: 13,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                          if (requestedBy != null)
+                            FutureBuilder<UsersRecord>(
+                              future: fsGetUserOnce(requestedBy),
+                              builder: (context, reqSnap) {
+                                final reqName =
+                                    reqSnap.data?.displayName ?? '';
+                                return Text(
+                                  reqName.isNotEmpty
+                                      ? 'Invited by $reqName'
+                                      : '',
+                                  style: TextStyle(
+                                    fontFamily: 'Inter',
+                                    color: Color(0xFF9CA3AF),
+                                    fontSize: 11,
+                                  ),
+                                );
+                              },
+                            ),
+                        ],
+                      ),
+                    ),
+                    // Approve button
+                    InkWell(
+                      onTap: () async {
+                        try {
+                          await chat.reference.update({
+                            'members':
+                                FieldValue.arrayUnion([userRef]),
+                            'pending_members':
+                                FieldValue.arrayRemove([entry]),
+                          });
+
+                          final userName =
+                              currentUserDisplayName.isNotEmpty
+                                  ? currentUserDisplayName
+                                  : 'Admin';
+                          await fsCreateMessage(
+                            chat.reference,
+                            {
+                              'content':
+                                  '$userName approved ${user.displayName} to join the group',
+                              'chat_ref': chat.reference,
+                              'sender_ref': currentUserReference,
+                              'timestamp': getCurrentTimestamp,
+                              'message_type': 'system',
+                            },
+                          );
+
+                          if (context.mounted) {
+                            setDialogState(() {});
+                            chatController.refreshChats(force: true);
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text(
+                                    '${user.displayName} has been added'),
+                                backgroundColor: Color(0xFF34C759),
+                              ),
+                            );
+                          }
+                        } catch (e) {
+                          if (context.mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content:
+                                    Text('Failed to approve member'),
+                                backgroundColor: Color(0xFFEF4444),
+                              ),
+                            );
+                          }
+                        }
+                      },
+                      child: Container(
+                        padding: EdgeInsets.symmetric(
+                            horizontal: 10, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: Color(0xFF34C759),
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: Text(
+                          'Approve',
+                          style: TextStyle(
+                            fontFamily: 'Inter',
+                            color: Colors.white,
+                            fontSize: 11,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                    ),
+                    SizedBox(width: 6),
+                    // Reject button
+                    InkWell(
+                      onTap: () async {
+                        try {
+                          await chat.reference.update({
+                            'pending_members':
+                                FieldValue.arrayRemove([entry]),
+                          });
+                          if (context.mounted) {
+                            setDialogState(() {});
+                          }
+                        } catch (e) {
+                          // silently fail
+                        }
+                      },
+                      child: Container(
+                        padding: EdgeInsets.symmetric(
+                            horizontal: 10, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: Color(0xFFF3F4F6),
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: Text(
+                          'Reject',
+                          style: TextStyle(
+                            fontFamily: 'Inter',
+                            color: Color(0xFF6B7280),
+                            fontSize: 11,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            },
+          );
+        }),
+      ],
     );
   }
 
@@ -8373,12 +8792,10 @@ class _DesktopChatWidgetState extends State<DesktopChatWidget>
     if (confirmed != true) return;
 
     try {
-      final updatedMembers = List<DocumentReference>.from(chat.members)
-        ..remove(user.reference);
-
-      await fsPatchDocument(chat.reference, {
-        'members': updatedMembers,
-      });
+      // Atomically remove user from chat members (avoids race conditions with stale data)
+      await fsArrayRemove(chat.reference, 'members', [user.reference]);
+      // Also remove from admin_users if they were an admin
+      await fsArrayRemove(chat.reference, 'admin_users', [user.reference]);
 
       final actorName = currentUserDisplayName.isNotEmpty
           ? currentUserDisplayName
@@ -9949,109 +10366,109 @@ class _ChatListItemState extends State<_ChatListItem>
       child: InkWell(
         mouseCursor: MaterialStateMouseCursor.clickable,
         onTap: widget.onTap,
-        child: IntrinsicHeight(
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              if (widget.isSelected)
-                Container(
+        child: Stack(
+          children: [
+            // Blue selection indicator - positioned to fill full height
+            if (widget.isSelected)
+              Positioned(
+                left: 0,
+                top: 0,
+                bottom: 0,
+                child: Container(
                   width: 3,
                   decoration: BoxDecoration(
                     color: Color(0xFF3B82F6),
                     borderRadius: BorderRadius.circular(2),
                   ),
                 ),
-              Expanded(
-                child: Padding(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
-                  child: Container(
-                    width: double.infinity,
-                    padding: const EdgeInsetsDirectional.fromSTEB(16, 8, 16, 8),
-                    decoration: BoxDecoration(
-                      color:
-                          widget.isSelected ? Colors.white : Colors.transparent,
-                      borderRadius: BorderRadius.circular(8),
-                      border: widget.isSelected
-                          ? Border.all(
-                              color: Color.fromRGBO(230, 235, 245, 1),
-                              width: 1,
-                            )
-                          : Border(
-                              bottom: BorderSide(
-                                color: Color.fromRGBO(230, 235, 245, 1),
-                                width: 1,
-                              ),
-                            ),
-                      boxShadow: widget.isSelected
-                          ? [
-                              BoxShadow(
-                                color: Color.fromRGBO(0, 0, 0, 0.05),
-                                blurRadius: 8,
-                                offset: Offset(0, 2),
-                                spreadRadius: 0,
-                              ),
-                            ]
-                          : null,
-                    ),
-                    child: IntrinsicHeight(
-                      child: Row(
-                        crossAxisAlignment: CrossAxisAlignment.center,
+              ),
+            // Main content
+            Padding(
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+              child: Container(
+                width: double.infinity,
+                padding: const EdgeInsetsDirectional.fromSTEB(16, 8, 16, 8),
+                decoration: BoxDecoration(
+                  color:
+                      widget.isSelected ? Colors.white : Colors.transparent,
+                  borderRadius: BorderRadius.circular(8),
+                  border: widget.isSelected
+                      ? Border.all(
+                          color: Color.fromRGBO(230, 235, 245, 1),
+                          width: 1,
+                        )
+                      : Border(
+                          bottom: BorderSide(
+                            color: Color.fromRGBO(230, 235, 245, 1),
+                            width: 1,
+                          ),
+                        ),
+                  boxShadow: widget.isSelected
+                      ? [
+                          BoxShadow(
+                            color: Color.fromRGBO(0, 0, 0, 0.05),
+                            blurRadius: 8,
+                            offset: Offset(0, 2),
+                            spreadRadius: 0,
+                          ),
+                        ]
+                      : null,
+                ),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    _buildChatAvatar(widget.chat),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          _buildChatAvatar(widget.chat),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: Column(
-                              mainAxisSize: MainAxisSize.min,
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Row(
-                                  children: [
-                                    if (widget.showPinIcon &&
-                                        widget.chat.isPinnedByUser(
-                                            currentUserReference)) ...[
-                                      const Icon(
-                                        Icons.push_pin,
-                                        color: Color(0xFF000000),
-                                        size: 16,
-                                      ),
-                                      const SizedBox(width: 4),
-                                    ],
-                                    Expanded(
-                                      child: _getChatDisplayName(widget.chat,
-                                          isSelected: widget.isSelected),
-                                    ),
-                                  ],
+                          Row(
+                            children: [
+                              if (widget.showPinIcon &&
+                                  widget.chat.isPinnedByUser(
+                                      currentUserReference)) ...[
+                                const Icon(
+                                  Icons.push_pin,
+                                  color: Color(0xFF000000),
+                                  size: 16,
                                 ),
-                                const SizedBox(height: 4),
-                                _getLastMessagePreview(widget.chat,
+                                const SizedBox(width: 4),
+                              ],
+                              Expanded(
+                                child: _getChatDisplayName(widget.chat,
                                     isSelected: widget.isSelected),
-                              ],
-                            ),
+                              ),
+                            ],
                           ),
-                          const SizedBox(width: 6),
-                          SizedBox(
-                            width: 70,
-                            child: Column(
-                              mainAxisSize: MainAxisSize.min,
-                              crossAxisAlignment: CrossAxisAlignment.end,
-                              children: [
-                                _buildMessageTimestamp(),
-                                if (widget.hasUnreadMessages) ...[
-                                  const SizedBox(height: 6),
-                                  _buildUnreadCountBadge(),
-                                ],
-                              ],
-                            ),
-                          ),
+                          const SizedBox(height: 4),
+                          _getLastMessagePreview(widget.chat,
+                              isSelected: widget.isSelected),
                         ],
                       ),
                     ),
-                  ),
+                    const SizedBox(width: 6),
+                    SizedBox(
+                      width: 70,
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.end,
+                        children: [
+                          _buildMessageTimestamp(),
+                          if (widget.hasUnreadMessages) ...[
+                            const SizedBox(height: 6),
+                            _buildUnreadCountBadge(),
+                          ],
+                        ],
+                      ),
+                    ),
+                  ],
                 ),
               ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     ).withClickCursor().withClickCursor();
@@ -10221,6 +10638,7 @@ class _ChatListItemState extends State<_ChatListItem>
           color: Color(0xFF111827),
           fontSize: 13,
           fontWeight: FontWeight.w500,
+          height: 1.2,
         ),
         maxLines: 1,
         overflow: TextOverflow.ellipsis,
@@ -10247,6 +10665,7 @@ class _ChatListItemState extends State<_ChatListItem>
             color: Color(0xFF111827),
             fontSize: 13,
             fontWeight: FontWeight.w500,
+            height: 1.2,
           ),
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
@@ -10261,6 +10680,7 @@ class _ChatListItemState extends State<_ChatListItem>
             color: Color(0xFF111827),
             fontSize: 13,
             fontWeight: FontWeight.w500,
+            height: 1.2,
           ),
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
@@ -10293,6 +10713,7 @@ class _ChatListItemState extends State<_ChatListItem>
               color: Color(0xFF111827),
               fontSize: 13,
               fontWeight: FontWeight.w500,
+              height: 1.2,
             ),
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
@@ -10326,6 +10747,7 @@ class _ChatListItemState extends State<_ChatListItem>
         fontFamily: 'Inter',
         color: widget.isSelected ? Color(0xFF6B7280) : Color(0xFF9CA3AF),
         fontSize: 11,
+        height: 1.2,
       ),
       maxLines: 1,
       softWrap: false,
@@ -10381,10 +10803,29 @@ class _ChatListItemState extends State<_ChatListItem>
             .getCachedUnreadCount(widget.chat.reference.id),
         builder: (context, snapshot) {
           final count = snapshot.data;
-          if (count == null || count <= 0) {
-            return const SizedBox.shrink();
+          if (count != null && count > 0) {
+            return badge(count);
           }
-          return badge(count);
+          // If manually marked as unread but no actual unread count,
+          // show a plain blue dot (WeChat-style)
+          if (widget.hasUnreadMessages) {
+            return Container(
+              width: 16,
+              height: 16,
+              decoration: BoxDecoration(
+                color: Color(0xFF3B82F6),
+                shape: BoxShape.circle,
+                boxShadow: [
+                  BoxShadow(
+                    color: Color(0x4D3B82F6),
+                    blurRadius: 3,
+                    spreadRadius: 0.5,
+                  ),
+                ],
+              ),
+            );
+          }
+          return const SizedBox.shrink();
         },
       );
     }
@@ -10395,10 +10836,29 @@ class _ChatListItemState extends State<_ChatListItem>
           widget.chatController.getCachedUnreadCount(widget.chat.reference.id),
       builder: (context, snapshot) {
         final count = snapshot.data;
-        if (count == null || count <= 0) {
-          return const SizedBox.shrink();
+        if (count != null && count > 0) {
+          return badge(count);
         }
-        return badge(count);
+        // If manually marked as unread but no actual unread count,
+        // show a plain blue dot (WeChat-style)
+        if (widget.hasUnreadMessages) {
+          return Container(
+            width: 16,
+            height: 16,
+            decoration: BoxDecoration(
+              color: Color(0xFF3B82F6),
+              shape: BoxShape.circle,
+              boxShadow: [
+                BoxShadow(
+                  color: Color(0x4D3B82F6),
+                  blurRadius: 3,
+                  spreadRadius: 0.5,
+                ),
+              ],
+            ),
+          );
+        }
+        return const SizedBox.shrink();
       },
     );
   }
@@ -10455,6 +10915,7 @@ class _ChatListItemState extends State<_ChatListItem>
                 color: isSelected ? Color(0xFF6B7280) : Color(0xFF374151),
                 fontSize: 11,
                 fontWeight: FontWeight.w600,
+                height: 1.2,
               ),
             ),
             TextSpan(
@@ -10463,6 +10924,7 @@ class _ChatListItemState extends State<_ChatListItem>
                 fontFamily: 'Inter',
                 color: isSelected ? Color(0xFF9CA3AF) : Color(0xFF6B7280),
                 fontSize: 11,
+                height: 1.2,
               ),
             ),
           ],
@@ -10526,6 +10988,7 @@ class _ChatListItemState extends State<_ChatListItem>
                             isSelected ? Color(0xFF6B7280) : Color(0xFF374151),
                         fontSize: 11,
                         fontWeight: FontWeight.w600,
+                        height: 1.2,
                       ),
                     ),
                     TextSpan(
@@ -10535,6 +10998,7 @@ class _ChatListItemState extends State<_ChatListItem>
                         color:
                             isSelected ? Color(0xFF9CA3AF) : Color(0xFF6B7280),
                         fontSize: 11,
+                        height: 1.2,
                       ),
                     ),
                   ],
@@ -10552,6 +11016,7 @@ class _ChatListItemState extends State<_ChatListItem>
             fontFamily: 'Inter',
             color: isSelected ? Color(0xFF9CA3AF) : Color(0xFF6B7280),
             fontSize: 11,
+            height: 1.2,
           ),
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
@@ -10565,6 +11030,7 @@ class _ChatListItemState extends State<_ChatListItem>
           fontFamily: 'Inter',
           color: isSelected ? Color(0xFF9CA3AF) : Color(0xFF6B7280),
           fontSize: 11,
+          height: 1.2,
         ),
         maxLines: 1,
         overflow: TextOverflow.ellipsis,
@@ -10606,6 +11072,7 @@ class _ChatListItemState extends State<_ChatListItem>
                     color: isSelected ? Color(0xFF6B7280) : Color(0xFF374151),
                     fontSize: 11,
                     fontWeight: FontWeight.w600,
+                    height: 1.2,
                   ),
                 ),
                 TextSpan(
@@ -10617,6 +11084,7 @@ class _ChatListItemState extends State<_ChatListItem>
                     fontFamily: 'Inter',
                     color: isSelected ? Color(0xFF9CA3AF) : Color(0xFF6B7280),
                     fontSize: 11,
+                    height: 1.2,
                   ),
                 ),
               ],
@@ -10638,6 +11106,7 @@ class _ChatListItemState extends State<_ChatListItem>
         fontFamily: 'Inter',
         color: isSelected ? Color(0xFF9CA3AF) : Color(0xFF6B7280),
         fontSize: 11,
+        height: 1.2,
       ),
       maxLines: 1,
       overflow: TextOverflow.ellipsis,

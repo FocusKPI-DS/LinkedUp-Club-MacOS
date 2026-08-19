@@ -5,6 +5,7 @@ import '/backend/schema/enums/enums.dart';
 import '/flutter_flow/flutter_flow_util.dart';
 import '/pages/desktop_chat/desktop_safe_user_builder.dart';
 import '/pages/desktop_chat/rest_poll_builder.dart';
+import '/utils/chat_helpers.dart';
 import 'dart:io';
 import 'package:adaptive_platform_ui/adaptive_platform_ui.dart';
 import 'package:cached_network_image/cached_network_image.dart';
@@ -69,6 +70,12 @@ class _AddGroupMembersWidgetState extends State<AddGroupMembersWidget> {
 
   int get _addedCount => _selectedMembers.length - _originalMemberCount;
 
+  bool get _isAdmin =>
+      ChatHelpers.isGroupAdmin(widget.chatDoc, currentUserReference);
+
+  bool get _canDirectlyAdd =>
+      _isAdmin || !(widget.chatDoc?.inviteApprovalRequired ?? false);
+
   Future<void> _addMembers() async {
     if (widget.chatDoc == null) return;
     if (_addedCount <= 0) {
@@ -77,47 +84,98 @@ class _AddGroupMembersWidgetState extends State<AddGroupMembersWidget> {
     }
 
     try {
-      // Update the members list
-      await fsPatchDocument(widget.chatDoc!.reference, {
-        ...mapToFirestore({
-          'members': _selectedMembers,
-        }),
-      });
-
-      // Send system message
       final userName = currentUserDisplayName.isNotEmpty
           ? currentUserDisplayName
           : (currentUserDocument?.displayName ?? 'Someone');
 
-      final systemMessage = '$userName added $_addedCount ${_addedCount == 1 ? 'member' : 'members'}';
+      if (_canDirectlyAdd) {
+        // Admin: directly add members (existing behavior)
+        await fsPatchDocument(widget.chatDoc!.reference, {
+          ...mapToFirestore({
+            'members': _selectedMembers,
+          }),
+        });
 
-      await fsCreateMessage(
-        widget.chatDoc!.reference,
-        {
-          'content': systemMessage,
-          'chat_ref': widget.chatDoc!.reference,
-          'sender_ref': currentUserReference,
-          'timestamp': getCurrentTimestamp,
-          'message_type': 'system',
-        },
-      );
+        final systemMessage =
+            '$userName added $_addedCount ${_addedCount == 1 ? 'member' : 'members'}';
 
-      // Update chat's last_message fields for preview
-      await fsPatchDocument(widget.chatDoc!.reference, {
-        'last_message': systemMessage,
-        'last_message_at': getCurrentTimestamp,
-        'last_message_sent': currentUserReference,
-        'last_message_type': MessageType.text.serialize(),
-      });
+        await fsCreateMessage(
+          widget.chatDoc!.reference,
+          {
+            'content': systemMessage,
+            'chat_ref': widget.chatDoc!.reference,
+            'sender_ref': currentUserReference,
+            'timestamp': getCurrentTimestamp,
+            'message_type': 'system',
+          },
+        );
+
+        await fsPatchDocument(widget.chatDoc!.reference, {
+          'last_message': systemMessage,
+          'last_message_at': getCurrentTimestamp,
+          'last_message_sent': currentUserReference,
+          'last_message_type': MessageType.text.serialize(),
+        });
+
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Members added successfully'),
+              backgroundColor: Color(0xFF34C759),
+            ),
+          );
+        }
+      } else {
+        // Non-admin: submit as pending member requests
+        final newMemberRefs = _selectedMembers
+            .where((ref) => !widget.chatDoc!.members
+                .any((m) => m.id == ref.id))
+            .toList();
+
+        final pendingEntries = newMemberRefs
+            .map((ref) => {
+                  'user_ref': ref,
+                  'requested_by': currentUserReference,
+                  'requested_at': getCurrentTimestamp,
+                })
+            .toList();
+
+        await widget.chatDoc!.reference.update({
+          'pending_members': FieldValue.arrayUnion(pendingEntries),
+        });
+
+        final systemMessage =
+            '$userName requested to add $_addedCount ${_addedCount == 1 ? 'member' : 'members'}';
+
+        await fsCreateMessage(
+          widget.chatDoc!.reference,
+          {
+            'content': systemMessage,
+            'chat_ref': widget.chatDoc!.reference,
+            'sender_ref': currentUserReference,
+            'timestamp': getCurrentTimestamp,
+            'message_type': 'system',
+          },
+        );
+
+        await fsPatchDocument(widget.chatDoc!.reference, {
+          'last_message': systemMessage,
+          'last_message_at': getCurrentTimestamp,
+          'last_message_sent': currentUserReference,
+          'last_message_type': MessageType.text.serialize(),
+        });
+
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Request sent! Waiting for admin approval.'),
+              backgroundColor: Color(0xFF3B82F6),
+            ),
+          );
+        }
+      }
 
       if (mounted) {
-        // Show success and pop back
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Members added successfully'),
-            backgroundColor: Color(0xFF34C759),
-          ),
-        );
         Navigator.of(context).pop();
       }
     } catch (e) {
@@ -689,6 +747,9 @@ class _AddGroupMembersWidgetState extends State<AddGroupMembersWidget> {
 
   Widget _buildAddButton() {
     final canAdd = _addedCount > 0;
+    final buttonColor = canAdd
+        ? (_canDirectlyAdd ? Color(0xFF007AFF) : Color(0xFFF59E0B))
+        : Color(0xFFE5E5EA);
 
     return Container(
       padding: EdgeInsets.all(16),
@@ -717,7 +778,7 @@ class _AddGroupMembersWidgetState extends State<AddGroupMembersWidget> {
             width: double.infinity,
             height: 50,
             decoration: BoxDecoration(
-              color: canAdd ? Color(0xFF007AFF) : Color(0xFFE5E5EA),
+              color: buttonColor,
               borderRadius: BorderRadius.circular(12),
             ),
             child: Row(
@@ -725,14 +786,18 @@ class _AddGroupMembersWidgetState extends State<AddGroupMembersWidget> {
               children: [
                 if (canAdd)
                   Icon(
-                    CupertinoIcons.checkmark,
+                    _canDirectlyAdd
+                        ? CupertinoIcons.checkmark
+                        : CupertinoIcons.paperplane,
                     size: 18,
                     color: Colors.white,
                   ),
                 if (canAdd) SizedBox(width: 8),
                 Text(
                   canAdd
-                      ? 'Add $_addedCount ${_addedCount == 1 ? 'member' : 'members'}'
+                      ? (_canDirectlyAdd
+                          ? 'Add $_addedCount ${_addedCount == 1 ? 'member' : 'members'}'
+                          : 'Request to add $_addedCount ${_addedCount == 1 ? 'member' : 'members'}')
                       : 'Select members to add',
                   style: TextStyle(
                     fontFamily: 'SF Pro Text',

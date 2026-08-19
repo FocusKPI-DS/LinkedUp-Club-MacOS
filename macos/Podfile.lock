@@ -1,5 +1,5 @@
 PODS:
-  - app_badge_plus (1.2.6):
+  - app_badge_plus (1.2.10):
     - FlutterMacOS
   - app_links (6.4.1):
     - FlutterMacOS
@@ -229,6 +229,8 @@ PODS:
     - FlutterMacOS
   - record_macos (1.0.0):
     - FlutterMacOS
+  - screen_retriever_macos (0.0.1):
+    - FlutterMacOS
   - share_plus (0.0.1):
     - FlutterMacOS
   - shared_preferences_foundation (0.0.1):
@@ -245,6 +247,8 @@ PODS:
     - FlutterMacOS
   - super_native_extensions (0.0.1):
     - FlutterMacOS
+  - tray_manager (0.0.1):
+    - FlutterMacOS
   - url_launcher_macos (0.0.1):
     - FlutterMacOS
   - video_player_avfoundation (0.0.1):
@@ -255,7 +259,9 @@ PODS:
   - webview_flutter_wkwebview (0.0.1):
     - Flutter
     - FlutterMacOS
-  - zego_express_engine (3.23.0):
+  - window_manager (0.5.0):
+    - FlutterMacOS
+  - zego_express_engine (3.24.1):
     - FlutterMacOS
 
 DEPENDENCIES:
@@ -289,16 +295,19 @@ DEPENDENCIES:
   - pdfx (from `Flutter/ephemeral/.symlinks/plugins/pdfx/macos`)
   - quill_native_bridge_macos (from `Flutter/ephemeral/.symlinks/plugins/quill_native_bridge_macos/macos`)
   - record_macos (from `Flutter/ephemeral/.symlinks/plugins/record_macos/macos`)
+  - screen_retriever_macos (from `Flutter/ephemeral/.symlinks/plugins/screen_retriever_macos/macos`)
   - share_plus (from `Flutter/ephemeral/.symlinks/plugins/share_plus/macos`)
   - shared_preferences_foundation (from `Flutter/ephemeral/.symlinks/plugins/shared_preferences_foundation/darwin`)
   - sign_in_with_apple (from `Flutter/ephemeral/.symlinks/plugins/sign_in_with_apple/macos`)
   - speech_to_text (from `Flutter/ephemeral/.symlinks/plugins/speech_to_text/darwin`)
   - sqflite (from `Flutter/ephemeral/.symlinks/plugins/sqflite/darwin`)
   - super_native_extensions (from `Flutter/ephemeral/.symlinks/plugins/super_native_extensions/macos`)
+  - tray_manager (from `Flutter/ephemeral/.symlinks/plugins/tray_manager/macos`)
   - url_launcher_macos (from `Flutter/ephemeral/.symlinks/plugins/url_launcher_macos/macos`)
   - video_player_avfoundation (from `Flutter/ephemeral/.symlinks/plugins/video_player_avfoundation/darwin`)
   - wakelock_plus (from `Flutter/ephemeral/.symlinks/plugins/wakelock_plus/macos`)
   - webview_flutter_wkwebview (from `Flutter/ephemeral/.symlinks/plugins/webview_flutter_wkwebview/darwin`)
+  - window_manager (from `Flutter/ephemeral/.symlinks/plugins/window_manager/macos`)
   - zego_express_engine (from `Flutter/ephemeral/.symlinks/plugins/zego_express_engine/macos`)
 
 SPEC REPOS:
@@ -398,6 +407,8 @@ EXTERNAL SOURCES:
     :path: Flutter/ephemeral/.symlinks/plugins/quill_native_bridge_macos/macos
   record_macos:
     :path: Flutter/ephemeral/.symlinks/plugins/record_macos/macos
+  screen_retriever_macos:
+    :path: Flutter/ephemeral/.symlinks/plugins/screen_retriever_macos/macos
   share_plus:
     :path: Flutter/ephemeral/.symlinks/plugins/share_plus/macos
   shared_preferences_foundation:
@@ -410,6 +421,8 @@ EXTERNAL SOURCES:
     :path: Flutter/ephemeral/.symlinks/plugins/sqflite/darwin
   super_native_extensions:
     :path: Flutter/ephemeral/.symlinks/plugins/super_native_extensions/macos
+  tray_manager:
+    :path: Flutter/ephemeral/.symlinks/plugins/tray_manager/macos
   url_launcher_macos:
     :path: Flutter/ephemeral/.symlinks/plugins/url_launcher_macos/macos
   video_player_avfoundation:
@@ -418,6 +431,8 @@ EXTERNAL SOURCES:
     :path: Flutter/ephemeral/.symlinks/plugins/wakelock_plus/macos
   webview_flutter_wkwebview:
     :path: Flutter/ephemeral/.symlinks/plugins/webview_flutter_wkwebview/darwin
+  window_manager:
+    :path: Flutter/ephemeral/.symlinks/plugins/window_manager/macos
   zego_express_engine:
     :path: Flutter/ephemeral/.symlinks/plugins/zego_express_engine/macos
 
@@ -427,7 +442,7 @@ CHECKOUT OPTIONS:
     :tag: 11.13.0
 
 SPEC CHECKSUMS:
-  app_badge_plus: f47ad0952fcd28b92ce9bad98c565bf0c4a3fd28
+  app_badge_plus: f33a2c15c26aa691703e4e666e282a06b187f89e
   app_links: c3185399a5cabc2e610ee5ad52fb7269b84ff869
   AppAuth: d4f13a8fe0baf391b2108511793e4b479691fb73
   AppCheckCore: cc8fd0a3a230ddd401f326489c99990b013f0c4f
@@ -489,18 +504,21 @@ SPEC CHECKSUMS:
   PromisesObjC: f5707f49cb48b9636751c5b2e7d227e43fba9f47
   quill_native_bridge_macos: 3a5f378bc757eb92825193853020b759b56cbb2c
   record_macos: 3ead198d39fad25d10163780132a96b6fd162a1c
+  screen_retriever_macos: 038d3f7b34a779b06f536842003e41e8ec1fb4b7
   share_plus: 36537c04ce0c3e3f5bd297ce4318b6d5ee5fd6cf
   shared_preferences_foundation: fcdcbc04712aee1108ac7fda236f363274528f78
   sign_in_with_apple: a9e97e744e8edc36aefc2723111f652102a7a727
   speech_to_text: 87bf9298952e8d9073be1b6aade6d5758db5170c
   sqflite: 673a0e54cc04b7d6dba8d24fb8095b31c3a99eec
   super_native_extensions: 85efee3a7495b46b04befcfc86ed12069264ebf3
+  tray_manager: c2a678ee19e2a094f0c2d03660ee2c3e81cea8ab
   url_launcher_macos: c82c93949963e55b228a30115bd219499a6fe404
   video_player_avfoundation: 7c6c11d8470e1675df7397027218274b6d2360b3
   wakelock_plus: 4783562c9a43d209c458cb9b30692134af456269
   webview_flutter_wkwebview: 29eb20d43355b48fe7d07113835b9128f84e3af4
-  zego_express_engine: 460103d0ad65743063ca9dadbb0eecfe6f37978f
+  window_manager: e25faf20d88283a0d46e7b1a759d07261ca27575
+  zego_express_engine: 5f3be17a148127a57841cb1342d7594164e98f3c
 
-PODFILE CHECKSUM: 5f86c444fdc3e44e799265b47f4673a92bca08da
+PODFILE CHECKSUM: fffc9d72e08a98b269d394b17175aa070c43c635
 
 COCOAPODS: 1.16.2

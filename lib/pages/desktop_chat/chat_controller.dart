@@ -448,6 +448,7 @@ class ChatController extends GetxController {
 
   // Set selected chat
   void selectChat(ChatsRecord chat) {
+    final wasManuallyUnread = _manuallyMarkedUnread.contains(chat.reference.id);
     _manuallyMarkedUnread.remove(chat.reference.id);
     selectedChat.value = chat;
 
@@ -465,10 +466,33 @@ class ChatController extends GetxController {
       return;
     }
 
-    markMessagesAsSeen(chat);
+    // If the chat was manually marked unread, wait for the pending Firestore
+    // write to complete first, then mark as seen. This avoids a race condition
+    // where arrayRemove arrives before arrayUnion.
+    if (wasManuallyUnread && _pendingMarkUnreadFuture != null) {
+      _pendingMarkUnreadFuture!.whenComplete(() {
+        _pendingMarkUnreadFuture = null;
+        markMessagesAsSeen(chat);
+      });
+    } else {
+      markMessagesAsSeen(chat);
+    }
+
+    // Safety-net: schedule a delayed cleanup to guarantee marked_unread_by
+    // is cleared and user is back in last_message_seen.
+    if (wasManuallyUnread && currentUserReference != null) {
+      Future.delayed(const Duration(seconds: 2), () {
+        chat.reference.update({
+          'marked_unread_by': FieldValue.arrayRemove([currentUserReference!]),
+          'last_message_seen': FieldValue.arrayUnion([currentUserReference!]),
+        }).catchError((e) {
+          debugLog('❌ [selectChat] Delayed cleanup error: $e');
+        });
+      });
+    }
   }
 
-  // Mark a chat as unread (local-only, WeChat-style)
+  // Mark a chat as unread (WeChat-style) – persists to Firestore
   void markChatAsUnread(ChatsRecord chat) {
     _manuallyMarkedUnread.add(chat.reference.id);
     knownUnreadChats.add(chat.reference.id);
@@ -476,6 +500,25 @@ class ChatController extends GetxController {
     // Set seenAt to epoch so any lastMessageAt is always "after" it
     locallySeenChats[chat.reference.id] =
         DateTime.fromMillisecondsSinceEpoch(0);
+
+    // Trigger UI refresh immediately so the badge appears right away
+    final currentChats = List<ChatsRecord>.from(chats);
+    chats.value = currentChats;
+
+    // Persist to Firestore so the unread state syncs across devices/restarts
+    // Store the future so selectChat can await it to avoid race conditions.
+    if (currentUserReference != null) {
+      _pendingMarkUnreadFuture = chat.reference.update({
+        'marked_unread_by': FieldValue.arrayUnion([currentUserReference]),
+        'last_message_seen': FieldValue.arrayRemove([currentUserReference]),
+      }).then((_) {
+        _pendingMarkUnreadFuture = null;
+        debugLog('📩 [markChatAsUnread] Persisted to Firestore');
+      }).catchError((e) {
+        _pendingMarkUnreadFuture = null;
+        debugLog('❌ [markChatAsUnread] Firestore error: $e');
+      });
+    }
   }
 
   // Update search query and trigger async message search
@@ -511,6 +554,10 @@ class ChatController extends GetxController {
   // Chats manually marked unread by the user (WeChat-style). These bypass
   // Firestore seen-list checks so the badge stays even if read on another device.
   final RxSet<String> _manuallyMarkedUnread = <String>{}.obs;
+
+  // Track pending markChatAsUnread Firestore writes to avoid race conditions
+  // when user quickly marks-as-unread then reads the chat.
+  Future<void>? _pendingMarkUnreadFuture;
 
   // Check if chat has unread messages
   bool hasUnreadMessages(ChatsRecord chat) {
@@ -732,15 +779,16 @@ class ChatController extends GetxController {
           });
         }
       } else {
-        // Even if already in seen list, still remove from marked_unread_by
-        final markedUnreadBy = chat.snapshotData['marked_unread_by'] as List<dynamic>?;
-        if (markedUnreadBy != null && markedUnreadBy.contains(currentUserReference)) {
-          chat.reference.update({
-            'marked_unread_by': FieldValue.arrayRemove([currentUserReference!]),
-          }).catchError((e) {
-            debugLog('❌ Error removing from marked_unread_by: $e');
-          });
-        }
+        // Always remove from marked_unread_by AND re-add to last_message_seen.
+        // This fixes the case where markChatAsUnread removed user from last_message_seen
+        // but the if-branch above didn't trigger (e.g. last message was sent by current user),
+        // leaving the user permanently out of last_message_seen and causing persistent unread.
+        chat.reference.update({
+          'marked_unread_by': FieldValue.arrayRemove([currentUserReference!]),
+          'last_message_seen': FieldValue.arrayUnion([currentUserReference!]),
+        }).catchError((e) {
+          debugLog('❌ Error updating seen state: $e');
+        });
       }
     } catch (e) {
       debugLog('❌ Error marking messages as seen: $e');
@@ -765,13 +813,19 @@ class ChatController extends GetxController {
         }
       }
 
+      // Always remove from marked_unread_by unconditionally to avoid stale
+      // snapshot race condition. Use arrayRemove for Firestore consistency.
+      // For REST path, we always include this in the patch.
       final markedUnreadBy =
           chat.snapshotData['marked_unread_by'] as List<dynamic>?;
-      if (markedUnreadBy != null &&
-          markedUnreadBy.contains(currentUserReference)) {
+      // Build the updated list removing current user
+      if (markedUnreadBy != null) {
         patch['marked_unread_by'] = markedUnreadBy
             .where((r) => r != currentUserReference)
             .toList();
+      } else {
+        // Even if local snapshot doesn't have it, set to empty to be safe
+        patch['marked_unread_by'] = [];
       }
 
       if (patch.isEmpty) return;

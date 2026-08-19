@@ -148,6 +148,12 @@ class ChatsRecord extends FirestoreRecord {
   String get manualMeetingTranscription => _manualMeetingTranscription ?? '';
   bool hasManualMeetingTranscription() => _manualMeetingTranscription != null;
 
+  // "invite_approval_required" field — whether member invitations require
+  // admin/owner approval. Default is false (members can invite directly).
+  bool? _inviteApprovalRequired;
+  bool get inviteApprovalRequired => _inviteApprovalRequired ?? false;
+  bool hasInviteApprovalRequired() => _inviteApprovalRequired != null;
+
   // "active_meeting" field — nested map for live meeting tracking.
   Map<String, dynamic>? _activeMeeting;
   Map<String, dynamic>? get activeMeeting => _activeMeeting;
@@ -194,6 +200,8 @@ class ChatsRecord extends FirestoreRecord {
     _isServiceChat = snapshotData['is_service_chat'] as bool?;
     _manualMeetingTranscription =
         snapshotData['manual_meeting_transcription'] as String?;
+    _inviteApprovalRequired =
+        snapshotData['invite_approval_required'] as bool?;
     _activeMeeting =
         (snapshotData['active_meeting'] as Map<String, dynamic>?);
   }
@@ -251,6 +259,7 @@ Map<String, dynamic> createChatsRecordData({
   DocumentReference? workspaceRef,
   bool? isServiceChat,
   String? manualMeetingTranscription,
+  bool? inviteApprovalRequired,
 }) {
   final firestoreData = mapToFirestore(
     <String, dynamic>{
@@ -273,6 +282,7 @@ Map<String, dynamic> createChatsRecordData({
       'workspace_ref': workspaceRef,
       'is_service_chat': isServiceChat,
       'manual_meeting_transcription': manualMeetingTranscription,
+      'invite_approval_required': inviteApprovalRequired,
     }.withoutNulls,
   );
 
@@ -307,7 +317,8 @@ class ChatsRecordDocumentEquality implements Equality<ChatsRecord> {
         e1?.reminderFrequency == e2?.reminderFrequency &&
         e1?.lastSeen == e2?.lastSeen &&
         e1?.workspaceRef == e2?.workspaceRef &&
-        e1?.isServiceChat == e2?.isServiceChat;
+        e1?.isServiceChat == e2?.isServiceChat &&
+        e1?.inviteApprovalRequired == e2?.inviteApprovalRequired;
   }
 
   @override
@@ -334,7 +345,8 @@ class ChatsRecordDocumentEquality implements Equality<ChatsRecord> {
         e?.reminderFrequency,
         e?.lastSeen,
         e?.workspaceRef,
-        e?.isServiceChat
+        e?.isServiceChat,
+        e?.inviteApprovalRequired
       ]);
 
   @override

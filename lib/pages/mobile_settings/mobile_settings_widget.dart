@@ -1,4 +1,6 @@
+import '/components/skeleton/skeleton_templates.dart';
 import '/auth/firebase_auth/auth_util.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import '/backend/backend.dart';
 import '/flutter_flow/flutter_flow_util.dart';
 import '/pages/user_summary/user_summary_widget.dart';
@@ -465,6 +467,8 @@ class _MobileSettingsWidgetState extends State<MobileSettingsWidget>
         return _buildPrivacySecurityContent();
       case 'Preferences':
         return _buildPreferencesContent();
+      case 'Connections':
+        return _buildMobileConnectionsSettingsContent();
       case 'FAQs':
         return _buildFAQsContent();
       case 'Contact Support':
@@ -700,6 +704,12 @@ class _MobileSettingsWidgetState extends State<MobileSettingsWidget>
         'icon': Icons.tune,
         'label': 'Preferences',
         'page': 'Preferences',
+        'color': Color(0xFF8E8E93),
+      },
+      {
+        'icon': Icons.people_outline,
+        'label': 'Connections',
+        'page': 'Connections',
         'color': Color(0xFF8E8E93),
       },
       {
@@ -1629,6 +1639,282 @@ class _MobileSettingsWidgetState extends State<MobileSettingsWidget>
           ],
         ),
       ),
+    );
+  }
+
+  final TextEditingController _mobileDomainController = TextEditingController();
+
+  Widget _buildMobileConnectionsSettingsContent() {
+    if (currentUserReference == null) {
+      return const SettingsListSkeleton();
+    }
+
+    return StreamBuilder<DocumentSnapshot>(
+      stream: currentUserReference!.snapshots(),
+      builder: (context, snapshot) {
+        if (!snapshot.hasData) {
+          return const SettingsListSkeleton();
+        }
+
+        final data = snapshot.data!.data() as Map<String, dynamic>? ?? {};
+        final autoAcceptAll = data['auto_accept_all_requests'] as bool? ?? false;
+        final autoAcceptSameCompany = data['auto_accept_same_company'] as bool? ?? false;
+        final autoAcceptDomains = List<String>.from(
+          data['auto_accept_email_domains'] as List? ?? [],
+        );
+
+        return CupertinoPageScaffold(
+          backgroundColor: const Color(0xFFF2F2F7),
+          navigationBar: CupertinoNavigationBar(
+            backgroundColor: const Color(0xFFF2F2F7),
+            border: null,
+            leading: CupertinoButton(
+              padding: EdgeInsets.zero,
+              onPressed: () => setState(() => _selectedSetting = ''),
+              child: const Icon(CupertinoIcons.back, color: Color(0xFF007AFF)),
+            ),
+            middle: const Text(
+              'Connections',
+              style: TextStyle(
+                fontFamily: 'SF Pro Text',
+                fontWeight: FontWeight.w600,
+                fontSize: 17,
+              ),
+            ),
+          ),
+          child: SafeArea(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 40),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Auto-accept toggles section
+                  Container(
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Column(
+                      children: [
+                        // Accept all
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                          child: Row(
+                            children: [
+                              const Icon(CupertinoIcons.person_add, size: 22, color: Color(0xFF007AFF)),
+                              const SizedBox(width: 12),
+                              const Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      'Accept all requests',
+                                      style: TextStyle(
+                                        fontFamily: 'SF Pro Text',
+                                        fontSize: 16,
+                                        color: Color(0xFF1A1A1A),
+                                      ),
+                                    ),
+                                    SizedBox(height: 2),
+                                    Text(
+                                      'Auto-approve all incoming requests',
+                                      style: TextStyle(
+                                        fontFamily: 'SF Pro Text',
+                                        fontSize: 12,
+                                        color: Color(0xFF8E8E93),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              CupertinoSwitch(
+                                value: autoAcceptAll,
+                                activeColor: const Color(0xFF34C759),
+                                onChanged: (val) {
+                                  currentUserReference!.update({
+                                    'auto_accept_all_requests': val,
+                                  });
+                                },
+                              ),
+                            ],
+                          ),
+                        ),
+                        const Divider(height: 1, indent: 50),
+                        // Same company
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                          child: Row(
+                            children: [
+                              const Icon(CupertinoIcons.building_2_fill, size: 22, color: Color(0xFF007AFF)),
+                              const SizedBox(width: 12),
+                              const Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      'Same company auto-accept',
+                                      style: TextStyle(
+                                        fontFamily: 'SF Pro Text',
+                                        fontSize: 16,
+                                        color: Color(0xFF1A1A1A),
+                                      ),
+                                    ),
+                                    SizedBox(height: 2),
+                                    Text(
+                                      'Auto-approve same email domain',
+                                      style: TextStyle(
+                                        fontFamily: 'SF Pro Text',
+                                        fontSize: 12,
+                                        color: Color(0xFF8E8E93),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              CupertinoSwitch(
+                                value: autoAcceptSameCompany,
+                                activeColor: const Color(0xFF34C759),
+                                onChanged: (val) {
+                                  currentUserReference!.update({
+                                    'auto_accept_same_company': val,
+                                  });
+                                },
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+
+                  // Custom domains section
+                  const Padding(
+                    padding: EdgeInsets.only(left: 16, bottom: 6),
+                    child: Text(
+                      'CUSTOM AUTO-ACCEPT DOMAINS',
+                      style: TextStyle(
+                        fontFamily: 'SF Pro Text',
+                        fontSize: 12,
+                        color: Color(0xFF8E8E93),
+                        letterSpacing: 0.5,
+                      ),
+                    ),
+                  ),
+                  Container(
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    padding: const EdgeInsets.all(12),
+                    child: Column(
+                      children: [
+                        // Add domain row
+                        Row(
+                          children: [
+                            Expanded(
+                              child: CupertinoTextField(
+                                controller: _mobileDomainController,
+                                placeholder: 'e.g. focuskpi.ai',
+                                placeholderStyle: const TextStyle(
+                                  fontFamily: 'SF Pro Text',
+                                  fontSize: 15,
+                                  color: Color(0xFFC7C7CC),
+                                ),
+                                style: const TextStyle(
+                                  fontFamily: 'SF Pro Text',
+                                  fontSize: 15,
+                                  color: Color(0xFF1A1A1A),
+                                ),
+                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFFF2F2F7),
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            CupertinoButton(
+                              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                              color: const Color(0xFF007AFF),
+                              borderRadius: BorderRadius.circular(8),
+                              minSize: 0,
+                              onPressed: () {
+                                final domain = _mobileDomainController.text.trim().toLowerCase();
+                                if (domain.isEmpty || !domain.contains('.')) return;
+                                if (autoAcceptDomains.contains(domain)) return;
+                                currentUserReference!.update({
+                                  'auto_accept_email_domains': FieldValue.arrayUnion([domain]),
+                                });
+                                _mobileDomainController.clear();
+                              },
+                              child: const Text(
+                                'Add',
+                                style: TextStyle(
+                                  fontFamily: 'SF Pro Text',
+                                  fontSize: 15,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                        if (autoAcceptDomains.isNotEmpty) ...[
+                          const SizedBox(height: 12),
+                          ...autoAcceptDomains.map((domain) => Container(
+                            margin: const EdgeInsets.only(bottom: 6),
+                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFF2F2F7),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Row(
+                              children: [
+                                Text(
+                                  '@$domain',
+                                  style: const TextStyle(
+                                    fontFamily: 'SF Pro Text',
+                                    fontSize: 15,
+                                    color: Color(0xFF1A1A1A),
+                                  ),
+                                ),
+                                const Spacer(),
+                                GestureDetector(
+                                  onTap: () {
+                                    currentUserReference!.update({
+                                      'auto_accept_email_domains': FieldValue.arrayRemove([domain]),
+                                    });
+                                  },
+                                  child: const Icon(
+                                    CupertinoIcons.minus_circle_fill,
+                                    size: 22,
+                                    color: Color(0xFFFF3B30),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          )),
+                        ],
+                      ],
+                    ),
+                  ),
+                  const Padding(
+                    padding: EdgeInsets.only(left: 16, top: 6),
+                    child: Text(
+                      'Requests from these email domains will be automatically approved.',
+                      style: TextStyle(
+                        fontFamily: 'SF Pro Text',
+                        fontSize: 12,
+                        color: Color(0xFF8E8E93),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
     );
   }
 

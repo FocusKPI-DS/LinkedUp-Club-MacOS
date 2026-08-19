@@ -1,3 +1,4 @@
+import '/components/skeleton/skeleton_templates.dart';
 import '/backend/backend.dart';
 import '/backend/firestore/firestore_desktop_adapter.dart';
 import '/flutter_flow/flutter_flow_util.dart';
@@ -194,9 +195,7 @@ class _FeedWidgetState extends State<FeedWidget> {
                             builder: (context, snapshot) {
                               if (snapshot.connectionState ==
                                   ConnectionState.waiting) {
-                                return const Center(
-                                  child: CircularProgressIndicator(),
-                                );
+                                return const FeedSkeleton();
                               }
 
                               if (snapshot.hasError) {

@@ -207,6 +207,24 @@ class UsersRecord extends FirestoreRecord {
   DocumentReference? get defaultWorkspaceRef => _defaultWorkspaceRef;
   bool hasDefaultWorkspaceRef() => _defaultWorkspaceRef != null;
 
+  // "auto_accept_all_requests" field.
+  // When true, all incoming connection requests are auto-accepted.
+  bool? _autoAcceptAllRequests;
+  bool get autoAcceptAllRequests => _autoAcceptAllRequests ?? false;
+  bool hasAutoAcceptAllRequests() => _autoAcceptAllRequests != null;
+
+  // "auto_accept_same_company" field.
+  // When true, requests from users with the same email domain are auto-accepted.
+  bool? _autoAcceptSameCompany;
+  bool get autoAcceptSameCompany => _autoAcceptSameCompany ?? false;
+  bool hasAutoAcceptSameCompany() => _autoAcceptSameCompany != null;
+
+  // "auto_accept_email_domains" field.
+  // List of email domains (e.g. 'focuskpi.ai') whose users' requests are auto-accepted.
+  List<String>? _autoAcceptEmailDomains;
+  List<String> get autoAcceptEmailDomains => _autoAcceptEmailDomains ?? const [];
+  bool hasAutoAcceptEmailDomains() => _autoAcceptEmailDomains != null;
+
   void _initializeFields() {
     _email = snapshotData['email'] as String?;
     _displayName = snapshotData['display_name'] as String?;
@@ -251,6 +269,12 @@ class UsersRecord extends FirestoreRecord {
     _workspaces = getDataList(snapshotData['workspaces']);
     _defaultWorkspaceRef =
         snapshotData['default_workspace_ref'] as DocumentReference?;
+    _autoAcceptAllRequests =
+        snapshotData['auto_accept_all_requests'] as bool?;
+    _autoAcceptSameCompany =
+        snapshotData['auto_accept_same_company'] as bool?;
+    _autoAcceptEmailDomains =
+        getDataList(snapshotData['auto_accept_email_domains']);
   }
 
   static CollectionReference get collection =>

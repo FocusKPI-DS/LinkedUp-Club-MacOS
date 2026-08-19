@@ -94,6 +94,8 @@ class _ChatGroupCreationWidgetState extends State<ChatGroupCreationWidget> {
     _model.groupValue =
         widget.isEdit == true ? (widget.chatDoc?.eventRef != null) : false;
     _model.switchValue = true;
+    _model.inviteApprovalValue =
+        widget.isEdit == true ? (widget.chatDoc?.inviteApprovalRequired ?? false) : false;
     _model.textFieldEventTextController ??= TextEditingController();
     _model.textFieldEventFocusNode ??= FocusNode();
 
@@ -951,6 +953,104 @@ class _ChatGroupCreationWidgetState extends State<ChatGroupCreationWidget> {
                                                 onChanged: (newValue) async {
                                                   safeSetState(() => _model
                                                       .privateValue = newValue);
+                                                },
+                                                activeThumbColor:
+                                                    FlutterFlowTheme.of(context)
+                                                        .primary,
+                                                activeTrackColor:
+                                                    FlutterFlowTheme.of(context)
+                                                        .accent1,
+                                                inactiveTrackColor:
+                                                    const Color(0xFFE5E7EB),
+                                                inactiveThumbColor:
+                                                    FlutterFlowTheme.of(context)
+                                                        .accent2,
+                                              ),
+                                            ],
+                                          ),
+                                          Row(
+                                            mainAxisSize: MainAxisSize.max,
+                                            mainAxisAlignment:
+                                                MainAxisAlignment.spaceBetween,
+                                            crossAxisAlignment:
+                                                CrossAxisAlignment.center,
+                                            children: [
+                                              Expanded(
+                                                child: Column(
+                                                  mainAxisSize:
+                                                      MainAxisSize.max,
+                                                  crossAxisAlignment:
+                                                      CrossAxisAlignment.start,
+                                                  children: [
+                                                    Text(
+                                                      'Invite Approval',
+                                                      style: FlutterFlowTheme
+                                                              .of(context)
+                                                          .bodyMedium
+                                                          .override(
+                                                            font: GoogleFonts
+                                                                .inter(
+                                                              fontWeight:
+                                                                  FontWeight
+                                                                      .w500,
+                                                              fontStyle:
+                                                                  FlutterFlowTheme.of(
+                                                                          context)
+                                                                      .bodyMedium
+                                                                      .fontStyle,
+                                                            ),
+                                                            color: const Color(
+                                                                0xFF374151),
+                                                            fontSize: 14.0,
+                                                            letterSpacing: 0.0,
+                                                            fontWeight:
+                                                                FontWeight.w500,
+                                                            fontStyle:
+                                                                FlutterFlowTheme.of(
+                                                                        context)
+                                                                    .bodyMedium
+                                                                    .fontStyle,
+                                                          ),
+                                                    ),
+                                                    Text(
+                                                      'New invites require admin approval',
+                                                      style: FlutterFlowTheme
+                                                              .of(context)
+                                                          .bodySmall
+                                                          .override(
+                                                            font: GoogleFonts
+                                                                .inter(
+                                                              fontWeight:
+                                                                  FontWeight
+                                                                      .normal,
+                                                              fontStyle:
+                                                                  FlutterFlowTheme.of(
+                                                                          context)
+                                                                      .bodySmall
+                                                                      .fontStyle,
+                                                            ),
+                                                            color: const Color(
+                                                                0xFF6B7280),
+                                                            fontSize: 12.0,
+                                                            letterSpacing: 0.0,
+                                                            fontWeight:
+                                                                FontWeight
+                                                                    .normal,
+                                                            fontStyle:
+                                                                FlutterFlowTheme.of(
+                                                                        context)
+                                                                    .bodySmall
+                                                                    .fontStyle,
+                                                          ),
+                                                    ),
+                                                  ],
+                                                ),
+                                              ),
+                                              Switch(
+                                                value: _model.inviteApprovalValue ?? false,
+                                                onChanged: (newValue) async {
+                                                  safeSetState(() => _model
+                                                      .inviteApprovalValue = newValue);
                                                 },
                                                 activeThumbColor:
                                                     FlutterFlowTheme.of(context)
@@ -2227,6 +2327,7 @@ class _ChatGroupCreationWidgetState extends State<ChatGroupCreationWidget> {
                                           admin: currentUserReference,
                                           lastMessageAt: getCurrentTimestamp,
                                           isPin: false,
+                                          inviteApprovalRequired: _model.inviteApprovalValue ?? false,
                                         ),
                                         ...mapToFirestore(
                                           {
@@ -2252,6 +2353,7 @@ class _ChatGroupCreationWidgetState extends State<ChatGroupCreationWidget> {
                                           admin: currentUserReference,
                                           lastMessageAt: getCurrentTimestamp,
                                           isPin: false,
+                                          inviteApprovalRequired: _model.inviteApprovalValue ?? false,
                                         ),
                                         ...mapToFirestore(
                                           {
@@ -2329,6 +2431,7 @@ class _ChatGroupCreationWidgetState extends State<ChatGroupCreationWidget> {
                                   chatImageUrl: _model.chatImage,
                                   description: _model.textController2.text,
                                   isPrivate: _model.privateValue,
+                                  inviteApprovalRequired: _model.inviteApprovalValue ?? false,
                                 ));
 
                                 context.goNamed(

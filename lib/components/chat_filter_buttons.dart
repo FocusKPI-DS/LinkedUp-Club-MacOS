@@ -15,20 +15,29 @@ class ChatFilterButtons extends StatelessWidget {
 
       return Container(
         padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
-        child: Row(
-          children: [
-            _FilterButton(
-              label: 'All',
-              isSelected: selectedFilter == 'All',
-              onTap: () => chatController.updateChatFilter('All'),
-            ),
-            const SizedBox(width: 8.0),
-            _FilterButton(
-              label: 'Unread',
-              isSelected: selectedFilter == 'Unread',
-              onTap: () => chatController.updateChatFilter('Unread'),
-            ),
-          ],
+        child: Container(
+          decoration: BoxDecoration(
+            color: Color(0xFFF3F4F6),
+            borderRadius: BorderRadius.circular(8.0),
+          ),
+          child: Row(
+            children: [
+              Expanded(
+                child: _FilterButton(
+                  label: 'All',
+                  isSelected: selectedFilter == 'All',
+                  onTap: () => chatController.updateChatFilter('All'),
+                ),
+              ),
+              Expanded(
+                child: _FilterButton(
+                  label: 'Unread',
+                  isSelected: selectedFilter == 'Unread',
+                  onTap: () => chatController.updateChatFilter('Unread'),
+                ),
+              ),
+            ],
+          ),
         ),
       );
     });
@@ -53,21 +62,31 @@ class _FilterButton extends StatelessWidget {
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 200),
         padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+        margin: const EdgeInsets.all(3.0),
         decoration: BoxDecoration(
-          color: isSelected
-              ? CupertinoColors.systemBlue
-              : Color(0xFFF2F2F7),
-          borderRadius: BorderRadius.circular(20.0),
+          color: isSelected ? Colors.white : Colors.transparent,
+          borderRadius: BorderRadius.circular(6.0),
+          border: isSelected
+              ? Border.all(color: Color(0xFFE5E7EB), width: 1)
+              : null,
+          boxShadow: isSelected
+              ? [
+                  BoxShadow(
+                    color: Color.fromRGBO(0, 0, 0, 0.05),
+                    blurRadius: 4,
+                    offset: Offset(0, 1),
+                  ),
+                ]
+              : null,
         ),
         child: Text(
           label,
           style: TextStyle(
-            fontSize: 14.0,
+            fontSize: 13.0,
             fontWeight: FontWeight.w500,
-            color: isSelected
-                ? CupertinoColors.white
-                : CupertinoColors.systemBlue,
+            color: Color(0xFF374151),
           ),
+          textAlign: TextAlign.center,
         ),
       ),
     );

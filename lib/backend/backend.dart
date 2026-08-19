@@ -1368,9 +1368,15 @@ Future maybeCreateUser(User user) async {
     final userUid = user.uid;
     if (userUid != null && userUid.isNotEmpty) {
       await actions.handleReferralConnection(userUid);
+      // Auto-connect users with same company email domain
+      unawaited(actions.autoConnectSameCompanyUsers(userUid).then((count) {
+        if (count > 0) {
+          print('[Signup] Auto-connected $count users with same company email');
+        }
+      }));
     }
   } catch (e) {
-    // Referral connection failed (non-critical)
+    // Referral / auto-connect failed (non-critical)
   }
 }
 

@@ -1,3 +1,4 @@
+import '/components/skeleton/skeleton_templates.dart';
 import '/backend/backend.dart';
 import '/utils/debug_log.dart';
 import '/custom_code/actions/ai_translation_service.dart';
@@ -686,7 +687,9 @@ class ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget> {
       try {
         final user = await fsGetUserOnce(ref);
         users.add(user);
-      } catch (_) {}
+      } catch (e) {
+        print('⚠️ [_loadMembers] Failed to load member ${ref.path}: $e');
+      }
     }
     if (mounted) {
       debugLog('📋 [_loadMembers] Loaded ${users.length} members for chat ${widget.chatReference!.reference.id}, total members in doc: ${members.length}');
@@ -905,6 +908,22 @@ class ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget> {
           'edited_at': getCurrentTimestamp,
         });
         debugLog('✏️ [edit] Message updated: ${editMsg.reference.id}');
+
+        // Update sidebar preview if this was the last message
+        // Strip mention markup for display: <@uid|Name> → @Name
+        final displayText = processedContent.replaceAllMapped(
+          RegExp(r'<@[^|]+\|([^>]+)>'),
+          (m) => '@${m.group(1)}',
+        );
+        final previewPatch = {
+          'last_message': displayText.length > 100 ? displayText.substring(0, 100) : displayText,
+        };
+        // Update Firestore chat document so sidebar stays correct after poll refresh
+        final chatRef = widget.chatReference?.reference;
+        if (chatRef != null) {
+          await fsPatchDocument(chatRef, previewPatch);
+        }
+        _notifySidebarPreview(previewPatch);
       } catch (e) {
         debugLog('❌ [edit] Error updating message: $e');
       }
@@ -1036,7 +1055,11 @@ class ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget> {
           createdAt: getCurrentTimestamp,
           messageType: MessageType.text,
           replyTo: _model.replyingToMessage?.reference.id,
-          replyToContent: _model.replyingToMessage?.content,
+          replyToContent: _model.replyingToMessage?.content
+              ?.replaceAllMapped(
+                RegExp(r'<@[^|]+\|([^>]+)>'),
+                (m) => '@${m.group(1)}',
+              ),
           replyToSender: _model.replyingToMessage != null
               ? (_resolveUserName(_model.replyingToMessage!))
               : null,
@@ -1604,7 +1627,7 @@ class ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget> {
 
   Widget _buildDesktopMessageList() {
     if (_desktopMessages == null) {
-      return const Center(child: CircularProgressIndicator());
+      return const MessagesSkeleton();
     }
     return Stack(
       children: [
@@ -1629,7 +1652,7 @@ class ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget> {
   @override
   Widget build(BuildContext context) {
     if (widget.chatReference == null) {
-      return const Center(child: CircularProgressIndicator());
+      return const MessagesSkeleton();
     }
 
     final threadBody = Stack(
@@ -1644,7 +1667,7 @@ class ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget> {
           // Message List
           Expanded(
             child: !_messagesStreamReady
-                ? const Center(child: CircularProgressIndicator())
+                ? const MessagesSkeleton()
                 : _staggerDesktopFirestore
                     ? _buildDesktopMessageList()
                     : StreamBuilder<List<MessagesRecord>>(
@@ -1664,7 +1687,7 @@ class ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget> {
                   );
                 }
                 if (!snapshot.hasData) {
-                  return const Center(child: CircularProgressIndicator());
+                  return const MessagesSkeleton();
                 }
 
                 final messages = snapshot.data!;
@@ -1867,7 +1890,7 @@ class ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget> {
                         const SizedBox(height: 2),
                         Text(
                           _model.replyingToMessage!.content.isNotEmpty
-                              ? _model.replyingToMessage!.content
+                              ? _model.replyingToMessage!.content.replaceAllMapped(RegExp(r'<@[^|>]+\|([^>]+)>'), (m) => '@${m.group(1)}').replaceAllMapped(RegExp(r'<@([^>]+)>'), (m) => '@user')
                               : (_model.replyingToMessage!.image.isNotEmpty
                                   ? '📷 Photo'
                                   : (_model.replyingToMessage!.video.isNotEmpty
@@ -2101,6 +2124,9 @@ class ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget> {
               // Camera logic
             },
           ),
+          // Bottom safe area padding for iOS (home indicator)
+          if (!kIsWeb && Platform.isIOS)
+            SizedBox(height: MediaQuery.of(context).viewPadding.bottom),
               ],
             ),
           ),
@@ -2247,16 +2273,16 @@ class ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget> {
                           }
                         },
                         config: Config(
-                          height: 260,
+                          height: (!kIsWeb && (Platform.isMacOS || Platform.isWindows || Platform.isLinux)) ? 560 : 260,
                           checkPlatformCompatibility: true,
                           emojiViewConfig: EmojiViewConfig(
-                            columns: 8,
-                            emojiSizeMax: 24,
-                            verticalSpacing: 0,
-                            horizontalSpacing: 0,
+                            columns: (!kIsWeb && (Platform.isMacOS || Platform.isWindows || Platform.isLinux)) ? 5 : 8,
+                            emojiSizeMax: (!kIsWeb && (Platform.isMacOS || Platform.isWindows || Platform.isLinux)) ? 128 : 24,
+                            verticalSpacing: (!kIsWeb && (Platform.isMacOS || Platform.isWindows || Platform.isLinux)) ? 12 : 0,
+                            horizontalSpacing: (!kIsWeb && (Platform.isMacOS || Platform.isWindows || Platform.isLinux)) ? 12 : 0,
                             gridPadding: const EdgeInsets.symmetric(
-                                horizontal: 8, vertical: 4),
-                            recentsLimit: 24,
+                                horizontal: 16, vertical: 8),
+                            recentsLimit: 28,
                             replaceEmojiOnLimitExceed: true,
                             noRecents: Text(
                               'No Recents',

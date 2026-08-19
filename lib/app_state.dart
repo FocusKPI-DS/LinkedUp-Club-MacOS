@@ -84,6 +84,9 @@ class FFAppState extends ChangeNotifier {
         _groupFoldersEnabled =
             prefs.getBool('ff_groupFoldersEnabled') ?? _groupFoldersEnabled;
       });
+      _safeInit(() {
+        _uiScale = prefs.getDouble('ff_uiScale') ?? _uiScale;
+      });
     });
   }
 
@@ -491,6 +494,15 @@ class FFAppState extends ChangeNotifier {
   set chatFontSize(double value) {
     _chatFontSize = value;
     prefs.setDouble('ff_chatFontSize', value);
+    notifyListeners();
+  }
+
+  // UI Scale preference
+  double _uiScale = 1.0;
+  double get uiScale => _uiScale;
+  set uiScale(double value) {
+    _uiScale = value.clamp(0.8, 1.4);
+    prefs.setDouble('ff_uiScale', _uiScale);
     notifyListeners();
   }
 }

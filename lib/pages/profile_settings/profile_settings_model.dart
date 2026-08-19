@@ -6,6 +6,7 @@ enum SettingsTab {
   yourProfile,
   notifications,
   preferences,
+  connections,
   apiKeys,
   helpFeedback,
   logout,

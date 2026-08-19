@@ -825,7 +825,7 @@ class NavBarPage extends StatefulWidget {
 
 /// This is the private State class that goes with NavBarPage.
 class _NavBarPageState extends State<NavBarPage> with WidgetsBindingObserver {
-  String _currentPageName = 'Home';
+  String _currentPageName = 'DesktopChat';
   late Widget? _currentPage;
 
   // Lazy-init chat UIs so Windows does not load chat stack at login (Home first).
@@ -939,7 +939,7 @@ class _NavBarPageState extends State<NavBarPage> with WidgetsBindingObserver {
   }
 
   void _setCurrentPageName(String pageName, Map<String, Widget> tabs) {
-    // Ensure the page name exists in tabs, fallback to 'Home' if not
+    // Ensure the page name exists in tabs, fallback to DesktopChat/MobileChat
     if (tabs.containsKey(pageName)) {
       _currentPageName = pageName;
       // Clear news indicator when Announcements page is opened (desktop only)
@@ -951,7 +951,7 @@ class _NavBarPageState extends State<NavBarPage> with WidgetsBindingObserver {
         FFAppState().chatPageLastOpened = DateTime.now();
       }
     } else {
-      _currentPageName = 'Home';
+      _currentPageName = (!kIsWeb && Platform.isIOS) ? 'MobileChat' : 'DesktopChat';
     }
   }
 
@@ -979,20 +979,12 @@ class _NavBarPageState extends State<NavBarPage> with WidgetsBindingObserver {
 
     // Create a mapping for the navbar items to their corresponding tab indices
     final navItemToIndex = {
-      'Home': 0,
-      // 'Chat': 1, // Commented out - using MobileChat instead
-      'MobileChat': 1, // Chat (renamed from Mobile Chat) - for iOS
-      'DesktopChat': 1, // Desktop Chat - for macOS
-      // 'Gmail': 2, // Gmail - for macOS
-      // 'GmailMobile': 2, // Gmail Mobile - for iOS
-      // 'AIAssistant': 3, // Desktop AI Assistant - Removed
-      // 'MobileAssistant': 3, // Mobile AI Assistant - Removed
-      // 'Discover': 3, // Commented out
-      // 'Announcements':
-      //    5, // News - for desktop (Index 5 to avoid collision with Connections)
-      'Connections': 2, // Connections - for iOS and Desktop (Index 2)
-      'ProfileSettings': 3, // Settings - for macOS
-      'MobileSettings': 3, // Settings - for iOS (updated to index 3)
+      'Home': 0, // Keep for compatibility but not shown in nav
+      'MobileChat': 0, // Chat - for iOS
+      'DesktopChat': 0, // Desktop Chat - for macOS
+      'Connections': 1, // Connections - for iOS and Desktop
+      'ProfileSettings': 2, // Settings - for macOS
+      'MobileSettings': 2, // Settings - for iOS
     };
 
     final currentIndex = navItemToIndex[_currentPageName] ?? 0;
@@ -1011,11 +1003,9 @@ class _NavBarPageState extends State<NavBarPage> with WidgetsBindingObserver {
             connectionRequestCount = userSnapshot.data!.friendRequests.length;
           }
 
-          // Map tab indices to page names (3 items: Home, Chat, Connections, Settings)
+          // Map tab indices to page names (3 items: Chat, Connections, Settings)
           final pageNames = [
-            'Home',
             'MobileChat',
-            // 'GmailMobile',
             'Connections',
             'MobileSettings'
           ];
@@ -1023,19 +1013,9 @@ class _NavBarPageState extends State<NavBarPage> with WidgetsBindingObserver {
           // Build items with dynamic label for Connections
           final items = <AdaptiveNavigationDestination>[
             AdaptiveNavigationDestination(
-              icon: 'house.fill',
-              label: 'Home',
-            ),
-            AdaptiveNavigationDestination(
               icon: 'message.fill',
               label: 'Chat',
             ),
-            /*
-            AdaptiveNavigationDestination(
-              icon: 'envelope.fill',
-              label: 'Mail',
-            ),
-            */
             AdaptiveNavigationDestination(
               icon: 'person.2.fill',
               label: connectionRequestCount > 0
@@ -1050,7 +1030,7 @@ class _NavBarPageState extends State<NavBarPage> with WidgetsBindingObserver {
           ];
 
           return AdaptiveScaffold(
-            body: _currentPage ?? tabs[_currentPageName] ?? tabs['Home']!,
+            body: _currentPage ?? tabs[_currentPageName] ?? tabs['MobileChat']!,
             bottomNavigationBar: AdaptiveBottomNavigationBar(
               useNativeBottomBar: true,
               items: items,
@@ -1077,7 +1057,7 @@ class _NavBarPageState extends State<NavBarPage> with WidgetsBindingObserver {
             _buildVerticalNavBar(tabs, currentIndex, navItemToIndex),
             // Main Content Area
             Expanded(
-              child: _currentPage ?? tabs[_currentPageName] ?? tabs['Home']!,
+              child: _currentPage ?? tabs[_currentPageName] ?? tabs['DesktopChat']!,
             ),
           ],
         ),
@@ -1414,16 +1394,6 @@ class _NavBarPageState extends State<NavBarPage> with WidgetsBindingObserver {
   Widget _buildVerticalNavBar(Map<String, Widget> tabs, int currentIndex,
       Map<String, int> navItemToIndex) {
     final navItems = [
-      {
-        'icon': Icons.home_rounded,
-        'label': 'Home',
-        'page': 'Home',
-      },
-      // {
-      //   'icon': Icons.chat_rounded,
-      //   'label': 'Chat',
-      //   'page': 'Chat',
-      // }, // Commented out - using DesktopChat for macOS and web
       {
         'icon': Icons.chat_bubble_outline_rounded,
         'label': 'Chat',

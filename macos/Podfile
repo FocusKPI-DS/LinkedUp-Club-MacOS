@@ -1,4 +1,4 @@
-platform :osx, '11.0'
+platform :osx, '13.0'
 
 # CocoaPods analytics sends network stats synchronously affecting flutter build latency.
 ENV['COCOAPODS_DISABLE_STATS'] = 'true'
@@ -38,7 +38,7 @@ post_install do |installer|
   installer.pods_project.targets.each do |target|
     flutter_additional_macos_build_settings(target)
     target.build_configurations.each do |config|
-      config.build_settings['MACOSX_DEPLOYMENT_TARGET'] = '11.0'
+      config.build_settings['MACOSX_DEPLOYMENT_TARGET'] = '13.0'
       
       # Fix DT_TOOLCHAIN_DIR issue for Xcode 15
       if config.base_configuration_reference != nil
@@ -55,6 +55,17 @@ post_install do |installer|
         'PERMISSION_MICROPHONE=1',
       ]
       # End of the permission_handler configuration
+    end
+  end
+
+  # Patch zego_express_engine: errorCode removed in newer ZegoExpressEngine SDK (Xcode 26.2+)
+  zego_file = File.join(installer.sandbox.root, '..', 'Flutter', 'ephemeral', '.symlinks', 'plugins', 'zego_express_engine', 'macos', 'Classes', 'internal', 'ZegoExpressEngineEventHandler.m')
+  if File.exist?(zego_file)
+    content = File.read(zego_file)
+    if content.include?('info.errorCode')
+      patched = content.gsub('info.errorCode', '0 /* errorCode patched */')
+      File.write(zego_file, patched)
+      puts "[Podfile] Patched ZegoExpressEngineEventHandler.m: replaced info.errorCode with 0"
     end
   end
 end

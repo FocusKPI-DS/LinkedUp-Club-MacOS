@@ -82,6 +82,8 @@ class ChatGroupCreationModel extends FlutterFlowModel<ChatGroupCreationWidget> {
   bool? groupValue;
   // State field(s) for Switch widget.
   bool? switchValue;
+  // State field(s) for invite approval toggle.
+  bool? inviteApprovalValue;
   // State field(s) for TextFieldEvent widget.
   FocusNode? textFieldEventFocusNode;
   TextEditingController? textFieldEventTextController;

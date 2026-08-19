@@ -38,7 +38,7 @@ class DesktopClipboardPasteHelper {
   static Future<List<DesktopClipboardPasteItem>> readAll() async {
     final results = <DesktopClipboardPasteItem>[];
 
-    if (Platform.isWindows) {
+    if (Platform.isWindows || Platform.isMacOS) {
       results.addAll(await _readFromNativePasteboard());
     }
 

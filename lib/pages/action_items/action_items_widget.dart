@@ -1,3 +1,4 @@
+import '/components/skeleton/skeleton_templates.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -28,7 +29,7 @@ class _ActionItemsWidgetState extends State<ActionItemsWidget> {
     return _buildActionItemsStream(
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Center(child: CircularProgressIndicator());
+          return const SettingsListSkeleton();
         }
 
         if (snapshot.hasError) {

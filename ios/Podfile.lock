@@ -1,7 +1,7 @@
 PODS:
   - adaptive_platform_ui (0.1.0):
     - Flutter
-  - app_badge_plus (1.2.6):
+  - app_badge_plus (1.2.10):
     - Flutter
   - app_links (7.0.0):
     - Flutter
@@ -23,7 +23,7 @@ PODS:
     - Flutter
   - audio_waveforms (0.0.1):
     - Flutter
-  - BranchSDK (3.13.3)
+  - BranchSDK (3.14.2)
   - camera_avfoundation (0.0.1):
     - Flutter
   - cloud_firestore (5.6.9):
@@ -227,8 +227,8 @@ PODS:
     - GoogleUtilities/Environment (~> 8.1)
     - GTMSessionFetcher/Core (< 5.0, >= 3.4)
   - Flutter (1.0.0)
-  - flutter_branch_sdk (8.11.0):
-    - BranchSDK (~> 3.13.0)
+  - flutter_branch_sdk (8.12.1):
+    - BranchSDK (~> 3.14.0)
     - Flutter
   - flutter_inappwebview_ios (0.0.1):
     - Flutter
@@ -242,6 +242,8 @@ PODS:
   - geolocator_apple (1.2.0):
     - Flutter
     - FlutterMacOS
+  - google_sign_in_all_platforms_mobile (0.0.1):
+    - Flutter
   - google_sign_in_ios (0.0.1):
     - AppAuth (>= 1.7.4)
     - Flutter
@@ -326,7 +328,6 @@ PODS:
   - libwebp/sharpyuv (1.5.0)
   - libwebp/webp (1.5.0):
     - libwebp/sharpyuv
-  - MTBBarcodeScanner (5.0.11)
   - nanopb (3.30910.0):
     - nanopb/decode (= 3.30910.0)
     - nanopb/encode (= 3.30910.0)
@@ -349,7 +350,6 @@ PODS:
     - PromisesObjC (= 2.4.0)
   - qr_code_scanner_plus (0.2.6):
     - Flutter
-    - MTBBarcodeScanner
   - qr_code_tools (0.1.0):
     - Flutter
   - quill_native_bridge_ios (0.0.1):
@@ -390,7 +390,7 @@ PODS:
   - webview_flutter_wkwebview (0.0.1):
     - Flutter
     - FlutterMacOS
-  - zego_express_engine (3.23.0):
+  - zego_express_engine (3.24.1):
     - Flutter
 
 DEPENDENCIES:
@@ -421,6 +421,7 @@ DEPENDENCIES:
   - flutter_inappwebview_ios (from `.symlinks/plugins/flutter_inappwebview_ios/ios`)
   - flutter_keyboard_visibility_temp_fork (from `.symlinks/plugins/flutter_keyboard_visibility_temp_fork/ios`)
   - geolocator_apple (from `.symlinks/plugins/geolocator_apple/darwin`)
+  - google_sign_in_all_platforms_mobile (from `.symlinks/plugins/google_sign_in_all_platforms_mobile/ios`)
   - google_sign_in_ios (from `.symlinks/plugins/google_sign_in_ios/darwin`)
   - GoogleUtilities
   - image_gallery_saver_plus (from `.symlinks/plugins/image_gallery_saver_plus/ios`)
@@ -490,7 +491,6 @@ SPEC REPOS:
     - GTMSessionFetcher
     - leveldb-library
     - libwebp
-    - MTBBarcodeScanner
     - nanopb
     - OrderedSet
     - PromisesObjC
@@ -553,6 +553,8 @@ EXTERNAL SOURCES:
     :path: ".symlinks/plugins/flutter_keyboard_visibility_temp_fork/ios"
   geolocator_apple:
     :path: ".symlinks/plugins/geolocator_apple/darwin"
+  google_sign_in_all_platforms_mobile:
+    :path: ".symlinks/plugins/google_sign_in_all_platforms_mobile/ios"
   google_sign_in_ios:
     :path: ".symlinks/plugins/google_sign_in_ios/darwin"
   image_gallery_saver_plus:
@@ -613,7 +615,7 @@ CHECKOUT OPTIONS:
 
 SPEC CHECKSUMS:
   adaptive_platform_ui: dcd588cb59eb4c5bd1a430158b00b98b0493b3f0
-  app_badge_plus: d13997a69d78ae6cafd6353b17d4033897b54f4c
+  app_badge_plus: 08a692638f84bc8170aab5aaf90225810fe131b6
   app_links: 6d01271b3907b0ee7325c5297c75d697c4226c4d
   AppAuth: d4f13a8fe0baf391b2108511793e4b479691fb73
   AppCheckCore: cc8fd0a3a230ddd401f326489c99990b013f0c4f
@@ -621,7 +623,7 @@ SPEC CHECKSUMS:
   assets_audio_player_web: 19826380c44375761aa0b9053665c1e3fbc3b86b
   audio_session: 19e9480dbdd4e5f6c4543826b2e8b0e4ab6145fe
   audio_waveforms: cd736909ebc6b6a164eb74701d8c705ce3241e1c
-  BranchSDK: 19a6e97115350db916a57823c7f6ed96d1e70e46
+  BranchSDK: 2c0cb80cd108acaf26effdd94c37076d4024bdb8
   camera_avfoundation: 281867ff09f1da66f031a184ecfbc6f2e625c9f5
   cloud_firestore: ded01e29d440fa7ba52bc855f27d2fc7a1bcf4be
   cloud_functions: 68d67463cf7985ad374b4e58113976de4836372f
@@ -666,10 +668,11 @@ SPEC CHECKSUMS:
   FirebaseSharedSwift: aca73668bc95e8efccb618e0167eab05d19d3a75
   FirebaseStorage: 2a3e5402a565e06e121308dadfe0626976fd6b45
   Flutter: cabc95a1d2626b1b06e7179b784ebcf0c0cde467
-  flutter_branch_sdk: 65d94499973dd5fb7db71608e40865a57c13bd0b
+  flutter_branch_sdk: 53604a204f176f1eff73df8e1a0b35e50adabbdb
   flutter_inappwebview_ios: 6f63631e2c62a7c350263b13fa5427aedefe81d4
   flutter_keyboard_visibility_temp_fork: 8a8809c4129e31d25fca77446e0f3fd548122ced
   geolocator_apple: 66b711889fd333205763b83c9dcf0a57a28c7afd
+  google_sign_in_all_platforms_mobile: 14062cc28e3432a927ebf2fa5dbdba85c157951b
   google_sign_in_ios: 7411fab6948df90490dc4620ecbcabdc3ca04017
   GoogleDataTransport: aae35b7ea0c09004c3797d53c8c41f66f219d6a7
   GoogleSignIn: ce8c89bb9b37fb624b92e7514cc67335d1e277e4
@@ -682,7 +685,6 @@ SPEC CHECKSUMS:
   just_audio: a42c63806f16995daf5b219ae1d679deb76e6a79
   leveldb-library: cc8b8f8e013647a295ad3f8cd2ddf49a6f19be19
   libwebp: 02b23773aedb6ff1fd38cec7a77b81414c6842a8
-  MTBBarcodeScanner: f453b33c4b7dfe545d8c6484ed744d55671788cb
   nanopb: fad817b59e0457d11a5dfbde799381cd727c1275
   open_filex: 6e26e659846ec990262224a12ef1c528bb4edbe4
   OrderedSet: e539b66b644ff081c73a262d24ad552a69be3a94
@@ -692,7 +694,7 @@ SPEC CHECKSUMS:
   permission_handler_apple: 9878588469a2b0d0fc1e048d9f43605f92e6cec2
   PromisesObjC: f5707f49cb48b9636751c5b2e7d227e43fba9f47
   PromisesSwift: 9d77319bbe72ebf6d872900551f7eeba9bce2851
-  qr_code_scanner_plus: 3bfe4deb7f28996a63a2a580819d49dae80d5ed3
+  qr_code_scanner_plus: 92b556a924f8e0ce42649fe27af8bdb93c3c18da
   qr_code_tools: a2c9e4ee5ec641df1cde93e4fc9e31b677ad0d5a
   quill_native_bridge_ios: 2b01d585fcc73d0f5eed78c0bd244ee564b06f5a
   RecaptchaInterop: 11e0b637842dfb48308d242afc3f448062325aba
@@ -710,8 +712,8 @@ SPEC CHECKSUMS:
   video_thumbnail: c4e2a3c539e247d4de13cd545344fd2d26ffafd1
   wakelock_plus: 76957ab028e12bfa4e66813c99e46637f367fc7e
   webview_flutter_wkwebview: 29eb20d43355b48fe7d07113835b9128f84e3af4
-  zego_express_engine: 08ce2209d3c8af8182fbae5bdb391c477f5630a4
+  zego_express_engine: 2c8431923de8814333772402e5464e19883499e9
 
-PODFILE CHECKSUM: cd550ea571c1290cd617e29504a872b18e64bb83
+PODFILE CHECKSUM: 3443c7368d9387ddbb0f6af617325db32714f1a5
 
 COCOAPODS: 1.16.2
