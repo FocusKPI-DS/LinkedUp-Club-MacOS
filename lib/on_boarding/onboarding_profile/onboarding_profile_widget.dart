@@ -15,6 +15,7 @@ import 'dart:io';
 import 'dart:math';
 import 'dart:ui';
 import '/custom_code/actions/index.dart' as actions;
+import '/utils/connection_request_helpers.dart';
 import '/custom_code/widgets/index.dart' as custom_widgets;
 import '/index.dart';
 import 'package:smooth_page_indicator/smooth_page_indicator.dart'
@@ -4253,75 +4254,24 @@ class _OnboardingProfileWidgetState extends State<OnboardingProfileWidget>
 
     print("ONBOARDING SUBMIT PRESSED");
     try {
-      // Check if already connected
-      if (currentUser.friends.contains(user.reference)) {
-        _showErrorMessage('You are already connected with ${user.displayName}');
-        return;
-      }
-
-      // Check if request already sent
-      if (currentUser.sentRequests.contains(user.reference)) {
-        _showErrorMessage(
-            'Connection request already sent to ${user.displayName}');
-        return;
-      }
-
-      // Check if they already sent us a request (auto-accept scenario)
-      if (currentUser.friendRequests.contains(user.reference)) {
-        // Auto-accept the connection
-        final batch = FirebaseFirestore.instance.batch();
-
-        // Update current user: add to friends, remove from friend_requests
-        batch.update(currentUserReference!, {
-          'friends': FieldValue.arrayUnion([user.reference]),
-          'friend_requests': FieldValue.arrayRemove([user.reference]),
-          'sent_requests': FieldValue.arrayRemove([user.reference]),
-        });
-
-        // Update other user: add to friends, remove from sent_requests
-        batch.update(user.reference, {
-          'friends': FieldValue.arrayUnion([currentUserReference]),
-          'sent_requests': FieldValue.arrayRemove([currentUserReference]),
-        });
-
-        await batch.commit();
-
-        if (mounted) {
-          _showSuccessMessage('Connected with ${user.displayName}!');
-        }
-        return;
-      }
-
-      // Use a batch write for better performance and atomicity
-      final batch = FirebaseFirestore.instance.batch();
-
-      // Update current user's sent requests
-      batch.update(currentUserReference!, {
-        'sent_requests': FieldValue.arrayUnion([user.reference]),
-      });
-
-      // Update target user's friend requests
-      batch.update(user.reference, {
-        'friend_requests': FieldValue.arrayUnion([currentUserReference]),
-      });
-
-      await batch.commit();
-
-      if (mounted) {
-        _showSuccessMessage('Connection request sent to ${user.displayName}');
-      }
-
-      // Fire-and-forget: send email notification to recipient
-      actions.sendConnectionRequestEmail(
-        recipientEmail: user.email,
-        recipientName: user.displayName,
-        senderName: currentUser.displayName,
+      final outcome = await ConnectionRequestHelpers.promptAndSend(
+        context: context,
+        targetUser: user,
       );
+      if (!mounted) return;
+      final message = ConnectionRequestHelpers.successMessage(
+        outcome,
+        user.displayName,
+      );
+      if (message != null) {
+        _showSuccessMessage(message);
+      }
     } catch (e) {
       print('Error sending connection request: $e');
       if (mounted) {
-        // Check if it's a permission error and provide specific guidance
-        if (e.toString().contains('permission-denied')) {
+        if (e is ConnectionRequestException) {
+          _showErrorMessage(e.message);
+        } else if (e.toString().contains('permission-denied')) {
           _showErrorMessage(
               'Unable to send connection request. This feature requires updated permissions.');
         } else {

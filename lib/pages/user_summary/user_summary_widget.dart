@@ -1,6 +1,5 @@
 import '/components/skeleton/skeleton_templates.dart';
 import '/auth/firebase_auth/auth_util.dart';
-import '/custom_code/actions/index.dart' as actions;
 import '/utils/debug_log.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_functions/cloud_functions.dart';
@@ -11,6 +10,7 @@ import '/flutter_flow/flutter_flow_expanded_image_view.dart';
 import '/pages/mobile_chat/mobile_chat_widget.dart';
 import '/pages/desktop_chat/chat_controller.dart';
 import '/utils/chat_helpers.dart';
+import '/utils/connection_request_helpers.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
@@ -301,54 +301,24 @@ class _UserSummaryWidgetState extends State<UserSummaryWidget> {
     _startOperation(userId);
 
     try {
-      // Bulletproof check - don't send if already connected or request already sent
-      final currentUserData = await fsGetUserOnce(currentUserReference!);
-
-      if (currentUserData.friends.contains(user.reference)) {
-        _showErrorMessage('You are already connected with ${user.displayName}');
-        return;
-      }
-
-      if (currentUserData.sentRequests.contains(user.reference)) {
-        _showErrorMessage(
-          'Connection request already sent to ${user.displayName}',
-        );
-        return;
-      }
-
-      // Check if they already sent us a request (auto-accept scenario)
-      if (currentUserData.friendRequests.contains(user.reference)) {
-        await _acceptConnectionRequest(user);
-        return;
-      }
-
-      await fsArrayUnion(
-        currentUserReference!,
-        'sent_requests',
-        [user.reference],
+      final outcome = await ConnectionRequestHelpers.promptAndSend(
+        context: context,
+        targetUser: user,
       );
-
-      await fsArrayUnion(
-        user.reference,
-        'friend_requests',
-        [currentUserReference!],
+      if (!mounted) return;
+      final message = ConnectionRequestHelpers.successMessage(
+        outcome,
+        user.displayName,
       );
-
-      if (mounted) {
-        _showSuccessMessage('Connection request sent to ${user.displayName}');
+      if (message != null) {
+        _showSuccessMessage(message);
       }
-
-      // Fire-and-forget: send email notification to recipient
-      actions.sendConnectionRequestEmail(
-        recipientEmail: user.email,
-        recipientName: user.displayName,
-        senderName: currentUserData.displayName,
-      );
     } catch (e) {
       debugLog('Error sending connection request: $e');
       if (mounted) {
-        // Check if it's a permission error and provide specific guidance
-        if (e.toString().contains('permission-denied')) {
+        if (e is ConnectionRequestException) {
+          _showErrorMessage(e.message);
+        } else if (e.toString().contains('permission-denied')) {
           _showErrorMessage(
             'Unable to send connection request. This feature requires updated permissions.',
           );
@@ -372,33 +342,16 @@ class _UserSummaryWidgetState extends State<UserSummaryWidget> {
     _startOperation(userId);
 
     try {
-      // Bulletproof check - ensure request exists
-      final currentUserData = await fsGetUserOnce(currentUserReference!);
-
-      if (!currentUserData.sentRequests.contains(user.reference)) {
-        _showErrorMessage('No pending request to ${user.displayName}');
-        return;
-      }
-
-      await fsArrayRemove(
-        currentUserReference!,
-        'sent_requests',
-        [user.reference],
-      );
-
-      await fsArrayRemove(
-        user.reference,
-        'friend_requests',
-        [currentUserReference!],
-      );
-
+      await ConnectionRequestHelpers.cancel(user);
       if (mounted) {
         _showSuccessMessage('Connection request cancelled');
       }
     } catch (e) {
       debugLog('Error cancelling connection request: $e');
       if (mounted) {
-        if (e.toString().contains('permission-denied')) {
+        if (e is ConnectionRequestException) {
+          _showErrorMessage(e.message);
+        } else if (e.toString().contains('permission-denied')) {
           _showErrorMessage(
             'Unable to cancel connection request. This feature requires updated permissions.',
           );
@@ -422,53 +375,16 @@ class _UserSummaryWidgetState extends State<UserSummaryWidget> {
     _startOperation(userId);
 
     try {
-      // Bulletproof check - ensure they sent us a request and we're not already connected
-      final currentUserData = await fsGetUserOnce(currentUserReference!);
-
-      if (currentUserData.friends.contains(user.reference)) {
-        _showErrorMessage('You are already connected with ${user.displayName}');
-        return;
-      }
-
-      if (!currentUserData.friendRequests.contains(user.reference)) {
-        _showErrorMessage('No pending request from ${user.displayName}');
-        return;
-      }
-
-      await fsArrayUnion(
-        currentUserReference!,
-        'friends',
-        [user.reference],
-      );
-      await fsArrayRemove(
-        currentUserReference!,
-        'friend_requests',
-        [user.reference],
-      );
-      await fsArrayRemove(
-        currentUserReference!,
-        'sent_requests',
-        [user.reference],
-      );
-
-      await fsArrayUnion(
-        user.reference,
-        'friends',
-        [currentUserReference!],
-      );
-      await fsArrayRemove(
-        user.reference,
-        'sent_requests',
-        [currentUserReference!],
-      );
-
+      await ConnectionRequestHelpers.accept(user);
       if (mounted) {
         _showSuccessMessage('Connection request accepted!');
       }
     } catch (e) {
       debugLog('Error accepting connection request: $e');
       if (mounted) {
-        if (e.toString().contains('permission-denied')) {
+        if (e is ConnectionRequestException) {
+          _showErrorMessage(e.message);
+        } else if (e.toString().contains('permission-denied')) {
           _showErrorMessage(
             'Unable to accept connection request. This feature requires updated permissions.',
           );
@@ -492,29 +408,20 @@ class _UserSummaryWidgetState extends State<UserSummaryWidget> {
     _startOperation(userId);
 
     try {
-      // Bulletproof check - ensure request exists
-      final currentUserData = await fsGetUserOnce(currentUserReference!);
-
-      if (!currentUserData.friendRequests.contains(user.reference)) {
-        _showErrorMessage('No pending request from ${user.displayName}');
-        return;
-      }
-
-      await fsArrayRemove(
-        currentUserReference!,
-        'friend_requests',
-        [user.reference],
-      );
-
+      await ConnectionRequestHelpers.decline(user);
       if (mounted) {
         _showSuccessMessage('Connection request declined');
       }
     } catch (e) {
       debugLog('Error declining connection request: $e');
       if (mounted) {
-        _showErrorMessage(
-          'Failed to decline connection request. Please check your internet connection and try again.',
-        );
+        if (e is ConnectionRequestException) {
+          _showErrorMessage(e.message);
+        } else {
+          _showErrorMessage(
+            'Failed to decline connection request. Please check your internet connection and try again.',
+          );
+        }
       }
     } finally {
       _stopOperation(userId);
@@ -2763,6 +2670,20 @@ class _UserSummaryWidgetState extends State<UserSummaryWidget> {
                                         if (!isOwnProfile &&
                                             currentUser != null) ...[
                                           SizedBox(height: 16),
+                                          if (hasIncomingRequest)
+                                            Padding(
+                                              padding: const EdgeInsets.only(
+                                                bottom: 12,
+                                              ),
+                                              child: ConnectionRequestHelpers
+                                                  .noteBanner(
+                                                ConnectionRequestHelpers
+                                                    .noteFrom(
+                                                  currentUser,
+                                                  profileUser.reference,
+                                                ),
+                                              ),
+                                            ),
                                           Row(
                                             children: [
                                               if (isConnected)
@@ -3925,6 +3846,20 @@ class _UserSummaryWidgetState extends State<UserSummaryWidget> {
                                           if (!isOwnProfile &&
                                               currentUser != null) ...[
                                             SizedBox(height: 16),
+                                            if (hasIncomingRequest)
+                                              Padding(
+                                                padding: const EdgeInsets.only(
+                                                  bottom: 12,
+                                                ),
+                                                child: ConnectionRequestHelpers
+                                                    .noteBanner(
+                                                  ConnectionRequestHelpers
+                                                      .noteFrom(
+                                                    currentUser,
+                                                    profileUser.reference,
+                                                  ),
+                                                ),
+                                              ),
                                             Row(
                                               children: [
                                                 if (isConnected)

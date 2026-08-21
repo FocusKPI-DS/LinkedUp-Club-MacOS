@@ -107,6 +107,12 @@ class UsersRecord extends FirestoreRecord {
   List<DocumentReference> get friendRequests => _friendRequests ?? const [];
   bool hasFriendRequests() => _friendRequests != null;
 
+  // "friend_request_notes" field — intro notes keyed by sender uid.
+  Map<String, String>? _friendRequestNotes;
+  Map<String, String> get friendRequestNotes =>
+      _friendRequestNotes ?? const {};
+  bool hasFriendRequestNotes() => _friendRequestNotes != null;
+
   // "is_online" field.
   bool? _isOnline;
   bool get isOnline => _isOnline ?? false;
@@ -245,6 +251,12 @@ class UsersRecord extends FirestoreRecord {
     _friends = getDataList(snapshotData['friends']);
     _sentRequests = getDataList(snapshotData['sent_requests']);
     _friendRequests = getDataList(snapshotData['friend_requests']);
+    final rawNotes = snapshotData['friend_request_notes'];
+    if (rawNotes is Map) {
+      _friendRequestNotes = rawNotes.map(
+        (key, value) => MapEntry(key.toString(), value?.toString() ?? ''),
+      );
+    }
     _isOnline = snapshotData['is_online'] as bool?;
     _agreedToTerms = snapshotData['agreed_to_terms'] as bool?;
     _invitationCode = snapshotData['invitation_code'] as String?;

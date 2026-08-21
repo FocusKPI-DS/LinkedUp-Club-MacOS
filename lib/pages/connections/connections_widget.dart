@@ -1,6 +1,5 @@
 import '/components/skeleton/skeleton_templates.dart';
 import '/auth/firebase_auth/auth_util.dart';
-import '/custom_code/actions/index.dart' as actions;
 import '/backend/backend.dart';
 import '/backend/firestore/firestore_desktop_adapter.dart';
 import '/pages/desktop_chat/desktop_safe_user_builder.dart';
@@ -11,6 +10,7 @@ import '/pages/chat/user_profile_popup/user_profile_popup.dart';
 import '/pages/profile_settings/profile_settings_widget.dart';
 import '/pages/profile_settings/profile_settings_model.dart';
 import '/utils/desktop_pointer.dart';
+import '/utils/connection_request_helpers.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'dart:ui';
@@ -1238,6 +1238,9 @@ class _ConnectionsWidgetState extends State<ConnectionsWidget> {
     final timeLabel = _relativeTimeLabel(user.createdTime);
     final name =
         user.displayName.isNotEmpty ? user.displayName : 'Unknown User';
+    final requestNote = hasIncomingRequest
+        ? ConnectionRequestHelpers.noteFrom(currentUser, user.reference)
+        : null;
 
     return Material(
       color: Colors.transparent,
@@ -1306,7 +1309,22 @@ class _ConnectionsWidgetState extends State<ConnectionsWidget> {
                                 ],
                               ),
                             ],
-                            if (user.bio.isNotEmpty) ...[
+                            if (requestNote != null) ...[
+                              const SizedBox(height: 4),
+                              Text(
+                                requestNote,
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                  fontFamily: 'SF Pro Text',
+                                  color: Color(0xFF334155),
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w400,
+                                  fontStyle: FontStyle.italic,
+                                  decoration: TextDecoration.none,
+                                ),
+                              ),
+                            ] else if (user.bio.isNotEmpty) ...[
                               const SizedBox(height: 4),
                               Text(
                                 user.bio,
@@ -1896,82 +1914,24 @@ class _ConnectionsWidgetState extends State<ConnectionsWidget> {
     _startOperation(userId);
 
     try {
-      // Bulletproof check - don't send if already connected or request already sent
-      final currentUserData = await fsGetUserOnce(currentUserReference!);
-
-      if (currentUserData.friends.contains(user.reference)) {
-        _showErrorMessage('You are already connected with ${user.displayName}');
-        return;
-      }
-
-      if (currentUserData.sentRequests.contains(user.reference)) {
-        _showErrorMessage(
-            'Connection request already sent to ${user.displayName}');
-        return;
-      }
-
-      // Check if they already sent us a request (auto-accept scenario)
-      if (currentUserData.friendRequests.contains(user.reference)) {
-        await _acceptConnectionRequest(user);
-        return;
-      }
-
-      // Check if target user has auto-accept settings enabled
-      final targetUser = await fsGetUserOnce(user.reference);
-      final senderDomain = _getCompanyDomain(currentUserData.email);
-      final targetDomain = _getCompanyDomain(targetUser.email);
-
-      bool shouldAutoAccept = targetUser.autoAcceptAllRequests;
-      if (!shouldAutoAccept && targetUser.autoAcceptSameCompany &&
-          senderDomain != null && senderDomain == targetDomain) {
-        shouldAutoAccept = true;
-      }
-      if (!shouldAutoAccept && senderDomain != null &&
-          targetUser.autoAcceptEmailDomains.contains(senderDomain)) {
-        shouldAutoAccept = true;
-      }
-
-      if (shouldAutoAccept) {
-        // Directly add as friends (skip the request flow)
-        await fsArrayUnion(currentUserReference!, 'friends', [user.reference]);
-        await fsArrayUnion(user.reference, 'friends', [currentUserReference!]);
-        // Clean up any stale sent_requests/friend_requests
-        await fsArrayRemove(currentUserReference!, 'sent_requests', [user.reference]);
-        await fsArrayRemove(user.reference, 'friend_requests', [currentUserReference!]);
-
-        if (mounted) {
-          _showSuccessMessage('Connected with ${user.displayName}!');
-        }
-      } else {
-        // Send a regular connection request
-        await fsArrayUnion(
-          currentUserReference!,
-          'sent_requests',
-          [user.reference],
-        );
-        await fsArrayUnion(
-          user.reference,
-          'friend_requests',
-          [currentUserReference!],
-        );
-
-        if (mounted) {
-          _showSuccessMessage('Connection request sent to ${user.displayName}');
-        }
-      }
-
-      // Fire-and-forget: send email notification to recipient
-      final currentUserData2 = await fsGetUserOnce(currentUserReference!);
-      actions.sendConnectionRequestEmail(
-        recipientEmail: user.email,
-        recipientName: user.displayName,
-        senderName: currentUserData2.displayName,
+      final outcome = await ConnectionRequestHelpers.promptAndSend(
+        context: context,
+        targetUser: user,
       );
+      if (!mounted) return;
+      final message = ConnectionRequestHelpers.successMessage(
+        outcome,
+        user.displayName,
+      );
+      if (message != null) {
+        _showSuccessMessage(message);
+      }
     } catch (e) {
       print('Error sending connection request: $e');
       if (mounted) {
-        // Check if it's a permission error and provide specific guidance
-        if (e.toString().contains('permission-denied')) {
+        if (e is ConnectionRequestException) {
+          _showErrorMessage(e.message);
+        } else if (e.toString().contains('permission-denied')) {
           _showErrorMessage(
               'Unable to send connection request. This feature requires updated permissions.');
         } else {
@@ -1993,44 +1953,16 @@ class _ConnectionsWidgetState extends State<ConnectionsWidget> {
     _startOperation(userId);
 
     try {
-      // Bulletproof check - ensure they sent us a request and we're not already connected
-      final currentUserData = await fsGetUserOnce(currentUserReference!);
-
-      if (currentUserData.friends.contains(user.reference)) {
-        _showErrorMessage('You are already connected with ${user.displayName}');
-        return;
-      }
-
-      if (!currentUserData.friendRequests.contains(user.reference)) {
-        _showErrorMessage('No pending request from ${user.displayName}');
-        return;
-      }
-
-      await fsArrayUnion(currentUserReference!, 'friends', [user.reference]);
-      await fsArrayRemove(
-        currentUserReference!,
-        'friend_requests',
-        [user.reference],
-      );
-      await fsArrayRemove(
-        currentUserReference!,
-        'sent_requests',
-        [user.reference],
-      );
-      await fsArrayUnion(user.reference, 'friends', [currentUserReference!]);
-      await fsArrayRemove(
-        user.reference,
-        'sent_requests',
-        [currentUserReference!],
-      );
-
+      await ConnectionRequestHelpers.accept(user);
       if (mounted) {
         _showSuccessMessage('Connection request accepted!');
       }
     } catch (e) {
       print('Error accepting connection request: $e');
       if (mounted) {
-        if (e.toString().contains('permission-denied')) {
+        if (e is ConnectionRequestException) {
+          _showErrorMessage(e.message);
+        } else if (e.toString().contains('permission-denied')) {
           _showErrorMessage(
               'Unable to accept connection request. This feature requires updated permissions.');
         } else {
@@ -2052,28 +1984,19 @@ class _ConnectionsWidgetState extends State<ConnectionsWidget> {
     _startOperation(userId);
 
     try {
-      // Bulletproof check - ensure request exists
-      final currentUserData = await fsGetUserOnce(currentUserReference!);
-
-      if (!currentUserData.friendRequests.contains(user.reference)) {
-        _showErrorMessage('No pending request from ${user.displayName}');
-        return;
-      }
-
-      await fsArrayRemove(
-        currentUserReference!,
-        'friend_requests',
-        [user.reference],
-      );
-
+      await ConnectionRequestHelpers.decline(user);
       if (mounted) {
         _showSuccessMessage('Connection request declined');
       }
     } catch (e) {
       print('Error declining connection request: $e');
       if (mounted) {
-        _showErrorMessage(
-            'Failed to decline connection request. Please check your internet connection and try again.');
+        if (e is ConnectionRequestException) {
+          _showErrorMessage(e.message);
+        } else {
+          _showErrorMessage(
+              'Failed to decline connection request. Please check your internet connection and try again.');
+        }
       }
     } finally {
       _stopOperation(userId);
@@ -2089,33 +2012,19 @@ class _ConnectionsWidgetState extends State<ConnectionsWidget> {
     _startOperation(userId);
 
     try {
-      // Bulletproof check - ensure sent request exists
-      final currentUserData = await fsGetUserOnce(currentUserReference!);
-
-      if (!currentUserData.sentRequests.contains(user.reference)) {
-        _showErrorMessage('No pending sent request to ${user.displayName}');
-        return;
-      }
-
-      if (currentUserData.friends.contains(user.reference)) {
-        _showErrorMessage('You are already connected with ${user.displayName}');
-        return;
-      }
-
-      await fsArrayRemove(
-        currentUserReference!,
-        'sent_requests',
-        [user.reference],
-      );
-
+      await ConnectionRequestHelpers.cancel(user);
       if (mounted) {
         _showSuccessMessage('Connection request cancelled');
       }
     } catch (e) {
       print('Error cancelling connection request: $e');
       if (mounted) {
-        _showErrorMessage(
-            'Failed to cancel connection request. Please check your internet connection and try again.');
+        if (e is ConnectionRequestException) {
+          _showErrorMessage(e.message);
+        } else {
+          _showErrorMessage(
+              'Failed to cancel connection request. Please check your internet connection and try again.');
+        }
       }
     } finally {
       _stopOperation(userId);

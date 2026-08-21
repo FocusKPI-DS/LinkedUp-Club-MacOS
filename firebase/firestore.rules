@@ -131,9 +131,11 @@ service cloud.firestore {
       return ('friend_requests' in newData) ||
              ('sent_requests' in newData) ||
              ('friends' in newData) ||
+             ('friend_request_notes' in newData) ||
              ('friend_requests' in request.resource.data) ||
              ('sent_requests' in request.resource.data) ||
-             ('friends' in request.resource.data);
+             ('friends' in request.resource.data) ||
+             ('friend_request_notes' in request.resource.data);
     }
 
     // Gmail cache - users can only access their own cache

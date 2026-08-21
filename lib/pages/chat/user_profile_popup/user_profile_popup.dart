@@ -4,6 +4,7 @@ import '/backend/firestore/firestore_desktop_adapter.dart';
 import '/flutter_flow/flutter_flow_util.dart';
 import '/pages/chat/chat_component/memo/memo_widget.dart';
 import '/utils/chat_helpers.dart';
+import '/utils/connection_request_helpers.dart';
 import '/utils/open_direct_chat.dart';
 import '/utils/desktop_pointer.dart';
 import 'package:cached_network_image/cached_network_image.dart';
@@ -197,26 +198,36 @@ class _UserProfilePopupState extends State<UserProfilePopup> {
     setState(() => _busy = true);
     try {
       await action();
+    } catch (e) {
+      if (!mounted) return;
+      final message = e is ConnectionRequestException
+          ? e.message
+          : 'Something went wrong. Please try again.';
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(message)),
+      );
     } finally {
       if (mounted) setState(() => _busy = false);
     }
   }
 
   Future<void> _acceptRequest() => _runBusy(() async {
-        await fsArrayUnion(currentUserReference!, 'friends', [_ref]);
-        await fsArrayRemove(currentUserReference!, 'friend_requests', [_ref]);
-        await fsArrayRemove(_ref, 'sent_requests', [currentUserReference]);
-        await fsArrayUnion(_ref, 'friends', [currentUserReference]);
+        await ConnectionRequestHelpers.accept(widget.user);
       });
 
   Future<void> _addFriend() => _runBusy(() async {
-        await fsArrayUnion(_ref, 'friend_requests', [currentUserReference]);
-        await fsArrayUnion(currentUserReference!, 'sent_requests', [_ref]);
+        await ConnectionRequestHelpers.promptAndSend(
+          context: context,
+          targetUser: widget.user,
+        );
+      });
+
+  Future<void> _declineRequest() => _runBusy(() async {
+        await ConnectionRequestHelpers.decline(widget.user);
       });
 
   Future<void> _cancelRequest() => _runBusy(() async {
-        await fsArrayRemove(_ref, 'friend_requests', [currentUserReference]);
-        await fsArrayRemove(currentUserReference!, 'sent_requests', [_ref]);
+        await ConnectionRequestHelpers.cancel(widget.user);
       });
 
   Future<void> _openMessage() async {
@@ -504,7 +515,27 @@ class _UserProfilePopupState extends State<UserProfilePopup> {
                                       _buildEmailCopyButton(),
                                       const SizedBox(height: 12),
                                       AuthUserStreamWidget(
-                                        builder: (context) => _buildActionRow(),
+                                        builder: (context) => Column(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
+                                          children: [
+                                            _buildActionRow(),
+                                            if (_friendState() ==
+                                                    _FriendState.incoming &&
+                                                currentUserDocument !=
+                                                    null) ...[
+                                              const SizedBox(height: 10),
+                                              ConnectionRequestHelpers
+                                                  .noteBanner(
+                                                ConnectionRequestHelpers
+                                                    .noteFrom(
+                                                  currentUserDocument!,
+                                                  _ref,
+                                                ),
+                                              ),
+                                            ],
+                                          ],
+                                        ),
                                       ),
                                     ],
                                   ),
@@ -792,8 +823,7 @@ class _UserProfilePopupState extends State<UserProfilePopup> {
           onTap: _acceptRequest,
         ));
         children.add(const SizedBox(width: 8));
-        children
-            .add(_outlineIconButton(Icons.chat_bubble_outline, _openMessage));
+        children.add(_outlineIconButton(Icons.close, _declineRequest));
         break;
       case _FriendState.pending:
         children.add(_outlineButton(
@@ -801,9 +831,6 @@ class _UserProfilePopupState extends State<UserProfilePopup> {
           icon: Icons.hourglass_empty,
           onTap: _cancelRequest,
         ));
-        children.add(const SizedBox(width: 8));
-        children
-            .add(_outlineIconButton(Icons.chat_bubble_outline, _openMessage));
         break;
       case _FriendState.bot:
         children.add(_filledButton(
@@ -818,9 +845,6 @@ class _UserProfilePopupState extends State<UserProfilePopup> {
           icon: Icons.person_add_alt_1,
           onTap: _addFriend,
         ));
-        children.add(const SizedBox(width: 8));
-        children
-            .add(_outlineIconButton(Icons.chat_bubble_outline, _openMessage));
         break;
       case _FriendState.self:
         break;

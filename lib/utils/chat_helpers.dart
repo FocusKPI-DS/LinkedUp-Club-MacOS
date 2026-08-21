@@ -84,6 +84,23 @@ class ChatHelpers {
         return existing;
       }
 
+      // New DMs are connections-only. Existing threads (including legacy
+      // non-connection chats) can still be reopened above.
+      final isBot = targetUserRef.path.contains('ai_agent');
+      if (!isBot) {
+        final cachedFriend = currentUserDocument?.friends
+                .any((ref) => ref.path == targetUserRef.path) ??
+            false;
+        if (!cachedFriend) {
+          final me = await fsGetUserOnce(currentRef);
+          if (!me.friends.any((ref) => ref.path == targetUserRef.path)) {
+            throw Exception(
+              'You can only message connections. Send a connection request to start a conversation.',
+            );
+          }
+        }
+      }
+
       // 2. No existing chat found — create one
       final newChatRef = await fsCreateChat({
         ...createChatsRecordData(
