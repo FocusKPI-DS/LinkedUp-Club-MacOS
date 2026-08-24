@@ -1320,7 +1320,6 @@ class _ConnectionsWidgetState extends State<ConnectionsWidget> {
                                   color: Color(0xFF334155),
                                   fontSize: 12,
                                   fontWeight: FontWeight.w400,
-                                  fontStyle: FontStyle.italic,
                                   decoration: TextDecoration.none,
                                 ),
                               ),
