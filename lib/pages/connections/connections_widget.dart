@@ -1240,7 +1240,9 @@ class _ConnectionsWidgetState extends State<ConnectionsWidget> {
         user.displayName.isNotEmpty ? user.displayName : 'Unknown User';
     final requestNote = hasIncomingRequest
         ? ConnectionRequestHelpers.noteFrom(currentUser, user.reference)
-        : null;
+        : isSentRequest
+            ? ConnectionRequestHelpers.noteFrom(user, currentUser.reference)
+            : null;
 
     return Material(
       color: Colors.transparent,

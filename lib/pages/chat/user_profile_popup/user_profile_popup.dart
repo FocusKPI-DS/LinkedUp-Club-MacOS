@@ -515,27 +515,42 @@ class _UserProfilePopupState extends State<UserProfilePopup> {
                                       _buildEmailCopyButton(),
                                       const SizedBox(height: 12),
                                       AuthUserStreamWidget(
-                                        builder: (context) => Column(
-                                          crossAxisAlignment:
-                                              CrossAxisAlignment.start,
-                                          children: [
-                                            _buildActionRow(),
-                                            if (_friendState() ==
-                                                    _FriendState.incoming &&
-                                                currentUserDocument !=
-                                                    null) ...[
-                                              const SizedBox(height: 10),
-                                              ConnectionRequestHelpers
-                                                  .noteBanner(
+                                        builder: (context) {
+                                          final friendState = _friendState();
+                                          final currentUser =
+                                              currentUserDocument;
+                                          final requestNote = currentUser ==
+                                                  null
+                                              ? null
+                                              : friendState ==
+                                                      _FriendState.incoming
+                                                  ? ConnectionRequestHelpers
+                                                      .noteFrom(
+                                                      currentUser,
+                                                      _ref,
+                                                    )
+                                                  : friendState ==
+                                                          _FriendState.pending
+                                                      ? ConnectionRequestHelpers
+                                                          .noteFrom(
+                                                          widget.user,
+                                                          currentUser
+                                                              .reference,
+                                                        )
+                                                      : null;
+                                          return Column(
+                                            crossAxisAlignment:
+                                                CrossAxisAlignment.start,
+                                            children: [
+                                              _buildActionRow(),
+                                              if (requestNote != null) ...[
+                                                const SizedBox(height: 10),
                                                 ConnectionRequestHelpers
-                                                    .noteFrom(
-                                                  currentUserDocument!,
-                                                  _ref,
-                                                ),
-                                              ),
+                                                    .noteBanner(requestNote),
+                                              ],
                                             ],
-                                          ],
-                                        ),
+                                          );
+                                        },
                                       ),
                                     ],
                                   ),
