@@ -26,8 +26,20 @@ const double _kAddConnectionsDialogMaxHeightFactor = 0.72;
 const double _kAddConnectionsDialogInset = 48;
 const double _kAddConnectionsDialogPadding = 36;
 const double _kAddConnectionsCardSpacing = 14;
+const double _kAddConnectionsFullPageMaxWidth = 700;
 
 Future<void> showAddConnectionsDialog(BuildContext context) async {
+  // Phones don't have room for the centered desktop dialog (title wraps,
+  // cards clip). Reuse the existing full-page layout instead.
+  if (MediaQuery.sizeOf(context).width < _kAddConnectionsFullPageMaxWidth) {
+    await Navigator.of(context).push(
+      CupertinoPageRoute<void>(
+        builder: (_) => const AddConnectionsWidget(asDialog: false),
+      ),
+    );
+    return;
+  }
+
   final chat = await showDialog<ChatsRecord>(
     context: context,
     barrierColor: Colors.black.withOpacity(0.45),
@@ -433,6 +445,8 @@ class _AddConnectionsWidgetState extends State<AddConnectionsWidget> {
           const Expanded(
             child: Text(
               'Add Connections',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
               style: TextStyle(
                 fontFamily: 'SF Pro Display',
                 fontSize: 24,

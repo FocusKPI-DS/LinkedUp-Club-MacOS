@@ -841,7 +841,7 @@ class _UserProfilePopupState extends State<UserProfilePopup> {
         break;
       case _FriendState.none:
         children.add(_filledButton(
-          label: 'Add friend',
+          label: 'Connect',
           icon: Icons.person_add_alt_1,
           onTap: _addFriend,
         ));
