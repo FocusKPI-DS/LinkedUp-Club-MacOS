@@ -58,14 +58,15 @@ post_install do |installer|
     end
   end
 
-  # Patch zego_express_engine: errorCode removed in newer ZegoExpressEngine SDK (Xcode 26.2+)
-  zego_file = File.join(installer.sandbox.root, '..', 'Flutter', 'ephemeral', '.symlinks', 'plugins', 'zego_express_engine', 'macos', 'Classes', 'internal', 'ZegoExpressEngineEventHandler.m')
-  if File.exist?(zego_file)
+  # Patch zego_express_engine: macOS native SDK 3.24.0 has no ZegoFaceDetectionInfo.errorCode.
+  # setup.sh copies ios/Classes/internal onto macos before compile, so patch iOS too.
+  plugin_root = File.join(installer.sandbox.root, '..', 'Flutter', 'ephemeral', '.symlinks', 'plugins', 'zego_express_engine')
+  ['ios', 'macos'].each do |platform|
+    zego_file = File.join(plugin_root, platform, 'Classes', 'internal', 'ZegoExpressEngineEventHandler.m')
+    next unless File.exist?(zego_file)
     content = File.read(zego_file)
-    if content.include?('info.errorCode')
-      patched = content.gsub('info.errorCode', '0 /* errorCode patched */')
-      File.write(zego_file, patched)
-      puts "[Podfile] Patched ZegoExpressEngineEventHandler.m: replaced info.errorCode with 0"
-    end
+    next unless content.include?('info.errorCode')
+    File.write(zego_file, content.gsub('@(info.errorCode)', '@(0)'))
+    puts "[Podfile] Patched #{platform} ZegoExpressEngineEventHandler.m: replaced info.errorCode with 0"
   end
 end

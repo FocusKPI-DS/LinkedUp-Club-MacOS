@@ -2273,13 +2273,13 @@ class ChatThreadComponentWidgetState extends State<ChatThreadComponentWidget> {
                           }
                         },
                         config: Config(
-                          height: (!kIsWeb && (Platform.isMacOS || Platform.isWindows || Platform.isLinux)) ? 560 : 260,
+                          height: 260,
                           checkPlatformCompatibility: true,
                           emojiViewConfig: EmojiViewConfig(
-                            columns: (!kIsWeb && (Platform.isMacOS || Platform.isWindows || Platform.isLinux)) ? 5 : 8,
-                            emojiSizeMax: (!kIsWeb && (Platform.isMacOS || Platform.isWindows || Platform.isLinux)) ? 128 : 24,
-                            verticalSpacing: (!kIsWeb && (Platform.isMacOS || Platform.isWindows || Platform.isLinux)) ? 12 : 0,
-                            horizontalSpacing: (!kIsWeb && (Platform.isMacOS || Platform.isWindows || Platform.isLinux)) ? 12 : 0,
+                            columns: 8,
+                            emojiSizeMax: 28,
+                            verticalSpacing: 0,
+                            horizontalSpacing: 0,
                             gridPadding: const EdgeInsets.symmetric(
                                 horizontal: 16, vertical: 8),
                             recentsLimit: 28,

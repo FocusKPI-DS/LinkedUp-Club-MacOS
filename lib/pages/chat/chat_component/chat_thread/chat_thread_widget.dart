@@ -1709,15 +1709,15 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
     final isDesktop = !kIsWeb && (Platform.isMacOS || Platform.isWindows || Platform.isLinux);
 
     final emojiConfig = Config(
-      height: isDesktop ? 560 : MediaQuery.of(context).size.height * 0.35,
+      height: isDesktop ? 360 : MediaQuery.of(context).size.height * 0.35,
       checkPlatformCompatibility: true,
       emojiViewConfig: EmojiViewConfig(
-        columns: isDesktop ? 5 : 8,
-        emojiSizeMax: isDesktop ? 128.0 : 28.0,
-        verticalSpacing: isDesktop ? 12 : 0,
-        horizontalSpacing: isDesktop ? 12 : 0,
+        columns: 8,
+        emojiSizeMax: 28.0,
+        verticalSpacing: 0,
+        horizontalSpacing: 0,
         gridPadding: isDesktop
-            ? const EdgeInsets.symmetric(horizontal: 16, vertical: 12)
+            ? const EdgeInsets.symmetric(horizontal: 8, vertical: 4)
             : EdgeInsets.zero,
         recentsLimit: 28,
         replaceEmojiOnLimitExceed: true,
@@ -1787,8 +1787,8 @@ class _ChatThreadWidgetState extends State<ChatThreadWidget> {
           child: Material(
             color: Colors.transparent,
             child: Container(
-              width: 800,
-              height: 700,
+              width: 420,
+              height: 460,
               decoration: BoxDecoration(
                 color: isDark ? const Color(0xFF1C1C1E) : Colors.white,
                 borderRadius: BorderRadius.circular(16),
